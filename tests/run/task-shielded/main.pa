@@ -1,7 +1,7 @@
 # `task.shielded` runs a region uninterruptibly: the scheduler drives it to
 # completion atomically, so it can't be torn apart by a concurrent
 # cancellation, and a sibling can't interleave partway through it.
-use core.task
+use std.task
 
 # A critical section with an internal suspension point (`yield`). Shielded, the
 # two prints stay adjacent — the `yield` doesn't hand control to the sibling.

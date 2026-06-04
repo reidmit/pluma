@@ -430,7 +430,7 @@ fn is_syntactic_value(e: &ExprNode) -> bool {
 	}
 }
 
-// Maps a scope-handle method name + handle kind to the `core.task` kernel def
+// Maps a scope-handle method name + handle kind to the `std.task` kernel def
 // it lowers to. `None` if the method isn't valid on that handle (e.g. `next`
 // on a fail-fast scope), so it falls through to the normal record/error path.
 fn scope_method_def(method: &str, kind: HandleKind) -> Option<&'static str> {
@@ -533,7 +533,7 @@ impl<'compiler> Analyzer<'compiler> {
 		self.add_type_binding("string".into(), Type::String, Range::collapsed(0, 0));
 		self.add_type_binding("bytes".into(), Type::Bytes, Range::collapsed(0, 0));
 		// `regex` is the pure-Pluma `regex-pattern` enum tree (a backtick literal
-		// reifies to it; `core.regex` walks it). The opaque `Type::Regex` is gone.
+		// reifies to it; `std.regex` walks it). The opaque `Type::Regex` is gone.
 		self.add_type_binding(
 			"regex".into(),
 			Type::Enum("__prelude__.regex-pattern".into(), vec![]),
@@ -677,7 +677,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// added below once the prelude enum types are registered.
 		self.register_prelude_ord_trait();
 		// `hash` trait: `hash fun a -> int`. Concrete instances on int,
-		// float, string, bool. Unblocks generic `core.dict` over those
+		// float, string, bool. Unblocks generic `std.dict` over those
 		// primitive key types.
 		self.register_prelude_hash_trait();
 		// `wire` trait: `encode fun a -> bytes` / `decode fun bytes ->
@@ -2191,9 +2191,9 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	// The structured-concurrency kernel defs (`scope-spawn`, `manual-next`, …)
-	// are private to `core.task`: they're the lowering targets of the `scope`
+	// are private to `std.task`: they're the lowering targets of the `scope`
 	// keyword and the `s.spawn`/`s.next` handle methods, not a public API, so
-	// their signatures aren't carried in `core.task`'s exports. But a handle
+	// their signatures aren't carried in `std.task`'s exports. But a handle
 	// method rewritten to `task.scope-spawn …` still needs to type-check, so
 	// synthesize their (fixed, compiler-known) signatures here — with fresh
 	// tyvars for per-use polymorphism, mirroring how an imported value would be
@@ -2202,7 +2202,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// so nothing downstream needs the def to be public. Keep these in lockstep
 	// with the signatures in `compiler/src/stdlib/task.pa`.
 	fn scope_kernel_def_type(&mut self, module: &str, def_name: &str) -> Option<Type> {
-		if module != "core.task" {
+		if module != "std.task" {
 			return None;
 		}
 		let task = |a: Type| Type::Enum("__prelude__.task".to_string(), vec![a]);
@@ -2296,26 +2296,26 @@ impl<'compiler> Analyzer<'compiler> {
 		};
 
 		// New callee: the kernel def `<def_name>`. In a module that imports
-		// `core.task` (under whatever local name) it lives in that namespace, so
+		// `std.task` (under whatever local name) it lives in that namespace, so
 		// emit a `<local>.<def_name>` namespace access with its type synthesized
-		// here (the kernel defs are private to `core.task`, so they aren't in its
+		// here (the kernel defs are private to `std.task`, so they aren't in its
 		// exports and can't be resolved through imports — `scope_kernel_def_type`
 		// supplies the known signature). Synthesizing it here, rather than letting
 		// the FieldAccess resolver look it up, is precisely what keeps these defs
 		// private: a kernel name a *user* writes (`task.scope-spawn …`) still
-		// reaches the resolver and is reported private. Inside `core.task` itself
+		// reaches the resolver and is reported private. Inside `std.task` itself
 		// there's no such import — the def is a local top-level — so reference it
 		// bare (this is what lets the combinators in task.pa use `s.spawn`/`s.next`
 		// on their own handles, and it resolves regardless of visibility).
 		let task_local = self
 			.import_qualified
 			.iter()
-			.find(|(_, full)| full.as_str() == "core.task")
+			.find(|(_, full)| full.as_str() == "std.task")
 			.map(|(local, _)| local.clone());
 		let new_callee = match task_local {
 			Some(local) => {
 				let ty = self
-					.scope_kernel_def_type("core.task", def_name)
+					.scope_kernel_def_type("std.task", def_name)
 					.expect("scope_method_def name must have a kernel signature");
 				ExprNode {
 					ty,
@@ -5601,12 +5601,12 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 			Type::Enum(name, args) if name == "__prelude__.task" && args.len() == 1 => {
 				// Fully-qualified so codegen resolves it by name regardless of
-				// imports: `core.task` isn't auto-imported, but `??` (like
+				// imports: `std.task` isn't auto-imported, but `??` (like
 				// `try`) must work on any task value -- including inside
-				// `core.task` itself and in modules that only received a task
+				// `std.task` itself and in modules that only received a task
 				// from elsewhere. The dot marks it compiler-inserted (user
 				// namespace names are bare identifiers).
-				("core.task", resolved_left.clone())
+				("std.task", resolved_left.clone())
 			}
 			_ => {
 				self.error(

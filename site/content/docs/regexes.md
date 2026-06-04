@@ -16,7 +16,7 @@ let phone = `
 `
 ```
 
-The result is a value of the primitive type `regex`, which can only be tested or extracted from via the operations in `core.regex`.
+The result is a value of the primitive type `regex`, which can only be tested or extracted from via the operations in `std.regex`.
 
 ## The literal
 
@@ -119,7 +119,7 @@ let timestamp = `
 `
 ```
 
-Capture names must be identifiers. Captured substrings are surfaced through the match record returned by `core.regex.find` / `find-all`, and via the `${name}` syntax in replacement strings — see [the API](#the-regex-type-and-core-regex) below.
+Capture names must be identifiers. Captured substrings are surfaced through the match record returned by `std.regex.find` / `find-all`, and via the `${name}` syntax in replacement strings — see [the API](#the-regex-type-and-core-regex) below.
 
 ## Quantifiers
 
@@ -173,14 +173,14 @@ A quantifier on an anchor (`^?`, `$*`, `%+`, etc.) is a parse error — repeatin
 
 The `%` mnemonic: a line separating two dots, like a boundary between two words.
 
-## The `regex` type and `core.regex`
+## The `regex` type and `std.regex`
 
 The literal `` `…` `` produces a value of the primitive type `regex`. Compilation happens once, at the regex's definition site — the value carries the compiled matcher.
 
 The standard library:
 
 ```pluma
-use core.regex
+use std.regex
 
 regex.matches        :: fun regex string -> bool
 regex.find           :: fun regex string -> option regex.match
@@ -207,7 +207,7 @@ A named group that's in the pattern but didn't match in this instance — e.g. o
 Worked example — boolean matching:
 
 ```pluma
-use core.regex
+use std.regex
 
 def hello = `"hello"`
 
@@ -220,8 +220,8 @@ def main = fun {
 Worked example — extracting structure:
 
 ```pluma
-use core.regex as re
-use core.dict
+use std.regex as re
+use std.dict
 
 def pair = `<key: letter+> "=" <val: digit+>`
 
@@ -239,7 +239,7 @@ def main = fun {
 Replacement strings support `${name}` to interpolate a named capture; `$$` is a literal `$`. Splits discard the matched text:
 
 ```pluma
-use core.regex as re
+use std.regex as re
 
 def main = fun {
     print (re.replace `digit+` "n=42 m=7" "X")         # n=X m=X

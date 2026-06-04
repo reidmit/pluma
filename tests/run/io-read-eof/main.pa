@@ -1,4 +1,4 @@
-use core.io
+use std.sys.io
 
 # no stdin.txt for this fixture, so stdin is empty — first read returns err
 def main = fun {

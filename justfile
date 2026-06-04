@@ -41,7 +41,7 @@ test-write:
   @ INSTA_UPDATE=always cargo test -p tests
 
 # run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
-# through `pluma test` — exercises the stdlib and the `core.test` runner under V8.
+# through `pluma test` — exercises the stdlib and the `std.test` runner under V8.
 test-stdlib:
   @ cargo run --bin cli --quiet -- test compiler/src/stdlib
 

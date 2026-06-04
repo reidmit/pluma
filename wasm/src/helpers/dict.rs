@@ -1,4 +1,4 @@
-// `core.dict` as an **immutable persistent** hash-array-mapped trie. `insert`/
+// `std.dict` as an **immutable persistent** hash-array-mapped trie. `insert`/
 // `remove`/`update` path-copy the nodes on the root→leaf path and return a *new*
 // `$dict`; every untouched subtree is shared by reference, so `dict` has value
 // semantics like a record (and two consecutive versions can be diffed cheaply —

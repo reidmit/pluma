@@ -1,4 +1,4 @@
-// Reuse — opportunistic in-place reuse for value-semantics `core.dict`.
+// Reuse — opportunistic in-place reuse for value-semantics `std.dict`.
 //
 // `dict.insert` returns a *new* dict; the input is never mutated (value semantics).
 // A persistent insert path-copies the root→leaf nodes, so a tight accumulator loop
@@ -32,7 +32,7 @@ use std::collections::HashSet;
 pub struct ReuseNote {
 	/// Source range of the `dict.insert` call.
 	pub range: Range,
-	/// The enclosing function's module (e.g. `main`, `core.dict`).
+	/// The enclosing function's module (e.g. `main`, `std.dict`).
 	pub module: String,
 	/// The enclosing function's name.
 	pub func: String,

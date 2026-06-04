@@ -1,4 +1,4 @@
-use core.dict
+use std.dict
 
 # A dict built transiently (`from-entries`) is still a normal immutable value:
 # persistent ops on it must not mutate it, and `merge`'s inputs stay untouched.

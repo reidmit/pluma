@@ -1,4 +1,4 @@
-// The `core.io` result shaper. `core.io` host imports traffic only in primitive
+// The `std.sys.io` result shaper. `std.sys.io` host imports traffic only in primitive
 // `$value`s (string / bytes / list-of-string / nothing) plus a null-on-failure
 // signal — they never build the `result` enum. `__io_result` does that wrapping in
 // wasm, so a real server/browser host (Rust/WASI/JS) never needs the `result`
@@ -23,7 +23,7 @@ fn str_lit(w: &mut Wat, (off, len): (u32, u32)) {
 	w.struct_new(types::T_STR);
 }
 
-/// `__io_result(payload) -> result`. The argument is a marshalled `core.io` op's
+/// `__io_result(payload) -> result`. The argument is a marshalled `std.sys.io` op's
 /// shaped return: a primitive `$value` on success, or `null` on failure (the host
 /// having stashed the message for `io-last-error`). Build `ok payload` (non-null) or
 /// `err (io-last-error())` (null). The `err` message is read out of scratch:

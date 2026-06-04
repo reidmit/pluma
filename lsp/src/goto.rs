@@ -47,7 +47,7 @@ pub enum ModuleLocation {
 	/// A user module: a real file on disk.
 	Disk(PathBuf),
 	/// A baked-in stdlib module (source inlined in the compiler binary),
-	/// named e.g. `core.list`. Materialized to a cache file on demand.
+	/// named e.g. `std.list`. Materialized to a cache file on demand.
 	Stdlib(String),
 }
 
@@ -861,10 +861,10 @@ mod tests {
 
 	#[test]
 	fn use_import_namespace() {
-		let src = "use core.math\n\ndef x = math.pi\n";
+		let src = "use std.math\n\ndef x = math.pi\n";
 		// `math` in `math.pi` jumps to the import's local name on line 0.
-		// `use core.math` — `math` starts at col 9.
-		assert_eq!(goto(src, 2, 8), Some((0, 9)));
+		// `use std.math` — `math` starts at col 8.
+		assert_eq!(goto(src, 2, 8), Some((0, 8)));
 	}
 
 	#[test]
@@ -955,9 +955,9 @@ mod tests {
 
 	#[test]
 	fn stdlib_value_resolves_to_baked_module() {
-		// `list.reverse` resolves into the baked `core.list` source — no file
+		// `list.reverse` resolves into the baked `std.list` source — no file
 		// on disk, no materialization (resolve is pure).
-		let main = "use core.list\n\ndef x = list.reverse [1]\n";
+		let main = "use std.list\n\ndef x = list.reverse [1]\n";
 		// `reverse` in `list.reverse` is at line 2, col 13.
 		match resolve(main.as_bytes(), &PathBuf::from("/proj/main.pa"), 2, 15) {
 			Some(Resolved::OtherModule {
@@ -965,7 +965,7 @@ mod tests {
 				module,
 				range,
 			}) => {
-				assert_eq!(name, "core.list");
+				assert_eq!(name, "std.list");
 				// `def reverse` is on line 37 of list.pa (0-indexed 36)... assert
 				// it lands on a def whose name is `reverse`.
 				let def = module
@@ -991,7 +991,7 @@ mod tests {
 		let cache = std::env::temp_dir().join(format!("pluma-cache-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&cache);
 
-		let main = "use core.list\n\ndef x = list.reverse [1]\n";
+		let main = "use std.list\n\ndef x = list.reverse [1]\n";
 		match goto_definition_in(
 			main.as_bytes(),
 			&PathBuf::from("/proj/main.pa"),
@@ -1000,7 +1000,7 @@ mod tests {
 			Some(&cache),
 		) {
 			Some(Target::OtherFile { path, .. }) => {
-				assert!(path.ends_with("core/list.pa"), "path: {:?}", path);
+				assert!(path.ends_with("std/list.pa"), "path: {:?}", path);
 				assert!(path.is_file(), "materialized file should exist");
 			}
 			other => panic!("expected OtherFile into cache, got {}", target_kind(&other)),

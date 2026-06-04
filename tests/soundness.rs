@@ -28,7 +28,7 @@
 //     persistent copy. Currently transparent for free; the guard is that a regression
 //     loosening the escape check would make the in-place mutation observable here.
 
-use compiler::{Compiler, Platform};
+use compiler::Compiler;
 
 /// Whether a case is expected to fire the reuse rewrite on its user-module insert(s).
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -51,10 +51,10 @@ struct Case {
 // the two emits stay independent under parallel test threads).
 // --------------------------------------------------------------------------
 
-/// Compile a single-module Pluma source string to lowered IR. Stdlib (`core.*`)
+/// Compile a single-module Pluma source string to lowered IR. Stdlib (`std.*`)
 /// resolves from the baked-in registry, so an arbitrary root dir is fine.
 fn lower_src(name: &str, src: &str) -> ir::IrProgram {
-	let mut compiler = Compiler::for_root_dir(std::env::temp_dir()).with_platform(Platform::Server);
+	let mut compiler = Compiler::for_root_dir(std::env::temp_dir());
 	compiler.add_entry_module("main".into());
 	compiler.set_module_source("main".into(), src.as_bytes().to_vec());
 	compiler
@@ -101,7 +101,7 @@ fn user_reuse_sites(name: &str, src: &str) -> (usize, usize) {
 	ir::resolve::resolve_builtins(&mut program);
 	let notes: Vec<_> = ir::reuse::report(&program)
 		.into_iter()
-		.filter(|n| !n.module.starts_with("core."))
+		.filter(|n| !n.module.starts_with("std."))
 		.collect();
 	let reused = notes.iter().filter(|n| n.reused).count();
 	(reused, notes.len())
@@ -121,7 +121,7 @@ fn corpus() -> Vec<Case> {
 	add(
 		"clean-accumulator",
 		Fire::Yes,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) (i * i)) (i - 1) }
 }
@@ -142,7 +142,7 @@ def main = fun {
 	add(
 		"borrow-size-in-loop",
 		Fire::Yes,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 {
 		m
@@ -165,7 +165,7 @@ def main = fun {
 	add(
 		"lookup-in-loop",
 		Fire::Yes,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 {
 		m
@@ -188,7 +188,7 @@ def main = fun {
 	add(
 		"branching-value",
 		Fire::Yes,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 {
 		m
@@ -212,7 +212,7 @@ def main = fun {
 	add(
 		"two-separate-builds",
 		Fire::Yes,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) (i * 10)) (i - 1) }
 }
@@ -234,7 +234,7 @@ def main = fun {
 	add(
 		"deep-trie",
 		Fire::Yes,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) (i * 3)) (i - 1) }
 }
@@ -259,7 +259,7 @@ def main = fun {
 	add(
 		"build-on-existing-snapshot",
 		Fire::Yes,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) i) (i - 1) }
 }
@@ -282,7 +282,7 @@ def main = fun {
 	add(
 		"build-then-persistent-extend",
 		Fire::Yes,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) i) (i - 1) }
 }
@@ -306,8 +306,8 @@ def main = fun {
 	add(
 		"snapshots-escape-into-list",
 		Fire::No,
-		r#"use core.dict
-use core.list
+		r#"use std.dict
+use std.list
 def snapshots = fun m acc i {
 	if i == 0 {
 		acc
@@ -337,7 +337,7 @@ def main = fun {
 	add(
 		"read-after-insert",
 		Fire::No,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m acc i {
 	if i == 0 {
 		acc
@@ -359,7 +359,7 @@ def main = fun {
 	add(
 		"escape-into-tuple",
 		Fire::No,
-		r#"use core.dict
+		r#"use std.dict
 def fst = fun p {
 	let (a, _) = p
 	a
@@ -387,7 +387,7 @@ def main = fun {
 	add(
 		"remove-in-chain",
 		Fire::No,
-		r#"use core.dict
+		r#"use std.dict
 def build = fun m i {
 	if i == 0 {
 		m

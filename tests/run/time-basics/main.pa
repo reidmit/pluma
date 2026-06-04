@@ -1,5 +1,5 @@
-use core.time
-use core.io
+use std.time
+use std.sys.io
 
 def show-instant = fun label t {
 	io.print "$(label): $(time.to-iso t)"

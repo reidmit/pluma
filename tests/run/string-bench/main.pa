@@ -2,8 +2,8 @@
 # back, and measure the round-trip. Exercises to-string, join (divide-and-
 # conquer concat), split (position list), and codepoint-indexed length.
 
-use core.string
-use core.list
+use std.string
+use std.list
 
 def main = fun {
 	let parts = list.build 500 fun i {

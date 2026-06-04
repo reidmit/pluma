@@ -3,8 +3,8 @@
 # results. Exercises the CPS state machine, fiber spawn/schedule, and the
 # activation-stack snapshot/restore on every suspension.
 
-use core.task
-use core.list
+use std.task
+use std.list
 
 def worker = fun n {
 	try a = task.return n

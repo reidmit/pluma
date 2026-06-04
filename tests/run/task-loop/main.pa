@@ -4,7 +4,7 @@
 # task (`task.return`). On the frame-snapshot runtime the whole frame (loop IP +
 # locals) is saved at each suspension; the CPS pass flattens the loop's back-edge
 # into the dispatch loop and threads the loop-carried `ref`s/binds through state.
-use core.task
+use std.task
 
 def main = fun {
 	let total = ref.new 0

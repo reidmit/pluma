@@ -1,6 +1,6 @@
-use core.test
-use core.bytes
-use core.assert
+use std.test
+use std.bytes
+use std.assert
 
 def tests :: test.suite = [
 	test.case "length of empty bytes" fun {

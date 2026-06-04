@@ -8,11 +8,11 @@
 # to a float, which would lose precision on large whole numbers. The
 # `get-number` helper smooths over the distinction when you don't care.
 
-use core.dict
-use core.math
-use core.list
-use core.string
-use core.bytes
+use std.dict
+use std.math
+use std.list
+use std.string
+use std.bytes
 
 # A parsed JSON value. JSON has a handful of shapes -- null, a boolean,
 # a number, a string, an array, or an object -- and a `value` is exactly
@@ -210,7 +210,7 @@ public def get-array :: fun value -> option (list value) = fun v {
 }
 
 # Pulls the contents of a JSON object out as a `dict string value`,
-# which you can walk with `core.dict`. `none` if the value isn't an
+# which you can walk with `std.dict`. `none` if the value isn't an
 # object.
 #
 #     try doc = json.parse "{\"a\": 1}"

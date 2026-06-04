@@ -1,7 +1,7 @@
 # Word-frequency tally over a stream of keys — exercises the hash dict on both
 # the lookup and insert paths.
 
-use core.dict
+use std.dict
 
 def tally = fun m i limit buckets {
 	if i == limit is true {

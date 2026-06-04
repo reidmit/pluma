@@ -1,4 +1,4 @@
-use core.dict
+use std.dict
 
 # Enum keys with a user `hash` instance — exercises enum keys through
 # insert / lookup / remove (the backend keys on the structural `__hash`).

@@ -1,103 +1,84 @@
-// Target platforms and host capabilities.
+// Deploy targets and target-tiered module gating.
 //
 // Pluma compiles from one shared IR to one WasmGC backend, but a `.wasm` runs in
-// different host environments — a server/machine or a browser. A `Platform` is a
-// host-capability *profile*: it decides which stdlib modules a program may `use`
-// and (downstream) which host imports the module declares. The `Native` profile is
-// the default (used by the frontend/analysis path and the `tests/analyze` suite) —
-// it provides every capability, so nothing is ever gated on it; deploy builds pick
-// `Server` (or, in future, `Browser`).
+// different host environments — a machine with an operating system underneath
+// (servers, CLIs, scripts, batch jobs, desktop) or a web/DOM sandbox. The two
+// `--target` values name that split: `sys` and `web`.
 //
-// Gating is a static table: each gated module declares the capabilities it needs
-// (`MODULE_CAPS`), each platform declares the capabilities it provides
-// (`Platform::provides`). A `use` of a module whose needs the active platform
-// can't satisfy is a compile error at the `use` site. Modules with no row need no
-// capabilities and are available everywhere (pure compute: `core.list`, `core.dict`,
-// the auto-imported `core.ref`/`option`/`result`, …).
+// Gating is derived from the module's namespace prefix, not a capability table:
+//
+//   std.sys.*  → allowed only on the `sys` target
+//   std.web.*  → allowed only on the `web` target
+//   std.*      → allowed on both (pure compute / shared host surface)
+//
+// A `Target` is the chosen deploy profile. Most flows don't choose one: the
+// frontend/analysis path, the LSP, `pluma run`/`test`/`check`, and the
+// `tests/analyze` suite all compile and run locally under V8 with full host
+// capabilities, so they are *ungated* — modeled as `None` (no target). Only
+// `pluma build --target sys|web` selects a `Some(target)` and enforces gating at
+// the `use` site.
 
-/// A host-provided capability. A module needs some set of these; a platform
-/// provides some set. Grows as new host surfaces (e.g. a future `core.dom`) land.
+/// A deploy target. The two `--target` values. Not a third "native"/"ungated"
+/// variant — ungated mode is `Option::None` (see `gate`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Capability {
-	/// Filesystem reads/writes (`core.io` file ops).
-	Fs,
-	/// Standard streams — stdin/stdout/stderr (`io.read`, `io.print`).
-	Stdio,
-	/// Network sockets / outbound connections.
-	Net,
-	/// Wall-clock + monotonic clock reads (`time.now`, `time.monotonic`).
-	Clock,
-	/// Cryptographic / OS entropy (`random.*` seeds, `uuid` v4/v7).
-	Entropy,
-	/// Process/env surface — `io.args`, `io.env`, `io.exit`.
-	Process,
-	/// Browser DOM access (future `core.dom`).
-	Dom,
-	/// Browser `fetch` / outbound HTTP from the client (future).
-	Fetch,
-	/// Browser timers — `setTimeout`/`requestAnimationFrame` (future).
-	Timer,
+pub enum Target {
+	/// A machine/OS host: servers, CLIs, scripts, batch jobs, desktop.
+	/// Grants `std.sys.*`.
+	Sys,
+	/// A web/DOM sandbox host. Grants `std.web.*`.
+	Web,
 }
 
-/// A deploy target = a host-capability profile.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Platform {
-	/// The frontend/analysis default. Provides every capability, so module gating
-	/// never rejects anything. The default.
-	#[default]
-	Native,
-	/// A server/machine wasm host (filesystem, stdio, net, clock, entropy, process).
-	Server,
-	/// A browser wasm host (DOM, fetch, timers, console).
-	Browser,
-}
-
-impl Platform {
-	/// Whether this platform's host provides `cap`.
-	pub fn provides(self, cap: Capability) -> bool {
-		use Capability::*;
-		match self {
-			// Native is the full-capability dev/test profile — everything.
-			Platform::Native => true,
-			Platform::Server => matches!(cap, Fs | Stdio | Net | Clock | Entropy | Process),
-			// `Stdio` here is `console.log` — keeps `print`/`debug` working in the browser.
-			Platform::Browser => matches!(cap, Dom | Fetch | Timer | Stdio),
-		}
-	}
-
-	/// A human-facing name for diagnostics ("not available on the browser target").
+impl Target {
+	/// A human-facing name for diagnostics + the `--target` value.
 	pub fn label(self) -> &'static str {
 		match self {
-			Platform::Native => "native",
-			Platform::Server => "server",
-			Platform::Browser => "browser",
+			Target::Sys => "sys",
+			Target::Web => "web",
 		}
 	}
 
-	/// The capabilities a module needs but this platform doesn't provide. Empty
-	/// means the module is available here. `module_capabilities` returns `&[]` for
-	/// any module without a row, so ungated modules always come back empty.
-	pub fn missing_capabilities(self, module_name: &str) -> Vec<Capability> {
-		module_capabilities(module_name)
-			.iter()
-			.copied()
-			.filter(|c| !self.provides(*c))
-			.collect()
+	/// The opposite target — the one whose tier this target does *not* grant.
+	/// Used only to phrase the rejection diagnostic.
+	fn other(self) -> Target {
+		match self {
+			Target::Sys => Target::Web,
+			Target::Web => Target::Sys,
+		}
 	}
 }
 
-/// The capabilities a stdlib module requires. Only gated modules need a row;
-/// everything else (and every user module) defaults to `&[]` — never gated.
-pub fn module_capabilities(module_name: &str) -> &'static [Capability] {
-	use Capability::*;
-	match module_name {
-		"core.io" => &[Fs, Stdio, Process],
-		// Networking: server/native only. A browser reaches the network through
-		// `fetch` (Capability::Fetch), not raw sockets, so it never gets `Net`.
-		"core.net" => &[Net],
-		"core.http" => &[Net],
-		"core.dom" => &[Dom],
-		_ => &[],
+/// The target-specific tier a module name belongs to, if any. `std.sys.*` → `Sys`,
+/// `std.web.*` → `Web`, everything else (shared `std.*`, user modules) → `None`.
+fn module_tier(module_name: &str) -> Option<Target> {
+	if module_name.starts_with("std.sys.") {
+		Some(Target::Sys)
+	} else if module_name.starts_with("std.web.") {
+		Some(Target::Web)
+	} else {
+		None
+	}
+}
+
+/// Gate a `use` of `module_name` under an optional deploy `target`. Returns a
+/// rejection message if the module's tier doesn't match the active target.
+///
+/// - `None` (ungated mode): never rejects — the frontend/analysis/run/test path.
+/// - `Some(t)`: a `std.<other>.*` module is rejected; shared + matching-tier
+///   modules are allowed.
+pub fn gate(target: Option<Target>, module_name: &str) -> Option<String> {
+	let tier = module_tier(module_name)?;
+	match target {
+		// Ungated: analyze everything.
+		None => None,
+		// On a target, only the matching tier's modules are available.
+		Some(t) if t == tier => None,
+		Some(t) => Some(format!(
+			"`{}` is not available on the `{}` target — it is a `{}`-only module.",
+			module_name,
+			t.label(),
+			t.other().label(),
+		)),
 	}
 }
 
@@ -106,56 +87,35 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn native_provides_everything() {
-		for cap in [
-			Capability::Fs,
-			Capability::Stdio,
-			Capability::Net,
-			Capability::Clock,
-			Capability::Entropy,
-			Capability::Process,
-			Capability::Dom,
-			Capability::Fetch,
-			Capability::Timer,
-		] {
-			assert!(
-				Platform::Native.provides(cap),
-				"Native should provide {cap:?}"
-			);
+	fn ungated_allows_everything() {
+		for m in ["std.list", "std.sys.io", "std.web.dom", "some.user.module"] {
+			assert!(gate(None, m).is_none(), "ungated rejected {m}");
 		}
 	}
 
 	#[test]
-	fn core_io_gating_by_platform() {
-		// Native + Server satisfy core.io; the browser is missing Fs + Process.
-		assert!(Platform::Native.missing_capabilities("core.io").is_empty());
-		assert!(Platform::Server.missing_capabilities("core.io").is_empty());
-		assert_eq!(
-			Platform::Browser.missing_capabilities("core.io"),
-			vec![Capability::Fs, Capability::Process]
-		);
+	fn sys_target_allows_sys_and_shared_rejects_web() {
+		assert!(gate(Some(Target::Sys), "std.sys.io").is_none());
+		assert!(gate(Some(Target::Sys), "std.sys.net").is_none());
+		assert!(gate(Some(Target::Sys), "std.list").is_none());
+		let rej = gate(Some(Target::Sys), "std.web.dom").expect("web module should be rejected on sys");
+		assert!(rej.contains("std.web.dom") && rej.contains("sys"));
 	}
 
 	#[test]
-	fn core_net_gating_by_platform() {
-		// Native + Server satisfy core.net/core.http; the browser is missing Net
-		// (it reaches the network through `fetch`, not raw sockets).
-		for module in ["core.net", "core.http"] {
-			assert!(Platform::Native.missing_capabilities(module).is_empty());
-			assert!(Platform::Server.missing_capabilities(module).is_empty());
-			assert_eq!(
-				Platform::Browser.missing_capabilities(module),
-				vec![Capability::Net]
-			);
-		}
+	fn web_target_allows_web_and_shared_rejects_sys() {
+		assert!(gate(Some(Target::Web), "std.web.dom").is_none());
+		assert!(gate(Some(Target::Web), "std.web.app").is_none());
+		assert!(gate(Some(Target::Web), "std.list").is_none());
+		let rej = gate(Some(Target::Web), "std.sys.io").expect("sys module should be rejected on web");
+		assert!(rej.contains("std.sys.io") && rej.contains("web"));
 	}
 
 	#[test]
-	fn ungated_modules_need_nothing() {
-		// Unlisted (pure-compute) modules require no capabilities anywhere.
-		for p in [Platform::Native, Platform::Server, Platform::Browser] {
-			assert!(p.missing_capabilities("core.list").is_empty());
-			assert!(p.missing_capabilities("some.user.module").is_empty());
+	fn user_modules_never_gated() {
+		for t in [None, Some(Target::Sys), Some(Target::Web)] {
+			assert!(gate(t, "app.main").is_none());
+			assert!(gate(t, "sub.utils").is_none());
 		}
 	}
 }

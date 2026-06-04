@@ -1,10 +1,10 @@
-# Exercises the `core.test` runner itself — `flatten` (groups, skip, todo),
+# Exercises the `std.test` runner itself — `flatten` (groups, skip, todo),
 # case execution, the printed tree, and the summary — as a normal program run
 # under V8. Color is off (a clean snapshot); every runnable case passes, so
 # `run-all` returns `ok`.
 
-use core.test
-use core.assert
+use std.test
+use std.assert
 
 def tests :: test.suite = [
 	test.case "adds" fun { assert.equals (2 + 3) 5 },

@@ -1,4 +1,4 @@
-use core.dict
+use std.dict
 
 # A linear `dict.insert` accumulator — the shape `loopify` + the reuse pass rewrite to
 # a transient in-place insert. The in-place mutation must be unobservable: the final

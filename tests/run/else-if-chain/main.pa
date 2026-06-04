@@ -1,4 +1,4 @@
-use core.string
+use std.string
 
 def heading-level = fun line {
 	if string.starts-with line "###### " {

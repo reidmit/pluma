@@ -12,10 +12,10 @@
 # (same tag, same `on-input` handler name), so focus and the caret survive every
 # keystroke.
 
-use core.html
-use core.events
-use core.string
-use core.app
+use std.web.html
+use std.web.events
+use std.string
+use std.web.app
 
 enum msg {
 	typed string

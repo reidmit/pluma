@@ -1,6 +1,6 @@
-// core.random / core.uuid (the `Entropy` capability). The host generates these natively
+// std.random / std.uuid (the `Entropy` capability). The host generates these natively
 // with the `rand`/`uuid` crates. i64 results cross as JS BigInt; byte/string results go
-// through scratch (`deliver_read_v8`). Range/length validation lives in `core.random`
+// through scratch (`deliver_read_v8`). Range/length validation lives in `std.random`
 // (Pluma), so the raw `random-int-range`/`random-bytes` imports never fail.
 
 use super::marshal::{argi, ctx_and_mem, deliver_read_v8, read_str};
@@ -40,7 +40,7 @@ pub(super) fn cb_random_int_range(
 		.to_big_int(scope)
 		.map(|b| b.i64_value().0)
 		.unwrap_or(0);
-	// `core.random` guarantees `lo < hi` before calling.
+	// `std.random` guarantees `lo < hi` before calling.
 	let n = rand::rng().random_range(lo..hi);
 	rv.set(v8::BigInt::new_from_i64(scope, n).into());
 }
@@ -57,7 +57,7 @@ pub(super) fn cb_random_bytes(
 		argi(scope, &args, 2),
 	);
 	let (ctx, mem) = ctx_and_mem(scope, &args);
-	// `core.random` guarantees `n >= 0` before calling.
+	// `std.random` guarantees `n >= 0` before calling.
 	let mut buf = vec![0u8; n.max(0) as usize];
 	rand::rng().fill_bytes(&mut buf);
 	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, buf));

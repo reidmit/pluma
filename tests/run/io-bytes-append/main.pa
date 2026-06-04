@@ -1,5 +1,5 @@
-use core.bytes
-use core.io
+use std.bytes
+use std.sys.io
 
 def show-write = fun r {
 	when r is ok _ {

@@ -3,7 +3,7 @@
 #
 # The `option` type itself (`some` and `none`) is built in and always
 # available, so you don't need this module just to make or match an
-# option -- see the prelude. Import it (`use core.option`) for the
+# option -- see the prelude. Import it (`use std.option`) for the
 # helpers below.
 
 # Chains a follow-up step onto an option. `then opt f` runs `f` on the
@@ -159,7 +159,7 @@ public def to-result :: fun (option a) e -> result a e = fun o e {
 }
 
 # The `io.fail` primitive, referenced by its builtin tag directly rather
-# than through `core.io`: `option` rides in the prelude, so importing
+# than through `std.sys.io`: `option` rides in the prelude, so importing
 # `io` here would close an import cycle. Aborts with `msg` on stderr and
 # a nonzero exit; never returns.
 def fail-with :: fun string -> a = built-in "io-fail"

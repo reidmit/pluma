@@ -1,8 +1,8 @@
 # A `manual scope`: spawn everything, drain the first completion via `s.next`,
 # then `s.cancel` the losers. Exercises manual-scope typing and the `s.next` /
 # `s.cancel` handle methods, plus `s.spawn` inside a nested closure.
-use core.task
-use core.list
+use std.task
+use std.list
 
 def race = fun ts {
 	manual scope as s {

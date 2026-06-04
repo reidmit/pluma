@@ -469,8 +469,8 @@ mod tests {
 
 	#[test]
 	fn stdlib_symbol_shows_its_doc() {
-		// `list.reverse` pulls its doc from the baked `core.list` source.
-		let src = "use core.list\n\ndef x = list.reverse [1]\n";
+		// `list.reverse` pulls its doc from the baked `std.list` source.
+		let src = "use std.list\n\ndef x = list.reverse [1]\n";
 		// `reverse` is at line 2, col 13.
 		let doc = hover_doc_at(src, 2, 15).expect("expected a doc for list.reverse");
 		assert!(doc.contains("opposite order"), "unexpected doc: {:?}", doc);
@@ -478,10 +478,10 @@ mod tests {
 
 	#[test]
 	fn use_path_shows_module_doc() {
-		// Hovering the `core.list` path in the `use` shows the module's own
+		// Hovering the `std.list` path in the `use` shows the module's own
 		// top-level doc comment (the block at the top of `list.pa`).
-		let src = "use core.list\n\ndef x = list.reverse [1]\n";
-		// `core.list` spans cols 4..13 on line 0.
+		let src = "use std.list\n\ndef x = list.reverse [1]\n";
+		// `std.list` spans cols 4..13 on line 0.
 		let doc = hover_doc_at(src, 0, 8).expect("expected the module doc on the use path");
 		assert!(
 			doc.starts_with("Lists:"),
@@ -494,7 +494,7 @@ mod tests {
 	fn namespace_receiver_shows_module_doc() {
 		// Hovering the `list` namespace in `list.reverse` resolves back to the
 		// import and shows the module doc.
-		let src = "use core.list\n\ndef x = list.reverse [1]\n";
+		let src = "use std.list\n\ndef x = list.reverse [1]\n";
 		// `list` receiver is at line 2, cols 8..12.
 		let doc = hover_doc_at(src, 2, 9).expect("expected the module doc on the namespace");
 		assert!(
@@ -506,8 +506,8 @@ mod tests {
 
 	#[test]
 	fn aliased_use_shows_module_doc() {
-		// The alias in `use core.regex as re` carries the module doc too.
-		let src = "use core.regex as re\n\ndef x = re.matches `\"a\"` \"a\"\n";
+		// The alias in `use std.regex as re` carries the module doc too.
+		let src = "use std.regex as re\n\ndef x = re.matches `\"a\"` \"a\"\n";
 		// `re` alias is at line 0, cols 18..20.
 		let doc = hover_doc_at(src, 0, 18).expect("expected the module doc on the alias");
 		assert!(!doc.is_empty(), "expected a non-empty module doc");

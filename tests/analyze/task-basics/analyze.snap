@@ -4,11 +4,11 @@ expression: output
 ---
 module `main` (tests/analyze/task-basics/main.pa) {
     comments: {
-        0: " The core.task primitives and their inferred types.",
+        0: " The std.task primitives and their inferred types.",
     },
     ast: Some(
         module(1:0-8:37) [
-            use(1:0-1:13) `core.task`,
+            use(1:0-1:12) `std.task`,
         ] [
             def(2:0-2:37) :: nothing {
                 name: ident(2:4-2:12) `make-num`,

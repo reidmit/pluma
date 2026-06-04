@@ -1,7 +1,7 @@
 # `defer` inside an async function runs at function exit on the normal path,
 # LIFO, even across suspension points (`try`). The cleanups are anchored to
 # the task frame and survive each await.
-use core.task
+use std.task
 
 def main = fun {
 	defer print "deferred A (last)"

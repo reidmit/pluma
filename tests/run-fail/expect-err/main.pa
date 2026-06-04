@@ -1,7 +1,7 @@
 # `result.expect` on an `err` aborts the whole program: the message, then
 # the underlying error, go to stderr and the program exits nonzero.
 # `after` never prints.
-use core.string
+use std.string
 
 def main = fun {
 	print "before"

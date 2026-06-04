@@ -1,5 +1,5 @@
-# The core.task primitives and their inferred types.
-use core.task
+# The std.task primitives and their inferred types.
+use std.task
 def make-num = fun { task.return 42 }
 
 def make-fail = fun { task.fail "boom" }

@@ -1,4 +1,4 @@
-// `core.dom` event-handler registry helpers (`Platform::Browser`).
+// `std.web.dom` event-handler registry helpers (`the Web target`).
 //
 // DOM events fire host-side, but a Pluma handler is a `$closure` heap value the
 // host can't hold. So `dom.on-click` stows the handler in a module-level registry

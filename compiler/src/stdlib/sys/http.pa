@@ -1,4 +1,4 @@
-# A small HTTP/1.1 server, built entirely on `core.net`. You write a
+# A small HTTP/1.1 server, built entirely on `std.sys.net`. You write a
 # handler -- a function from a `request` to a `response` -- and `serve`
 # runs it, accepting connections and replying to each one.
 #
@@ -21,12 +21,12 @@
 # (`Connection: close`); keep-alive, chunked transfer, HTTP/2, and
 # WebSockets are not handled yet.
 
-use core.net
-use core.task
-use core.string
-use core.bytes
-use core.dict
-use core.list
+use std.sys.net
+use std.task
+use std.string
+use std.bytes
+use std.dict
+use std.list
 
 # The HTTP method (verb). `other` carries any method name not listed
 # here, so unusual verbs still parse.

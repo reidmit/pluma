@@ -849,7 +849,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 	Some(match tag {
 		"to-string" => H::ToString,
-		// The MVU command spawn primitive (`core.app`): inject a `task msg` into the
+		// The MVU command spawn primitive (`std.web.app`): inject a `task msg` into the
 		// browser scheduler as a root-scoped fiber.
 		"spawn-command" => H::SpawnCommand,
 		// Higher-order builders: synthetic wasm helpers (loop + closure call).

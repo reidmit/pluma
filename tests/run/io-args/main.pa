@@ -1,5 +1,5 @@
-use core.io
-use core.list
+use std.sys.io
+use std.list
 
 # `io.args` returns the program's argv as a `list string`. The snapshot harness
 # invokes fixtures with no extra arguments, so argv is empty here — exercising the

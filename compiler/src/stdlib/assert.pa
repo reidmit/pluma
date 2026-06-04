@@ -1,11 +1,11 @@
 # Checks for use inside tests. Each check returns a `result`: `ok ()`
-# when it holds, `err message` when it doesn't. A `core.test` case
+# when it holds, `err message` when it doesn't. A `std.test` case
 # body returns one of these — `pluma test` passes the case when it's `ok`
 # and reports the message when it's `err`. Combine several checks in one
 # case with `assert.all`.
 #
-#     use core.test
-#     use core.assert
+#     use std.test
+#     use std.assert
 #
 #     def tests :: test.suite = [
 #         test.case "two and two" (fun { assert.equals (2 + 2) 4 }),

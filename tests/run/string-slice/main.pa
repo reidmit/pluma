@@ -1,4 +1,4 @@
-use core.string
+use std.string
 
 # `slice`/`drop`/`char-at` index by character (Unicode scalar value),
 # matching `length`. Indices clamp; `char-at` returns an option.

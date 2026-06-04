@@ -92,7 +92,7 @@ pub const TAG_SCOPE_HANDLE: i32 = 18;
 /// flow through Pluma code as an ordinary value. Compared by reference identity
 /// (`ref.eq` on the wrapper, like `$ref`); Display is the opaque `<extern>`; never
 /// structurally serialized (a handle must not cross the `wire`). No Phase-1 host
-/// import produces one — the `Platform::Browser` DOM/fetch imports (Phase 3) do.
+/// import produces one — the `the Web target` DOM/fetch imports (Phase 3) do.
 pub const TAG_EXTERN: i32 = 19;
 /// A persistent-`$dict` trie node (`$cnode`): a `$value` subtype carrying a
 /// bitmap + a `$valarray` of slots (each a `$dentry` leaf or a child `$cnode`).
@@ -277,11 +277,11 @@ enum FuncKind {
 	/// `$bytes` into scratch at offset 0, returning its length (the single-payload
 	/// convenience the writer emit sites + the `print`-as-value wrapper share).
 	MarshalSend,
-	/// A `core.io` host import with two i32 args → one i32 result: `(i32, i32) -> i32`.
+	/// A `std.sys.io` host import with two i32 args → one i32 result: `(i32, i32) -> i32`.
 	/// Covers the stdin reads + `io-last-error` (`(dst, cap) -> len`), `delete`/`mkdir`
 	/// (`(path, plen) -> status`), and `exists`/`is-dir` (`(path, plen) -> bool`).
 	Io2,
-	/// A `core.io` host import with four i32 args → one i32 result: `(i32,i32,i32,i32)
+	/// A `std.sys.io` host import with four i32 args → one i32 result: `(i32,i32,i32,i32)
 	/// -> i32`. Covers the path reads (`(path, plen, dst, cap) -> len`) and the file
 	/// writers (`(path, plen, data, dlen) -> status`).
 	Io4,
@@ -316,7 +316,7 @@ enum FuncKind {
 	WireReadByte,
 	/// The decode varint source: `() -> i64` (reads a LEB128 varint / sets `g_err`).
 	WireReadVarint,
-	/// A `core.net` op returning `(i32 status, i32 n)` from two i32 args:
+	/// A `std.sys.net` op returning `(i32 status, i32 n)` from two i32 args:
 	/// `(i32, i32) -> (i32, i32)`. `net-listen`/`net-connect` (`(addr_ptr, alen) ->
 	/// (status, socket-id)`) and `net-accept` (`(fid, listener-id) -> (status, conn-id)`).
 	NetListen,
@@ -333,7 +333,7 @@ enum FuncKind {
 	NetPoll,
 	/// Drop a reactor registration: `net-unwatch(i32 fid) -> ()`.
 	NetUnwatch,
-	/// A `core.dom` node-producing import: `(i32 ptr, i32 len) -> externref`
+	/// A `std.web.dom` node-producing import: `(i32 ptr, i32 len) -> externref`
 	/// (`dom-create-element`/`dom-create-text` — a tag/text string in scratch →
 	/// a fresh DOM node). The host returns the engine-managed `externref`; wasm
 	/// boxes it into a `$extern` (`emit_dom`).
@@ -528,12 +528,12 @@ impl FuncTypes {
 		self.intern(FuncKind::MarshalSend)
 	}
 
-	/// A two-arg `core.io` host import: `(i32, i32) -> i32`.
+	/// A two-arg `std.sys.io` host import: `(i32, i32) -> i32`.
 	pub fn for_io2(&mut self) -> u32 {
 		self.intern(FuncKind::Io2)
 	}
 
-	/// A four-arg `core.io` host import: `(i32, i32, i32, i32) -> i32`.
+	/// A four-arg `std.sys.io` host import: `(i32, i32, i32, i32) -> i32`.
 	pub fn for_io4(&mut self) -> u32 {
 		self.intern(FuncKind::Io4)
 	}
@@ -628,7 +628,7 @@ impl FuncTypes {
 		self.intern(FuncKind::WireReadVarint)
 	}
 
-	/// `core.dom` node-producing import type: `(i32, i32) -> externref`.
+	/// `std.web.dom` node-producing import type: `(i32, i32) -> externref`.
 	pub fn for_dom_make(&mut self) -> u32 {
 		self.intern(FuncKind::DomMake)
 	}
@@ -1023,7 +1023,7 @@ impl FuncTypes {
 					types.ty().function([value_ref()], [ValType::I32]);
 					continue;
 				}
-				// core.net host imports (ABI.md Phase 1). Each fallible op returns a
+				// std.sys.net host imports (ABI.md Phase 1). Each fallible op returns a
 				// `(status:i32, n:i32)` pair — `n` is a socket id / byte count / read
 				// length; byte payloads (addr, data, the read result) cross via scratch.
 				FuncKind::NetListen => {
@@ -1090,7 +1090,7 @@ impl FuncTypes {
 					types.ty().function([], [ValType::I64]);
 					continue;
 				}
-				// core.dom host imports (Platform::Browser) — node handles cross as
+				// std.web.dom host imports (the Web target) — node handles cross as
 				// `externref`, strings as scratch `(ptr, len)`. The one externref-
 				// returning shape (the gap this milestone closes) is `DomMake`/`DomBody`.
 				FuncKind::DomMake => {

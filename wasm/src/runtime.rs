@@ -32,7 +32,7 @@ pub(crate) mod task_kind {
 	pub(crate) const HANDLE: i32 = 11;
 	#[allow(dead_code)]
 	pub(crate) const NEXT: i32 = 12;
-	// core.net suspending socket ops — dispatched like any other task kind, but
+	// std.sys.net suspending socket ops — dispatched like any other task kind, but
 	// each does a non-blocking host call and parks the fiber on the reactor
 	// (`wait::IO`, re-run via `fiber::RETRY`) when it would block. See
 	// `helpers/task.rs`'s pump NET arms + block step.
@@ -273,7 +273,7 @@ pub(crate) enum Helper {
 	/// to back. Returns `nothing`. Backs sync `defer` (the async path runs its
 	/// cleanups through the CPS poll driver instead).
 	RunDefers,
-	/// `__io_result(payload) -> result` — wrap a `core.io` host import's return into
+	/// `__io_result(payload) -> result` — wrap a `std.sys.io` host import's return into
 	/// `ok payload` (non-null) or `err (io-last-error())` (null). Keeps the host
 	/// trafficking only in primitive `$value`s (string/bytes/list/nothing), never
 	/// the `result` enum's variant layout — that lives here. Backs the file/stdin
@@ -361,7 +361,7 @@ pub(crate) enum Helper {
 	/// an error. Exported as `__entry_error` so the host detects a program failure
 	/// without reflecting the GC value. Reuses `__tostring` + `__send_bytes`.
 	EntryError,
-	/// `__dom_register(closure) -> i32 token` — append a `core.dom` event-handler
+	/// `__dom_register(closure) -> i32 token` — append a `std.web.dom` event-handler
 	/// closure to the `dom_handlers` registry `$list` (lazily creating it), returning
 	/// its index. `dom.on-click` calls this and hands the token to the host. Reuses
 	/// `__list_push`; types as `(value) -> i32` (the `EntryError` shape).
@@ -454,17 +454,17 @@ pub(crate) struct Runtime {
 	/// failure) and the `__defers` field name the driver scans for.
 	pub(crate) tasklits: TaskLits,
 	/// `result` `ok`/`err` tags + display names `__io_result` wraps an io host
-	/// return in. Populated when any `core.io` result builtin is reachable.
+	/// return in. Populated when any `std.sys.io` result builtin is reachable.
 	pub(crate) ioreslits: IoResultLits,
 	/// Host import `io-last-error() -> $str` — the message `__io_result` attaches to
 	/// `err` on a failed io call. Present whenever `IoResult` is emitted.
 	pub(crate) io_last_error: Option<u32>,
-	/// The `core.net` host import indices (the seven socket ops + the reactor's
+	/// The `std.sys.net` host import indices (the seven socket ops + the reactor's
 	/// `net-poll`/`net-unwatch`). `Some` exactly when the program reaches a net
 	/// builtin; the async scheduler's net machinery (pump NET arms, block step,
 	/// reap unwatch) and the emit-side sync shaping read it.
 	pub(crate) net: Option<NetImports>,
-	/// Wasm index of the mutable `(ref null $list)` global holding the `core.dom`
+	/// Wasm index of the mutable `(ref null $list)` global holding the `std.web.dom`
 	/// event-handler registry — a `$list` of handler closures, indexed by the i32
 	/// token `dom.add-listener` hands the host. `Some` exactly when a `dom-add-listener`
 	/// is reachable (the program registers an event handler); the exported
@@ -483,7 +483,7 @@ impl Runtime {
 	}
 }
 
-/// The `core.net` host import indices. The synchronous ops (`listen`/`close`/
+/// The `std.sys.net` host import indices. The synchronous ops (`listen`/`close`/
 /// `local_addr`/`connect`) are marshalled at `emit`'s `host_call`; the suspending ops
 /// (`accept`/`read`/`write`) and the reactor controls (`poll`/`unwatch`) are called
 /// from the hand-emitted scheduler (`helpers/task.rs`).
@@ -503,7 +503,7 @@ pub(crate) struct NetImports {
 /// The marshalling helper/global indices the suspending net ops (`accept`/`read`/
 /// `write`) need in the pump: encode the write payload + read buffer into scratch
 /// (`alloc`/`store`), copy the read result out (`load`), shape the result (`io_result`,
-/// the `ok`/`err` wrapper net reuses from `core.io`), and the bump cursor. `Some`
+/// the `ok`/`err` wrapper net reuses from `std.sys.io`), and the bump cursor. `Some`
 /// exactly when the program reaches a net builtin (the same condition as `NetImports`).
 #[derive(Clone, Copy)]
 pub(crate) struct NetMarshal {
@@ -514,14 +514,14 @@ pub(crate) struct NetMarshal {
 	pub(crate) bump: u32,
 }
 
-/// Whether `tag` is one of the seven `core.net` socket builtins (the suspending
+/// Whether `tag` is one of the seven `std.sys.net` socket builtins (the suspending
 /// `accept`/`read`/`write` plus the synchronous `listen`/`close`/`local-addr`/
 /// `connect`). Drives net-import registration (`module.rs`).
 pub(crate) fn is_net_builtin(tag: &str) -> bool {
 	is_net_sync(tag) || matches!(tag, "net-accept" | "net-read" | "net-write")
 }
 
-/// Whether `tag` is a *synchronous* `core.net` op — a host call shaped into a
+/// Whether `tag` is a *synchronous* `std.sys.net` op — a host call shaped into a
 /// `result` (or a Pure `$task`, for `connect`) at the `emit` call site, rather
 /// than a suspending `$task` the scheduler drives.
 pub(crate) fn is_net_sync(tag: &str) -> bool {
@@ -681,7 +681,7 @@ pub(crate) struct WireResultLits {
 }
 
 /// The `result` `ok`/`err` variant tags + interned display-name `(off, len)`
-/// strings `__io_result` wraps a `core.io` host return in: `ok payload` (non-null
+/// strings `__io_result` wraps a `std.sys.io` host return in: `ok payload` (non-null
 /// host return) or `err (io-last-error())` (null).
 #[derive(Clone, Copy, Default)]
 pub(crate) struct IoResultLits {
@@ -912,7 +912,7 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: false,
 		}),
-		// `core.io` reads/fs (server platform). These are marshalled at the `emit`
+		// `std.sys.io` reads/fs (server platform). These are marshalled at the `emit`
 		// call site (`emit_io`) — args/results cross as scratch byte payloads + an i32
 		// status/len, which `__io_result` wraps into `ok`/`err` (`is_io_result`). The
 		// `arity` here is the logical Pluma signature (`io_kind` + `module.rs` pick the
@@ -952,7 +952,7 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 0,
 			returns_value: true,
 		}),
-		// `core.random` / `core.uuid` (Entropy). The scalars cross natively (i64 as a
+		// `std.random` / `std.uuid` (Entropy). The scalars cross natively (i64 as a
 		// JS BigInt, f64 direct); `random-bytes`/`uuid-v4`/`uuid-v7` write a payload to
 		// scratch (`is_rng_host` → `emit_rng`); `uuid-parse` rides the io read path
 		// (`ReadFileStr`) so its `result` is shaped by `__io_result`.
@@ -968,7 +968,7 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: true,
 		}),
-		// `core.time` clock reads (`Clock`). `time-now`/`-monotonic` cross as i64
+		// `std.time` clock reads (`Clock`). `time-now`/`-monotonic` cross as i64
 		// BigInts (boxed `instant`/`duration` in wasm — `is_clock_host` → `emit_clock`);
 		// `time-parse` rides a marshalled `(fp,fl,ip,il,dst) -> status` shape into a
 		// `result instant string`. `arity` is the logical Pluma signature.
@@ -985,7 +985,7 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: false,
 		}),
-		// `core.dom` (Platform::Browser). All emitted via `emit_dom` (`is_dom_host` →
+		// `std.web.dom` (the Web target). All emitted via `emit_dom` (`is_dom_host` →
 		// `dom_kind`); the `arity`/`returns_value` here drive only the "is this a host
 		// builtin?" classification — node handles cross as `externref` and strings as
 		// scratch, which the generic host path can't shape.
@@ -1022,7 +1022,7 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 	}
 }
 
-/// How a `core.time` clock host import shapes its result (`emit_clock`). The pure
+/// How a `std.time` clock host import shapes its result (`emit_clock`). The pure
 /// `time` conversions (`time-duration-as-nanos` etc.) are *not* here — those are inline
 /// `retag_int_box` builtins with no host import.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1038,7 +1038,7 @@ pub(crate) enum ClockKind {
 	Parse,
 }
 
-/// Classify a `core.time` clock host builtin (the ones needing a host import). `None`
+/// Classify a `std.time` clock host builtin (the ones needing a host import). `None`
 /// for the inline conversions and non-time tags.
 pub(crate) fn clock_kind(tag: &str) -> Option<ClockKind> {
 	Some(match tag {
@@ -1050,12 +1050,12 @@ pub(crate) fn clock_kind(tag: &str) -> Option<ClockKind> {
 	})
 }
 
-/// Whether `tag` is an `emit_clock`-handled `core.time` clock host import.
+/// Whether `tag` is an `emit_clock`-handled `std.time` clock host import.
 pub(crate) fn is_clock_host(tag: &str) -> bool {
 	clock_kind(tag).is_some()
 }
 
-/// How a `core.random`/`core.uuid` host import (other than `uuid-parse`, which rides
+/// How a `std.random`/`std.uuid` host import (other than `uuid-parse`, which rides
 /// the io read path) shapes its result. The scalars box directly; the byte/string
 /// ones write a payload to scratch.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1072,7 +1072,7 @@ pub(crate) enum RngKind {
 	UuidStr,
 }
 
-/// Classify a `core.random`/`core.uuid` builtin emitted via `emit_rng` (everything
+/// Classify a `std.random`/`std.uuid` builtin emitted via `emit_rng` (everything
 /// but `uuid-parse`, which goes through `emit_io` as a `ReadFileStr`). `None` otherwise.
 pub(crate) fn rng_kind(tag: &str) -> Option<RngKind> {
 	Some(match tag {
@@ -1090,7 +1090,7 @@ pub(crate) fn is_rng_host(tag: &str) -> bool {
 	rng_kind(tag).is_some()
 }
 
-/// How a `core.dom` host import (`Platform::Browser`) crosses the boundary and is
+/// How a `std.web.dom` host import (`the Web target`) crosses the boundary and is
 /// shaped at the `emit_dom` call site. Node handles ride as `externref` (unboxed
 /// from / boxed into a `$extern` wrapper); strings ride as scratch `(ptr, len)`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1133,7 +1133,7 @@ pub(crate) enum DomKind {
 	SetBoolProp,
 }
 
-/// Classify a `core.dom` host builtin emitted via `emit_dom`. `None` for non-dom tags.
+/// Classify a `std.web.dom` host builtin emitted via `emit_dom`. `None` for non-dom tags.
 pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 	Some(match tag {
 		"dom-body" => DomKind::Body,
@@ -1153,12 +1153,12 @@ pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 	})
 }
 
-/// Whether `tag` is an `emit_dom`-handled `core.dom` host import.
+/// Whether `tag` is an `emit_dom`-handled `std.web.dom` host import.
 pub(crate) fn is_dom_host(tag: &str) -> bool {
 	dom_kind(tag).is_some()
 }
 
-/// Whether `tag` is a `core.io` builtin emitted through the marshalling host path
+/// Whether `tag` is a `std.sys.io` builtin emitted through the marshalling host path
 /// (the file/stdin ops + the `bool` queries + `io.args`) — all of which traffic byte
 /// payloads through scratch memory. A superset of `is_io_result`; the extras
 /// (`io-file-exists`/`io-is-dir` return a bare `bool`, `io-args` a bare `list`) skip
@@ -1167,7 +1167,7 @@ pub(crate) fn is_io_host(tag: &str) -> bool {
 	is_io_result(tag) || matches!(tag, "io-file-exists" | "io-is-dir" | "io-args" | "io-env")
 }
 
-/// How a marshalled `core.io` op crosses the boundary: the wasm host-import shape
+/// How a marshalled `std.sys.io` op crosses the boundary: the wasm host-import shape
 /// (`Io2` = `(i32,i32) -> i32`, `Io4` = `(i32,i32,i32,i32) -> i32`) plus how the emit
 /// site shapes the `i32` result back into a `$value`. `Read*` ops length-probe a
 /// `dst`; the writers return a `status`; the queries return a `bool`.
@@ -1197,7 +1197,7 @@ pub(crate) enum IoKind {
 	PathBool,
 }
 
-/// Classify a marshalled `core.io` builtin tag (and `io-last-error`, an internal
+/// Classify a marshalled `std.sys.io` builtin tag (and `io-last-error`, an internal
 /// read). `None` for non-io tags.
 pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 	Some(match tag {
@@ -1234,7 +1234,7 @@ pub(crate) fn io_uses_io4(tag: &str) -> bool {
 	)
 }
 
-/// Whether `tag` is a `core.io` builtin whose host return must be wrapped into a
+/// Whether `tag` is a `std.sys.io` builtin whose host return must be wrapped into a
 /// `result` by `__io_result` (the file/stdin ops returning `result …`). Excludes
 /// `io-file-exists`/`io-is-dir` (bare `bool`) and the stdout writers (`nothing`).
 pub(crate) fn is_io_result(tag: &str) -> bool {
@@ -1312,7 +1312,7 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		"task-shielded" => task_kind::SHIELDED,
 		"scope-new" => task_kind::SCOPE,
 		"scope-next" => task_kind::NEXT,
-		// core.net suspending socket ops: a `$task` carrying the op's args (the
+		// std.sys.net suspending socket ops: a `$task` carrying the op's args (the
 		// scheduler does the non-blocking host call + reactor park). listen/close/
 		// local-addr/connect are NOT here — they're synchronous host calls.
 		"net-accept" => task_kind::NET_ACCEPT,

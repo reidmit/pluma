@@ -1,6 +1,6 @@
-use core.io
-use core.list
-use core.string
+use std.sys.io
+use std.list
+use std.string
 
 # Write a couple of temp files into `target/`, list the directory back
 # (filtered to our prefix so other build artifacts don't perturb the

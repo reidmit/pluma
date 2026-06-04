@@ -1,7 +1,7 @@
 # `io.fail` stops the program directly: its message goes to stderr and the
 # exit code is nonzero. It's the primitive `expect` is built on. `after`
 # never prints.
-use core.io
+use std.sys.io
 
 def main = fun {
 	print "before"

@@ -12,8 +12,8 @@
 # Both decoders accept input with or without the trailing `=` padding,
 # and reject any character outside the chosen alphabet.
 
-use core.bytes
-use core.string
+use std.bytes
+use std.string
 
 # Encodes bytes with the standard alphabet, including `=` padding.
 #

@@ -55,7 +55,7 @@ public enum result a b {
 #
 # It's the third `try` carrier alongside `option` and `result`: inside a
 # function that returns a `task`, `try x = some-task` awaits it, and the
-# whole function is itself a `task`. The `task.*` helpers (in `core.task`,
+# whole function is itself a `task`. The `task.*` helpers (in `std.task`,
 # auto-imported) build and combine them; `scope` (a keyword) runs them
 # concurrently.
 #
@@ -142,7 +142,7 @@ public enum wire-schema {
 }
 
 # The runtime reification of a backtick regex literal: the pattern's shape
-# as a tree the pure-Pluma regex engine (`core.regex`) walks to match. You
+# as a tree the pure-Pluma regex engine (`std.regex`) walks to match. You
 # never write one by hand; the compiler synthesizes it from the `` `...` ``
 # literal. It's public so those synthesized values have a named home.
 #

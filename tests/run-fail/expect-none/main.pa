@@ -1,6 +1,6 @@
 # `option.expect` on `none` aborts with just the message -- an option has
 # no error payload to show. `after` never prints.
-use core.list
+use std.list
 
 def empty :: list int = []
 

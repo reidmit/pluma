@@ -1,7 +1,7 @@
-use core.io
-use core.time
+use std.sys.io
+use std.time
 
-# The `core.time` clock builtins (Clock capability): wall clock, monotonic clock,
+# The `std.time` clock builtins (Clock capability): wall clock, monotonic clock,
 # blocking sleep, and strtime parse. `time.now`/`time.monotonic` are nondeterministic,
 # so this fixture only prints *deterministic* derivations of them (a boolean comparison
 # that's stably `true`, never a raw timestamp) — keeping the snapshot portable.

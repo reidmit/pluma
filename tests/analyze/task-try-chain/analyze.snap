@@ -10,7 +10,7 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
     },
     ast: Some(
         module(3:0-13:1) [
-            use(3:0-3:13) `core.task`,
+            use(3:0-3:12) `std.task`,
         ] [
             def(4:0-8:1) :: nothing {
                 name: ident(4:4-4:9) `steps`,

@@ -1,4 +1,4 @@
-use core.list
+use std.list
 
 # Regression: a trait-constrained def whose body only *forwards* its
 # `numeric a` dict into a self-recursive constrained helper (rather than

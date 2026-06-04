@@ -1,4 +1,4 @@
-use core.string
+use std.string
 
 def main = fun {
 	print (string.length "hello")

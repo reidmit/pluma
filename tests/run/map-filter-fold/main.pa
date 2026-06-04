@@ -1,6 +1,6 @@
 # Stdlib pipeline: map → filter → fold over a built list.
 
-use core.list
+use std.list
 
 def range = fun n {
 	when n is 0 {

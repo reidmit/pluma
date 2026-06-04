@@ -1,4 +1,4 @@
-// core.net native import callbacks. Reuses the engine-independent `HostNet`/`NetRet`
+// std.sys.net native import callbacks. Reuses the engine-independent `HostNet`/`NetRet`
 // reactor (`crate::net`); these just shape a `NetRet` into the marshalling ABI. The
 // multi-result ops return a `[status, n]` JS array (how V8 surfaces a multi-value wasm
 // import result).
@@ -18,7 +18,7 @@ fn set_pair(scope: &mut v8::HandleScope, rv: &mut v8::ReturnValue, a: i32, b: i3
 }
 
 /// Shape a scalar `NetRet` (id / count / nothing) into `(status, n)`; an error stashes
-/// its message in `last_error` (read back via `io-last-error`, like core.io).
+/// its message in `last_error` (read back via `io-last-error`, like std.sys.io).
 fn net_scalar_v8(ctx: &mut Ctx, ret: NetRet) -> (i32, i32) {
 	match ret {
 		NetRet::OkInt(v) => (0, v),

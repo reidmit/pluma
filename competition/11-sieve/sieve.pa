@@ -2,7 +2,7 @@
 # workload than trial-division primes: this leans on `list.set` throughput in a
 # tight loop, then folds an order-sensitive checksum over the survivors.
 
-use core.list
+use std.list
 
 # Mark every multiple of `p` (from p*p) as composite.
 def mark = fun sieve p j n {

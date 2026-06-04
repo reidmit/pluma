@@ -1,4 +1,4 @@
-# core.app -- the Elm-style runtime that drives a `core.html` view.
+# std.web.app -- the Elm-style runtime that drives a `std.web.html` view.
 #
 # You write three pieces -- an initial model, a pure `update`, and a `view`
 # -- and `app.sandbox` owns the rest: it holds the model, renders the view to
@@ -28,10 +28,10 @@
 # input focus, caret, scroll, and CSS transitions). The diff is unkeyed and
 # recursive; keyed list reconciliation is a later refinement.
 
-use core.html
-use core.dom
-use core.list
-use core.task
+use std.web.html
+use std.web.dom
+use std.list
+use std.task
 
 # The runtime's parallel tree: each node mirrors a `html.html` node but also
 # holds the live `dom.node` it built, and (for elements) the handler ids

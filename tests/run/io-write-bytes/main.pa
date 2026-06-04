@@ -1,4 +1,4 @@
-use core.io
+use std.sys.io
 
 def main = fun {
 	# write-bytes goes to stdout literally — no newline, no Display

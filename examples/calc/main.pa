@@ -17,11 +17,11 @@
 # or eval error is reported and the loop simply continues, so one bad
 # line never ends the session.
 
-use core.io
-use core.list
-use core.dict
-use core.math
-use core.string
+use std.sys.io
+use std.list
+use std.dict
+use std.math
+use std.string
 use value
 use parser
 use eval

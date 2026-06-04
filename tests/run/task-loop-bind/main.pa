@@ -2,7 +2,7 @@
 # and uses it later in the same iteration. Exercises the resume-value binding on
 # a loop back-edge: each iteration suspends awaiting `double`, resumes with the
 # bound `d`, folds it into the accumulator, and continues. Sum is 2+4+6 = 12.
-use core.task
+use std.task
 
 def double = fun x {
 	task.return (x + x)

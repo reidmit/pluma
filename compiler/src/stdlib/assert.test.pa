@@ -1,5 +1,5 @@
-use core.test
-use core.assert
+use std.test
+use std.assert
 
 # `none` and bare `err "..."` need pinning so the assertion sees a
 # concrete option/result type at the call site.

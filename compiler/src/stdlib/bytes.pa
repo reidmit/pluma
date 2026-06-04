@@ -10,7 +10,7 @@
 #
 # Like strings and lists, bytes never change in place.
 
-use core.list
+use std.list
 
 # How many bytes are in the sequence.
 #

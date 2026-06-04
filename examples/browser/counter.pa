@@ -1,4 +1,4 @@
-# A click counter — the smallest real `core.dom` app.
+# A click counter — the smallest real `std.web.dom` app.
 #
 # Build it for the browser and serve the bundle:
 #
@@ -7,7 +7,7 @@
 #
 # then open http://localhost:8000/ . Clicking the button increments the label.
 
-use core.dom
+use std.web.dom
 
 def main = fun {
 	let root = dom.body ()

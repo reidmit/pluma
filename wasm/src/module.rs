@@ -54,7 +54,7 @@ impl Module {
 		// builtin call (via `helper_for_tag` here); the rest by IR construct (added
 		// by `scan_helpers` below).
 		let mut requested: HelperSet = HelperSet::new();
-		// Whether the program reaches a `core.net` builtin. The seven socket ops plus
+		// Whether the program reaches a `std.sys.net` builtin. The seven socket ops plus
 		// the reactor's `net-poll`/`net-unwatch` are registered together once, after
 		// the scan (see below) — the suspending `accept`/`read`/`write` are `$task`
 		// constructors driven by the scheduler, and `poll`/`unwatch` are reached only
@@ -113,7 +113,7 @@ impl Module {
 						requested.insert(Helper::ToString);
 					}
 				}
-				// Marshalled `core.io` ops encode their path/data args into scratch
+				// Marshalled `std.sys.io` ops encode their path/data args into scratch
 				// (`__alloc`/`__store_bytes`); reads also `__load_bytes` the payload and
 				// need the `io-copyout` overflow import, and `read-dir` splits names.
 				if is_io_host(tag) {
@@ -143,7 +143,7 @@ impl Module {
 						}
 					}
 				}
-				// `core.io` result builtins need the `__io_result` shaper + the
+				// `std.sys.io` result builtins need the `__io_result` shaper + the
 				// `io-last-error` channel it queries, on top of their own host import
 				// (registered by the generic path just below — fall through). `uuid-parse`
 				// rides this path too (it's classified as an io read).
@@ -154,7 +154,7 @@ impl Module {
 						host_order.push("io-last-error".to_string());
 					}
 				}
-				// `core.random`/`core.uuid` payload builders (`emit_rng`): the byte/string
+				// `std.random`/`std.uuid` payload builders (`emit_rng`): the byte/string
 				// ones write to scratch and read it back (`random-bytes` may overflow);
 				// the scalars need no helpers. Their host import is registered below.
 				if is_rng_host(tag) {
@@ -174,7 +174,7 @@ impl Module {
 						_ => {}
 					}
 				}
-				// `core.time` clock imports (`emit_clock`). now/monotonic/sleep need no
+				// `std.time` clock imports (`emit_clock`). now/monotonic/sleep need no
 				// helpers; `time-parse` marshals two strings + a scratch i64 slot and
 				// shapes its `result instant string` through `__io_result` (so it needs
 				// the marshalling helpers + the `io-last-error` error channel).
@@ -188,7 +188,7 @@ impl Module {
 						host_order.push("io-last-error".to_string());
 					}
 				}
-				// `core.dom` (`emit_dom`): string-carrying node ops marshal their args into
+				// `std.web.dom` (`emit_dom`): string-carrying node ops marshal their args into
 				// scratch; `dom-get-value` reads a payload back; `on-click` stows its handler
 				// in the dispatch registry (the `__dom_register`/`__dom_dispatch` helpers,
 				// whose dep `__list_push` and the `dom_handlers` global come in below). The
@@ -239,7 +239,7 @@ impl Module {
 			host_index.insert("float_to_str".to_string(), host_order.len() as u32);
 			host_order.push("float_to_str".to_string());
 		}
-		// `core.net`: register the whole import set together when any net builtin is
+		// `std.sys.net`: register the whole import set together when any net builtin is
 		// reachable (the sync ops shaped at the call site, the suspending ops + the
 		// reactor controls driven by the scheduler). The host defines all nine
 		// unconditionally, so importing the full set even when only some are used is
@@ -263,8 +263,8 @@ impl Module {
 				unwatch: reg("net-unwatch"),
 			}
 		});
-		// `core.net` shapes its results through `__io_result` (the same `ok`/`err` +
-		// `io-last-error` channel as `core.io`) and marshals byte payloads (addr/data,
+		// `std.sys.net` shapes its results through `__io_result` (the same `ok`/`err` +
+		// `io-last-error` channel as `std.sys.io`) and marshals byte payloads (addr/data,
 		// the read result) through scratch — pull those helpers + the error import in.
 		if uses_net {
 			requested.insert(Helper::IoResult);
@@ -509,7 +509,7 @@ impl Module {
 				ctxlen: wire_global(ValType::I32, &zero_i32),
 			};
 		}
-		// The `core.dom` event-handler registry (`dom_handlers`): a mutable `(ref null
+		// The `std.web.dom` event-handler registry (`dom_handlers`): a mutable `(ref null
 		// $list)` of handler closures, indexed by the token `dom.on-click` hands the host.
 		// Allocated (and `__dom_dispatch` exported, below) only when a listener is
 		// reachable — `__dom_register` lazily fills it on the first registration.
@@ -790,7 +790,7 @@ impl Module {
 			}
 		}
 
-		// `core.io` result builtins wrap their host return in `ok`/`err` via
+		// `std.sys.io` result builtins wrap their host return in `ok`/`err` via
 		// `__io_result`; resolve the `result` enum's variant tags + display names.
 		if requested.contains(&Helper::IoResult) {
 			let res = "__prelude__.result";
@@ -809,7 +809,7 @@ impl Module {
 						err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
 					};
 				}
-				_ => diags.push("`core.io` needs the `result` enum".to_string()),
+				_ => diags.push("`std.sys.io` needs the `result` enum".to_string()),
 			}
 		}
 

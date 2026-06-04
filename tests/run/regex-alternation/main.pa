@@ -1,4 +1,4 @@
-use core.regex
+use std.regex
 
 def yes-or-no = `"yes" | "no"`
 

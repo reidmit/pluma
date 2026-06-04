@@ -1,7 +1,7 @@
 # Patterns where records contain lists and lists contain records, in
 # both `let` and `when` positions.
 
-use core.list
+use std.list
 
 def main = fun {
 	# Record with a list field — extract head + tail of inner list.

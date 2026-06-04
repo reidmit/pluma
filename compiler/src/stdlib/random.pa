@@ -7,8 +7,8 @@
 # sequence every run, handy for tests and simulations -- isn't available
 # yet, but is planned.)
 
-use core.list
-use core.math
+use std.list
+use std.math
 
 # A random whole number from 0 up to (but not including) 2^63. Draws
 # fresh randomness each call.

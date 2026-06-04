@@ -1,4 +1,4 @@
-# Two clients hit one core.http server at the same time, and the handler is
+# Two clients hit one std.sys.http server at the same time, and the handler is
 # rigged so it can only finish once *both* requests are in flight: on entry
 # it bumps a shared counter, then waits for that counter to reach 2 before
 # replying "paired". A sequential server -- one connection handled to
@@ -11,12 +11,12 @@
 # regression to sequential serving still terminates the run -- with a
 # different but equally deterministic snapshot ("alone ...") instead of
 # hanging.
-use core.net
-use core.http
-use core.task
-use core.string
-use core.bytes
-use core.list
+use std.sys.net
+use std.sys.http
+use std.task
+use std.string
+use std.bytes
+use std.list
 
 # Spin until a second handler is also in flight (`gate` has reached 2).
 # `fuel` bounds the wait so a sequential server -- where the second handler

@@ -90,7 +90,7 @@ pub fn run_streaming_v8(bytes: &[u8], args: &[String]) -> i32 {
 }
 
 /// Run a `pluma test` artifact under V8, streaming the report to stdout, and map
-/// the outcome to a process exit code. The runner (`core.test.run-all`) prints
+/// the outcome to a process exit code. The runner (`std.test.run-all`) prints
 /// everything itself and returns `ok ()` on success or `err ""` on test failures
 /// — so a clean failure (`"runtime error: "` with an empty message) just exits 1
 /// silently, while a genuine trap (a crashing case) still surfaces its message.
@@ -169,7 +169,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-write-bytes", cb_write_out);
 	register(scope, pluma, data, "io-write-err-bytes", cb_write_err);
 	register(scope, pluma, data, "io-fail", cb_io_fail);
-	// core.io reads / fs.
+	// std.sys.io reads / fs.
 	register(scope, pluma, data, "io-read", cb_io_read);
 	register(scope, pluma, data, "io-read-all", cb_io_read_all);
 	register(
@@ -192,7 +192,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-is-dir", cb_is_dir);
 	register(scope, pluma, data, "io-last-error", cb_last_error);
 	register(scope, pluma, data, "io-copyout", cb_io_copyout);
-	// core.io process surface (Process capability) — argv, env, exit.
+	// std.sys.io process surface (Process capability) — argv, env, exit.
 	register(scope, pluma, data, "io-args", cb_io_args);
 	register(scope, pluma, data, "io-env", cb_io_env);
 	register(scope, pluma, data, "io-exit", cb_io_exit);
@@ -203,7 +203,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "math-exp", cb_math_exp);
 	register(scope, pluma, data, "math-sin", cb_math_sin);
 	register(scope, pluma, data, "math-cos", cb_math_cos);
-	// core.random / core.uuid (Entropy).
+	// std.random / std.uuid (Entropy).
 	register(scope, pluma, data, "random-int", cb_random_int);
 	register(scope, pluma, data, "random-float", cb_random_float);
 	register(scope, pluma, data, "random-int-range", cb_random_int_range);
@@ -211,12 +211,12 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "uuid-v4", cb_uuid_v4);
 	register(scope, pluma, data, "uuid-v7", cb_uuid_v7);
 	register(scope, pluma, data, "uuid-parse", cb_uuid_parse);
-	// core.time clock surface (Clock capability) — wall/monotonic clock, sleep, parse.
+	// std.time clock surface (Clock capability) — wall/monotonic clock, sleep, parse.
 	register(scope, pluma, data, "time-now", cb_time_now);
 	register(scope, pluma, data, "time-monotonic", cb_time_monotonic);
 	register(scope, pluma, data, "time-sleep", cb_time_sleep);
 	register(scope, pluma, data, "time-parse", cb_time_parse);
-	// core.net — socket ops (the multi-result ones return a `[status, n]` JS array) +
+	// std.sys.net — socket ops (the multi-result ones return a `[status, n]` JS array) +
 	// the reactor controls. `net-poll` blocks the thread synchronously (fine in a V8
 	// callback) until a parked socket is ready — the reactor step.
 	register(scope, pluma, data, "net-listen", cb_net_listen);

@@ -1,4 +1,4 @@
-// `core.net` — the host-side socket table + I/O reactor: byte-level TCP ops plus a
+// `std.sys.net` — the host-side socket table + I/O reactor: byte-level TCP ops plus a
 // `polling` readiness reactor. The in-wasm scheduler owns the loop; when its ready
 // queue empties and socket I/O is in flight, it calls the blocking `net-poll` import
 // here (the reactor step). The suspending ops (accept/read/write) are
@@ -52,7 +52,7 @@ enum Interest {
 	Write,
 }
 
-/// All `core.net` runtime state: the socket table plus the readiness reactor.
+/// All `std.sys.net` runtime state: the socket table plus the readiness reactor.
 /// Lives in `HostState` so it persists across host calls for the whole run.
 pub(crate) struct HostNet {
 	sockets: HashMap<u32, SocketEntry>,

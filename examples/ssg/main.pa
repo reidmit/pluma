@@ -7,9 +7,9 @@
 # styled page template, and writes the result to the output directory.
 # An index page linking every document is generated too.
 
-use core.io
-use core.list
-use core.string
+use std.sys.io
+use std.list
+use std.string
 use markdown
 use page
 

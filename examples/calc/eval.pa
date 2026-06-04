@@ -9,9 +9,9 @@
 # Everything returns `result num string`, so the first undefined name,
 # divide-by-zero, or unknown function short-circuits with a message.
 
-use core.list
-use core.dict
-use core.math
+use std.list
+use std.dict
+use std.math
 use value
 use parser
 

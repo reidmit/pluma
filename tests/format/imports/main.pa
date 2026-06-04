@@ -1,5 +1,5 @@
-use core.list
-use core.regex as re
+use std.list
+use std.regex as re
 
 def main = fun {
 	print "ok"

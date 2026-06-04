@@ -1,4 +1,4 @@
-use core.math
+use std.math
 
 # Exercises the unary float-math host imports (sin/cos/exp/log) plus the
 # pure-Pluma `tan` that rides on sin/cos. Outputs are reduced to exact values

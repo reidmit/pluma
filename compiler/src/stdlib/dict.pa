@@ -21,7 +21,7 @@
 # Iteration order is unspecified: `keys`, `values`, `entries`, `map`, `filter`,
 # and `fold` walk the pairs in an arbitrary (hash-determined) order.
 
-use core.list
+use std.list
 
 # An empty dict with no entries. The starting point you build up from
 # with `insert`.

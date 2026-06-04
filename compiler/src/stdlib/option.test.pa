@@ -1,6 +1,6 @@
-use core.test
-use core.option as opt
-use core.assert
+use std.test
+use std.option as opt
+use std.assert
 
 # Helpers that wrap an int or return none, so `then` has something
 # to do.

@@ -11,7 +11,7 @@
 // message into scratch.
 //
 // This file holds the engine-independent core — the `HostIo` sinks, `HostState`, and
-// the `core.net` reactor (`HostNet`) — that the V8 runner in `v8host.rs` drives. That
+// the `std.sys.net` reactor (`HostNet`) — that the V8 runner in `v8host.rs` drives. That
 // runner has three front doors over one set of host imports, differing only in the
 // `HostIo` sink behind `HostState` — so every door tests the exact runtime the CLI ships:
 //   - `run_streaming_v8` — **process stdio** (stdout/stderr streamed live, stdin read
@@ -25,7 +25,7 @@ use std::io::{Read, Write};
 
 use net::HostNet;
 
-// The `core.net` host-side socket table + I/O reactor (`HostNet`/`NetRet`), kept in its
+// The `std.sys.net` host-side socket table + I/O reactor (`HostNet`/`NetRet`), kept in its
 // own engine-independent module; `HostState` holds one for the run.
 mod net;
 
@@ -240,13 +240,13 @@ struct HostState {
 	/// The `io.fail` abort message, stashed before the host traps so the runner can
 	/// surface it as the program's `runtime error: <msg>` status.
 	fail: Option<String>,
-	/// The message the last failed `core.io` call stashed (errno-style); returned
+	/// The message the last failed `std.sys.io` call stashed (errno-style); returned
 	/// by the `io-last-error` import, which `__io_result` queries on the err path.
 	last_error: String,
 	/// Bytes a read op produced that didn't fit the caller's first `dst` buffer; the
 	/// wasm side then reserves the true size and drains this via `__io_copyout`. Empty
 	/// on the common (fits-first-try) path. (ABI.md Phase 1, the read overflow path.)
 	read_stash: Vec<u8>,
-	/// `core.net` runtime state: the socket table + the I/O reactor.
+	/// `std.sys.net` runtime state: the socket table + the I/O reactor.
 	net: HostNet,
 }

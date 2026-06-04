@@ -1,4 +1,4 @@
-use core.list
+use std.list
 
 # An explicit int comparator (avoids passing the `ord.compare` trait
 # method as a first-class value, which the wasm backend can't wrap yet).

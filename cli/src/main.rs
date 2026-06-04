@@ -269,7 +269,7 @@ fn test_command(args: Vec<String>) {
 
 	let mut compiler = Compiler::for_root_dir(root_dir.clone());
 	// Add the project marker as an entry so the analyzer type-checks
-	// `def package` against `core.package.info` (catches mistakes in the
+	// `def package` against `std.package.info` (catches mistakes in the
 	// config even when no test code references it).
 	compiler.add_entry_module(compiler::PROJECT_MARKER_MODULE.to_string());
 	for name in &test_modules {
@@ -287,7 +287,7 @@ fn test_command(args: Vec<String>) {
 
 	// Synthesize a test entry over the discovered suites and emit a WasmGC module,
 	// then run it under V8 (the deploy engine — `pluma test` exercises the exact
-	// artifact you ship). The runner is itself Pluma: `core.test.run-all` flattens
+	// artifact you ship). The runner is itself Pluma: `std.test.run-all` flattens
 	// each suite, runs the cases, prints the tree, and returns ok / err.
 	let use_color = std::io::IsTerminal::is_terminal(&std::io::stdout());
 	let program = match ir::lower_tests(&compiler, use_color) {
@@ -373,15 +373,15 @@ fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
 	out
 }
 
-/// `pluma build [--target server|browser] <file> [-o out]` — compile a module to
-/// a deploy artifact. `--target server` (the default) lowers the shared IR under
-/// `Platform::Server` through the WasmGC backend and writes `<out>.wasm`, run with
-/// `pluma run <out>.wasm`. `--target browser` is reserved for the WasmGC frontend
-/// (see notes/DEPLOY.md) and is not yet available.
+/// `pluma build [--target sys|web] <file> [-o out]` — compile a module to a deploy
+/// artifact. `--target sys` (the default) lowers the shared IR for the `Sys` target
+/// (a machine/OS host) through the WasmGC backend and writes `<out>.wasm`, run with
+/// `pluma run <out>.wasm`. `--target web` lowers for the web/DOM sandbox and writes
+/// a browser bundle (see notes/DEPLOY.md).
 fn build_command(args: Vec<String>) {
 	let mut entry_path: Option<String> = None;
 	let mut out_base: Option<String> = None;
-	let mut target = String::from("server");
+	let mut target = String::from("sys");
 	let mut iter = args.into_iter();
 	while let Some(a) = iter.next() {
 		match a.as_str() {
@@ -402,19 +402,19 @@ fn build_command(args: Vec<String>) {
 		}
 	};
 
-	let platform = match target.as_str() {
-		"server" => Platform::Server,
-		"browser" => Platform::Browser,
+	let target = match target.as_str() {
+		"sys" => Target::Sys,
+		"web" => Target::Web,
 		other => {
 			print_error(format!(
-				"Unknown --target `{other}`. Expected `server` or `browser`."
+				"Unknown --target `{other}`. Expected `sys` or `web`."
 			));
 			std::process::exit(1);
 		}
 	};
 
 	let mut compiler = match Compiler::from_entry_path(entry_path.clone()) {
-		Ok(c) => c.with_platform(platform),
+		Ok(c) => c.with_target(Some(target)),
 		Err(diagnostics) => {
 			print_diagnostics(diagnostics);
 			std::process::exit(1);
@@ -445,7 +445,7 @@ fn build_command(args: Vec<String>) {
 	let bytes = match wasm::emit_with_options(
 		&program,
 		wasm::EmitOptions {
-			browser: platform == Platform::Browser,
+			browser: target == Target::Web,
 			..Default::default()
 		},
 	) {
@@ -455,8 +455,8 @@ fn build_command(args: Vec<String>) {
 			std::process::exit(1);
 		}
 	};
-	match platform {
-		Platform::Server => {
+	match target {
+		Target::Sys => {
 			let wasm_path = format!("{base}.wasm");
 			if let Err(e) = std::fs::write(&wasm_path, &bytes) {
 				print_error(format!("writing {wasm_path}: {e}"));
@@ -464,13 +464,13 @@ fn build_command(args: Vec<String>) {
 			}
 			println!("wrote {wasm_path} (run with `pluma run {wasm_path}`)");
 		}
-		// The browser bundle: the wasm artifact plus the JS loader + HTML shell that run
+		// The web bundle: the wasm artifact plus the JS loader + HTML shell that run
 		// it against the real DOM. Written into a `<base>/` directory; serve it over HTTP
 		// (WasmGC needs a real origin, not file://) and open `index.html`.
-		Platform::Browser => {
+		Target::Web => {
 			let dir = std::path::PathBuf::from(&base);
 			if let Err(e) = browser_bundle::write_bundle(&dir, &bytes) {
-				print_error(format!("writing browser bundle to {}: {e}", dir.display()));
+				print_error(format!("writing web bundle to {}: {e}", dir.display()));
 				std::process::exit(1);
 			}
 			println!(
@@ -478,11 +478,6 @@ fn build_command(args: Vec<String>) {
 				 serve with `python3 -m http.server --directory {0}` and open the printed URL",
 				dir.display()
 			);
-		}
-		// `Native` is the analysis/dev profile, never a deploy build target.
-		Platform::Native => {
-			print_error("`build` needs --target server or browser, not the native profile");
-			std::process::exit(1);
 		}
 	}
 }
@@ -524,7 +519,7 @@ fn run(entry_path: String, program_args: Vec<String>) {
 	// Compile to a WasmGC artifact and run it under V8 — the deploy engine, the exact
 	// thing `pluma build` ships ("run what you deploy"). Every builtin the language
 	// exposes lowers to wasm, so a program the backend can't emit (today only the
-	// browser-only `core.dom` surface) is a hard `wasm codegen error`.
+	// web-only `std.web.dom` surface) is a hard `wasm codegen error`.
 	let program = match ir::lower(&compiler) {
 		Ok(p) => p,
 		Err(msg) => {
@@ -576,7 +571,7 @@ fn reuse_command(entry_path: String) {
 	// actionable here.
 	let notes: Vec<_> = ir::reuse::report(&program)
 		.into_iter()
-		.filter(|n| !n.module.starts_with("core."))
+		.filter(|n| !n.module.starts_with("std."))
 		.collect();
 	if notes.is_empty() {
 		println!("no `dict.insert` sites found in your modules");
@@ -691,7 +686,7 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
-  build <path> [--target server] [-o out]
+  build <path> [--target sys|web] [-o out]
                    compile a module to a WasmGC deploy artifact (.wasm); run it
                    with `pluma run <out>.wasm`
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
@@ -719,7 +714,7 @@ Compiler & toolchain for the {} programming language
 
 COMMANDS:
   [run] <path>     execute a module directly (the `run` keyword is optional)
-  build <path> [--target server] [-o out]
+  build <path> [--target sys|web] [-o out]
                    compile a module to a WasmGC deploy artifact (.wasm); run it
                    with `pluma run <out>.wasm`
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run

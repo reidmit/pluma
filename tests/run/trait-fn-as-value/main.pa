@@ -4,7 +4,7 @@
 # work: codegen wraps it so the resolved dicts are prepended and the runtime
 # arity matches the user-visible type. Regression test for an arity mismatch.
 
-use core.list
+use std.list
 
 def step = fun acc x {
 	acc + x

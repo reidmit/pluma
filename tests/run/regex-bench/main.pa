@@ -1,8 +1,8 @@
 # Regex stress: the pure-Pluma backtracking engine. Compile a pattern with a
 # named capture once, then run `find-all` over a sentence many times.
 
-use core.regex as re
-use core.list
+use std.regex as re
+use std.list
 
 def word = `<w: letter+>`
 

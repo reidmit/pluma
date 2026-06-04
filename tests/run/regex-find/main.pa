@@ -1,6 +1,6 @@
-use core.regex as re
-use core.dict
-use core.list
+use std.regex as re
+use std.dict
+use std.list
 
 def coord = `"(" <x: digit+> "," <y: digit+> ")"`
 

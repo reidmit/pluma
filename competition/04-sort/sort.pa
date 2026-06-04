@@ -1,7 +1,7 @@
 # Sort a pseudo-random integer list with the stdlib stable merge sort, then fold
 # an order-sensitive checksum over the result.
 
-use core.list
+use std.list
 
 def main = fun {
 	let xs = list.build 100000 fun i { (i * 2654435761) % 100003 }

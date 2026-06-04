@@ -4,7 +4,7 @@
 # The `task` type itself is built in and always available (see the prelude),
 # and the async *syntax* -- `try`/`??` over a task, the `scope` block, `defer`,
 # duration literals -- needs no import. But the named functions here all live
-# behind `use core.task`: since you can't build a task without `task.return` /
+# behind `use std.task`: since you can't build a task without `task.return` /
 # `task.fail`, async code imports this module anyway.
 #
 # You rarely call `task.then` by hand: inside a function that returns a
@@ -13,7 +13,7 @@
 # (`task.all`, `task.race`, `task.with-timeout`, …) compose tasks that run
 # concurrently; `scope` (a keyword) is the structured-concurrency block
 # they're built on.
-use core.list
+use std.list
 
 # Lifts a plain value into a task that is already finished. `task.return
 # 5` is the task that immediately produces `5`. It's how an async function

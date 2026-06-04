@@ -1,7 +1,7 @@
 # A fail-fast `scope` with two spawned children, awaited via `try`. Exercises
 # scope typing (the block is a `task a`), the `scope as s` handle binding, and
 # `s.spawn` method dispatch (lowered to the `task.scope-spawn` kernel builtin).
-use core.task
+use std.task
 def both = fun t1 t2 {
 	scope as s {
 		let h1 = s.spawn t1

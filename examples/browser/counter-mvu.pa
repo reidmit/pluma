@@ -6,9 +6,9 @@
 # then open http://localhost:8000/ . The runtime owns the model and the DOM;
 # you just describe the view and how messages change the model.
 
-use core.html
-use core.events
-use core.app
+use std.web.html
+use std.web.events
+use std.web.app
 
 enum msg {
 	increment

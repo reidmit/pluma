@@ -1,4 +1,4 @@
-use core.list
+use std.list
 
 def main = fun {
 	[1, 2, 3] | list.filter fun n { n > 1 } | print

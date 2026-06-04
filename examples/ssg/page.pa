@@ -3,9 +3,9 @@
 # A document may begin with a `---`-delimited header of `key: value`
 # lines; everything after the closing `---` is the Markdown body.
 
-use core.string
-use core.list
-use core.dict
+use std.string
+use std.list
+use std.dict
 
 # Split a document into its metadata dict and Markdown body. With no
 # header, the metadata is empty and the body is the whole input.

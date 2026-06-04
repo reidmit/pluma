@@ -1,14 +1,14 @@
 # An HTTP/1.1 request/response over loopback, all in one process: a real
-# core.http server (its accept/read/parse/serialize/write loop) talks to a
+# std.sys.http server (its accept/read/parse/serialize/write loop) talks to a
 # hand-written client that sends a raw GET and reads the raw reply. The
 # server runs under a scope that's cancelled once the exchange is done.
 # Output is the (deterministic) status line and body the client received.
-use core.net
-use core.http
-use core.task
-use core.string
-use core.bytes
-use core.list
+use std.sys.net
+use std.sys.http
+use std.task
+use std.string
+use std.bytes
+use std.list
 
 def handler :: fun http.request -> task http.response = fun req {
 	task.return (http.text 200 ("you asked for " ++ req.path))

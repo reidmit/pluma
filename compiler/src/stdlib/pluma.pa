@@ -1,4 +1,4 @@
-use core.package
+use std.package
 
 public def package :: package.info = {
 	name: "core",

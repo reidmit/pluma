@@ -4,9 +4,9 @@
 # flags, item count), so it is independent of key ordering and agrees across
 # every language.
 
-use core.json
-use core.list
-use core.string
+use std.json
+use std.list
+use std.string
 
 # Build N objects as one JSON array string. Integers and fixed strings only, so
 # every language constructs byte-identical input.

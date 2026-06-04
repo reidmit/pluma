@@ -3,7 +3,7 @@
 # *characters* (Unicode scalar values), not bytes, so an accented letter
 # or an emoji counts as one character even though it takes several bytes
 # to store. When you need the raw bytes instead, use `to-bytes` (or
-# reach for `core.bytes`).
+# reach for `std.bytes`).
 #
 # Strings never change in place: every function here returns a new
 # string and leaves the original alone.
@@ -14,9 +14,9 @@
 # no byte under 128 -- so character-level work reduces to byte-level work
 # without any Unicode tables.
 
-use core.list
-use core.bytes
-use core.math
+use std.list
+use std.bytes
+use std.math
 
 # Reinterpret bytes as a string with no copy and no UTF-8 check -- the
 # inverse of `to-bytes`. Private and only ever handed bytes that were

@@ -1,4 +1,4 @@
-use core.string
+use std.string
 
 def show-int = fun r {
 	when r is ok n {

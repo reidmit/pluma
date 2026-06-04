@@ -1,4 +1,4 @@
-use core.dict
+use std.dict
 
 # `foo` has no `hash` instance, so using it as a dict key must fail
 # the `where (hash k)` constraint on `dict.insert`.

@@ -1,8 +1,8 @@
-use core.test
-use core.uuid
-use core.string
-use core.bytes
-use core.assert
+use std.test
+use std.uuid
+use std.string
+use std.bytes
+use std.assert
 
 def tests :: test.suite = [
 	test.case "v4 has canonical length" fun {

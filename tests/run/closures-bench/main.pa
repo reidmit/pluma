@@ -2,7 +2,7 @@
 # apply every one to a running accumulator. Exercises closure allocation (env
 # capture) and indirect calls.
 
-use core.list
+use std.list
 
 def main = fun {
 	let adders = list.build 5000 fun i {

@@ -1,5 +1,5 @@
-use core.json
-use core.list
+use std.json
+use std.list
 
 # Walker helpers compose via `try`. Build a small nested document and
 # pull values back out by field path.

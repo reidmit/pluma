@@ -1,7 +1,7 @@
-use core.test
-use core.assert
+use std.test
+use std.assert
 
-# `ref` is auto-imported in every module — no `use core.ref` needed.
+# `ref` is auto-imported in every module — no `use std.ref` needed.
 
 def tests :: test.suite = [
 	test.case "new + get round-trips an int" fun {

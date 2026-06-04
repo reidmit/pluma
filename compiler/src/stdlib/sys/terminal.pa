@@ -1,4 +1,4 @@
-# core.terminal — ANSI styling for terminal output.
+# std.sys.terminal — ANSI styling for terminal output.
 #
 # Pure string-wrapping: each helper wraps a string in SGR escape codes with a
 # single reset, so colored output composes without the early-reset bug you get
@@ -6,13 +6,13 @@
 # capability — the caller decides whether to apply styling (e.g. only when the
 # output is a TTY) and prints the result itself.
 #
-#     use core.terminal
+#     use std.sys.terminal
 #     print (terminal.bold-green "passed")
 #     print (terminal.styled [1, 31] "bold red")
 
-use core.bytes
-use core.list
-use core.string
+use std.bytes
+use std.list
+use std.string
 
 # ESC (0x1b) as a one-character string. Built from a byte since string literals
 # don't carry a `\x` escape; `build`/`to-string` for code 27 never fails.

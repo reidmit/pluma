@@ -1,8 +1,8 @@
-# core.html -- a virtual DOM: your UI described as plain data.
+# std.web.html -- a virtual DOM: your UI described as plain data.
 #
-# Instead of poking at the real page (that's `core.dom`), you build an
+# Instead of poking at the real page (that's `std.web.dom`), you build an
 # `html msg` value -- a tree of elements and text -- and hand it to the
-# `core.app` runtime, which makes the real DOM match it. Because it's just
+# `std.web.app` runtime, which makes the real DOM match it. Because it's just
 # data, `view` stays a pure function of your model.
 #
 # The `msg` type parameter is the message an element's event handlers emit:
@@ -11,7 +11,7 @@
 #
 # Build trees with the element helpers (`html.div`, `html.button`,
 # `html.text`, ...), attach attributes with the attribute helpers
-# (`html.class`, `html.value`, ...), and add event handlers from `core.events`.
+# (`html.class`, `html.value`, ...), and add event handlers from `std.web.events`.
 #
 # There is a named builder for (almost) every standard HTML tag, mirroring
 # Elm's `Html` module. Every element builder has the same shape -- it takes a
@@ -19,8 +19,8 @@
 # `br` still take a (usually empty) child list. For a tag without a builder,
 # reach for the generic `html.element "tag" attrs kids`.
 
-use core.dom
-use core.list
+use std.web.dom
+use std.list
 
 # A virtual DOM node. The constructors are internal (`el`/`txt`); build nodes
 # with the helpers below so the public API is all qualified (`html.div`,
@@ -35,7 +35,7 @@ public enum html msg {
 # and properties differ in what they touch -- `set-attribute` vs `node[name] = …`;
 # properties are what controlled inputs need (live `value`/`checked`, not the
 # initial-state attribute). Internal constructors; build with the helpers below +
-# `core.events`.
+# `std.web.events`.
 public enum attribute msg {
 	a-set string string
 	a-prop-str string string
@@ -482,7 +482,7 @@ public def bool-property :: fun string bool -> attribute msg = fun k v {
 	a-prop-bool k v
 }
 
-# An event handler attribute (usually you'll reach for `core.events`):
+# An event handler attribute (usually you'll reach for `std.web.events`):
 # `html.on "click" (fun _e { Save })`.
 public def on :: fun string (fun dom.event -> msg) -> attribute msg = fun name handler {
 	a-on name handler

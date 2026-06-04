@@ -8,11 +8,11 @@ pub enum Type {
 	Int,
 	Float,
 	// An opaque point on the wall clock (UTC), backed by an i64 nanosecond
-	// count since the Unix epoch. Produced and consumed only by `core.time`
+	// count since the Unix epoch. Produced and consumed only by `std.time`
 	// builtins; the surface language can't peek at the raw count.
 	Instant,
 	// An opaque signed time span, backed by an i64 nanosecond count. Also
-	// owned by `core.time`.
+	// owned by `std.time`.
 	Duration,
 	String,
 	Bytes,
@@ -42,10 +42,10 @@ pub enum Type {
 	List(Box<Type>),
 	// `Dict(key, value)`. A hash-backed associative table; keys must have a
 	// `hash` instance, but that constraint lives on the operations in
-	// `core.dict`, not on the type itself.
+	// `std.dict`, not on the type itself.
 	Dict(Box<Type>, Box<Type>),
 	// `Ref(inner)`. A mutable cell holding a value of type `inner`. Created
-	// via `ref.new`, read/written through `core.ref` operations. Equality
+	// via `ref.new`, read/written through `std.ref` operations. Equality
 	// on refs is reference identity, not structural.
 	Ref(Box<Type>),
 }

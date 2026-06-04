@@ -1,6 +1,6 @@
-use core.test
-use core.base64
-use core.assert
+use std.test
+use std.base64
+use std.assert
 
 def tests :: test.suite = [
 	test.case "encode of empty bytes" fun {

@@ -235,7 +235,7 @@ pub(crate) fn build_run_task_fn(
 }
 
 // ==========================================================================
-// The browser command runtime (Platform::Browser).
+// The browser command runtime (the Web target).
 //
 // A browser MVU app is long-lived and externally driven: `__browser_entry`
 // (exported `_entry`) runs `init` + pumps once and RETURNS, leaving the
@@ -783,7 +783,7 @@ pub(crate) fn build_pump_fn(
 					);
 				});
 
-				// core.net suspending ops (ABI.md Phase 1): marshal byte payloads through
+				// std.sys.net suspending ops (ABI.md Phase 1): marshal byte payloads through
 				// scratch, do the non-blocking host call, then settle the produced
 				// `result` value — or, on would-block, park on socket readiness
 				// (`wait::IO`, re-Started from `fiber::RETRY` by the block step). token =
@@ -2610,7 +2610,7 @@ fn net_settle(
 		|w| {
 			// Ready: build a payload-or-null and shape it through `__io_result` — status
 			// 0 → `ok <payload>`, non-zero → null → `err (io-last-error())` (the message
-			// was set host-side, same channel as `core.io`).
+			// was set host-side, same channel as `std.sys.io`).
 			w.local_get(status).i32(2).i32_eq(); // err?
 			w.if_result(
 				types::value_ref(),

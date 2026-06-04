@@ -1,5 +1,5 @@
-use core.io
-use core.string
+use std.sys.io
+use std.string
 
 def main = fun {
 	when io.read-all () is ok contents {

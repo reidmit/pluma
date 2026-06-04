@@ -17,16 +17,16 @@ use std::path::{Path, PathBuf};
 // `then`, `option.some` falls through to the enum's `some`). The
 // FieldAccess dispatch in the analyzer handles the overlap.
 pub const AUTO_IMPORTS: &[(&str, &str)] = &[
-	("core.ref", "ref"),
-	("core.option", "option"),
-	("core.result", "result"),
-	// NB: `core.task` is deliberately *not* auto-imported. The async syntax
+	("std.ref", "ref"),
+	("std.option", "option"),
+	("std.result", "result"),
+	// NB: `std.task` is deliberately *not* auto-imported. The async syntax
 	// (`try`/`??` over a task, `scope`, `defer`, duration literals) needs no
 	// import — it's type-driven and lowers to fully-qualified globals — but
 	// every *named* task function (`task.return`, `task.sleep`, `task.both`,
-	// the kernel behind `s.spawn`/`s.next`, …) lives behind `use core.task`.
+	// the kernel behind `s.spawn`/`s.next`, …) lives behind `use std.task`.
 	// Since you can't build a task without `task.return`/`task.fail`, async
-	// code imports `core.task` anyway; keeping it explicit avoids pulling the
+	// code imports `std.task` anyway; keeping it explicit avoids pulling the
 	// whole combinator surface into every module's namespace.
 ];
 
@@ -58,11 +58,10 @@ pub struct Compiler {
 	// Pre-registered native modules (stdlib). Resolved without parsing any
 	// `.pa` file — the compiler hands the analyzer their exports directly.
 	pub native_modules: HashMap<String, ModuleExports>,
-	// The target platform whose host-capability profile gates module
-	// availability (a `use core.io` on the browser target is an error).
-	// Defaults to `Native` (the frontend/analysis profile — provides every
-	// capability, so nothing is gated), so existing flows are unchanged.
-	pub platform: Platform,
+	// The deploy target whose tier gates module availability (a `use std.web.dom`
+	// on the `sys` target is an error). `None` is the ungated frontend/analysis
+	// mode — nothing is gated — so existing flows are unchanged.
+	pub target: Option<Target>,
 }
 
 impl Compiler {
@@ -76,16 +75,16 @@ impl Compiler {
 			diagnostics: Vec::new(),
 			exports_cache: HashMap::new(),
 			native_modules: HashMap::new(),
-			platform: Platform::default(),
+			target: None,
 		})
 	}
 
-	// Select the target platform whose capability profile gates module
-	// availability. Builder form so the ~14 existing constructor call sites
-	// (cli, lsp, tests, bench) keep their default `Native` profile untouched;
-	// only a platform-specific build (e.g. the wasm-server test harness) opts in.
-	pub fn with_platform(mut self, platform: Platform) -> Self {
-		self.platform = platform;
+	// Select the deploy target whose tier gates module availability. Builder
+	// form so the ~14 existing constructor call sites (cli, lsp, tests) keep
+	// their default ungated (`None`) mode untouched; only a `pluma build
+	// --target sys|web` opts into gating.
+	pub fn with_target(mut self, target: Option<Target>) -> Self {
+		self.target = target;
 		self
 	}
 
@@ -101,7 +100,7 @@ impl Compiler {
 			diagnostics: Vec::new(),
 			exports_cache: HashMap::new(),
 			native_modules: HashMap::new(),
-			platform: Platform::default(),
+			target: None,
 		}
 	}
 
@@ -275,11 +274,11 @@ impl Compiler {
 		let importer_path = self.modules.get(module_name).map(|m| m.module_path.clone());
 		let mut rejected_imports: HashSet<String> = HashSet::new();
 		for (full_name, _, range, use_range) in &imports {
-			// The capabilities `full_name` requires that the active platform
-			// doesn't provide. Empty on the default `Native` profile (it provides
-			// everything) and for any ungated module — so this gate is inert for
+			// Whether `full_name`'s tier is barred by the active deploy target.
+			// `None` (the default ungated mode) never bars anything, and shared
+			// `std.*` / user modules have no tier — so this gate is inert for
 			// existing flows. Reported against the whole `use …` statement.
-			let missing_caps = self.platform.missing_capabilities(full_name);
+			let tier_rejection = gate(self.target, full_name);
 			let rejection: Option<(String, Range)> = if is_test_module(full_name) && !importer_is_test {
 				Some((
 					format!(
@@ -299,17 +298,8 @@ impl Compiler {
 					),
 					*range,
 				))
-			} else if !missing_caps.is_empty() {
-				Some((
-					format!(
-						"`{}` is not available on the {} target — it needs host \
-						capabilities {:?} this platform does not provide.",
-						full_name,
-						self.platform.label(),
-						missing_caps
-					),
-					*use_range,
-				))
+			} else if let Some(message) = tier_rejection {
+				Some((message, *use_range))
 			} else {
 				None
 			};
@@ -350,15 +340,15 @@ impl Compiler {
 		}
 
 		// Auto-imported modules: bound under a bare name in every user
-		// module without an explicit `use`. Currently `core.ref` →
-		// `ref`, `core.option` → `option`, `core.result` → `result`.
+		// module without an explicit `use`. Currently `std.ref` →
+		// `ref`, `std.option` → `option`, `std.result` → `result`.
 		// User code can shadow by binding the local name to something
 		// else via `use`. Exports come from either a baked `.pa` source
 		// (loaded via `load_module` into `exports_cache`) or from a
 		// pre-registered native module. Auto-imports don't apply when
 		// loading an auto-imported module itself — they'd otherwise
-		// form a cycle among themselves (loading `core.option` would
-		// recurse into loading `core.ref` etc. while `core.option` is
+		// form a cycle among themselves (loading `std.option` would
+		// recurse into loading `std.ref` etc. while `std.option` is
 		// still on the visiting stack).
 		let is_auto_imported_module = AUTO_IMPORTS.iter().any(|(n, _)| *n == module_name);
 		if !is_auto_imported_module {
@@ -434,10 +424,10 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
 
 /// Whether `name` is a discovered test *file* (`<segments>.test.pa`), as
 /// opposed to ordinary code. These are import-gated: only other test modules may
-/// `use` them. `core.test` is excluded — it's the test *framework* (stdlib),
+/// `use` them. `std.test` is excluded — it's the test *framework* (stdlib),
 /// importable from anywhere, and only incidentally shares the `.test` suffix.
 fn is_test_module(name: &str) -> bool {
-	name.ends_with(".test") && name != "core.test"
+	name.ends_with(".test") && name != "std.test"
 }
 
 pub fn to_module_path(root_dir: &Path, module_name: &str) -> PathBuf {
@@ -516,11 +506,11 @@ fn get_root_dir_and_module_name(entry_path: String) -> Result<(PathBuf, String),
 mod platform_gating_tests {
 	use super::*;
 
-	// Compile a synthetic `main` module under `platform`, returning the
+	// Compile a synthetic `main` module under `target`, returning the
 	// diagnostics (empty on success). The module source is fed in-memory, so no
 	// disk access is needed; gated stdlib modules resolve from the baked sources.
-	fn check_with(platform: Platform, source: &str) -> Vec<Diagnostic> {
-		let mut compiler = Compiler::for_root_dir(std::env::temp_dir()).with_platform(platform);
+	fn check_with(target: Option<Target>, source: &str) -> Vec<Diagnostic> {
+		let mut compiler = Compiler::for_root_dir(std::env::temp_dir()).with_target(target);
 		compiler.set_module_source("main".to_string(), source.as_bytes().to_vec());
 		compiler.add_entry_module("main".to_string());
 		match compiler.check() {
@@ -530,33 +520,33 @@ mod platform_gating_tests {
 	}
 
 	#[test]
-	fn core_io_allowed_on_native_and_server() {
-		let src = "use core.io\n\ndef main = fun { io.print \"hi\" }\n";
-		assert!(check_with(Platform::Native, src).is_empty());
-		assert!(check_with(Platform::Server, src).is_empty());
+	fn sys_io_allowed_ungated_and_on_sys() {
+		let src = "use std.sys.io\n\ndef main = fun { io.print \"hi\" }\n";
+		assert!(check_with(None, src).is_empty());
+		assert!(check_with(Some(Target::Sys), src).is_empty());
 	}
 
 	#[test]
-	fn core_io_rejected_on_browser() {
-		let src = "use core.io\n\ndef main = fun { io.print \"hi\" }\n";
-		let diags = check_with(Platform::Browser, src);
+	fn sys_io_rejected_on_web() {
+		let src = "use std.sys.io\n\ndef main = fun { io.print \"hi\" }\n";
+		let diags = check_with(Some(Target::Web), src);
 		assert!(
 			diags
 				.iter()
-				.any(|d| d.message.contains("core.io") && d.message.contains("browser")),
-			"expected a browser-target rejection for core.io, got: {:?}",
+				.any(|d| d.message.contains("std.sys.io") && d.message.contains("web")),
+			"expected a web-target rejection for std.sys.io, got: {:?}",
 			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
 		);
 	}
 
 	#[test]
 	fn ungated_module_available_everywhere() {
-		let src = "use core.list\n\ndef main = fun { list.length [1] }\n";
-		for p in [Platform::Native, Platform::Server, Platform::Browser] {
+		let src = "use std.list\n\ndef main = fun { list.length [1] }\n";
+		for t in [None, Some(Target::Sys), Some(Target::Web)] {
 			assert!(
-				check_with(p, src).is_empty(),
-				"core.list rejected on {:?}",
-				p
+				check_with(t, src).is_empty(),
+				"std.list rejected on {:?}",
+				t
 			);
 		}
 	}

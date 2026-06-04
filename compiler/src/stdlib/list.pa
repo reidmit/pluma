@@ -15,7 +15,7 @@
 #
 # When a lookup might come up empty -- asking for the first
 # element of a list that could be empty, say -- you get back an
-# `option` (see `core.option`) rather than a crash: `some value`
+# `option` (see `std.option`) rather than a crash: `some value`
 # if it found something, `none` if it didn't.
 
 # Returns how many elements are in the list.

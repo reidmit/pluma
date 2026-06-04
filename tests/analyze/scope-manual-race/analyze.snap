@@ -10,8 +10,8 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
     },
     ast: Some(
         module(3:0-22:1) [
-            use(3:0-3:13) `core.task`,
-            use(4:0-4:13) `core.list`,
+            use(3:0-3:12) `std.task`,
+            use(4:0-4:12) `std.list`,
         ] [
             def(6:0-17:1) :: nothing {
                 name: ident(6:4-6:8) `race`,

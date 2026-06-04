@@ -1,4 +1,4 @@
-use core.regex
+use std.regex
 
 # Named captures compile to `(?P<name>...)`. The captured substrings
 # are surfaced through `regex.find` (see regex-find fixture) — this

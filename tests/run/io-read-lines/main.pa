@@ -1,4 +1,4 @@
-use core.io
+use std.sys.io
 
 # read every line from stdin until EOF, prefixing each with its index
 def loop = fun i {

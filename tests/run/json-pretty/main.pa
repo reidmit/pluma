@@ -1,4 +1,4 @@
-use core.json
+use std.json
 
 # Pretty-print: 2-space indent, one element per line, insertion order
 # preserved.

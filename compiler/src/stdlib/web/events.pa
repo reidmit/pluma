@@ -1,4 +1,4 @@
-# core.events -- attach event handlers to elements in a `core.html` view.
+# std.web.events -- attach event handlers to elements in a `std.web.html` view.
 #
 # Each helper returns an `attribute msg` you drop into an element's attribute
 # list; when the DOM event fires, the runtime feeds the resulting `msg` into
@@ -7,8 +7,8 @@
 #     html.button [events.on-click Increment] [html.text "+"]
 #     html.input  [events.on-input Typed] []
 
-use core.html
-use core.dom
+use std.web.html
+use std.web.dom
 
 # Fire `msg` when the element is clicked. The click event itself is ignored
 # -- you just name the message to send.

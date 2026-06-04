@@ -7,9 +7,9 @@
 # no user interaction: `init` issues a `sleep 1s` command; when it completes it
 # sends `tick`, and `update` increments the count and re-issues the command.
 
-use core.html
-use core.app
-use core.task
+use std.web.html
+use std.web.app
+use std.task
 
 enum msg {
 	tick

@@ -1,12 +1,12 @@
-# core.test — declarative test trees that `pluma test` runs.
+# std.test — declarative test trees that `pluma test` runs.
 #
 # A test file (`*.test.pa`) exports a single `tests :: test.suite` — a list of
 # test nodes. Build them with the constructors below; each `case` body returns a
 # `result` (`ok ()` to pass, `err msg` to fail), which is exactly what the
-# `core.assert` checks produce.
+# `std.assert` checks produce.
 #
-#     use core.test
-#     use core.assert
+#     use std.test
+#     use std.assert
 #
 #     def tests :: test.suite = [
 #         test.case "adds" (fun { assert.equals (2 + 3) 5 }),
@@ -23,9 +23,33 @@
 # `pluma test` synthesizes the call. There is no registrar and no mutation — a
 # suite is a plain value you can build, map over, and pass around.
 
-use core.list
-use core.string
-use core.terminal
+use std.list
+use std.string
+use std.bytes
+
+# --- inlined ANSI styling --------------------------------------------------
+# `std.test` is a shared module (it runs under V8 on both the `sys` and `web`
+# targets), so it cannot depend on the `sys`-only `std.sys.terminal`. The few
+# styling helpers the runner needs are inlined here instead — kept byte-for-byte
+# in sync with `std.sys.terminal`'s `styled`/wrappers.
+
+# ESC (0x1b) as a one-character string. Built from a byte since string literals
+# don't carry a `\x` escape; `build`/`to-string` for code 27 never fails.
+def esc :: string = bytes.to-string (bytes.build 1 fun _i { 27 }) ?? ""
+
+# Wrap `s` in the given SGR codes, closed by a single reset (1 = bold, 2 = dim,
+# 31 = red, …), so colored output composes without an early-reset bug.
+def styled :: fun (list int) string -> string = fun codes s {
+	let nums = string.join (list.map codes fun c { to-string c }) ";"
+	"$(esc)[$(nums)m$(s)$(esc)[0m"
+}
+
+def bold :: fun string -> string = fun s { styled [1] s }
+def dim :: fun string -> string = fun s { styled [2] s }
+def bold-red :: fun string -> string = fun s { styled [1, 31] s }
+def bold-green :: fun string -> string = fun s { styled [1, 32] s }
+def bold-yellow :: fun string -> string = fun s { styled [1, 33] s }
+def bold-dim :: fun string -> string = fun s { styled [2, 1] s }
 
 # A node in a test tree. Opaque: build one only through the constructors below
 # (`test.case`, `test.group`, `test.skip`, `test.focus`, `test.todo`) — a suite
@@ -157,7 +181,7 @@ def common-len :: fun (list string) (list string) -> int = fun a b {
 def emit-headers :: fun bool (list string) (list string) -> list string = fun color printed path {
 	let common = common-len printed path
 	list.each (list.enumerate (list.drop path common)) fun ie {
-		print (spaces (common + ie.0 + 1) ++ paint color terminal.bold-dim ie.1)
+		print (spaces (common + ie.0 + 1) ++ paint color bold-dim ie.1)
 	}
 	path
 }
@@ -172,10 +196,10 @@ def print-msg :: fun string string -> nothing = fun indent msg {
 # Run one case body and print its pass/fail line; return the updated totals.
 def run-case :: fun bool string entry acc -> acc = fun color indent e a {
 	when e.body () is ok _u {
-		print (indent ++ paint color terminal.bold-green "✓" ++ " " ++ e.name)
+		print (indent ++ paint color bold-green "✓" ++ " " ++ e.name)
 		{...a, passed: a.passed + 1}
 	} is err msg {
-		print (indent ++ paint color terminal.bold-red "✗" ++ " " ++ e.name)
+		print (indent ++ paint color bold-red "✗" ++ " " ++ e.name)
 		print-msg indent msg
 		{...a, failed: a.failed + 1}
 	}
@@ -188,16 +212,16 @@ def run-entries :: fun bool bool (list entry) acc -> acc = fun color any-focused
 		let a1 = {...a, printed: emit-headers color a.printed e.path}
 		let indent = spaces (list.length e.path + 1)
 		when e.status is pending {
-			print (indent ++ paint color terminal.bold-yellow "○" ++ " " ++ e.name ++ " " ++ paint color terminal.dim "(todo)")
+			print (indent ++ paint color bold-yellow "○" ++ " " ++ e.name ++ " " ++ paint color dim "(todo)")
 			{...a1, todo: a1.todo + 1}
 		} is skipped {
-			print (indent ++ paint color terminal.dim "-" ++ " " ++ e.name ++ " " ++ paint color terminal.dim "(skipped)")
+			print (indent ++ paint color dim "-" ++ " " ++ e.name ++ " " ++ paint color dim "(skipped)")
 			{...a1, skipped: a1.skipped + 1}
 		} is focused {
 			run-case color indent e a1
 		} is normal {
 			if any-focused {
-				print (indent ++ paint color terminal.dim "-" ++ " " ++ e.name ++ " " ++ paint color terminal.dim "(not focused)")
+				print (indent ++ paint color dim "-" ++ " " ++ e.name ++ " " ++ paint color dim "(not focused)")
 				{...a1, skipped: a1.skipped + 1}
 			} else {
 				run-case color indent e a1
@@ -221,9 +245,9 @@ def summary-line :: fun bool acc -> string = fun color a {
 		with-skip
 	}
 	if a.failed == 0 {
-		paint color terminal.bold-green full
+		paint color bold-green full
 	} else {
-		paint color terminal.bold-red full
+		paint color bold-red full
 	}
 }
 
@@ -241,7 +265,7 @@ public def run-all :: fun bool (list {
 		} else {
 			""
 		}
-		print (lead ++ paint color terminal.bold indexed.1.name)
+		print (lead ++ paint color bold indexed.1.name)
 		let entries = flatten indexed.1.tests
 		let any-focused = list.any entries fun e {
 			is-focused e.status

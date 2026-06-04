@@ -1,4 +1,4 @@
-use core.io
+use std.sys.io
 
 # `make-dir` creates nested parents (mkdir -p), is idempotent, and the
 # created directory is usable for file I/O. Writes live under `target/`

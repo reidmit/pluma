@@ -53,7 +53,7 @@ pub fn lower(compiler: &Compiler) -> Result<IrProgram, String> {
 }
 
 /// Lower for `pluma test`: synthesize an entry that runs every module's `tests`
-/// suite through `core.test.run-all`, rather than calling a `main`. `color`
+/// suite through `std.test.run-all`, rather than calling a `main`. `color`
 /// enables ANSI styling in the rendered report.
 pub fn lower_tests(compiler: &Compiler, color: bool) -> Result<IrProgram, String> {
 	let mut lowerer = Lowerer::new(compiler);
@@ -804,7 +804,7 @@ impl<'a> Lowerer<'a> {
 			}
 			[head, tail] => {
 				// A dotted head is an already-fully-qualified reference (e.g.
-				// `core.task.or-else`), resolved directly against globals.
+				// `std.task.or-else`), resolved directly against globals.
 				if head.name.contains('.') {
 					if let Some(g) = self.globals.lookup(&head.name, &tail.name) {
 						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
@@ -1125,7 +1125,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// Lower a backtick regex literal to a `__prelude__.regex-pattern` enum
-	/// value tree — the shape the pure-Pluma `core.regex` engine walks. Mirrors
+	/// value tree — the shape the pure-Pluma `std.regex` engine walks. Mirrors
 	/// `lower_wire_shape`: a structured AST node reified as a runtime value
 	/// rather than flattened to a string. The quantifier `RegexKind`s all
 	/// collapse to `p-repeat inner min max` (`max = -1` is unbounded); a
@@ -1601,15 +1601,15 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// `scope (as s)? { body }` / `manual scope ...` — lower to a call to the
-	/// `core.task.scope-new` kernel: `scope-new <manual> (fun handle { body })`.
+	/// `std.task.scope-new` kernel: `scope-new <manual> (fun handle { body })`.
 	/// The body becomes its own closure frame (so its `try`s suspend within the
 	/// scope's child fiber, not this one — that's why a `scope` doesn't make the
 	/// enclosing function async). Mirrors `emit.rs`'s `emit_scope`.
 	fn lower_scope(&mut self, node: &ScopeNode, range: Range) -> Result<Atom, String> {
 		let g = self
 			.globals
-			.lookup("core.task", "scope-new")
-			.ok_or("`core.task.scope-new` not found")?;
+			.lookup("std.task", "scope-new")
+			.ok_or("`std.task.scope-new` not found")?;
 		let scope_new = self.emit_let(Rvalue::GlobalRef(g), range);
 		let manual = Atom::Const(Const::Bool(node.manual));
 		// The body closure's parameter carries the `scope as NAME` handle so the
@@ -2067,7 +2067,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// Synthesize the `pluma test` entry: build a `list {name, tests}` from the
-	/// discovered suites and tail it into `core.test.run-all color suites`. The
+	/// discovered suites and tail it into `std.test.run-all color suites`. The
 	/// suites are referenced by `GlobalId`, so their privacy (a `*.test.pa`'s
 	/// `tests` is private) doesn't matter — no source-level import is involved.
 	fn build_test_entry(
@@ -2077,8 +2077,8 @@ impl<'a> Lowerer<'a> {
 	) -> Result<FuncId, String> {
 		let run_all = self
 			.globals
-			.lookup("core.test", "run-all")
-			.ok_or("`core.test.run-all` was not compiled — does a `*.test.pa` file `use core.test`?")?;
+			.lookup("std.test", "run-all")
+			.ok_or("`std.test.run-all` was not compiled — does a `*.test.pa` file `use std.test`?")?;
 
 		let mut stmts: Vec<Stmt> = Vec::new();
 		let mut next: u32 = 0;

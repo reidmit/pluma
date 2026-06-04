@@ -1,5 +1,5 @@
-use core.bytes
-use core.string
+use std.bytes
+use std.string
 
 def show = fun r {
 	when r is ok s {

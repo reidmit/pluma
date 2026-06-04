@@ -32,12 +32,12 @@ when method is 'GET' { ... }
 is 'POST' { ... }
 ```
 
-## The `core.bytes` module
+## The `std.bytes` module
 
-A parallel surface to `core.string`:
+A parallel surface to `std.string`:
 
 ```pluma
-use core.bytes
+use std.bytes
 
 bytes.length b              # int — byte count
 bytes.is-empty b            # bool
@@ -61,7 +61,7 @@ bytes.split b sep           # empty sep splits into single-byte chunks
 
 ## Byte-aware I/O
 
-Byte-side I/O lives in `core.io`:
+Byte-side I/O lives in `std.sys.io`:
 
 ```pluma
 io.read-file-bytes path        # result bytes string — survives non-UTF-8 contents

@@ -2,12 +2,12 @@
 source: tests/analyze.rs
 expression: output
 ---
-error: Could not read module `core.does-not-exist`: No such file or directory (os error 2)
+error: Could not read module `std.does-not-exist`: No such file or directory (os error 2)
 
-error: Name `core` is not defined.
-> 3 | def x = core.does-not-exist
-              ^^^^
+error: Name `std` is not defined.
+> 3 | def x = std.does-not-exist
+              ^^^
 
 error: Type mismatch: expected `{does-not-exist: 'a, ...}`, but found `?`.
-> 3 | def x = core.does-not-exist
-              ^^^^^^^^^^^^^^^^^^^
+> 3 | def x = std.does-not-exist
+              ^^^^^^^^^^^^^^^^^^

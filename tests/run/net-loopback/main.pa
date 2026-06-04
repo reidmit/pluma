@@ -3,10 +3,10 @@
 # net.listen / local-addr / accept / read / write / close / connect plus the
 # scheduler's I/O reactor (accept and read park their fibers until the socket
 # is ready). The output is the deterministic echoed payload.
-use core.net
-use core.task
-use core.string
-use core.bytes
+use std.sys.net
+use std.task
+use std.string
+use std.bytes
 
 # Accept one client, echo back whatever it sends, then close.
 def serve-one = fun server {

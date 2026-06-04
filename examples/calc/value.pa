@@ -12,7 +12,7 @@
 # yields a float; two ints stay an int, until a division (or a
 # fractional power) forces a float.
 
-use core.math
+use std.math
 
 public enum num {
 	int-val int

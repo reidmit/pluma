@@ -19,7 +19,7 @@ pub use compiler::*;
 pub use diagnostic::*;
 pub use location::*;
 pub use module::{EnumExport, Module, ModuleExports, ValueConstraintExport};
-pub use platform::{Capability, Platform, module_capabilities};
+pub use platform::{Target, gate};
 pub use render::{Palette, render_diagnostics};
 pub use stdlib::{lookup_stdlib_source, stdlib_sources};
 pub use tokenizer::*;

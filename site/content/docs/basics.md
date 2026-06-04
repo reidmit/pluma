@@ -56,10 +56,10 @@ let list-across-lines = [
 
 ## Dicts
 
-Mutable, insertion-ordered hash dicts (key/value tables). `insert` and `remove` change the dict in place (and hand it back, for chaining), so two bindings to one dict are two views of the same table — like a `ref`. There's no dict literal syntax — construct one through `core.dict`:
+Mutable, insertion-ordered hash dicts (key/value tables). `insert` and `remove` change the dict in place (and hand it back, for chaining), so two bindings to one dict are two views of the same table — like a `ref`. There's no dict literal syntax — construct one through `std.dict`:
 
 ```pluma
-use core.dict
+use std.dict
 
 let m = dict.empty ()
 let _ = dict.insert m "alice" 30
@@ -72,11 +72,11 @@ The key type must have a `hash` instance. `int`, `float`, `string`, `bool`, `opt
 
 Iteration (`keys`, `values`, `entries`, `fold`, `map`, `filter`) is in insertion order. `insert`/`remove` mutate in place; the transformers `map`, `filter`, and `merge` instead build a new dict and leave their inputs alone. `from-entries` and `merge` are right-wins on duplicate keys. `==` on dicts is structural and order-independent. `size` returns the entry count.
 
-See `core.dict` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
+See `std.dict` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
 
 ## Refs
 
-A `ref` is a mutable cell — the simplest way to hold state that outlives a single expression. Most values are immutable; the deliberate exceptions are `ref`, a `dict` (which `insert`/`remove` mutate in place), and the in-place `list.set`/`list.push`. The `ref` module is auto-imported in every module; you don't write `use core.ref`.
+A `ref` is a mutable cell — the simplest way to hold state that outlives a single expression. Most values are immutable; the deliberate exceptions are `ref`, a `dict` (which `insert`/`remove` mutate in place), and the in-place `list.set`/`list.push`. The `ref` module is auto-imported in every module; you don't write `use std.ref`.
 
 ```pluma
 let counter = ref.new 0

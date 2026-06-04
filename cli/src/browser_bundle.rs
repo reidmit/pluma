@@ -1,10 +1,10 @@
-// The `pluma build --target browser` bundle: the WasmGC artifact plus the JS glue
+// The `pluma build --target web` bundle: the WasmGC artifact plus the JS glue
 // that runs it in a real browser. `app.wasm` is the compiled module (emitted under
-// `Platform::Browser`, so `core.dom` lowers to host imports); `loader.js` supplies
+// the `Web` target, so `std.web.dom` lowers to host imports); `loader.js` supplies
 // those imports backed by the real DOM and drives the module; `index.html` is a
 // minimal shell that loads the loader.
 //
-// The loader mirrors the server host's import-object shape (`host/src/v8host.rs`):
+// The loader mirrors the sys host's import-object shape (`host/src/v8host.rs`):
 // a `{ pluma: { ... } }` object over the module's exported `"memory"`, with each
 // `dom-*` import backed by the live `document`. The whole DOM surface is provided
 // regardless of which subset a given module imports (extras are ignored), exactly
@@ -58,7 +58,7 @@ const floatToStr = (n, ptr, cap) => {
 
 const pluma = {
   float_to_str: floatToStr,
-  // core.dom — node handles are opaque JS DOM nodes flowing through wasm $extern boxes.
+  // std.web.dom — node handles are opaque JS DOM nodes flowing through wasm $extern boxes.
   "dom-body": () => document.body,
   "dom-create-element": (p, l) => document.createElement(readStr(p, l)),
   "dom-create-text": (p, l) => document.createTextNode(readStr(p, l)),

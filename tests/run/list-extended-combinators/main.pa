@@ -1,8 +1,8 @@
 # Exercises the extended list combinators, with particular attention to the
 # `where (ord b)` defs (sort-by/min-by/max-by), whose trait-dict passing is the
 # interesting case for the WASM backend.
-use core.list
-use core.string
+use std.list
+use std.string
 
 def main = fun {
 	print (list.take-while [2, 4, 5, 6] fun n {

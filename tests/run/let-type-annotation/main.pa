@@ -2,7 +2,7 @@
 # top-level `def`. Lets a binding pin an otherwise-ambiguous type
 # without lifting the value out to module scope.
 
-use core.list
+use std.list
 
 def main = fun {
 	# The empty list's element type isn't constrained by anything else

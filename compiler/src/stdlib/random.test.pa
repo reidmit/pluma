@@ -1,8 +1,8 @@
-use core.test
-use core.random
-use core.bytes
-use core.list
-use core.assert
+use std.test
+use std.random
+use std.bytes
+use std.list
+use std.assert
 
 def tests :: test.suite = [
 	test.case "int returns non-negative" fun {

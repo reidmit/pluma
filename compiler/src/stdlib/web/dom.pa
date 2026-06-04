@@ -1,4 +1,4 @@
-# core.dom -- building and reacting to a web page's DOM, from the browser.
+# std.web.dom -- building and reacting to a web page's DOM, from the browser.
 #
 # These functions only exist when you compile for the browser target
 # (`pluma build --target browser`): they reach the real DOM through the
@@ -101,7 +101,7 @@ public def prevent-default :: fun event -> nothing = built-in "event-prevent-def
 # `"submit"`, ...) fires on the node. The handler receives the `event`.
 # Returns a *handler id* -- an opaque int naming the registry slot the handler
 # lives in. Pass it to `set-handler` to re-point the listener in place (the
-# `core.app` diff does this to update a reused node without detaching it);
+# `std.web.app` diff does this to update a reused node without detaching it);
 # ignore it for a one-off listener.
 #
 #     dom.add-listener btn "click" (fun _e { dom.set-text label "clicked" })
