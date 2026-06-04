@@ -19,69 +19,300 @@
 #
 # `app.sandbox` is for pure UIs (no effects). For effects -- timers, HTTP --
 # `app.element` (also here) lets `update` return commands.
+#
+# Re-render is a *structural diff*, not a rebuild. The runtime keeps the
+# previous virtual tree paired with its live DOM nodes (a `vnode`); on each
+# message it walks old-vs-new together and mutates only what changed -- set a
+# text node's content, patch an element's attributes, re-point its handlers in
+# place, add/remove trailing children -- preserving node identity (and so
+# input focus, caret, scroll, and CSS transitions). The diff is unkeyed and
+# recursive; keyed list reconciliation is a later refinement.
 
 use core.html
 use core.dom
 use core.list
 use core.task
 
-# Render a virtual node into a fresh real DOM node, wiring each event handler
-# to `dispatch` so a fired event becomes a message.
-def render :: fun (html.html msg) (fun msg -> nothing) -> dom.node = fun vdom dispatch {
+# The runtime's parallel tree: each node mirrors a `html.html` node but also
+# holds the live `dom.node` it built, and (for elements) the handler ids
+# `dom.add-listener` returned -- so a later diff can overwrite a reused node's
+# listeners in place via `dom.set-handler`.
+enum vnode msg {
+	v-el dom.node string (list (html.attribute msg)) (list int) (list (vnode msg))
+	v-txt dom.node string
+}
+
+# The live DOM node a `vnode` is paired with.
+def node-of :: fun (vnode msg) -> dom.node = fun v {
+	when v is v-el n _tag _attrs _toks _kids {
+		n
+	} is v-txt n _s {
+		n
+	}
+}
+
+# --- render: vdom -> fresh real DOM, returning the paired `vnode` -----------
+
+# `box` holds the current dispatch closure; every listener reads it at fire
+# time, so the one closure registered at render time always reaches the live
+# dispatch (and breaks the dispatch/render self-reference -- see `sandbox`).
+def render :: fun (html.html msg) (ref (fun msg -> nothing)) -> vnode msg = fun vdom box {
 	when vdom is el tag attrs kids {
 		let node = dom.create-element tag
-		list.each attrs fun a {
-			apply-attr node a dispatch
-		}
+		let toks = render-attrs node attrs box
+		let kid-nodes :: list (vnode msg) = []
 		list.each kids fun k {
-			dom.append-child node (render k dispatch)
+			let vk = render k box
+			dom.append-child node (node-of vk)
+			list.push kid-nodes vk
 		}
-		node
+		v-el node tag attrs toks kid-nodes
 	} is txt s {
-		dom.create-text s
+		v-txt (dom.create-text s) s
 	}
 }
 
-def apply-attr :: fun dom.node (html.attribute msg) (fun msg -> nothing) -> nothing = fun node a dispatch {
-	when a is a-set k v {
-		dom.set-attribute node k v
-	} is a-on name handler {
-		dom.add-listener node name fun e {
-			dispatch (handler e)
+# Apply each attribute to a freshly created node, returning the handler ids
+# (in `a-on` order) for the diff to overwrite later.
+def render-attrs :: fun dom.node (list (html.attribute msg)) (ref (fun msg -> nothing)) -> list int = fun node attrs box {
+	let toks :: list int = []
+	list.each attrs fun a {
+		when a is a-set k v {
+			dom.set-attribute node k v
+		} is a-on name handler {
+			let id = dom.add-listener node name fun e {
+				(ref.get box) (handler e)
+			}
+			list.push toks id
+		}
+	}
+	toks
+}
+
+# --- diff: old `vnode` vs new vdom, mutating the DOM in place ---------------
+
+# Reconcile one node. `parent` is the live parent (needed to swap a replaced
+# child). Reuse when the shapes match -- text-vs-text, or element-vs-element
+# with the same tag AND the same sequence of handler names (so the listener
+# set never changes and we only ever *overwrite* handler slots). Otherwise
+# build fresh and replace.
+def diff :: fun dom.node (vnode msg) (html.html msg) (ref (fun msg -> nothing)) -> vnode msg = fun parent old new box {
+	when old is v-el old-node old-tag old-attrs old-toks old-kids {
+		when new is el new-tag new-attrs new-kids {
+			if (old-tag == new-tag) && (names-eq (handler-names old-attrs) (handler-names new-attrs)) {
+				diff-attrs old-node old-attrs new-attrs
+				update-handlers old-toks new-attrs box
+				let new-kid-vnodes = diff-children old-node old-kids new-kids box
+				v-el old-node new-tag new-attrs old-toks new-kid-vnodes
+			} else {
+				replace parent old new box
+			}
+		} is txt _s {
+			replace parent old new box
+		}
+	} is v-txt old-node old-str {
+		when new is el _new-tag _new-attrs _new-kids {
+			replace parent old new box
+		} is txt new-str {
+			if old-str == new-str {
+				old
+			} else {
+				dom.set-text old-node new-str
+				v-txt old-node new-str
+			}
 		}
 	}
 }
 
-# Build the dispatch closure for a sandbox app. It and `render` are not
-# mutually recursive at creation -- dispatch only *calls* render when a
-# message arrives -- so a plain closure over the runtime's refs suffices.
-# (Naive re-render: each message rebuilds the whole view subtree and swaps it
-# in with one `replace-child`. A structural in-place diff is a later refinement.)
-def sandbox-dispatch :: fun (ref model) (ref dom.node) dom.node (fun msg model -> model) (fun model -> html.html msg) -> (fun msg -> nothing) = fun model current root update view {
-	fun m {
-		let next = update m (ref.get model)
-		ref.set model next
-		let new-node = render (view next) (sandbox-dispatch model current root update view)
-		dom.replace-child root new-node (ref.get current)
-		ref.set current new-node
+# Build a fresh subtree for `new` and swap it in for `old` under `parent`.
+def replace :: fun dom.node (vnode msg) (html.html msg) (ref (fun msg -> nothing)) -> vnode msg = fun parent old new box {
+	let fresh = render new box
+	dom.replace-child parent (node-of fresh) (node-of old)
+	fresh
+}
+
+# Patch attributes in place: set every new `a-set` that is new or changed,
+# then remove every old `a-set` key that is gone. Handlers are left to
+# `update-handlers`.
+def diff-attrs :: fun dom.node (list (html.attribute msg)) (list (html.attribute msg)) -> nothing = fun node old new {
+	list.each new fun a {
+		when a is a-set k v {
+			when (lookup-attr old k) is some ov {
+				if ov == v {
+					()
+				} else {
+					dom.set-attribute node k v
+				}
+			} is none {
+				dom.set-attribute node k v
+			}
+		} is a-on _name _handler {
+			()
+		}
+	}
+	list.each old fun a {
+		when a is a-set k _v {
+			when (lookup-attr new k) is some _nv {
+				()
+			} is none {
+				dom.remove-attribute node k
+			}
+		} is a-on _name _handler {
+			()
+		}
 	}
 }
+
+# The value of the first `a-set` with the given key, if any.
+def lookup-attr :: fun (list (html.attribute msg)) string -> option string = fun attrs key {
+	lookup-attr-from attrs key 0
+}
+
+def lookup-attr-from :: fun (list (html.attribute msg)) string int -> option string = fun attrs key i {
+	if i == (list.length attrs) {
+		none
+	} else {
+		when (list.get attrs i) is a-set k v {
+			if k == key {
+				some v
+			} else {
+				lookup-attr-from attrs key (i + 1)
+			}
+		} is a-on _name _handler {
+			lookup-attr-from attrs key (i + 1)
+		}
+	}
+}
+
+# The sequence of event names an attribute list listens on (in order). The
+# reuse gate compares these so a reused element keeps a fixed listener set.
+def handler-names :: fun (list (html.attribute msg)) -> list string = fun attrs {
+	let names :: list string = []
+	list.each attrs fun a {
+		when a is a-set _k _v {
+			()
+		} is a-on name _handler {
+			list.push names name
+		}
+	}
+	names
+}
+
+def names-eq :: fun (list string) (list string) -> bool = fun xs ys {
+	if (list.length xs) == (list.length ys) {
+		names-eq-from xs ys 0
+	} else {
+		false
+	}
+}
+
+def names-eq-from :: fun (list string) (list string) int -> bool = fun xs ys i {
+	if i == (list.length xs) {
+		true
+	} else {
+		if (list.get xs i) == (list.get ys i) {
+			names-eq-from xs ys (i + 1)
+		} else {
+			false
+		}
+	}
+}
+
+# Overwrite each reused handler slot with the new handler. `toks` are the old
+# node's handler ids; `attrs` the new attributes. The reuse gate guarantees
+# the `a-on` count matches `toks`, so we walk them in lockstep.
+def update-handlers :: fun (list int) (list (html.attribute msg)) (ref (fun msg -> nothing)) -> nothing = fun toks attrs box {
+	update-handlers-from toks attrs box 0 0
+}
+
+def update-handlers-from :: fun (list int) (list (html.attribute msg)) (ref (fun msg -> nothing)) int int -> nothing = fun toks attrs box ti ai {
+	if ai == (list.length attrs) {
+		()
+	} else {
+		when (list.get attrs ai) is a-set _k _v {
+			update-handlers-from toks attrs box ti (ai + 1)
+		} is a-on _name handler {
+			dom.set-handler (list.get toks ti) fun e {
+				(ref.get box) (handler e)
+			}
+			update-handlers-from toks attrs box (ti + 1) (ai + 1)
+		}
+	}
+}
+
+# Reconcile a child list by index (unkeyed): diff the shared prefix, append
+# the new tail, remove the old tail. Returns the new child `vnode` list. A
+# reorder is handled correctly but not efficiently (each shifted index diffs
+# as a replace); keyed reconciliation is a later refinement.
+def diff-children :: fun dom.node (list (vnode msg)) (list (html.html msg)) (ref (fun msg -> nothing)) -> list (vnode msg) = fun parent old new box {
+	let result :: list (vnode msg) = []
+	diff-children-from parent old new box result 0
+	result
+}
+
+def diff-children-from :: fun dom.node (list (vnode msg)) (list (html.html msg)) (ref (fun msg -> nothing)) (list (vnode msg)) int -> nothing = fun parent old new box result i {
+	let n-old = list.length old
+	let n-new = list.length new
+	if i == (max-int n-old n-new) {
+		()
+	} else {
+		if i < n-old {
+			if i < n-new {
+				list.push result (diff parent (list.get old i) (list.get new i) box)
+			} else {
+				dom.remove-child parent (node-of (list.get old i))
+			}
+		} else {
+			let vk = render (list.get new i) box
+			dom.append-child parent (node-of vk)
+			list.push result vk
+		}
+		diff-children-from parent old new box result (i + 1)
+	}
+}
+
+def max-int :: fun int int -> int = fun a b {
+	if a > b {
+		a
+	} else {
+		b
+	}
+}
+
+# --- app.sandbox: a pure UI -------------------------------------------------
 
 # Mount a pure UI: an initial model, a pure `update :: fun msg model -> model`,
-# and a `view :: fun model -> html.html msg`. Runs synchronously at startup; the
-# installed event listeners drive everything afterward.
-public def sandbox :: fun model (fun msg model -> model) (fun model -> html.html msg) -> nothing = fun init update view {
+# and a `view :: fun model -> html.html msg`. The mount runs at startup; the
+# installed event listeners drive everything afterward, each message diffing
+# the new view against the live tree. Returns the app's driver task (like
+# `element` minus the commands) -- a browser UI is event-driven, so the program
+# is async and the browser runtime drives it.
+#
+#     def main = app.sandbox 0 update view
+public def sandbox :: fun model (fun msg model -> model) (fun model -> html.html msg) -> task nothing = fun init update view {
 	let model = ref.new init
 	let root = dom.body ()
-	# Seeded with a throwaway detached node; replaced by the first render below.
-	let current = ref.new (dom.create-text "")
-	let dispatch = sandbox-dispatch model current root update view
-	let initial = render (view init) dispatch
-	ref.set current initial
-	dom.append-child root initial
+	# Seed the dispatch box with a no-op; the real dispatch is stored below,
+	# before any event can fire. Listeners read the box at fire time.
+	let box = ref.new fun _m {
+		()
+	}
+	let tree = ref.new (render (view init) box)
+	let dispatch = fun m {
+		let next = update m (ref.get model)
+		ref.set model next
+		let new-tree = diff root (ref.get tree) (view next) box
+		ref.set tree new-tree
+	}
+	ref.set box dispatch
+	dom.append-child root (node-of (ref.get tree))
+	# One await makes the program async, so the browser entry (which seeds
+	# `main` as a task) activates -- the same shape as `element`.
+	try _u = task.return ()
+	task.return ()
 }
 
-# --- app.element: the full MVU app, with effects -------------------------
+# --- app.element: the full MVU app, with effects ----------------------------
 
 # A `command msg` is a `list (task msg)` -- a batch of effects, each producing a
 # message the runtime feeds back into `update`. The empty list is "no effect".
@@ -96,17 +327,6 @@ def run-commands :: fun (list (task msg)) (fun msg -> nothing) -> nothing = fun 
 	}
 }
 
-def element-dispatch :: fun (ref model) (ref dom.node) dom.node (fun msg model -> (model, list (task msg))) (fun model -> html.html msg) -> (fun msg -> nothing) = fun model current root update view {
-	fun m {
-		let (next, cmds) = update m (ref.get model)
-		ref.set model next
-		let new-node = render (view next) (element-dispatch model current root update view)
-		dom.replace-child root new-node (ref.get current)
-		ref.set current new-node
-		run-commands cmds (element-dispatch model current root update view)
-	}
-}
-
 # Mount a full MVU app. `init` is `(model, commands)`; `update :: fun msg model ->
 # (model, commands)`; `view :: fun model -> html.html msg`. A command is a
 # `task msg` whose result re-enters `update` -- timers, HTTP, anything async.
@@ -118,11 +338,21 @@ public def element :: fun (model, list (task msg)) (fun msg model -> (model, lis
 	let (init-model, init-cmds) = init
 	let model = ref.new init-model
 	let root = dom.body ()
-	let current = ref.new (dom.create-text "")
-	let dispatch = element-dispatch model current root update view
-	let initial = render (view init-model) dispatch
-	ref.set current initial
-	dom.append-child root initial
+	let box = ref.new fun _m {
+		()
+	}
+	let tree = ref.new (render (view init-model) box)
+	let dispatch = fun m {
+		let (next, cmds) = update m (ref.get model)
+		ref.set model next
+		let new-tree = diff root (ref.get tree) (view next) box
+		ref.set tree new-tree
+		# `dispatch` isn't in scope inside its own body (a `let`, not a `def`);
+		# the box holds it, so commands spawned now re-enter the live dispatch.
+		run-commands cmds (ref.get box)
+	}
+	ref.set box dispatch
+	dom.append-child root (node-of (ref.get tree))
 	run-commands init-cmds dispatch
 	# One await makes the program async, so the scheduler + browser entry activate.
 	try _u = task.return ()

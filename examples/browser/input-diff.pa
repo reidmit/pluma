@@ -1,0 +1,38 @@
+# The diff's reason to exist: a controlled text input that keeps focus.
+#
+#     pluma build --target browser examples/browser/input-diff.pa -o /tmp/input
+#     python3 -m http.server --directory /tmp/input
+#
+# then open the printed URL and type into the box. Every keystroke runs
+# `update` and re-renders, but the structural diff *reuses* the <input> node
+# (same tag, same `on-input` handler name) instead of rebuilding it -- so focus
+# and the caret survive, and the echo below updates live. Under the old
+# full-rebuild renderer the input would lose focus on the first character.
+
+use core.html
+use core.events
+use core.app
+
+enum msg {
+	typed string
+}
+
+def view :: fun string -> html.html msg = fun text {
+	html.div [] [
+		html.input [html.placeholder "type here", html.value text, events.on-input (fun s { typed s })] [],
+		html.p [] [
+			html.span [] [html.text "you typed: "],
+			html.span [html.id "echo"] [html.text text],
+		],
+	]
+}
+
+def update :: fun msg string -> string = fun m _old {
+	when m is typed s {
+		s
+	}
+}
+
+def main = fun {
+	app.sandbox "" update view
+}

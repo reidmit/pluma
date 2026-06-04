@@ -1258,6 +1258,8 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "string-to-bytes"
 			// the in-place list mutation: `array.set` on the `$valarray`.
 			| "list-set"
+			// the in-place handler-registry overwrite: `array.set` on `dom_handlers`.
+			| "dom-set-handler"
 			// mutable cells: a `$ref` struct with a mutable boxed-value field.
 			// `ref-update` reads, applies a closure, writes back (closure call inline).
 			| "ref-new"

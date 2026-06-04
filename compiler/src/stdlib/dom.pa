@@ -83,13 +83,23 @@ public def prevent-default :: fun event -> nothing = built-in "event-prevent-def
 
 # Run `handler` whenever the named DOM event (`"click"`, `"input"`,
 # `"submit"`, ...) fires on the node. The handler receives the `event`.
+# Returns a *handler id* -- an opaque int naming the registry slot the handler
+# lives in. Pass it to `set-handler` to re-point the listener in place (the
+# `core.app` diff does this to update a reused node without detaching it);
+# ignore it for a one-off listener.
 #
 #     dom.add-listener btn "click" (fun _e { dom.set-text label "clicked" })
-public def add-listener :: fun node string (fun event -> nothing) -> nothing = built-in "dom-add-listener"
+public def add-listener :: fun node string (fun event -> nothing) -> int = built-in "dom-add-listener"
+
+# Replace the handler at an existing handler id (from `add-listener`) in place,
+# without touching the live DOM listener -- the next time the event fires, the
+# new handler runs. Lets the runtime re-point a reused node's behaviour.
+public def set-handler :: fun int (fun event -> nothing) -> nothing = built-in "dom-set-handler"
 
 # Sugar for the common case: run `handler` on every click.
 #
 #     dom.on-click btn (fun _e { dom.set-text label "clicked" })
 public def on-click :: fun node (fun event -> nothing) -> nothing = fun n handler {
-	add-listener n "click" handler
+	let _id = add-listener n "click" handler
+	()
 }

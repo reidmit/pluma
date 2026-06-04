@@ -2039,8 +2039,15 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::LocalGet(nl));
 				self.atom(&args[2]); // the handler closure
 				self.ins(Instruction::Call(register)); // -> i32 token
+				// Keep a copy of the token: the host call consumes it, but we also
+				// return it as a Pluma `int` (a handler id the diff uses to overwrite
+				// the slot in place via `dom.set-handler`).
+				let tok = self.fresh_local(ValType::I32);
+				self.ins(Instruction::LocalTee(tok));
 				self.ins(Instruction::Call(idx));
-				self.push_nothing();
+				self.ins(Instruction::LocalGet(tok));
+				self.ins(Instruction::I64ExtendI32S);
+				self.box_int();
 			}
 			// `(externref, externref) -> ()` — `dom-remove-child` (same as `Append`).
 			DomKind::Append2 => {
@@ -2671,6 +2678,32 @@ impl<'a> FnEmitter<'a> {
 				self.unbox_int();
 				self.ins(Instruction::I32WrapI64);
 				self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+			}
+			// dom.set-handler token closure : overwrite the handler-registry slot at
+			// `token` in place, so the diff can re-point a reused node's listener
+			// without detaching it. Same `array.set` shape as `list-set`, but the
+			// target array is the `dom_handlers` registry global (browser-only; the
+			// global is non-null here because a token only exists once `add-listener`
+			// has run and lazily created it).
+			"dom-set-handler" => {
+				let g = self
+					.runtime
+					.dom_handlers
+					.expect("dom-set-handler needs the dom_handlers global");
+				self.ins(Instruction::GlobalGet(g));
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_LIST,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_LIST,
+					field_index: 1,
+				});
+				self.atom(&args[0]);
+				self.unbox_int();
+				self.ins(Instruction::I32WrapI64);
+				self.atom(&args[1]);
+				self.ins(Instruction::ArraySet(types::T_VALARRAY));
+				self.push_nothing();
 			}
 			// list.set xs i v : overwrite the i-th slot in place; yields nothing.
 			// The deliberate escape hatch from list immutability.
