@@ -1,0 +1,10 @@
+enum tree {
+  empty
+  node int tree tree
+}
+
+def size = fun t {
+  when t is empty {
+    0
+  }
+}

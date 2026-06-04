@@ -1,0 +1,27 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0025]: Unexpected end of file. Expected a ')'.
+  ╭─▸ tests/errors/unclosed-interpolation/main.pa:1:1
+  │
+1 │ def msg = "n = $(to-string 1"
+  │ ^
+  ╰─
+
+error[E0017]: Unclosed string interpolation.
+  ╭─▸ tests/errors/unclosed-interpolation/main.pa:1:16
+  │
+1 │ def msg = "n = $(to-string 1"
+  │                ^^^^^^^^^^^^^^^
+  │
+  ╰─ help: close the interpolation with `)`, e.g. `"n = $(to-string n)"`.
+
+error[E0018]: Unclosed string.
+  ╭─▸ tests/errors/unclosed-interpolation/main.pa:1:29
+  │
+1 │ def msg = "n = $(to-string 1"
+  │                             ^
+  │
+  ╰─ help: add a closing `"`.

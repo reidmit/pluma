@@ -296,7 +296,7 @@ impl Backend {
 				.diagnostics
 				.iter()
 				.filter(|d| diagnostic_belongs_to(d, module_name.as_deref()))
-				.map(pluma_diagnostic_to_lsp)
+				.map(|d| pluma_diagnostic_to_lsp(d, &uri))
 				.collect()
 		};
 
@@ -314,7 +314,7 @@ fn diagnostic_belongs_to(d: &PlumaDiagnostic, module_name: Option<&str>) -> bool
 	}
 }
 
-fn pluma_diagnostic_to_lsp(d: &PlumaDiagnostic) -> Diagnostic {
+fn pluma_diagnostic_to_lsp(d: &PlumaDiagnostic, uri: &Url) -> Diagnostic {
 	let severity = match d.kind {
 		DiagnosticKind::Error => DiagnosticSeverity::ERROR,
 		DiagnosticKind::Warning => DiagnosticSeverity::WARNING,
@@ -332,14 +332,44 @@ fn pluma_diagnostic_to_lsp(d: &PlumaDiagnostic) -> Diagnostic {
 				character: 0,
 			},
 		});
+
+	// Fold the structured help/notes into the message so they show in clients
+	// that only render the message text.
+	let mut message = d.message.clone();
+	if let Some(help) = &d.help {
+		message.push_str(&format!("\nhelp: {}", help));
+	}
+	for note in &d.notes {
+		message.push_str(&format!("\nnote: {}", note));
+	}
+
+	// Secondary spans (e.g. "previous definition here") become related
+	// information, which clients surface as clickable cross-references.
+	let related_information = if d.labels.is_empty() {
+		None
+	} else {
+		Some(
+			d.labels
+				.iter()
+				.map(|label| DiagnosticRelatedInformation {
+					location: Location {
+						uri: uri.clone(),
+						range: pluma_range_to_lsp(&label.range),
+					},
+					message: label.message.clone(),
+				})
+				.collect(),
+		)
+	};
+
 	Diagnostic {
 		range,
 		severity: Some(severity),
-		code: None,
+		code: d.code.map(|c| NumberOrString::String(c.to_string())),
 		code_description: None,
 		source: Some("pluma".to_string()),
-		message: d.message.clone(),
-		related_information: None,
+		message,
+		related_information,
 		tags: None,
 		data: None,
 	}

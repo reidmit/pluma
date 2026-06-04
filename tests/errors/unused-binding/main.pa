@@ -1,0 +1,4 @@
+def main = fun {
+  let unused = 5
+  print "hello"
+}

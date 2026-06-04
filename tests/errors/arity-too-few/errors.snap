@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0104]: Parameter count mismatch: expected 2, but found 1.
+  ╭─▸ tests/errors/arity-too-few/main.pa:5:12
+  │
+5 │ def main = add 1
+  │            ^^^
+  ╰─

@@ -1,0 +1,13 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0107]: Field `namee` does not exist in record of type `{age: int, name: string}`.
+  ╭─▸ tests/errors/record-field-typo/main.pa:3:12
+  │
+3 │ def main = me.namee
+  │            ^^
+  │
+  ├─ help: did you mean `name`?
+  ╰─ note: available fields: `name`, `age`

@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0100]: Name `wumbology` is not defined.
+  ╭─▸ tests/errors/name-not-bound/main.pa:1:12
+  │
+1 │ def main = wumbology
+  │            ^^^^^^^^^
+  ╰─

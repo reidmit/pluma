@@ -1,0 +1,19 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0120]: This pattern can fail to match; `let` bindings must be irrefutable.
+  ╭─▸ tests/errors/refutable-let/main.pa:2:7
+  │
+2 │   let some x = some 5
+  │       ^^^^^^
+  │
+  ╰─ help: use an identifier, `_`, tuple, or record pattern — or switch to `if`/`when` to handle the other cases.
+
+error[E0100]: Name `x` is not defined.
+  ╭─▸ tests/errors/refutable-let/main.pa:3:20
+  │
+3 │   print (to-string x)
+  │                    ^
+  ╰─

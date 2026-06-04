@@ -1,3 +1,4 @@
+use crate::diagnostic::Reportable;
 use crate::{location::Range, tokens::Token};
 use std::fmt;
 
@@ -128,5 +129,67 @@ impl fmt::Display for ParseError {
 				}
 			}
 		}
+	}
+}
+
+impl Reportable for ParseError {
+	fn code(&self) -> &'static str {
+		use ParseErrorKind::*;
+		match self.kind {
+			EmptyRegularExpression => "E0001",
+			EmptyRegularExpressionGroup => "E0002",
+			EmptyRegularExpressionCount => "E0003",
+			InvalidBinaryDigit => "E0004",
+			InvalidDecimalDigit => "E0005",
+			InvalidHexDigit => "E0006",
+			InvalidOctalDigit => "E0007",
+			InvalidRegularExpressionCountModifier => "E0008",
+			QuantifierOnRegexAnchor => "E0009",
+			InvalidExpressionAfterDot => "E0010",
+			InvalidDefBody => "E0011",
+			MissingReturnType => "E0012",
+			OverflowingIntegerLiteral => "E0013",
+			InvalidDurationUnit => "E0014",
+			DurationUnitsOutOfOrder => "E0015",
+			OverflowingDurationLiteral => "E0016",
+			UnclosedInterpolation => "E0017",
+			UnclosedString => "E0018",
+			InvalidBytesEscape => "E0019",
+			InvalidHexEscape => "E0020",
+			BuiltinExpectsPlainString => "E0021",
+			ExpectedExpressionAfterSpread => "E0022",
+			ExpectedExpressionAfterDefer => "E0023",
+			MisplacedRecordSpread => "E0024",
+			UnexpectedEOF { .. } => "E0025",
+			UnexpectedToken { .. } => "E0026",
+			UnexpectedTopLevelToken { .. } => "E0027",
+			MisplacedVisibility { .. } => "E0028",
+		}
+	}
+
+	// Additive only: these surface in the rich renderer (and LSP) without
+	// changing the one-line `Display` message, so the analyze suite is
+	// unaffected. Kinds whose message already embeds guidance return `None`.
+	fn help(&self) -> Option<String> {
+		use ParseErrorKind::*;
+		let help = match self.kind {
+			InvalidBinaryDigit => "binary literals use only `0` and `1` (e.g. `0b1010`).",
+			InvalidDecimalDigit => "decimal literals use digits `0`–`9` (e.g. `47`).",
+			InvalidHexDigit => "hex literals use `0`–`9` and `a`–`f` (e.g. `0x2a`).",
+			InvalidOctalDigit => "octal literals use digits `0`–`7` (e.g. `0o57`).",
+			MissingReturnType => "add the return type after `->`, e.g. `fun int -> int`.",
+			OverflowingIntegerLiteral => "int literals must fit in a signed 64-bit integer.",
+			OverflowingDurationLiteral => {
+				"durations are stored as nanoseconds in a signed 64-bit integer."
+			}
+			UnclosedString => "add a closing `\"`.",
+			UnclosedInterpolation => "close the interpolation with `)`, e.g. `\"n = $(to-string n)\"`.",
+			BuiltinExpectsPlainString => {
+				"write the tag as a plain literal, e.g. `built-in \"io.print\"`."
+			}
+			InvalidExpressionAfterDot => "use `.field` for a record field or `.0` for a tuple element.",
+			_ => return None,
+		};
+		Some(help.to_string())
 	}
 }

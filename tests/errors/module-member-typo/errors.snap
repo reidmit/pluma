@@ -1,0 +1,12 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0100]: Name `list.lenght` is not defined.
+  ╭─▸ tests/errors/module-member-typo/main.pa:3:17
+  │
+3 │ def main = list.lenght
+  │                 ^^^^^^
+  │
+  ╰─ help: did you mean `length`?

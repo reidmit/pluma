@@ -1,0 +1,3 @@
+use core.list
+
+def main = list.lenght

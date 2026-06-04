@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0001]: Empty regular expression.
+  ╭─▸ tests/errors/regex-empty/main.pa:1:21
+  │
+1 │ def empty-pattern = ``
+  │                     ^^
+  ╰─

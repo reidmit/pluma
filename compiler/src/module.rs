@@ -152,7 +152,7 @@ impl Module {
 
 		for err in errors {
 			diagnostics.push(
-				Diagnostic::error(err)
+				Diagnostic::report(err)
 					.with_range(err.range)
 					.with_module(self.module_name.clone(), self.module_path.to_path_buf()),
 			);

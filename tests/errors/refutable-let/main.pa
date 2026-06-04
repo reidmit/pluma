@@ -1,0 +1,4 @@
+def main = fun {
+  let some x = some 5
+  print (to-string x)
+}

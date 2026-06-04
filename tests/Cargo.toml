@@ -23,6 +23,14 @@ name = "analyze"
 path = "analyze.rs"
 harness = false
 
+# The error-message audit suite. Renders diagnostics exactly as the CLI does
+# (via compiler::render_diagnostics) and snapshots them, one fixture per error
+# path. See errors.rs.
+[[test]]
+name = "errors"
+path = "errors.rs"
+harness = false
+
 [[test]]
 name = "format"
 path = "format.rs"

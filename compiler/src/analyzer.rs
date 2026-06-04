@@ -1036,11 +1036,50 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	fn warning(&mut self, range: Range, kind: AnalysisErrorKind) {
-		self.diagnostic(Some(range), Diagnostic::warning(AnalysisError { kind }));
+		self.diagnostic(
+			Some(range),
+			Diagnostic::report_warning(AnalysisError { kind }),
+		);
 	}
 
 	fn error(&mut self, range: Range, kind: AnalysisErrorKind) {
-		self.diagnostic(Some(range), Diagnostic::error(AnalysisError { kind }));
+		self.diagnostic(Some(range), Diagnostic::report(AnalysisError { kind }));
+	}
+
+	// Same as `error`, but with a secondary span (e.g. "previous definition
+	// here") attached to the diagnostic.
+	fn error_with_label(&mut self, range: Range, kind: AnalysisErrorKind, label: Label) {
+		self.diagnostic(
+			Some(range),
+			Diagnostic::report(AnalysisError { kind }).with_label(label),
+		);
+	}
+
+	// The closest in-scope *value* name to `name`, for a `did you mean?` hint.
+	// Pools every name that could legally appear as a bare value identifier:
+	// locals/params (all scope levels), bare variant constructors, trait
+	// methods, and imported module namespaces.
+	fn suggest_value(&self, name: &str) -> Option<String> {
+		let mut candidates: Vec<String> = Vec::new();
+		for level in &self.value_scopes {
+			candidates.extend(level.keys().cloned());
+		}
+		candidates.extend(self.variant_constructors.keys().cloned());
+		candidates.extend(self.traits.keys().cloned());
+		candidates.extend(self.imports.keys().cloned());
+		crate::suggest::closest(name, candidates)
+	}
+
+	// The closest in-scope *type* name to `name`: user type bindings plus the
+	// built-in primitive type names.
+	fn suggest_type(&self, name: &str) -> Option<String> {
+		const BUILTINS: [&str; 12] = [
+			"string", "bytes", "int", "float", "bool", "regex", "instant", "duration", "nothing", "list",
+			"dict", "ref",
+		];
+		let mut candidates: Vec<String> = self.type_scope.keys().cloned().collect();
+		candidates.extend(BUILTINS.iter().map(|s| s.to_string()));
+		crate::suggest::closest(name, candidates)
 	}
 
 	fn check_regex_character_classes(&mut self, node: &RegexNode) {
@@ -1203,13 +1242,17 @@ impl<'compiler> Analyzer<'compiler> {
 			// Top-level redefinition is an error. Locals can shadow via let,
 			// but two `def`s with the same name at module top level is almost
 			// certainly a mistake.
-			if let Some(_prev_range) =
+			if let Some(prev_range) =
 				seen_names.insert(definition.name.name.clone(), definition.name.range)
 			{
-				self.error(
+				self.error_with_label(
 					definition.name.range,
 					DuplicateDefinition {
 						name: definition.name.name.clone(),
+					},
+					Label {
+						range: prev_range,
+						message: "previous definition here".to_string(),
 					},
 				);
 			}
@@ -1767,9 +1810,16 @@ impl<'compiler> Analyzer<'compiler> {
 						match self.traits.get(&trait_name) {
 							Some(t) => (t.param_var, t.method_types.clone()),
 							None => {
+								let suggestion = crate::suggest::closest(
+									&trait_name,
+									self.traits.keys().cloned().collect::<Vec<_>>(),
+								);
 								self.error(
 									instance_node.trait_name.range,
-									AnalysisErrorKind::NameNotBound { name: trait_name },
+									AnalysisErrorKind::NameNotBound {
+										name: trait_name,
+										suggestion,
+									},
 								);
 								// Restore scope before continuing.
 								for (n, prev) in saved {
@@ -1790,10 +1840,15 @@ impl<'compiler> Analyzer<'compiler> {
 						let expected = match method_types.get(&method.name.name) {
 							Some(t) => t,
 							None => {
+								let suggestion = crate::suggest::closest(
+									&method.name.name,
+									method_types.keys().cloned().collect::<Vec<_>>(),
+								);
 								self.error(
 									method.name.range,
 									AnalysisErrorKind::NameNotBound {
 										name: format!("{}.{}", instance_node.trait_name.name, method.name.name),
+										suggestion,
 									},
 								);
 								continue;
@@ -2031,20 +2086,29 @@ impl<'compiler> Analyzer<'compiler> {
 								},
 							);
 						} else {
+							let mut candidates: Vec<String> = exports.enums.keys().cloned().collect();
+							candidates.extend(exports.aliases.keys().cloned());
+							let suggestion = crate::suggest::closest(&type_ident.name, candidates);
 							self.error(
 								type_ident.range,
 								NameNotBound {
 									name: format!("{}.{}", module.name, type_ident.name),
+									suggestion,
 								},
 							);
 						}
 						return Type::Unknown;
 					}
 
+					let suggestion = crate::suggest::closest(
+						&module.name,
+						self.imports.keys().cloned().collect::<Vec<_>>(),
+					);
 					self.error(
 						module.range,
 						NameNotBound {
 							name: module.name.clone(),
+							suggestion,
 						},
 					);
 					return Type::Unknown;
@@ -2095,10 +2159,12 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 
+				let suggestion = self.suggest_type(&type_ident.name);
 				self.error(
 					type_ident.range,
 					NameNotBound {
 						name: type_ident.name.clone(),
+						suggestion,
 					},
 				);
 
@@ -2454,10 +2520,12 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 
+				let suggestion = self.suggest_value(&ident.name);
 				self.error(
 					ident.range,
 					NameNotBound {
 						name: ident.name.clone(),
+						suggestion,
 					},
 				);
 
@@ -3029,11 +3097,16 @@ impl<'compiler> Analyzer<'compiler> {
 											expr.ty = Type::Fun(variant_params, enum_ty.into());
 										}
 										None => {
+											let suggestion = crate::suggest::closest(
+												&field.name,
+												enum_def.variants.iter().map(|(v, _)| v.clone()),
+											);
 											self.error(
 												field.range,
 												EnumVariantNotPresent {
 													variant: field.name.clone(),
 													ty: enum_ty,
+													suggestion,
 												},
 											);
 											expr.ty = Type::Unknown;
@@ -3103,10 +3176,15 @@ impl<'compiler> Analyzer<'compiler> {
 											},
 										);
 									} else {
+										let mut candidates: Vec<String> = exports.values.keys().cloned().collect();
+										candidates.extend(exports.enums.keys().cloned());
+										candidates.extend(exports.aliases.keys().cloned());
+										let suggestion = crate::suggest::closest(&field.name, candidates);
 										self.error(
 											field.range,
 											NameNotBound {
 												name: format!("{}.{}", ident.name, field.name),
+												suggestion,
 											},
 										);
 									}
@@ -3136,6 +3214,7 @@ impl<'compiler> Analyzer<'compiler> {
 							.iter()
 							.position(|m| m == &field.name);
 						let method_type = trait_decl.method_types.get(&field.name).cloned();
+						let method_names: Vec<String> = trait_decl.method_order.clone();
 
 						match (method_idx, method_type) {
 							(Some(idx), Some(method_ty)) => {
@@ -3151,10 +3230,12 @@ impl<'compiler> Analyzer<'compiler> {
 								return;
 							}
 							_ => {
+								let suggestion = crate::suggest::closest(&field.name, method_names);
 								self.error(
 									field.range,
 									NameNotBound {
 										name: format!("{}.{}", ident.name, field.name),
+										suggestion,
 									},
 								);
 								expr.ty = Type::Unknown;
@@ -3189,11 +3270,16 @@ impl<'compiler> Analyzer<'compiler> {
 									expr.ty = Type::Fun(variant_params, enum_ty.into());
 								}
 								None => {
+									let suggestion = crate::suggest::closest(
+										&field.name,
+										enum_def.variants.iter().map(|(v, _)| v.clone()),
+									);
 									self.error(
 										field.range,
 										EnumVariantNotPresent {
 											variant: field.name.clone(),
 											ty: enum_ty,
+											suggestion,
 										},
 									);
 									expr.ty = Type::Unknown;
@@ -3512,10 +3598,12 @@ impl<'compiler> Analyzer<'compiler> {
 						// error already reported
 					}
 					VariantResolution::NotFound => {
+						let suggestion = self.suggest_value(&name.name);
 						self.error(
 							name.range,
 							NameNotBound {
 								name: name.name.clone(),
+								suggestion,
 							},
 						);
 					}

@@ -1,0 +1,12 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0018]: Unclosed string.
+  ╭─▸ tests/errors/unclosed-string/main.pa:1:16
+  │
+1 │ def greeting = "hello, world
+  │                ^
+  │
+  ╰─ help: add a closing `"`.

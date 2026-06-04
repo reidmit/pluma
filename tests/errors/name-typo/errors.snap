@@ -1,0 +1,12 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0100]: Name `lenght` is not defined.
+  ╭─▸ tests/errors/name-typo/main.pa:3:12
+  │
+3 │ def main = lenght
+  │            ^^^^^^
+  │
+  ╰─ help: did you mean `length`?

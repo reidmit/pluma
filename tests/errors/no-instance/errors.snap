@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0113]: No instance of trait `numeric` for type `string`.
+  ╭─▸ tests/errors/no-instance/main.pa:2:3
+  │
+2 │   n + n
+  │   ^^^^^
+  ╰─

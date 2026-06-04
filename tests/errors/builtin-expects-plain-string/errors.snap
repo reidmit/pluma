@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0026]: Unexpected token (an identifier). Expected a string.
+  ╭─▸ tests/errors/builtin-expects-plain-string/main.pa:1:46
+  │
+1 │ def length :: fun (list a) -> int = built-in length
+  │                                              ^^^^^^
+  ╰─

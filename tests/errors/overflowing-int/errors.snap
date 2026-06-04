@@ -1,0 +1,12 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0013]: Overflowing integer literal.
+  ╭─▸ tests/errors/overflowing-int/main.pa:1:11
+  │
+1 │ def big = 999999999999999999999999
+  │           ^^^^^^^^^^^^^^^^^^^^^^^^
+  │
+  ╰─ help: int literals must fit in a signed 64-bit integer.

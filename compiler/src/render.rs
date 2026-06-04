@@ -1,0 +1,324 @@
+// The single source of truth for rendering a `Diagnostic` to text. Both the CLI
+// (`cli/src/printing.rs`, with color) and the `tests/errors` snapshot suite
+// (plain) go through here, so the test corpus guards exactly what users see.
+//
+// The left margin is one unbroken box-drawing rail: it opens at the location
+// (`╭─▸`), runs down through the source excerpt (`│`, with `┆` marking skipped
+// lines), and closes through the help/notes (`├─`, `╰─`):
+//
+//   error[E0100]: Name `lenght` is not defined.
+//      ╭─▸ tests/errors/name-typo/main.pa:3:12
+//      │
+//    3 │ def main = lenght
+//      │            ^^^^^^
+//      │
+//      ╰─ help: did you mean `length`?
+
+use crate::diagnostic::{Diagnostic, Label};
+use crate::location::Range;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+// Controls colorization. The CLI builds an `ansi()` palette (after its own
+// atty/NO_COLOR check) and the test suite builds a `plain()` one, so the two
+// outputs are identical modulo escape codes.
+pub struct Palette {
+	color: bool,
+}
+
+impl Palette {
+	pub fn plain() -> Self {
+		Palette { color: false }
+	}
+
+	pub fn ansi() -> Self {
+		Palette { color: true }
+	}
+
+	fn paint(&self, codes: &str, text: &str) -> String {
+		if self.color {
+			format!("\x1b[{}m{}\x1b[0m", codes, text)
+		} else {
+			text.to_string()
+		}
+	}
+
+	fn bold_red(&self, text: &str) -> String {
+		self.paint("1;31", text)
+	}
+
+	fn bold_yellow(&self, text: &str) -> String {
+		self.paint("1;33", text)
+	}
+
+	fn bold_blue(&self, text: &str) -> String {
+		self.paint("1;34", text)
+	}
+
+	fn dim(&self, text: &str) -> String {
+		self.paint("2", text)
+	}
+}
+
+// Renders all diagnostics into one string (blank line between each). `load`
+// maps a source path to its contents; results are cached so a file shared by
+// several diagnostics is read once. A `None` from `load` (synthetic path, e.g.
+// stdin) drops the source excerpt — the header, help, and notes still render.
+pub fn render_diagnostics(
+	diagnostics: &[Diagnostic],
+	mut load: impl FnMut(&Path) -> Option<String>,
+	palette: &Palette,
+) -> String {
+	let cwd = std::env::current_dir().unwrap_or_default();
+	let mut cache: HashMap<PathBuf, Option<Vec<String>>> = HashMap::new();
+	let mut out = String::new();
+
+	for (i, diagnostic) in diagnostics.iter().enumerate() {
+		if i > 0 {
+			out.push('\n');
+		}
+		render_one(diagnostic, &mut load, palette, &cwd, &mut cache, &mut out);
+	}
+
+	out
+}
+
+fn render_one(
+	diagnostic: &Diagnostic,
+	load: &mut impl FnMut(&Path) -> Option<String>,
+	palette: &Palette,
+	cwd: &Path,
+	cache: &mut HashMap<PathBuf, Option<Vec<String>>>,
+	out: &mut String,
+) {
+	use std::fmt::Write;
+
+	let is_error = diagnostic.is_error();
+	let severity = if is_error { "error" } else { "warning" };
+	let paint_severity = |text: &str| {
+		if is_error {
+			palette.bold_red(text)
+		} else {
+			palette.bold_yellow(text)
+		}
+	};
+
+	// Header: `error[E0103]: message` (code omitted when absent).
+	let header_label = match diagnostic.code {
+		Some(code) => format!("{}[{}]", severity, code),
+		None => severity.to_string(),
+	};
+	let _ = writeln!(
+		out,
+		"{}: {}",
+		paint_severity(&header_label),
+		diagnostic.message
+	);
+
+	// Resolve the source lines for the file this diagnostic points at.
+	let source = diagnostic.module_path.as_ref().and_then(|path| {
+		cache
+			.entry(path.clone())
+			.or_insert_with(|| load(path).map(|s| s.lines().map(|l| l.to_string()).collect()))
+			.clone()
+	});
+
+	let Some(range) = diagnostic.range else {
+		// No location to anchor a rail on (e.g. an ad-hoc CLI error). Render any
+		// help/notes as a simple indented trailer.
+		render_railless_trailer(diagnostic, palette, out);
+		return;
+	};
+	let Some(path) = diagnostic.module_path.as_ref() else {
+		render_railless_trailer(diagnostic, palette, out);
+		return;
+	};
+
+	// Width of the line-number column. The rail's `│` sits one space to its
+	// right, at column `w + 1`; corners and trailers align to the same column.
+	let mut max_line = range.end.line;
+	for label in &diagnostic.labels {
+		max_line = max_line.max(label.range.end.line);
+	}
+	let w = (max_line + 1).to_string().len();
+	let rail_indent = " ".repeat(w + 1);
+
+	// Open the rail at the location: `╭─▸ path:line:col` (1-based).
+	let display_path = path.strip_prefix(cwd).unwrap_or(path);
+	let location = format!(
+		"{}:{}:{}",
+		display_path.display(),
+		range.start.line + 1,
+		range.start.col + 1
+	);
+	let _ = writeln!(
+		out,
+		"{}{} {}",
+		rail_indent,
+		palette.dim("╭─▸"),
+		palette.dim(&location)
+	);
+
+	if let Some(lines) = &source {
+		let _ = writeln!(out, "{}{}", rail_indent, palette.dim("│"));
+		render_snippet(range, &diagnostic.labels, lines, w, is_error, palette, out);
+	}
+
+	// Close the rail through the help/notes. Each trailer line is a rail
+	// connector — a tee (`├─`) for all but the last, a corner (`╰─`) for the
+	// last — so the margin stays unbroken right down to where it ends.
+	let mut trailers: Vec<(String, &str)> = Vec::new();
+	if let Some(help) = &diagnostic.help {
+		trailers.push(("help:".to_string(), help.as_str()));
+	}
+	for note in &diagnostic.notes {
+		trailers.push(("note:".to_string(), note.as_str()));
+	}
+
+	if trailers.is_empty() {
+		// Nothing to say below the snippet — just cap the rail.
+		let _ = writeln!(out, "{}{}", rail_indent, palette.dim("╰─"));
+		return;
+	}
+
+	let _ = writeln!(out, "{}{}", rail_indent, palette.dim("│"));
+	let last = trailers.len() - 1;
+	for (i, (label, text)) in trailers.iter().enumerate() {
+		let connector = if i == last { "╰─" } else { "├─" };
+		let _ = writeln!(
+			out,
+			"{}{} {} {}",
+			rail_indent,
+			palette.dim(connector),
+			palette.bold_blue(label),
+			text
+		);
+	}
+}
+
+// Help/notes for a diagnostic with no source location to hang a rail on.
+fn render_railless_trailer(diagnostic: &Diagnostic, palette: &Palette, out: &mut String) {
+	use std::fmt::Write;
+	if let Some(help) = &diagnostic.help {
+		let _ = writeln!(out, "  {} {}", palette.bold_blue("help:"), help);
+	}
+	for note in &diagnostic.notes {
+		let _ = writeln!(out, "  {} {}", palette.bold_blue("note:"), note);
+	}
+}
+
+// Emits the source-excerpt body: each referenced line plus its caret row, in
+// ascending order, with a dashed rail (`┆`) standing in for skipped lines. The
+// caller owns the surrounding rail (opening corner + separators + close).
+fn render_snippet(
+	primary: Range,
+	labels: &[Label],
+	lines: &[String],
+	w: usize,
+	is_error: bool,
+	palette: &Palette,
+	out: &mut String,
+) {
+	use std::fmt::Write;
+
+	let paint_caret = |text: &str| {
+		if is_error {
+			palette.bold_red(text)
+		} else {
+			palette.bold_yellow(text)
+		}
+	};
+	let rail_indent = " ".repeat(w + 1);
+
+	// Collect every (line, start_col, span, caption, is_primary) marker. The
+	// primary marker uses the severity color; secondary labels are blue.
+	struct Marker {
+		line: usize,
+		start_col: usize,
+		span: usize,
+		caption: Option<String>,
+		primary: bool,
+	}
+
+	let mut markers: Vec<Marker> = vec![Marker {
+		line: primary.start.line,
+		start_col: primary.start.col,
+		span: caret_span(primary, lines),
+		caption: None,
+		primary: true,
+	}];
+	for label in labels {
+		markers.push(Marker {
+			line: label.range.start.line,
+			start_col: label.range.start.col,
+			span: caret_span(label.range, lines),
+			caption: Some(label.message.clone()),
+			primary: false,
+		});
+	}
+	markers.sort_by_key(|m| (m.line, m.start_col));
+
+	let mut prev_line: Option<usize> = None;
+	for marker in &markers {
+		// A dashed rail segment when markers skip non-adjacent source lines.
+		if let Some(prev) = prev_line {
+			if marker.line > prev + 1 {
+				let _ = writeln!(out, "{}{}", rail_indent, palette.dim("┆"));
+			}
+		}
+		prev_line = Some(marker.line);
+
+		let Some(text) = lines.get(marker.line) else {
+			continue;
+		};
+		let shown = text.replace('\t', " ");
+		let line_no = format!("{:>w$}", marker.line + 1, w = w);
+		let _ = writeln!(
+			out,
+			"{} {} {}",
+			palette.dim(&line_no),
+			palette.dim("│"),
+			shown
+		);
+
+		let pad = " ".repeat(marker.start_col);
+		let carets = "^".repeat(marker.span.max(1));
+		let painted = if marker.primary {
+			paint_caret(&carets)
+		} else {
+			palette.bold_blue(&carets)
+		};
+		let caption = match &marker.caption {
+			Some(c) if !c.is_empty() => {
+				let c = if marker.primary {
+					paint_caret(c)
+				} else {
+					palette.bold_blue(c)
+				};
+				format!(" {}", c)
+			}
+			_ => String::new(),
+		};
+		let _ = writeln!(
+			out,
+			"{}{} {}{}{}",
+			rail_indent,
+			palette.dim("│"),
+			pad,
+			painted,
+			caption
+		);
+	}
+}
+
+// Caret width for a range: exact for single-line ranges, else to end-of-line.
+fn caret_span(range: Range, lines: &[String]) -> usize {
+	if range.start.line == range.end.line {
+		range.end.col.saturating_sub(range.start.col).max(1)
+	} else {
+		lines
+			.get(range.start.line)
+			.map(|l| l.len().saturating_sub(range.start.col).max(1))
+			.unwrap_or(1)
+	}
+}

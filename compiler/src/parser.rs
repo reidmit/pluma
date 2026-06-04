@@ -163,6 +163,13 @@ impl<'a> Parser<'a> {
 			.or_else(|| uses.last().map(|u| u.range.end))
 			.unwrap_or_else(Point::zero);
 
+		// Merge the tokenizer's lexer-level diagnostics (unclosed strings, bad
+		// escapes, malformed digits) with the parser's, ordered by source
+		// position so the rendered output reads top-to-bottom.
+		let mut errors = self.errors.clone();
+		errors.extend(self.tokenizer.errors.iter().cloned());
+		errors.sort_by_key(|e| (e.range.start.line, e.range.start.col));
+
 		(
 			ModuleNode {
 				range: Range::between(start, end),
@@ -170,7 +177,7 @@ impl<'a> Parser<'a> {
 				body,
 			},
 			self.tokenizer.comments.clone(),
-			self.errors.clone(),
+			errors,
 		)
 	}
 
@@ -1761,7 +1768,11 @@ impl<'a> Parser<'a> {
 				_ => unreachable!(),
 			} as usize;
 
-			if let Some(next_result) = result.checked_add(byte_value * i) {
+			// Guard the multiply too — for a large literal `i` grows huge, and
+			// `byte_value * i` would itself overflow (panicking in debug) before
+			// the `checked_add` below ever runs.
+			let term = byte_value.checked_mul(i);
+			if let Some(next_result) = term.and_then(|t| result.checked_add(t)) {
 				result = next_result;
 			} else {
 				self.error::<LiteralNode>(ParseError {

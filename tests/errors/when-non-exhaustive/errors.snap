@@ -1,0 +1,12 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0109]: Non-exhaustive `when`: missing case for `node`.
+  ╭─▸ tests/errors/when-non-exhaustive/main.pa:7:3
+  │
+7 │   when t is empty {
+  │   ^^^^^^^^^^^^^^^^^
+  │
+  ╰─ help: add an arm for each missing case, or a wildcard `_` arm.

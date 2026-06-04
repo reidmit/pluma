@@ -1,0 +1,1 @@
+def length :: fun (list a) -> int = built-in length

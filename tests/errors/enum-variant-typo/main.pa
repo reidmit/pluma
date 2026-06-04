@@ -1,0 +1,7 @@
+enum color {
+  red
+  green
+  blue
+}
+
+def main = color.gren

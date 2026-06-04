@@ -1,8 +1,8 @@
 ---
 source: tests/analyze.rs
+assertion_line: 41
 expression: output
 ---
-error: `try`'s right-hand side has an undetermined type. Add a type annotation to its source so the carrier (option / result / task) can be selected.
+error: `try`'s right-hand side has an undetermined type.
 > 6 | 	try y = f x
        ^^^^^^^^^^^
-

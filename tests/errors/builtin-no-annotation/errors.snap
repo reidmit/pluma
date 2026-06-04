@@ -1,0 +1,12 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0128]: `built-in` requires a type annotation on the enclosing `def`.
+  ╭─▸ tests/errors/builtin-no-annotation/main.pa:1:14
+  │
+1 │ def length = built-in "list-length"
+  │              ^^^^^^^^^^^^^^^^^^^^^^
+  │
+  ╰─ help: write `def name :: <type> = built-in "tag"`.

@@ -1,45 +1,16 @@
 use atty::Stream;
 use std::env;
 
-fn hide_colors() -> bool {
+// Whether diagnostic output should carry ANSI color. Off when stdout isn't a
+// TTY or when `NO_COLOR=1` is set. The actual styling lives in the compiler's
+// `Palette`; this just decides which palette the CLI hands the renderer.
+pub fn should_colorize() -> bool {
 	if !atty::is(Stream::Stdout) {
-		return true;
+		return false;
 	}
 
 	match env::var("NO_COLOR") {
-		Ok(value) => value == "1",
-		_ => false,
+		Ok(value) => value != "1",
+		_ => true,
 	}
-}
-
-pub fn dim(text: &str) -> String {
-	if hide_colors() {
-		return format!("{}", text);
-	}
-
-	return format!("\x1b[2m{}\x1b[0m", text);
-}
-
-pub fn bold_dim(text: &str) -> String {
-	if hide_colors() {
-		return format!("{}", text);
-	}
-
-	return format!("\x1b[1m\x1b[2m{}\x1b[0m", text);
-}
-
-pub fn bold_red(text: &str) -> String {
-	if hide_colors() {
-		return format!("{}", text);
-	}
-
-	return format!("\x1b[1m\x1b[31m{}\x1b[0m", text);
-}
-
-pub fn bold_yellow(text: &str) -> String {
-	if hide_colors() {
-		return format!("{}", text);
-	}
-
-	return format!("\x1b[1m\x1b[33m{}\x1b[0m", text);
 }

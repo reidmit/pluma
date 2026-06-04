@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0014]: Invalid duration literal. Expected `<amount><unit>` segments using the units d, h, m, s, ms, us, ns (e.g. 2m20s).
+  ╭─▸ tests/errors/duration-bad-unit/main.pa:1:11
+  │
+1 │ def bad = 5sec
+  │           ^^^^
+  ╰─

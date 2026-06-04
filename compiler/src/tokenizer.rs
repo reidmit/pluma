@@ -29,7 +29,10 @@ pub struct Tokenizer<'a> {
 	// interpolation itself.
 	interpolation_paren_depth: Vec<usize>,
 	brace_depth: i32,
-	errors: Vec<ParseError>,
+	// Lexer-level diagnostics (unclosed string/interpolation, bad escapes,
+	// malformed digits). Drained by the parser into the module's error list
+	// once tokenization completes — see `Parser::parse_module`.
+	pub errors: Vec<ParseError>,
 	next_token: Option<Token>,
 	indent_level: usize,
 }

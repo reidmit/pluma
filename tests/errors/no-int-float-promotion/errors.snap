@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+assertion_line: 50
+expression: output
+---
+error[E0102]: Type mismatch: expected `int`, but found `float`.
+  ╭─▸ tests/errors/no-int-float-promotion/main.pa:1:16
+  │
+1 │ def main = 2 + 3.5
+  │                ^^^
+  ╰─

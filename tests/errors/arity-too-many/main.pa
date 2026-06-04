@@ -1,0 +1,5 @@
+def double = fun n {
+  n + n
+}
+
+def main = double 1 2

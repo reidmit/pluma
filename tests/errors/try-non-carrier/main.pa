@@ -1,0 +1,4 @@
+def go = fun {
+  try x = 5
+  ok x
+}

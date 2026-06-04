@@ -1,8 +1,9 @@
 ---
 source: tests/analyze.rs
+assertion_line: 41
 expression: output
 ---
-error: `private-fn` is private to module `lib`. Mark it `public` in that module to use it here.
+error: `private-fn` is private to module `lib`.
 > 3 | def out = lib.private-fn 5
                     ^^^^^^^^^^
 
