@@ -800,4 +800,60 @@ mod platform_gating_tests {
 			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
 		);
 	}
+
+	// FULLSTACK: check `modules` with `[server, client]` entries (target-less, so
+	// `check`'s single-target gate is off), then run the per-artifact gate.
+	fn gate_fullstack_multi(modules: &[(&str, &str)], server: &str, client: &str) -> Vec<Diagnostic> {
+		let mut compiler = Compiler::for_root_dir(std::env::temp_dir()).with_fullstack(true);
+		for (name, src) in modules {
+			compiler.set_module_source(name.to_string(), src.as_bytes().to_vec());
+		}
+		compiler.add_entry_module(server.to_string());
+		compiler.add_entry_module(client.to_string());
+		if let Err(diags) = compiler.check() {
+			return diags;
+		}
+		match compiler.gate_fullstack() {
+			Ok(()) => Vec::new(),
+			Err(diags) => diags,
+		}
+	}
+
+	#[test]
+	fn fullstack_gate_allows_each_tier_on_its_own_side() {
+		// The server half reaches `std.sys.*`, the client half `std.web.*` — each
+		// legal on its own artifact. A single `--target` couldn't admit both.
+		let server = "use std.sys.io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
+		let client = "use std.web.dom\n\ndef main = fun {\n\tlet _ = dom.body ()\n\t()\n}\n";
+		let diags = gate_fullstack_multi(
+			&[("server", server), ("client", client)],
+			"server",
+			"client",
+		);
+		assert!(
+			diags.is_empty(),
+			"fullstack gate wrongly barred a tier on its own side: {:?}",
+			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+		);
+	}
+
+	#[test]
+	fn fullstack_gate_bars_a_sys_leak_into_the_client() {
+		// The same `std.sys.io` import: fine reached from the server root, barred
+		// from the client root — the per-artifact split in action.
+		let server = "use std.sys.io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
+		let client = "use std.sys.io\n\ndef main = fun {\n\tio.print \"c\"\n}\n";
+		let diags = gate_fullstack_multi(
+			&[("server", server), ("client", client)],
+			"server",
+			"client",
+		);
+		assert!(
+			diags
+				.iter()
+				.any(|d| d.message.contains("std.sys.io") && d.message.contains("web")),
+			"expected the client root to bar std.sys.io on web, got: {:?}",
+			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+		);
+	}
 }
