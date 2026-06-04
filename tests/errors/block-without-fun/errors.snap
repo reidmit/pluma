@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0026]: Unexpected token (keyword `let`). Expected a '}'.
-  ╭─▸ tests/errors/block-without-fun/main.pa:2:14
+  │
+  ├─𜱶 help: `{ ... }` is a record literal; for a block of statements, write the body as `fun { ... }`.
   │
 2 │ def main = { let x = 5  x }
   │              ^^^
-  │
-  ╰─ help: `{ ... }` is a record literal; for a block of statements, write the body as `fun { ... }`.
+  ╰─𜱶 tests/errors/block-without-fun/main.pa:2:14

@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0021]: `built-in` requires a plain string literal naming the builtin tag.
-  ╭─▸ tests/errors/builtin-expects-plain-string/main.pa:2:37
+  │
+  ├─𜱶 help: write the tag as a plain literal, e.g. `built-in "io.print"`.
   │
 2 │ def f :: fun int -> int = built-in "io-$(n)"
   │                                     ^^^^^^^
-  │
-  ╰─ help: write the tag as a plain literal, e.g. `built-in "io.print"`.
+  ╰─𜱶 tests/errors/builtin-expects-plain-string/main.pa:2:37

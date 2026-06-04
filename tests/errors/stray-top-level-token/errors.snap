@@ -1,11 +1,9 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0027]: Unexpected token (decimal digits (e.g. 47)). Expected a top-level definition (`def`, `enum`, `alias`, `trait`, `test`, or `implement`).
-  ╭─▸ tests/errors/stray-top-level-token/main.pa:1:1
   │
 1 │ 123
   │ ^^^
-  ╰─
+  ╰─𜱶 tests/errors/stray-top-level-token/main.pa:1:1

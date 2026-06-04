@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0103]: Failed to unify recursive type `'a -> 'b`.
-  ╭─▸ tests/errors/recursive-unification/main.pa:2:20
   │
 2 │ def main = fun x { x x }
   │                    ^^^
-  ╰─
+  ╰─𜱶 tests/errors/recursive-unification/main.pa:2:20

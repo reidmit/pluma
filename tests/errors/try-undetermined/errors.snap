@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0122]: `try`'s right-hand side has an undetermined type.
-  ╭─▸ tests/errors/try-undetermined/main.pa:6:2
+  │
+  ├─𜱶 help: annotate the source so the carrier (option / result / task) can be selected.
   │
 6 │  try y = f x
   │  ^^^^^^^^^^^
-  │
-  ╰─ help: annotate the source so the carrier (option / result / task) can be selected.
+  ╰─𜱶 tests/errors/try-undetermined/main.pa:6:2

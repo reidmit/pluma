@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0029]: Expected an expression, but found a '*'.
-  ╭─▸ tests/errors/expression-expected/main.pa:2:12
   │
 2 │ def main = * 2
   │            ^
-  ╰─
+  ╰─𜱶 tests/errors/expression-expected/main.pa:2:12

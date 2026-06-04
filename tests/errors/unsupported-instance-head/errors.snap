@@ -3,16 +3,15 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0115]: Instance head `(int, int)` is not supported.
-  ╭─▸ tests/errors/unsupported-instance-head/main.pa:3:17
+  │
+  ├─𜱶 help: use a concrete type or a generic type constructor.
   │
 3 │ implement greet (int, int) { def hello = fun x { "a" } }
   │                 ^^^^^^^^^^
-  │
-  ╰─ help: use a concrete type or a generic type constructor.
+  ╰─𜱶 tests/errors/unsupported-instance-head/main.pa:3:17
 
 warning[E0101]: Name `x` is never used.
-  ╭─▸ tests/errors/unsupported-instance-head/main.pa:3:46
   │
 3 │ implement greet (int, int) { def hello = fun x { "a" } }
   │                                              ^
-  ╰─
+  ╰─𜱶 tests/errors/unsupported-instance-head/main.pa:3:46

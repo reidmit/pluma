@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0007]: Invalid octal digits.
-  ╭─▸ tests/errors/bad-octal-digit/main.pa:2:14
+  │
+  ├─𜱶 help: octal literals use digits `0`–`7` (e.g. `0o57`).
   │
 2 │ def main = 0o89
   │              ^^
-  │
-  ╰─ help: octal literals use digits `0`–`7` (e.g. `0o57`).
+  ╰─𜱶 tests/errors/bad-octal-digit/main.pa:2:14

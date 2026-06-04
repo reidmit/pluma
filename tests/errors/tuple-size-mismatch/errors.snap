@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0105]: Tuple size mismatch: expected 2 elements, but found 3.
-  ╭─▸ tests/errors/tuple-size-mismatch/main.pa:3:6
   │
 3 │  let (a, b) = (1, 2, 3)
   │      ^^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/tuple-size-mismatch/main.pa:3:6

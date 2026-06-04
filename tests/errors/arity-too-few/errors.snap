@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0104]: Parameter count mismatch: expected 2, but found 1.
-  ╭─▸ tests/errors/arity-too-few/main.pa:5:12
+  │
+  ├─𜱶 note: Pluma calls are uncurried, so this isn't partial application; pass every argument, or wrap it: `fun y { f x y }`.
   │
 5 │ def main = add 1
   │            ^^^
-  │
-  ╰─ note: Pluma calls are uncurried, so this isn't partial application; pass every argument, or wrap it: `fun y { f x y }`.
+  ╰─𜱶 tests/errors/arity-too-few/main.pa:5:12

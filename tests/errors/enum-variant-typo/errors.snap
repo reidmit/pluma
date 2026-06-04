@@ -1,12 +1,11 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0108]: Variant `gren` does not exist in enum of type `color`.
-  ╭─▸ tests/errors/enum-variant-typo/main.pa:7:18
+  │
+  ├─𜱶 help: did you mean `green`?
   │
 7 │ def main = color.gren
   │                  ^^^^
-  │
-  ╰─ help: did you mean `green`?
+  ╰─𜱶 tests/errors/enum-variant-typo/main.pa:7:18

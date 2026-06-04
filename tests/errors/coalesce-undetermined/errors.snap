@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0126]: `??`'s left-hand side has an undetermined type.
-  ╭─▸ tests/errors/coalesce-undetermined/main.pa:3:2
+  │
+  ├─𜱶 help: annotate the left-hand side so the carrier (option / result) can be selected.
   │
 3 │  x ?? 0
   │  ^^^^^^
-  │
-  ╰─ help: annotate the left-hand side so the carrier (option / result) can be selected.
+  ╰─𜱶 tests/errors/coalesce-undetermined/main.pa:3:2

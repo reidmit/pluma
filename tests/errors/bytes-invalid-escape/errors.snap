@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0019]: Invalid escape sequence in bytes literal. Valid escapes are \\, \', \0, \t, \r, \n, and \xNN.
-  ╭─▸ tests/errors/bytes-invalid-escape/main.pa:2:13
   │
 2 │ def main = '\q'
   │             ^^
-  ╰─
+  ╰─𜱶 tests/errors/bytes-invalid-escape/main.pa:2:13

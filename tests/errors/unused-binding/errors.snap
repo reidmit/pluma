@@ -1,11 +1,9 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 warning[E0101]: Name `unused` is never used.
-  ╭─▸ tests/errors/unused-binding/main.pa:2:7
   │
 2 │   let unused = 5
   │       ^^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/unused-binding/main.pa:2:7

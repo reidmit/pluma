@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0011]: Invalid body in `def` statement: expected either an expression or a type.
-  ╭─▸ tests/errors/trait-default-without-signature/main.pa:3:2
   │
 3 │  def hello = fun x { "hi" }
   │  ^^^^^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/trait-default-without-signature/main.pa:3:2

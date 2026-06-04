@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0121]: Field `a` is listed more than once in this record pattern.
-  ╭─▸ tests/errors/duplicate-record-pattern-field/main.pa:3:11
   │
 3 │  let { a, a } = { a: 1 }
   │           ^
-  ╰─
+  ╰─𜱶 tests/errors/duplicate-record-pattern-field/main.pa:3:11

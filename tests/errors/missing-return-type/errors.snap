@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0012]: Missing return type after '->' in function type expression
-  ╭─▸ tests/errors/missing-return-type/main.pa:2:10
+  │
+  ├─𜱶 help: add the return type after `->`, e.g. `fun int -> int`.
   │
 2 │ def f :: fun int -> = 1
   │          ^^^^^^^^^^
-  │
-  ╰─ help: add the return type after `->`, e.g. `fun int -> int`.
+  ╰─𜱶 tests/errors/missing-return-type/main.pa:2:10

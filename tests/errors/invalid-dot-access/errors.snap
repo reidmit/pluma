@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0010]: Invalid expression after `.`: expected either an integer or a field name.
-  ╭─▸ tests/errors/invalid-dot-access/main.pa:2:19
+  │
+  ├─𜱶 help: use `.field` for a record field or `.0` for a tuple element.
   │
 2 │ def main = (1, 2).+
   │                   ^
-  │
-  ╰─ help: use `.field` for a record field or `.0` for a tuple element.
+  ╰─𜱶 tests/errors/invalid-dot-access/main.pa:2:19

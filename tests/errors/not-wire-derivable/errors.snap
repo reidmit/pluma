@@ -3,15 +3,13 @@ source: tests/errors.rs
 expression: output
 ---
 warning[E0101]: Name `bytes` is never used.
-  ╭─▸ tests/errors/not-wire-derivable/main.pa:5:6
   │
 5 │  let bytes = wire.encode widget
   │      ^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/not-wire-derivable/main.pa:5:6
 
 error[E0114]: Can't send `{label: string, on-click: int -> int}` across the wire: field `on-click` can't (functions aren't serializable).
-  ╭─▸ tests/errors/not-wire-derivable/main.pa:5:14
   │
 5 │  let bytes = wire.encode widget
   │              ^^^^^^^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/not-wire-derivable/main.pa:5:14

@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0131]: `where` clause refers to type variable `b`, which does not appear in the def's type annotation.
-  ╭─▸ tests/errors/where-clause-unknown-param/main.pa:3:38
   │
 3 │ def f :: fun int -> int where (greet b) = fun x { x }
   │                                      ^
-  ╰─
+  ╰─𜱶 tests/errors/where-clause-unknown-param/main.pa:3:38

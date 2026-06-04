@@ -3,9 +3,9 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0004]: Invalid binary digits.
-  ╭─▸ tests/errors/bad-binary-digit/main.pa:2:15
+  │
+  ├─𜱶 help: binary literals use only `0` and `1` (e.g. `0b1010`).
   │
 2 │ def main = 0b12
   │               ^
-  │
-  ╰─ help: binary literals use only `0` and `1` (e.g. `0b1010`).
+  ╰─𜱶 tests/errors/bad-binary-digit/main.pa:2:15

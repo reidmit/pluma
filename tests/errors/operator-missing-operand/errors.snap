@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0029]: Expected an expression, but found a line break.
-  ╭─▸ tests/errors/operator-missing-operand/main.pa:2:15
   │
 2 │ def main = 1 +
   │               ^
-  ╰─
+  ╰─𜱶 tests/errors/operator-missing-operand/main.pa:2:15

@@ -3,8 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0002]: Empty grouping in regular expression.
-  ╭─▸ tests/errors/regex-empty-group/main.pa:2:14
   │
 2 │ def main = `a()b`
   │              ^
-  ╰─
+  ╰─𜱶 tests/errors/regex-empty-group/main.pa:2:14

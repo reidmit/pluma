@@ -1,11 +1,9 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0022]: Expected an expression after `...`.
-  ╭─▸ tests/errors/spread-no-operand/main.pa:1:17
   │
 1 │ def xs = [1, 2, ...]
   │                 ^^^
-  ╰─
+  ╰─𜱶 tests/errors/spread-no-operand/main.pa:1:17

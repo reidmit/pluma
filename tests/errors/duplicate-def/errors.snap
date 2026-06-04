@@ -1,14 +1,12 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0112]: Duplicate top-level definition `config`.
-  ╭─▸ tests/errors/duplicate-def/main.pa:3:5
   │
 1 │ def config = 1
   │     ^^^^^^ previous definition here
   ┆
 3 │ def config = 2
   │     ^^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/duplicate-def/main.pa:3:5

@@ -1,11 +1,9 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0123]: `try` only works on `option`, `result`, or `task`; this right-hand side has type `int`.
-  ╭─▸ tests/errors/try-non-carrier/main.pa:2:3
   │
 2 │   try x = 5
   │   ^^^^^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/try-non-carrier/main.pa:2:3

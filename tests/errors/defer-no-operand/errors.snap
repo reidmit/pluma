@@ -1,11 +1,9 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0023]: Expected an expression after `defer`.
-  ╭─▸ tests/errors/defer-no-operand/main.pa:2:3
   │
 2 │   defer
   │   ^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/defer-no-operand/main.pa:2:3

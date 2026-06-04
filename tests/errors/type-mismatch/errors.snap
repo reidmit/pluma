@@ -1,11 +1,9 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0102]: Type mismatch: expected `string`, but found `int`.
-  ╭─▸ tests/errors/type-mismatch/main.pa:1:12
   │
 1 │ def main = 1 == "hello"
   │            ^^^^^^^^^^^^
-  ╰─
+  ╰─𜱶 tests/errors/type-mismatch/main.pa:1:12

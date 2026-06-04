@@ -2,17 +2,19 @@
 // (`cli/src/printing.rs`, with color) and the `tests/errors` snapshot suite
 // (plain) go through here, so the test corpus guards exactly what users see.
 //
-// The left margin is one unbroken box-drawing rail: it opens at the location
-// (`╭─▸`), runs down through the source excerpt (`│`, with `┆` marking skipped
-// lines), and closes through the help/notes (`├─`, `╰─`):
+// One box-drawing rail runs down the left margin. It opens with a bare `│` under
+// the header; any help/notes tee off the top (`├─`); the source excerpt hangs
+// below (a gutter `│`, with `┆` marking skipped lines); and it closes with an
+// arrowhead pointing at the source location (`╰─𜱶`):
 //
 //   error[E0100]: Name `lenght` is not defined.
-//      ╭─▸ tests/errors/name-typo/main.pa:3:12
+//      │
+//      ├─𜱶 help: did you mean `length`?
 //      │
 //    3 │ def main = lenght
 //      │            ^^^^^^
 //      │
-//      ╰─ help: did you mean `length`?
+//      ╰─𜱶 tests/errors/name-typo/main.pa:3:12
 
 use crate::diagnostic::{Diagnostic, Label};
 use crate::location::Range;
@@ -55,8 +57,47 @@ impl Palette {
 		self.paint("1;34", text)
 	}
 
+	fn bold_cyan(&self, text: &str) -> String {
+		self.paint("1;36", text)
+	}
+
 	fn dim(&self, text: &str) -> String {
 		self.paint("2", text)
+	}
+
+	// Interprets the backtick-delimited code spans embedded in message strings
+	// (`` `option` ``, ``keyword `def` ``). With color, each matched pair becomes
+	// its inner text painted as a code span and the ticks are dropped — color is
+	// the emphasis, so the delimiters that stood in for it are redundant. Without
+	// color, the text is returned untouched so the ticks remain the emphasis (and
+	// the `tests/errors` snapshots stay readable). Only balanced pairs transform;
+	// a lone backtick is left literal.
+	fn code_spans(&self, text: &str) -> String {
+		if !self.color {
+			return text.to_string();
+		}
+		let mut out = String::with_capacity(text.len());
+		let mut rest = text;
+		while let Some(open) = rest.find('`') {
+			match rest[open + 1..].find('`') {
+				Some(rel_close) => {
+					let close = open + 1 + rel_close;
+					out.push_str(&rest[..open]);
+					out.push_str(&self.code(&rest[open + 1..close]));
+					rest = &rest[close + 1..];
+				}
+				// Unbalanced trailing backtick: emit the remainder verbatim.
+				None => break,
+			}
+		}
+		out.push_str(rest);
+		out
+	}
+
+	// Emphasis for inline code/type fragments. Cyan keeps code spans distinct from
+	// both the red error carets and the blue help/note labels.
+	fn code(&self, text: &str) -> String {
+		self.bold_cyan(text)
 	}
 }
 
@@ -112,7 +153,7 @@ fn render_one(
 		out,
 		"{}: {}",
 		paint_severity(&header_label),
-		diagnostic.message
+		palette.code_spans(&diagnostic.message)
 	);
 
 	// Resolve the source lines for the file this diagnostic points at.
@@ -143,7 +184,7 @@ fn render_one(
 	let w = (max_line + 1).to_string().len();
 	let rail_indent = " ".repeat(w + 1);
 
-	// Open the rail at the location: `╭─▸ path:line:col` (1-based).
+	// The location the rail's closing arrowhead points at (1-based).
 	let display_path = path.strip_prefix(cwd).unwrap_or(path);
 	let location = format!(
 		"{}:{}:{}",
@@ -151,22 +192,10 @@ fn render_one(
 		range.start.line + 1,
 		range.start.col + 1
 	);
-	let _ = writeln!(
-		out,
-		"{}{} {}",
-		rail_indent,
-		palette.dim("╭─▸"),
-		palette.dim(&location)
-	);
 
-	if let Some(lines) = &source {
-		let _ = writeln!(out, "{}{}", rail_indent, palette.dim("│"));
-		render_snippet(range, &diagnostic.labels, lines, w, is_error, palette, out);
-	}
-
-	// Close the rail through the help/notes. Each trailer line is a rail
-	// connector — a tee (`├─`) for all but the last, a corner (`╰─`) for the
-	// last — so the margin stays unbroken right down to where it ends.
+	// Help and notes lead the rail, stacked just under the header. Each is a tee
+	// (`├─`) — never a corner — since the rail always continues down through the
+	// snippet to the closing arrowhead.
 	let mut trailers: Vec<(String, &str)> = Vec::new();
 	if let Some(help) = &diagnostic.help {
 		trailers.push(("help:".to_string(), help.as_str()));
@@ -175,35 +204,60 @@ fn render_one(
 		trailers.push(("note:".to_string(), note.as_str()));
 	}
 
-	if trailers.is_empty() {
-		// Nothing to say below the snippet — just cap the rail.
-		let _ = writeln!(out, "{}{}", rail_indent, palette.dim("╰─"));
-		return;
-	}
-
+	// Open the rail, then tee off the trailers.
 	let _ = writeln!(out, "{}{}", rail_indent, palette.dim("│"));
-	let last = trailers.len() - 1;
-	for (i, (label, text)) in trailers.iter().enumerate() {
-		let connector = if i == last { "╰─" } else { "├─" };
+	for (label, text) in &trailers {
 		let _ = writeln!(
 			out,
 			"{}{} {} {}",
 			rail_indent,
-			palette.dim(connector),
+			palette.dim("├─𜱶"),
 			palette.bold_blue(label),
-			text
+			palette.code_spans(text)
 		);
 	}
+
+	// The source excerpt. A `│` spacer precedes it only when trailers sit above.
+	// No spacer follows: the snippet ends in a caret row, which already sets the
+	// closer apart. With no snippet, a spacer stands in so the closer doesn't butt
+	// against the trailers (or the opener).
+	if let Some(lines) = &source {
+		if !trailers.is_empty() {
+			let _ = writeln!(out, "{}{}", rail_indent, palette.dim("│"));
+		}
+		render_snippet(range, &diagnostic.labels, lines, w, is_error, palette, out);
+	} else if !trailers.is_empty() {
+		let _ = writeln!(out, "{}{}", rail_indent, palette.dim("│"));
+	}
+
+	// Close the rail with an arrowhead pointing at the source location.
+	let _ = writeln!(
+		out,
+		"{}{} {}",
+		rail_indent,
+		palette.dim("╰─𜱶"),
+		palette.dim(&location)
+	);
 }
 
 // Help/notes for a diagnostic with no source location to hang a rail on.
 fn render_railless_trailer(diagnostic: &Diagnostic, palette: &Palette, out: &mut String) {
 	use std::fmt::Write;
 	if let Some(help) = &diagnostic.help {
-		let _ = writeln!(out, "  {} {}", palette.bold_blue("help:"), help);
+		let _ = writeln!(
+			out,
+			"  {} {}",
+			palette.bold_blue("help:"),
+			palette.code_spans(help)
+		);
 	}
 	for note in &diagnostic.notes {
-		let _ = writeln!(out, "  {} {}", palette.bold_blue("note:"), note);
+		let _ = writeln!(
+			out,
+			"  {} {}",
+			palette.bold_blue("note:"),
+			palette.code_spans(note)
+		);
 	}
 }
 
