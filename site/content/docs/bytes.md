@@ -61,15 +61,15 @@ bytes.split b sep           # empty sep splits into single-byte chunks
 
 ## Byte-aware I/O
 
-Byte-side I/O lives in `std.sys.io`:
+Byte-side file I/O lives in `std.sys.fs`, the stdin/stdout stream versions in `std.sys.io`:
 
 ```pluma
-io.read-file-bytes path        # result bytes string — survives non-UTF-8 contents
-io.write-file-bytes path bytes # result nothing string
-io.append-file-bytes path bytes
+fs.read-file-bytes path        # result bytes string — survives non-UTF-8 contents
+fs.write-file-bytes path bytes # result nothing string
+fs.append-file-bytes path bytes
 io.read-all-bytes ()           # drain stdin as bytes
 io.write-bytes b               # raw write to stdout, no newline, no Display formatting
 io.write-err-bytes b           # same, to stderr
 ```
 
-The text-side equivalents (`io.read-file`, `io.write-file`, `io.read-all`) still exist and still require UTF-8; reach for the byte-side versions when you're dealing with binary data or when source encoding is uncertain.
+The text-side equivalents (`fs.read-file`, `fs.write-file`, `io.read-all`) still exist and still require UTF-8; reach for the byte-side versions when you're dealing with binary data or when source encoding is uncertain.

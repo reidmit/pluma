@@ -52,12 +52,12 @@ public def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
 
 # Returns the value inside a `some`, or stops the whole program when the
 # option is `none`. The message you pass is written to standard error and
-# the program exits nonzero (via `io.fail`). Reach for this in a script
+# the program exits nonzero (via `process.fail`). Reach for this in a script
 # when an empty result leaves nothing sensible to do -- the recovering
 # dual is `??`, which supplies a fallback instead of quitting.
 #
 #     # some -> the contents; none -> "no home directory" on stderr, then exit
-#     (io.env "HOME") | option.expect "no home directory"
+#     (process.env "HOME") | option.expect "no home directory"
 public def expect :: fun (option a) string -> a = fun o msg {
 	when o is some v {
 		v
@@ -158,8 +158,8 @@ public def to-result :: fun (option a) e -> result a e = fun o e {
 	}
 }
 
-# The `io.fail` primitive, referenced by its builtin tag directly rather
-# than through `std.sys.io`: `option` rides in the prelude, so importing
-# `io` here would close an import cycle. Aborts with `msg` on stderr and
-# a nonzero exit; never returns.
+# The `process.fail` primitive, referenced by its builtin tag directly
+# rather than through `std.sys.process`: `option` rides in the prelude, so
+# importing `process` here would close an import cycle. Aborts with `msg`
+# on stderr and a nonzero exit; never returns.
 def fail-with :: fun string -> a = built-in "io-fail"

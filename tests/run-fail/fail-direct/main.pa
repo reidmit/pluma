@@ -1,10 +1,10 @@
-# `io.fail` stops the program directly: its message goes to stderr and the
+# `process.fail` stops the program directly: its message goes to stderr and the
 # exit code is nonzero. It's the primitive `expect` is built on. `after`
 # never prints.
-use std.sys.io
+use std.sys.process
 
 def main = fun {
 	print "before"
-	io.fail "stopping on purpose"
+	process.fail "stopping on purpose"
 	print "after"
 }

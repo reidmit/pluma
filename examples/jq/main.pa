@@ -11,19 +11,21 @@
 #   echo '{"a":[1,2,3]}' | pluma run examples/jq '.a[-1]'
 
 use std.sys.io
+use std.sys.fs
+use std.sys.process
 use std.json
 use std.list
 use std.string
 use query
 
 public def main = fun {
-	let args = io.args ()
+	let args = process.args ()
 	when list.head args is none {
 		print "usage: pluma run examples/jq <path> [file.json]"
 	} is some path-expr {
 		let rest = list.drop args 1
 		let source = when list.head rest is some file {
-			io.read-file file
+			fs.read-file file
 		} is none {
 			io.read-all ()
 		}

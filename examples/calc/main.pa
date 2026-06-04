@@ -18,6 +18,7 @@
 # line never ends the session.
 
 use std.sys.io
+use std.sys.process
 use std.list
 use std.dict
 use std.math
@@ -70,7 +71,7 @@ public def handle = fun env line {
 
 public def run-command = fun env cmd {
 	if cmd == ":q" || cmd == ":quit" is true {
-		io.exit 0
+		process.exit 0
 	} else if cmd == ":help" is true {
 		print-help ()
 	} else if cmd == ":vars" is true {

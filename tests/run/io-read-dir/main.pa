@@ -1,4 +1,4 @@
-use std.sys.io
+use std.sys.fs
 use std.list
 use std.string
 
@@ -13,13 +13,13 @@ def mine = fun name {
 def main = fun {
 	let a = "target/pluma-rdtest-1.txt"
 	let b = "target/pluma-rdtest-2.txt"
-	let _w1 = io.write-file a "one"
-	let _w2 = io.write-file b "two"
+	let _w1 = fs.write-file a "one"
+	let _w2 = fs.write-file b "two"
 
-	print (io.is-dir "target")
-	print (io.is-dir a)
+	print (fs.is-dir "target")
+	print (fs.is-dir a)
 
-	when io.read-dir "target" is ok entries {
+	when fs.read-dir "target" is ok entries {
 		let ours = list.filter entries mine
 		let _ = list.each ours fun e {
 			print e
@@ -28,13 +28,13 @@ def main = fun {
 		print "read-dir err: $(msg)"
 	}
 
-	when io.read-dir "target/no-such-dir-xyz" is ok _ {
+	when fs.read-dir "target/no-such-dir-xyz" is ok _ {
 		print "unexpected ok"
 	} is err _ {
 		print "err on missing dir"
 	}
 
-	let _d1 = io.delete-file a
-	let _d2 = io.delete-file b
+	let _d1 = fs.delete-file a
+	let _d2 = fs.delete-file b
 	print "done"
 }

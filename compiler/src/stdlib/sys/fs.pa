@@ -1,0 +1,57 @@
+# Files and directories: reading, writing, listing, and the queries
+# that go with them.
+#
+# Anything that touches the filesystem can fail -- a file might not
+# exist, a directory might not be readable -- so those operations hand
+# back a `result`, with a message from the OS on the `err` side. The
+# plain `file-exists`/`is-dir` queries answer with a `bool` instead,
+# since "no" is an ordinary answer rather than an error.
+
+# Reads an entire file into a string. `ok contents` if it worked, or
+# `err message` if the file is missing or can't be read.
+#
+#     fs.read-file "notes.txt"   # ok "...the file's text..." or err
+public def read-file :: fun string -> result string string = built-in "io-read-file"
+
+# Writes `data` to a file, replacing whatever was there before. Creates
+# the file if it doesn't exist. `ok nothing` on success, `err` on
+# failure.
+#
+#     fs.write-file "out.txt" "hello"
+public def write-file :: fun string string -> result nothing string = built-in "io-write-file"
+
+# Adds `data` to the end of a file, keeping the existing contents.
+# Creates the file if it doesn't exist.
+public def append-file :: fun string string -> result nothing string = built-in "io-append-file"
+
+# True when the path exists and is a file (not a directory).
+#
+#     fs.file-exists "out.txt"   # true or false
+public def file-exists :: fun string -> bool = built-in "io-file-exists"
+
+# Deletes a file. `err` if it isn't there.
+public def delete-file :: fun string -> result nothing string = built-in "io-delete-file"
+
+# True when the path exists and is a directory.
+public def is-dir :: fun string -> bool = built-in "io-is-dir"
+
+# Lists the entries in a directory -- just the names, not full paths,
+# sorted, with hidden dotfiles included. `err` if the path isn't a
+# directory you can read.
+#
+#     fs.read-dir "."   # ok ["README.md", "src", ...] or err
+public def read-dir :: fun string -> result (list string) string = built-in "io-read-dir"
+
+# Creates a directory, along with any parent directories that don't
+# exist yet (like `mkdir -p`). Quietly succeeds if it's already there.
+public def make-dir :: fun string -> result nothing string = built-in "io-make-dir"
+
+# Byte-oriented versions of the file operations above, for binary data:
+# they read and write `bytes` instead of `string`, so they make no
+# assumption that the content is text. Reach for these with images,
+# compressed files, or anything that isn't UTF-8.
+public def read-file-bytes :: fun string -> result bytes string = built-in "io-read-file-bytes"
+
+public def write-file-bytes :: fun string bytes -> result nothing string = built-in "io-write-file-bytes"
+
+public def append-file-bytes :: fun string bytes -> result nothing string = built-in "io-append-file-bytes"

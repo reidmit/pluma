@@ -1,6 +1,6 @@
 # When `main` returns a `result`, an `err` becomes the program's exit
 # status: the error value goes to stderr and the program exits nonzero,
-# the same controlled exit `io.fail` produces.
+# the same controlled exit `process.fail` produces.
 def main = fun {
 	print "starting work"
 	err "deploy failed: 3 of 5 hosts unreachable"

@@ -36,7 +36,7 @@ public enum option a {
 # to ignore by accident.
 #
 # Parsing and I/O return results: `string.to-int` on text that might not
-# be a number, `io.read-file` on a path that might not exist.
+# be a number, `fs.read-file` on a path that might not exist.
 #
 #     when string.to-int s is ok n { n } is err msg { io.print msg }
 #

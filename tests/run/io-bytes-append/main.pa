@@ -1,5 +1,5 @@
 use std.bytes
-use std.sys.io
+use std.sys.fs
 
 def show-write = fun r {
 	when r is ok _ {
@@ -12,11 +12,11 @@ def show-write = fun r {
 def main = fun {
 	let path = "target/pluma-io-bytes-append.bin"
 
-	show-write (io.write-file-bytes path '\x01\x02')
-	show-write (io.append-file-bytes path '\x03\x04')
-	show-write (io.append-file-bytes path '\x05')
+	show-write (fs.write-file-bytes path '\x01\x02')
+	show-write (fs.append-file-bytes path '\x03\x04')
+	show-write (fs.append-file-bytes path '\x05')
 
-	when io.read-file-bytes path is ok b {
+	when fs.read-file-bytes path is ok b {
 		print (to-string b)
 		print (to-string (bytes.length b))
 	} is err msg {

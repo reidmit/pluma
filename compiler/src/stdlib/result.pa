@@ -17,7 +17,7 @@
 #
 # As with options, `try` is the readable way to write such a chain:
 #
-#     try text = io.read-file path   # stop with the err if it fails
+#     try text = fs.read-file path   # stop with the err if it fails
 #     ok (string.length text)        # otherwise carry on
 public def then :: fun (result a e) (fun a -> result b e) -> result b e = fun r f {
 	when r is ok v {
@@ -52,12 +52,12 @@ public def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback 
 # Returns the value inside an `ok`, or stops the whole program when the
 # result is an `err`. The message you pass is written to standard error,
 # followed by the error value itself, and the program exits nonzero (via
-# `io.fail`). Reach for this in a script when there's nothing sensible to
+# `process.fail`). Reach for this in a script when there's nothing sensible to
 # do but bail -- the recovering dual is `??`, which supplies a fallback
 # instead of quitting.
 #
 #     # ok -> the contents; err -> "reading config: <the os error>" then exit
-#     io.read-file "config.toml" | result.expect "reading config"
+#     fs.read-file "config.toml" | result.expect "reading config"
 public def expect :: fun (result a e) string -> a = fun r msg {
 	when r is ok v {
 		v
@@ -154,8 +154,8 @@ public def error :: fun (result a e) -> option e = fun r {
 	}
 }
 
-# The `io.fail` primitive, referenced by its builtin tag directly rather
-# than through `std.sys.io`: `result` rides in the prelude, so importing
-# `io` here would close an import cycle. Aborts with the message on
-# stderr and a nonzero exit; never returns.
+# The `process.fail` primitive, referenced by its builtin tag directly
+# rather than through `std.sys.process`: `result` rides in the prelude, so
+# importing `process` here would close an import cycle. Aborts with the
+# message on stderr and a nonzero exit; never returns.
 def fail-with :: fun string -> a = built-in "io-fail"

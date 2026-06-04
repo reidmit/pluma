@@ -1,17 +1,17 @@
-use std.sys.io
+use std.sys.fs
 
 def main = fun {
 	let path = "target/pluma-io-test-roundtrip.txt"
 
-	when io.write-file path "hello from pluma" is ok _ {
+	when fs.write-file path "hello from pluma" is ok _ {
 		print "wrote"
 	} is err msg {
 		print "write err: $(msg)"
 	}
 
-	print (io.file-exists path)
+	print (fs.file-exists path)
 
-	when io.read-file path is ok contents {
+	when fs.read-file path is ok contents {
 		print contents
 	} is err msg {
 		print "read err: $(msg)"
