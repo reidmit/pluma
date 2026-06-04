@@ -200,13 +200,21 @@ impl Module {
 							| DomKind::SetText
 							| DomKind::SetAttr
 							| DomKind::SetProp
-							| DomKind::SetBoolProp,
+							| DomKind::SetBoolProp
+							| DomKind::DevStoreSet,
 						) => {
 							requested.insert(Helper::MarshalAlloc);
 							requested.insert(Helper::MarshalStore);
 						}
 						Some(DomKind::GetValue) => {
 							requested.insert(Helper::MarshalAlloc);
+							requested.insert(Helper::MarshalLoad);
+						}
+						// `dom-dev-store-get` marshals the key string out *and* reads the
+						// value back, so it needs all three.
+						Some(DomKind::DevStoreGet) => {
+							requested.insert(Helper::MarshalAlloc);
+							requested.insert(Helper::MarshalStore);
 							requested.insert(Helper::MarshalLoad);
 						}
 						Some(DomKind::Listen) => {
@@ -866,6 +874,8 @@ impl Module {
 					Some(DomKind::GetValue) => ftypes.for_dom_get_value(),
 					Some(DomKind::Extern3) => ftypes.for_dom_extern3(),
 					Some(DomKind::Extern1) => ftypes.for_dom_extern1(),
+					Some(DomKind::DevStoreSet) => ftypes.for_dom_dev_store_set(),
+					Some(DomKind::DevStoreGet) => ftypes.for_dom_dev_store_get(),
 					Some(DomKind::Listen | DomKind::SetBoolProp) | None => ftypes.for_dom_listen(),
 				}
 			} else if tag == "net-listen" || tag == "net-connect" || tag == "net-accept" {

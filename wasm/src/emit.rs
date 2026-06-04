@@ -2110,7 +2110,74 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Call(idx));
 				self.push_nothing();
 			}
+			// `(kp, kl, vp, vl) -> ()` — the dev store write: two scratch strings, no node.
+			DomKind::DevStoreSet => {
+				let (Some(alloc), Some(store)) = (alloc, store) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
+				self.reset_bump();
+				let (kp, kl) = self.marshal_strlike_arg(&args[0], alloc, store);
+				let (vp, vl) = self.marshal_strlike_arg(&args[1], alloc, store);
+				self.ins(Instruction::LocalGet(kp));
+				self.ins(Instruction::LocalGet(kl));
+				self.ins(Instruction::LocalGet(vp));
+				self.ins(Instruction::LocalGet(vl));
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(kp, kl, dst, cap) -> len` — the dev store read.
+			DomKind::DevStoreGet => {
+				let (Some(alloc), Some(store), Some(load)) = (alloc, store, load) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
+				self.emit_dom_dev_store_get(idx, &args[0], alloc, store, load);
+			}
 		}
+	}
+
+	/// `dom.dev-store-get key`: `(kp, kl, dst, cap) -> len` — marshal the key string into
+	/// scratch, then have the host write the stored value into a fresh scratch region at
+	/// `dst`; build a `$str` from `(dst, len)`. Like `emit_dom_get_value` but with a string
+	/// key instead of a node. A generous fixed `CAP` (a model larger than this loses HMR
+	/// and falls back to `init` — fine for dev).
+	fn emit_dom_dev_store_get(&mut self, idx: u32, key: &Atom, alloc: u32, store: u32, load: u32) {
+		const CAP: i32 = 1 << 16;
+		self.reset_bump();
+		// Key first, so its scratch region is distinct from the value buffer below.
+		let (kp, kl) = self.marshal_strlike_arg(key, alloc, store);
+		let dst = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		self.ins(Instruction::LocalGet(kp));
+		self.ins(Instruction::LocalGet(kl));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::Call(idx)); // -> i32 len
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		// Clamp to CAP (the host writes ≤ CAP bytes; an over-long value reads as a
+		// truncated — hence undecodable — string, which falls back to `init`).
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::I32GtS);
+		self.ins(Instruction::If(BlockType::Empty));
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::LocalSet(len));
+		self.ins(Instruction::End);
+		self.ins(Instruction::I32Const(types::TAG_STR));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(load));
+		self.ins(Instruction::StructNew(types::T_STR));
 	}
 
 	/// `dom.get-value node`: `(externref, dst, cap) -> len` — the host writes the node's

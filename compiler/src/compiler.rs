@@ -62,6 +62,9 @@ pub struct Compiler {
 	// on the `sys` target is an error). `None` is the ungated frontend/analysis
 	// mode — nothing is gated — so existing flows are unchanged.
 	pub target: Option<Target>,
+	// `pluma dev` hot-reload mode: the analyzer redirects `app.sandbox`/`app.element`
+	// to their model-persisting `-hmr` variants. Off everywhere else.
+	pub hmr: bool,
 }
 
 impl Compiler {
@@ -76,6 +79,7 @@ impl Compiler {
 			exports_cache: HashMap::new(),
 			native_modules: HashMap::new(),
 			target: None,
+			hmr: false,
 		})
 	}
 
@@ -85,6 +89,13 @@ impl Compiler {
 	// --target sys|web` opts into gating.
 	pub fn with_target(mut self, target: Option<Target>) -> Self {
 		self.target = target;
+		self
+	}
+
+	// Enable `pluma dev` hot-reload redirection. Builder form like `with_target`,
+	// so existing call sites default to `false` (no redirection).
+	pub fn with_hmr(mut self, hmr: bool) -> Self {
+		self.hmr = hmr;
 		self
 	}
 
@@ -101,6 +112,7 @@ impl Compiler {
 			exports_cache: HashMap::new(),
 			native_modules: HashMap::new(),
 			target: None,
+			hmr: false,
 		}
 	}
 
@@ -369,9 +381,11 @@ impl Compiler {
 		// in alongside explicit imports so name resolution + discharge
 		// can use them.
 		let prelude_exports = self.exports_cache.get("__prelude__").cloned();
+		let hmr = self.hmr;
 		let module = self.modules.get_mut(module_name).unwrap();
 		let mut analyzer = Analyzer::new(&mut self.diagnostics);
 		analyzer.set_imports(imports_map, import_qualified);
+		analyzer.set_hmr(hmr);
 		if let Some(exports) = prelude_exports {
 			analyzer.add_imported_instances(&exports.instances);
 			analyzer.set_prelude_exports(exports);

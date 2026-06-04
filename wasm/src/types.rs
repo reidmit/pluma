@@ -372,6 +372,14 @@ enum FuncKind {
 	/// a call to the exported `__browser_resume(token)` (the browser command runtime's
 	/// real-timer source).
 	DomSetTimeout,
+	/// `dom-dev-store-set(i32 kp, i32 kl, i32 vp, i32 vl) -> ()` — the dev-only
+	/// key/value store (backed by `localStorage`): two scratch strings (key, value),
+	/// no node. Used by `pluma dev`'s HMR to carry the MVU model across a reload.
+	DomDevStoreSet,
+	/// `dom-dev-store-get(i32 kp, i32 kl, i32 dst, i32 cap) -> i32 len` — read the
+	/// dev store value for a scratch-string key into scratch at `dst` (≤ `cap`),
+	/// returning the length (the probe-read shape, like `dom-get-value`).
+	DomDevStoreGet,
 	/// A nullary thunk `() -> ()` — the browser command pump (`__browser_run`) and the
 	/// timer-resume entry (`__browser_resume`).
 	Thunk,
@@ -681,6 +689,16 @@ impl FuncTypes {
 	/// `dom-set-timeout`: `(i32, i32) -> ()`.
 	pub fn for_dom_set_timeout(&mut self) -> u32 {
 		self.intern(FuncKind::DomSetTimeout)
+	}
+
+	/// `dom-dev-store-set`: `(i32, i32, i32, i32) -> ()` — two scratch strings.
+	pub fn for_dom_dev_store_set(&mut self) -> u32 {
+		self.intern(FuncKind::DomDevStoreSet)
+	}
+
+	/// `dom-dev-store-get`: `(i32, i32, i32, i32) -> i32` — string key in, probe-read out.
+	pub fn for_dom_dev_store_get(&mut self) -> u32 {
+		self.intern(FuncKind::DomDevStoreGet)
 	}
 
 	/// A nullary thunk `() -> ()`.
@@ -1154,6 +1172,19 @@ impl FuncTypes {
 				}
 				FuncKind::DomSetTimeout => {
 					types.ty().function([ValType::I32, ValType::I32], []);
+					continue;
+				}
+				FuncKind::DomDevStoreSet => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I32, ValType::I32, ValType::I32], []);
+					continue;
+				}
+				FuncKind::DomDevStoreGet => {
+					types.ty().function(
+						[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+						[ValType::I32],
+					);
 					continue;
 				}
 				FuncKind::Thunk => {

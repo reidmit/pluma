@@ -1,5 +1,6 @@
 mod browser_bundle;
 mod colors;
+mod dev;
 mod printing;
 
 use compiler::*;
@@ -39,6 +40,11 @@ fn main() {
 			"build" => {
 				let rest: Vec<String> = std::env::args().skip(2).collect();
 				build_command(rest);
+			}
+
+			"dev" => {
+				let rest: Vec<String> = std::env::args().skip(2).collect();
+				dev::dev_command(rest);
 			}
 
 			"format" => {
@@ -689,6 +695,10 @@ COMMANDS:
   build <path> [--target sys|web] [-o out]
                    compile a module to a WasmGC deploy artifact (.wasm); run it
                    with `pluma run <out>.wasm`
+  dev <path> [--target sys|web] [--port N]
+                   watch sources and reload on save. `--target web` serves the
+                   browser bundle with live-reload (default port 2222); `sys`
+                   (default) restarts the program on each change.
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the
@@ -717,6 +727,10 @@ COMMANDS:
   build <path> [--target sys|web] [-o out]
                    compile a module to a WasmGC deploy artifact (.wasm); run it
                    with `pluma run <out>.wasm`
+  dev <path> [--target sys|web] [--port N]
+                   watch sources and reload on save. `--target web` serves the
+                   browser bundle with live-reload (default port 2222); `sys`
+                   (default) restarts the program on each change.
   format <path>... canonicalize formatting; pass `-` for stdin, `--check` to dry-run
   test [dir] [-f name]...
                    discover and run tests from `*.test.pa` files under the

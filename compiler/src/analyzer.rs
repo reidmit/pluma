@@ -49,6 +49,9 @@ pub struct Analyzer<'compiler> {
 	// The fully-qualified name of each imported module, keyed by the local
 	// namespace name. `use a.b.utils as u` produces `u -> a.b.utils`.
 	import_qualified: HashMap<String, String>,
+	// `pluma dev` hot-reload mode: redirect `app.sandbox`/`app.element` to their
+	// model-persisting `-hmr` variants (see `constrain_expr`'s namespace access).
+	hmr: bool,
 	// One-shot hint: the resolved parameter types of the function about to be
 	// constrained as an annotated def's RHS. The `Fun` arm consumes it to seed
 	// scope-handle params concretely (so handle methods dispatch on a param).
@@ -510,6 +513,7 @@ impl<'compiler> Analyzer<'compiler> {
 			variant_constructors: HashMap::new(),
 			imports: HashMap::new(),
 			import_qualified: HashMap::new(),
+			hmr: false,
 			fun_param_hints: None,
 			next_type_var_id: 0,
 			traits: HashMap::new(),
@@ -958,6 +962,11 @@ impl<'compiler> Analyzer<'compiler> {
 	) {
 		self.imports = imports;
 		self.import_qualified = import_qualified;
+	}
+
+	// Enable `pluma dev` hot-reload redirection (`app.sandbox` -> `app.sandbox-dev`).
+	pub fn set_hmr(&mut self, hmr: bool) {
+		self.hmr = hmr;
 	}
 
 	// Make `__prelude__`'s exports implicitly available in this module.
@@ -3065,10 +3074,11 @@ impl<'compiler> Analyzer<'compiler> {
 				// fighting the borrow checker. If none of the namespace
 				// cases apply, we put the FieldAccess back for the record
 				// field-access fallback.
-				let (mut receiver, field) = match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
-					ExprKind::FieldAccess { receiver, field } => (receiver, field),
-					_ => unreachable!(),
-				};
+				let (mut receiver, mut field) =
+					match std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple) {
+						ExprKind::FieldAccess { receiver, field } => (receiver, field),
+						_ => unreachable!(),
+					};
 
 				// Cross-module variant access: `module.enum-name.variant`.
 				// Match the chained-FieldAccess shape so we resolve before the
@@ -3132,6 +3142,18 @@ impl<'compiler> Analyzer<'compiler> {
 				// variant-access case below.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					if let Some(exports) = self.imports.get(&ident.name).cloned() {
+						// `pluma dev` hot-reload: redirect `app.sandbox`/`app.element` to the
+						// model-persisting `app.sandbox-dev`/`app.element-dev`. Keyed on the
+						// `-dev` variant existing in the module (only `std.web.app` defines
+						// them), so it's alias-agnostic and a no-op everywhere else. Renaming
+						// `field` here -- before the constraint freshening below -- discharges
+						// the variant's `where (wire model)` at this call site.
+						if self.hmr && (field.name == "sandbox" || field.name == "element") {
+							let dev_name = format!("{}-dev", field.name);
+							if exports.values.contains_key(&dev_name) {
+								field.name = dev_name;
+							}
+						}
 						match exports.values.get(&field.name) {
 							Some(ty) => {
 								expr.kind = ExprKind::NamespaceAccess(vec![ident.clone(), field.clone()]);

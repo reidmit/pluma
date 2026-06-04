@@ -32,6 +32,7 @@ use std.web.html
 use std.web.dom
 use std.list
 use std.task
+use std.hex
 
 # The runtime's parallel tree: each node mirrors a `html.html` node but also
 # holds the live `dom.node` it built, and (for elements) the handler ids
@@ -382,34 +383,16 @@ def max-int :: fun int int -> int = fun a b {
 # --- app.sandbox: a pure UI -------------------------------------------------
 
 # Mount a pure UI: an initial model, a pure `update :: fun msg model -> model`,
-# and a `view :: fun model -> html.html msg`. The mount runs at startup; the
-# installed event listeners drive everything afterward, each message diffing
-# the new view against the live tree. Returns the app's driver task (like
-# `element` minus the commands) -- a browser UI is event-driven, so the program
-# is async and the browser runtime drives it.
+# and a `view :: fun model -> html.html msg`. Exactly `element` with no commands --
+# a pure UI shouldn't have to thread `(model, [])` tuples through `init` and every
+# `update` branch just to say "no effects" -- so this is the thin no-effects door
+# over the same runtime. For timers, HTTP, or anything async, reach for `element`.
 #
 #     def main = app.sandbox 0 update view
 public def sandbox :: fun model (fun msg model -> model) (fun model -> html.html msg) -> task nothing = fun init update view {
-	let model = ref.new init
-	let root = dom.body ()
-	# Seed the dispatch box with a no-op; the real dispatch is stored below,
-	# before any event can fire. Listeners read the box at fire time.
-	let box = ref.new fun _m {
-		()
-	}
-	let tree = ref.new (render (view init) box)
-	let dispatch = fun m {
-		let next = update m (ref.get model)
-		ref.set model next
-		let new-tree = diff root (ref.get tree) (view next) box
-		ref.set tree new-tree
-	}
-	ref.set box dispatch
-	dom.append-child root (node-of (ref.get tree))
-	# One await makes the program async, so the browser entry (which seeds
-	# `main` as a task) activates -- the same shape as `element`.
-	try _u = task.return ()
-	task.return ()
+	element (init, []) (fun m n {
+		(update m n, [])
+	}) view
 }
 
 # --- app.element: the full MVU app, with effects ----------------------------
@@ -455,6 +438,71 @@ public def element :: fun (model, list (task msg)) (fun msg model -> (model, lis
 	dom.append-child root (node-of (ref.get tree))
 	run-commands init-cmds dispatch
 	# One await makes the program async, so the scheduler + browser entry activate.
+	try _u = task.return ()
+	task.return ()
+}
+
+# --- HMR variants: model-preserving hot reload for `pluma dev` ---------------
+
+# `pluma dev --target web` redirects `app.sandbox` / `app.element` to these when
+# the model is wire-able, so the live model survives a reload. They are otherwise
+# identical to their plain counterparts; the only additions are restoring the
+# saved model on mount and persisting it on every message. The redirect (not the
+# user) chooses these, so a non-wire-able model silently keeps the plain
+# (full-reload) variant -- hence the separate defs carrying `where (wire model)`.
+#
+# The model crosses a reload as `hex.encode (wire.encode model)` in a fixed
+# `localStorage` slot. On mount it is decoded back: a clean decode (same model
+# type) restores the state; any failure -- nothing saved, or the model type
+# changed since -- falls back to `init`. So state-compatible edits keep state and
+# shape-changing edits reset it, which is exactly the desired behaviour.
+
+# Decode the persisted model, falling back to `fallback` on absent/incompatible.
+def hmr-restore :: fun model -> model where (wire model) = fun fallback {
+	let saved = hex.decode (dom.dev-store-get "pluma-dev-hmr-model") ?? ''
+	when (wire.decode saved) is ok m {
+		m
+	} is err _e {
+		fallback
+	}
+}
+
+# Persist the current model into the dev store.
+def hmr-persist :: fun model -> nothing where (wire model) = fun m {
+	dom.dev-store-set "pluma-dev-hmr-model" (hex.encode (wire.encode m))
+}
+
+# `sandbox`, plus model persistence across a `pluma dev` reload. The thin
+# no-commands wrapper over `element-dev`, mirroring `sandbox` over `element`.
+public def sandbox-dev :: fun model (fun msg model -> model) (fun model -> html.html msg) -> task nothing where (wire model) = fun init update view {
+	element-dev (init, []) (fun m n {
+		(update m n, [])
+	}) view
+}
+
+# `element`, plus model persistence across a `pluma dev` reload. The initial
+# commands re-run on restore (so an effect-driven app -- a ticking clock, say --
+# keeps going after a reload); only the model is carried over.
+public def element-dev :: fun (model, list (task msg)) (fun msg model -> (model, list (task msg))) (fun model -> html.html msg) -> task nothing where (wire model) = fun init update view {
+	let (init-model, init-cmds) = init
+	let start = hmr-restore init-model
+	let model = ref.new start
+	let root = dom.body ()
+	let box = ref.new fun _m {
+		()
+	}
+	let tree = ref.new (render (view start) box)
+	let dispatch = fun m {
+		let (next, cmds) = update m (ref.get model)
+		ref.set model next
+		hmr-persist next
+		let new-tree = diff root (ref.get tree) (view next) box
+		ref.set tree new-tree
+		run-commands cmds (ref.get box)
+	}
+	ref.set box dispatch
+	dom.append-child root (node-of (ref.get tree))
+	run-commands init-cmds dispatch
 	try _u = task.return ()
 	task.return ()
 }

@@ -1018,6 +1018,16 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 				returns_value: false,
 			})
 		}
+		// dev-only HMR store (`pluma dev`): set takes (key, value) strings; get takes a
+		// key string and returns the stored value string.
+		"dom-dev-store-set" => Some(HostSig {
+			arity: 2,
+			returns_value: false,
+		}),
+		"dom-dev-store-get" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
 		_ => None,
 	}
 }
@@ -1131,6 +1141,12 @@ pub(crate) enum DomKind {
 	/// unboxed `bool`, assigning `node[name] = !!flag`. Bools cross as i32, never a string
 	/// (`node.disabled = "false"` would be truthy). Same wasm shape as `Listen`.
 	SetBoolProp,
+	/// `dom-dev-store-set`: `(kp, kl, vp, vl) -> ()`; two scratch strings, no node. The
+	/// dev-only `localStorage` write `pluma dev`'s HMR uses to persist the model.
+	DevStoreSet,
+	/// `dom-dev-store-get`: `(kp, kl, dst, cap) -> len`; a scratch-string key in,
+	/// probe-read the stored value into scratch (the `GetValue` shape minus the node).
+	DevStoreGet,
 }
 
 /// Classify a `std.web.dom` host builtin emitted via `emit_dom`. `None` for non-dom tags.
@@ -1149,6 +1165,8 @@ pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 		"event-prevent-default" => DomKind::Extern1,
 		"dom-set-string-property" => DomKind::SetProp,
 		"dom-set-bool-property" => DomKind::SetBoolProp,
+		"dom-dev-store-set" => DomKind::DevStoreSet,
+		"dom-dev-store-get" => DomKind::DevStoreGet,
 		_ => return None,
 	})
 }
