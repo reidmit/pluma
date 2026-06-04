@@ -165,11 +165,70 @@ impl Compiler {
 		for entry in self.entry_modules.clone() {
 			self.load_module(&entry, &mut visiting);
 		}
+		self.gate_by_reachability();
 
 		if !self.diagnostics.is_empty() {
 			Err(self.diagnostics.to_vec())
 		} else {
 			Ok(())
+		}
+	}
+
+	// FULLSTACK Layer 2: enforce deploy-target tier gating by def-level
+	// reachability. A forbidden-tier module (`std.sys.*` on `web`, `std.web.*`
+	// on `sys`) is rejected only when reachable from an entry through
+	// *non-`remote def`* code — a server island's server-only imports never
+	// reach the client closure. This replaces the coarse per-`use` tier gate;
+	// it runs after analysis and only when a deploy target is selected (the
+	// ungated `run`/`test`/analyze flows skip it entirely).
+	fn gate_by_reachability(&mut self) {
+		let Some(target) = self.target else {
+			return;
+		};
+		let mut reached: HashSet<String> = HashSet::new();
+		let mut work: Vec<String> = self.entry_modules.clone();
+		// First importer of each followed module, for the diagnostic caret.
+		let mut via: HashMap<String, (String, PathBuf, Range)> = HashMap::new();
+
+		while let Some(name) = work.pop() {
+			if !reached.insert(name.clone()) {
+				continue;
+			}
+			let Some(module) = self.modules.get(&name) else {
+				continue;
+			};
+			let Some(ast) = module.ast.as_ref() else {
+				continue;
+			};
+			let importer_path = module.module_path.clone();
+			// Follow only imports the module references outside `remote def`
+			// bodies — the island stop rule.
+			let live = crate::reachability::live_prefixes(ast);
+			let follow: Vec<(String, Range)> = ast
+				.uses
+				.iter()
+				.filter(|u| live.contains(&u.local_name().name))
+				.map(|u| (u.module_name(), u.range))
+				.collect();
+			for (full, range) in follow {
+				via
+					.entry(full.clone())
+					.or_insert_with(|| (name.clone(), importer_path.clone(), range));
+				work.push(full);
+			}
+		}
+
+		for module_name in &reached {
+			let Some(message) = gate(Some(target), module_name) else {
+				continue;
+			};
+			let mut diag = Diagnostic::error(message);
+			if let Some((importer, path, range)) = via.get(module_name) {
+				diag = diag
+					.with_range(*range)
+					.with_module(importer.clone(), path.clone());
+			}
+			self.diagnostics.push(diag);
 		}
 	}
 
@@ -340,11 +399,13 @@ impl Compiler {
 		let importer_path = self.modules.get(module_name).map(|m| m.module_path.clone());
 		let mut rejected_imports: HashSet<String> = HashSet::new();
 		for (full_name, _, range, use_range) in &imports {
-			// Whether `full_name`'s tier is barred by the active deploy target.
-			// `None` (the default ungated mode) never bars anything, and shared
-			// `std.*` / user modules have no tier — so this gate is inert for
-			// existing flows. Reported against the whole `use …` statement.
-			let tier_rejection = gate(self.target, full_name);
+			let _ = use_range;
+			// Deploy-target tier gating (`std.sys.*` vs `std.web.*`) is *not*
+			// enforced here at the `use` site — it's done after analysis by
+			// def-level reachability (`gate_by_reachability`), so a `remote def`
+			// body's server-only imports don't bar a web client. Only the
+			// always-true structural rules (test-module and project-marker
+			// imports) are rejected at the `use` site.
 			let rejection: Option<(String, Range)> = if is_test_module(full_name) && !importer_is_test {
 				Some((
 					format!(
@@ -364,8 +425,6 @@ impl Compiler {
 					),
 					*range,
 				))
-			} else if let Some(message) = tier_rejection {
-				Some((message, *use_range))
 			} else {
 				None
 			};
@@ -617,5 +676,51 @@ mod platform_gating_tests {
 				t
 			);
 		}
+	}
+
+	// Compile several in-memory modules under `target` from `entry`.
+	fn check_multi(target: Option<Target>, modules: &[(&str, &str)], entry: &str) -> Vec<Diagnostic> {
+		let mut compiler = Compiler::for_root_dir(std::env::temp_dir()).with_target(target);
+		for (name, src) in modules {
+			compiler.set_module_source(name.to_string(), src.as_bytes().to_vec());
+		}
+		compiler.add_entry_module(entry.to_string());
+		match compiler.check() {
+			Ok(()) => Vec::new(),
+			Err(diags) => diags,
+		}
+	}
+
+	#[test]
+	fn remote_def_body_imports_dont_reach_web_client() {
+		// `api` touches std.sys.io only inside a `remote def` body — a server
+		// island. A web client reaching `api`'s non-remote surface must not be
+		// barred by that server-only import (it never enters the client closure).
+		let api = "use std.task\nuse std.request\nuse std.sys.io\n\n\
+			public def label :: fun nothing -> string = fun {\n\t\"api\"\n}\n\n\
+			public remote def shout :: fun request string -> task string = fun _req msg {\n\
+			\tlet _ = io.print msg\n\ttask.return msg\n}\n";
+		let main = "use api\n\ndef main = fun {\n\tprint (api.label ())\n}\n";
+		let diags = check_multi(Some(Target::Web), &[("api", api), ("main", main)], "main");
+		assert!(
+			diags.is_empty(),
+			"a server-island import was wrongly barred on web: {:?}",
+			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+		);
+	}
+
+	#[test]
+	fn client_reachable_sys_import_is_rejected_on_web() {
+		// The control: when std.sys.io is reached through ordinary (non-remote)
+		// code across a module boundary, it is correctly barred on web.
+		let api = "use std.sys.io\n\n\
+			public def announce :: fun nothing -> nothing = fun {\n\tio.print \"hi\"\n}\n";
+		let main = "use api\n\ndef main = fun {\n\tapi.announce ()\n}\n";
+		let diags = check_multi(Some(Target::Web), &[("api", api), ("main", main)], "main");
+		assert!(
+			diags.iter().any(|d| d.message.contains("std.sys.io")),
+			"expected a web-target rejection for std.sys.io reached via a user module, got: {:?}",
+			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+		);
 	}
 }

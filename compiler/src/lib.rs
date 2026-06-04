@@ -8,6 +8,7 @@ mod location;
 mod module;
 mod parser;
 mod platform;
+mod reachability;
 mod render;
 mod rpc;
 mod stdlib;
