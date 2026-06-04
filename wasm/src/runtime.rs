@@ -361,13 +361,22 @@ pub(crate) enum Helper {
 	/// an error. Exported as `__entry_error` so the host detects a program failure
 	/// without reflecting the GC value. Reuses `__tostring` + `__send_bytes`.
 	EntryError,
+	/// `__dom_register(closure) -> i32 token` — append a `core.dom` event-handler
+	/// closure to the `dom_handlers` registry `$list` (lazily creating it), returning
+	/// its index. `dom.on-click` calls this and hands the token to the host. Reuses
+	/// `__list_push`; types as `(value) -> i32` (the `EntryError` shape).
+	DomRegister,
+	/// `__dom_dispatch(i32 token) -> ()` — the exported event entry: look up the
+	/// handler closure at `token` in `dom_handlers` and invoke it (arity-1 with a
+	/// `nothing` arg). The host calls it when a registered DOM event fires.
+	DomDispatch,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 82;
+	pub(crate) const COUNT: usize = 84;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -443,6 +452,12 @@ pub(crate) struct Runtime {
 	/// builtin; the async scheduler's net machinery (pump NET arms, block step,
 	/// reap unwatch) and the emit-side sync shaping read it.
 	pub(crate) net: Option<NetImports>,
+	/// Wasm index of the mutable `(ref null $list)` global holding the `core.dom`
+	/// event-handler registry — a `$list` of handler closures, indexed by the i32
+	/// token `dom.on-click` hands the host. `Some` exactly when a `dom-add-listener-*`
+	/// is reachable (the program registers an event handler); the exported
+	/// `__dom_dispatch` reads it to find the closure for a fired event.
+	pub(crate) dom_handlers: Option<u32>,
 }
 
 impl Runtime {
@@ -521,6 +536,8 @@ pub(crate) enum Ty {
 	MarshalSend,
 	MarshalReadNames,
 	EntryError,
+	/// The exported `__dom_dispatch(i32) -> ()` entry type.
+	DomDispatch,
 }
 
 impl Ty {
@@ -543,6 +560,7 @@ impl Ty {
 			Ty::MarshalSend => ft.for_marshal_send(),
 			Ty::MarshalReadNames => ft.for_marshal_read_names(),
 			Ty::EntryError => ft.for_entry_error(),
+			Ty::DomDispatch => ft.for_dom_dispatch(),
 		}
 	}
 }
@@ -948,6 +966,26 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: false,
 		}),
+		// `core.dom` (Platform::Browser). All emitted via `emit_dom` (`is_dom_host` →
+		// `dom_kind`); the `arity`/`returns_value` here drive only the "is this a host
+		// builtin?" classification — node handles cross as `externref` and strings as
+		// scratch, which the generic host path can't shape.
+		"dom-body" => Some(HostSig {
+			arity: 0,
+			returns_value: true,
+		}),
+		"dom-create-element" | "dom-create-text" | "dom-get-value" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
+		"dom-append-child" | "dom-set-text" | "dom-add-listener-click" => Some(HostSig {
+			arity: 2,
+			returns_value: false,
+		}),
+		"dom-set-attribute" => Some(HostSig {
+			arity: 3,
+			returns_value: false,
+		}),
 		_ => None,
 	}
 }
@@ -1018,6 +1056,49 @@ pub(crate) fn rng_kind(tag: &str) -> Option<RngKind> {
 /// Whether `tag` is an `emit_rng`-handled entropy/uuid builtin.
 pub(crate) fn is_rng_host(tag: &str) -> bool {
 	rng_kind(tag).is_some()
+}
+
+/// How a `core.dom` host import (`Platform::Browser`) crosses the boundary and is
+/// shaped at the `emit_dom` call site. Node handles ride as `externref` (unboxed
+/// from / boxed into a `$extern` wrapper); strings ride as scratch `(ptr, len)`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DomKind {
+	/// `dom-body`: `() -> externref`; box the returned node into `$extern`.
+	Body,
+	/// `dom-create-element`/`dom-create-text`: `(ptr, len) -> externref`; one scratch
+	/// string in, box the returned node.
+	Make,
+	/// `dom-append-child`: `(externref, externref) -> ()`; unbox two node args.
+	Append,
+	/// `dom-set-attribute`: `(externref, np, nl, vp, vl) -> ()`; node + two strings.
+	SetAttr,
+	/// `dom-set-text`: `(externref, ptr, len) -> ()`; node + one string.
+	SetText,
+	/// `dom-get-value`: `(externref, dst, cap) -> len`; node in, probe-read a `$str`.
+	GetValue,
+	/// `dom-add-listener-click`: `(externref, token) -> ()`; node + a registry token.
+	/// The handler closure (the second Pluma arg) is pushed into the handler registry
+	/// and replaced by its i32 index — the host calls `__dom_dispatch(token)` on the event.
+	Listen,
+}
+
+/// Classify a `core.dom` host builtin emitted via `emit_dom`. `None` for non-dom tags.
+pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
+	Some(match tag {
+		"dom-body" => DomKind::Body,
+		"dom-create-element" | "dom-create-text" => DomKind::Make,
+		"dom-append-child" => DomKind::Append,
+		"dom-set-attribute" => DomKind::SetAttr,
+		"dom-set-text" => DomKind::SetText,
+		"dom-get-value" => DomKind::GetValue,
+		"dom-add-listener-click" => DomKind::Listen,
+		_ => return None,
+	})
+}
+
+/// Whether `tag` is an `emit_dom`-handled `core.dom` host import.
+pub(crate) fn is_dom_host(tag: &str) -> bool {
+	dom_kind(tag).is_some()
 }
 
 /// Whether `tag` is a `core.io` builtin emitted through the marshalling host path

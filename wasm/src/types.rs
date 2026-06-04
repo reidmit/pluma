@@ -333,6 +333,35 @@ enum FuncKind {
 	NetPoll,
 	/// Drop a reactor registration: `net-unwatch(i32 fid) -> ()`.
 	NetUnwatch,
+	/// A `core.dom` node-producing import: `(i32 ptr, i32 len) -> externref`
+	/// (`dom-create-element`/`dom-create-text` — a tag/text string in scratch →
+	/// a fresh DOM node). The host returns the engine-managed `externref`; wasm
+	/// boxes it into a `$extern` (`emit_dom`).
+	DomMake,
+	/// `dom-body() -> externref` — the document root node (no args).
+	DomBody,
+	/// `dom-append-child(externref parent, externref child) -> ()`. Both nodes
+	/// are unboxed from their `$extern` wrappers before the call.
+	DomAppend,
+	/// `dom-set-attribute(externref node, i32 np, i32 nl, i32 vp, i32 vl) -> ()` —
+	/// node handle + two scratch strings (name, value).
+	DomSetAttr,
+	/// `dom-set-text(externref node, i32 ptr, i32 len) -> ()` — set a node's text
+	/// content from a scratch string.
+	DomNodeStr,
+	/// `dom-get-value(externref node, i32 dst, i32 cap) -> i32 len` — read an input
+	/// node's `.value` into scratch at `dst` (≤ `cap`), returning the length (the
+	/// probe-read shape, like the io reads).
+	DomGetValue,
+	/// `dom-add-listener-click(externref node, i32 token) -> ()` — register a click
+	/// handler. `token` indexes the wasm-side handler registry; the host wires
+	/// `addEventListener("click", () => __dom_dispatch(token))`.
+	DomListen,
+	/// The exported event-dispatch entry `__dom_dispatch(i32 token) -> ()` — the
+	/// host calls it when a registered DOM event fires; it looks up the handler
+	/// closure by `token` and invokes it. Distinct from the host imports above: it
+	/// is a wasm *export*, not an import.
+	DomDispatch,
 }
 
 /// A registered record *shape*: the WasmGC struct type interned for a distinct
@@ -584,6 +613,46 @@ impl FuncTypes {
 	/// The type index for the decode varint source: `() -> i64`.
 	pub fn for_wire_ruvarint(&mut self) -> u32 {
 		self.intern(FuncKind::WireReadVarint)
+	}
+
+	/// `core.dom` node-producing import type: `(i32, i32) -> externref`.
+	pub fn for_dom_make(&mut self) -> u32 {
+		self.intern(FuncKind::DomMake)
+	}
+
+	/// `dom-body`: `() -> externref`.
+	pub fn for_dom_body(&mut self) -> u32 {
+		self.intern(FuncKind::DomBody)
+	}
+
+	/// `dom-append-child`: `(externref, externref) -> ()`.
+	pub fn for_dom_append(&mut self) -> u32 {
+		self.intern(FuncKind::DomAppend)
+	}
+
+	/// `dom-set-attribute`: `(externref, i32, i32, i32, i32) -> ()`.
+	pub fn for_dom_set_attr(&mut self) -> u32 {
+		self.intern(FuncKind::DomSetAttr)
+	}
+
+	/// `dom-set-text`: `(externref, i32, i32) -> ()`.
+	pub fn for_dom_node_str(&mut self) -> u32 {
+		self.intern(FuncKind::DomNodeStr)
+	}
+
+	/// `dom-get-value`: `(externref, i32, i32) -> i32`.
+	pub fn for_dom_get_value(&mut self) -> u32 {
+		self.intern(FuncKind::DomGetValue)
+	}
+
+	/// `dom-add-listener-click`: `(externref, i32) -> ()`.
+	pub fn for_dom_listen(&mut self) -> u32 {
+		self.intern(FuncKind::DomListen)
+	}
+
+	/// The exported `__dom_dispatch(i32) -> ()` entry type.
+	pub fn for_dom_dispatch(&mut self) -> u32 {
+		self.intern(FuncKind::DomDispatch)
 	}
 
 	/// Encode the full type section: the fixed `$value` prefix, then every
@@ -986,6 +1055,56 @@ impl FuncTypes {
 				}
 				FuncKind::WireReadVarint => {
 					types.ty().function([], [ValType::I64]);
+					continue;
+				}
+				// core.dom host imports (Platform::Browser) — node handles cross as
+				// `externref`, strings as scratch `(ptr, len)`. The one externref-
+				// returning shape (the gap this milestone closes) is `DomMake`/`DomBody`.
+				FuncKind::DomMake => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I32], [extern_ref()]);
+					continue;
+				}
+				FuncKind::DomBody => {
+					types.ty().function([], [extern_ref()]);
+					continue;
+				}
+				FuncKind::DomAppend => {
+					types.ty().function([extern_ref(), extern_ref()], []);
+					continue;
+				}
+				FuncKind::DomSetAttr => {
+					types.ty().function(
+						[
+							extern_ref(),
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+						],
+						[],
+					);
+					continue;
+				}
+				FuncKind::DomNodeStr => {
+					types
+						.ty()
+						.function([extern_ref(), ValType::I32, ValType::I32], []);
+					continue;
+				}
+				FuncKind::DomGetValue => {
+					types
+						.ty()
+						.function([extern_ref(), ValType::I32, ValType::I32], [ValType::I32]);
+					continue;
+				}
+				FuncKind::DomListen => {
+					types.ty().function([extern_ref(), ValType::I32], []);
+					continue;
+				}
+				FuncKind::DomDispatch => {
+					types.ty().function([ValType::I32], []);
 					continue;
 				}
 			};

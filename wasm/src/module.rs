@@ -17,11 +17,12 @@ use wasm_encoder::{
 use crate::emit::FnEmitter;
 use crate::helpers::{REGISTRY, build_builtin_wrapper, builtin_arity, close_deps, helper_for_tag};
 use crate::runtime::{
-	ClockKind, GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoKind, IoResultLits,
+	ClockKind, DomKind, GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoKind, IoResultLits,
 	NetImports, OptionLits, OrderingLits, RngKind, Runtime, TaskGlobals, TaskLits, ToStringLits,
-	WireGlobals, WireResultLits, WireTags, clock_kind, host_sig, io_kind, io_uses_io4,
-	is_byte_writer, is_clock_host, is_f64_unary_host, is_inline_builtin, is_io_host, is_io_result,
-	is_net_builtin, is_raw_writer, is_rng_host, rng_kind, scan_helpers, task_builtin_kind,
+	WireGlobals, WireResultLits, WireTags, clock_kind, dom_kind, host_sig, io_kind, io_uses_io4,
+	is_byte_writer, is_clock_host, is_dom_host, is_f64_unary_host, is_inline_builtin, is_io_host,
+	is_io_result, is_net_builtin, is_raw_writer, is_rng_host, rng_kind, scan_helpers,
+	task_builtin_kind,
 };
 use crate::scan::{StrPool, collect_host_calls, collect_zero_arg_closures, scan_strings};
 use crate::types::{self, FuncTypes};
@@ -181,6 +182,28 @@ impl Module {
 					if !host_index.contains_key("io-last-error") {
 						host_index.insert("io-last-error".to_string(), host_order.len() as u32);
 						host_order.push("io-last-error".to_string());
+					}
+				}
+				// `core.dom` (`emit_dom`): string-carrying node ops marshal their args into
+				// scratch; `dom-get-value` reads a payload back; `on-click` stows its handler
+				// in the dispatch registry (the `__dom_register`/`__dom_dispatch` helpers,
+				// whose dep `__list_push` and the `dom_handlers` global come in below). The
+				// dom host import itself is registered by the generic path just after.
+				if is_dom_host(tag) {
+					match dom_kind(tag) {
+						Some(DomKind::Make | DomKind::SetText | DomKind::SetAttr) => {
+							requested.insert(Helper::MarshalAlloc);
+							requested.insert(Helper::MarshalStore);
+						}
+						Some(DomKind::GetValue) => {
+							requested.insert(Helper::MarshalAlloc);
+							requested.insert(Helper::MarshalLoad);
+						}
+						Some(DomKind::Listen) => {
+							requested.insert(Helper::DomRegister);
+							requested.insert(Helper::DomDispatch);
+						}
+						_ => {}
 					}
 				}
 				if !host_index.contains_key(tag) {
@@ -462,6 +485,26 @@ impl Module {
 				ctx: wire_global(nullable(types::T_VALARRAY), &null_arr),
 				ctxlen: wire_global(ValType::I32, &zero_i32),
 			};
+		}
+		// The `core.dom` event-handler registry (`dom_handlers`): a mutable `(ref null
+		// $list)` of handler closures, indexed by the token `dom.on-click` hands the host.
+		// Allocated (and `__dom_dispatch` exported, below) only when a listener is
+		// reachable — `__dom_register` lazily fills it on the first registration.
+		if requested.contains(&Helper::DomDispatch) {
+			let idx = gidx;
+			globals_sec.global(
+				GlobalType {
+					val_type: ValType::Ref(RefType {
+						nullable: true,
+						heap_type: HeapType::Concrete(types::T_LIST),
+					}),
+					mutable: true,
+					shared: false,
+				},
+				&ConstExpr::ref_null(HeapType::Concrete(types::T_LIST)),
+			);
+			gidx += 1;
+			runtime.dom_handlers = Some(idx);
 		}
 		// The async scheduler's module-level state: the current fiber's activation
 		// stack plus the fiber/scope tables, ready deque, timers, and the pump's
@@ -785,6 +828,16 @@ impl Module {
 					// uuid-v4/v7: `(dst, cap) -> len`, same shape as a two-arg io read.
 					Some(RngKind::UuidStr) | None => ftypes.for_io2(),
 				}
+			} else if is_dom_host(tag) {
+				match dom_kind(tag) {
+					Some(DomKind::Body) => ftypes.for_dom_body(),
+					Some(DomKind::Make) => ftypes.for_dom_make(),
+					Some(DomKind::Append) => ftypes.for_dom_append(),
+					Some(DomKind::SetAttr) => ftypes.for_dom_set_attr(),
+					Some(DomKind::SetText) => ftypes.for_dom_node_str(),
+					Some(DomKind::GetValue) => ftypes.for_dom_get_value(),
+					Some(DomKind::Listen) | None => ftypes.for_dom_listen(),
+				}
 			} else if tag == "net-listen" || tag == "net-connect" || tag == "net-accept" {
 				ftypes.for_net_listen()
 			} else if tag == "net-close" {
@@ -915,6 +968,11 @@ impl Module {
 		// a `result.err` failure + read its message out of scratch (no GC reflection).
 		if let Some(w) = runtime.idx(Helper::EntryError) {
 			exports.export("__entry_error", ExportKind::Func, w);
+		}
+		// `__dom_dispatch(token) -> ()`: the browser loader calls this when a registered
+		// DOM event fires, to run the handler closure stowed at `token`.
+		if let Some(w) = runtime.idx(Helper::DomDispatch) {
+			exports.export("__dom_dispatch", ExportKind::Func, w);
 		}
 
 		let mut data = DataSection::new();

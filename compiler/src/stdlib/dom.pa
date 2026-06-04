@@ -1,16 +1,62 @@
-# core.dom — minimal browser DOM surface for the client/JS target.
+# core.dom -- building and reacting to a web page's DOM, from the browser.
 #
-# Gated on the `Dom` capability (see compiler/src/platform.rs), so it's only
-# available when compiling for the browser. These builtins are the one part of the
-# language the WasmGC backend can't yet emit: they'll be served by the browser
-# target's hand-written JS DOM shim, which is unbuilt — so `core.dom` is currently
-# a `wasm codegen error` everywhere.
+# These functions only exist when you compile for the browser target
+# (`pluma build --target browser`): they reach the real DOM through the
+# host page, so they're gated on the `Dom` capability (see
+# compiler/src/platform.rs) and are unavailable on the server.
+#
+# A `node` is a live handle to one DOM element or text node. You make
+# nodes (`create-element`, `create-text`), wire them together
+# (`append-child`), give them content and attributes (`set-text`,
+# `set-attribute`), and attach behaviour (`on-click`). `body ()` hands
+# back the page's root, the node everything else hangs under. A node is
+# opaque -- you hold the handle and pass it along, but can't look inside.
+#
+# This is the imperative foundation the Elm-style MVU framework is built
+# on (see notes/FRONTEND.md); most apps will reach for that instead.
 
-# Set the text content of the element with the given id.
-public def set-text :: fun string string -> nothing = built-in "dom-set-text"
+# A live handle to one DOM node. Opaque: the browser owns it, you hold the
+# handle. (The runtime carrier is an engine `externref`, not the `int`
+# below -- the payload is a formality so the type is a real opaque enum.)
+opaque enum node {
+	handle int
+}
 
-# Set the inner HTML of the element with the given id.
-public def set-html :: fun string string -> nothing = built-in "dom-set-html"
+# The page's root node -- the `<body>` everything else is appended under.
+#
+#     let root = dom.body ()
+public def body :: fun nothing -> node = built-in "dom-body"
 
-# Read the `.value` of an input element by id (empty string if absent).
-public def get-value :: fun string -> string = built-in "dom-get-value"
+# Make a fresh element node of the given tag, detached from the page until
+# you `append-child` it somewhere.
+#
+#     let btn = dom.create-element "button"
+public def create-element :: fun string -> node = built-in "dom-create-element"
+
+# Make a fresh text node holding the given string.
+public def create-text :: fun string -> node = built-in "dom-create-text"
+
+# Append `child` as the last child of `parent`.
+#
+#     dom.append-child root btn
+public def append-child :: fun node node -> nothing = built-in "dom-append-child"
+
+# Set an attribute (`class`, `href`, `value`, ...) on a node.
+#
+#     dom.set-attribute input "placeholder" "your name"
+public def set-attribute :: fun node string string -> nothing = built-in "dom-set-attribute"
+
+# Replace a node's text content with the given string.
+#
+#     dom.set-text label "0"
+public def set-text :: fun node string -> nothing = built-in "dom-set-text"
+
+# Read an input node's current `.value` (the empty string if it has none).
+public def get-value :: fun node -> string = built-in "dom-get-value"
+
+# Run `handler` whenever the node is clicked. The handler is a plain
+# function; it typically mutates the page (`set-text`, `append-child`) or
+# updates a `ref`.
+#
+#     dom.on-click btn (fun _ { dom.set-text label "clicked" })
+public def on-click :: fun node (fun nothing -> nothing) -> nothing = built-in "dom-add-listener-click"

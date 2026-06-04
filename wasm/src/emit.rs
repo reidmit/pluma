@@ -13,9 +13,10 @@ use wasm_encoder::*;
 use crate::Diagnostics;
 use crate::async_lower::TASK_ENUM;
 use crate::runtime::{
-	ClockKind, GlobalKind, GlobalSlot, Helper, IoKind, RngKind, Runtime, WIRE_FNV_OFFSET, clock_kind,
-	host_sig, io_kind, is_byte_writer, is_clock_host, is_f64_unary_host, is_inline_builtin,
-	is_io_host, is_net_sync, is_raw_writer, is_rng_host, rng_kind, task_builtin_kind, task_kind,
+	ClockKind, DomKind, GlobalKind, GlobalSlot, Helper, IoKind, RngKind, Runtime, WIRE_FNV_OFFSET,
+	clock_kind, dom_kind, host_sig, io_kind, is_byte_writer, is_clock_host, is_dom_host,
+	is_f64_unary_host, is_inline_builtin, is_io_host, is_net_sync, is_raw_writer, is_rng_host,
+	rng_kind, task_builtin_kind, task_kind,
 };
 use crate::scan::{StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags};
 use crate::types::{self, FuncTypes};
@@ -1698,6 +1699,13 @@ impl<'a> FnEmitter<'a> {
 			self.emit_clock(tag, idx, args);
 			return;
 		}
+		// `core.dom` (Platform::Browser): node handles cross as `externref` (boxed into
+		// / unboxed from a `$extern`), strings as scratch, and `on-click` stows its
+		// handler closure in the dispatch registry.
+		if is_dom_host(tag) {
+			self.emit_dom(tag, idx, args);
+			return;
+		}
 		// `io.exit code`: pass the unboxed code as a raw `i32` to the `(i32)->()` host
 		// import (which exits the process). It diverges, but the `Let` binding still
 		// wants a value, so materialize `nothing` after the (unreachable) call.
@@ -1883,6 +1891,167 @@ impl<'a> FnEmitter<'a> {
 		}
 		// `$str`/`$bytes` share the `{tag, $bytes}` struct; only the tag differs.
 		self.ins(Instruction::I32Const(tag_const));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(load));
+		self.ins(Instruction::StructNew(types::T_STR));
+	}
+
+	/// Unbox a node-valued atom to its raw `externref`: cast to the `$extern` wrapper
+	/// and read its handle field. Leaves an `externref` on the stack.
+	fn unbox_extern(&mut self, a: &Atom) {
+		self.atom(a);
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+			types::T_EXTERN,
+		)));
+		self.ins(Instruction::StructGet {
+			struct_type_index: types::T_EXTERN,
+			field_index: 1,
+		});
+	}
+
+	/// `core.dom` host imports (`Platform::Browser`). Node handles cross as `externref`
+	/// (unboxed from / boxed into a `$extern`); string args ride scratch `(ptr, len)`;
+	/// `on-click` stows its handler closure in the dispatch registry and passes a token.
+	/// A node-returning import (`Body`/`Make`) pushes `TAG_EXTERN` *under* the call so the
+	/// post-call stack reads `[tag, handle]` for `struct.new $extern` (like `emit_clock_scalar`).
+	fn emit_dom(&mut self, tag: &str, idx: u32, args: &[Atom]) {
+		let kind = match dom_kind(tag) {
+			Some(k) => k,
+			None => {
+				self.diags.push(format!("emit_dom on non-dom tag `{tag}`"));
+				self.push_nothing();
+				return;
+			}
+		};
+		// The string-marshalling helpers (present whenever a string-carrying dom
+		// builtin is reachable — `module.rs` requests them alongside the dom imports).
+		let (alloc, store, load) = (
+			self.runtime.idx(Helper::MarshalAlloc),
+			self.runtime.idx(Helper::MarshalStore),
+			self.runtime.idx(Helper::MarshalLoad),
+		);
+		match kind {
+			// `() -> externref`: box the returned node.
+			DomKind::Body => {
+				self.ins(Instruction::I32Const(types::TAG_EXTERN));
+				self.ins(Instruction::Call(idx));
+				self.ins(Instruction::StructNew(types::T_EXTERN));
+			}
+			// `(ptr, len) -> externref`: one string in, box the returned node.
+			DomKind::Make => {
+				let (Some(alloc), Some(store)) = (alloc, store) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
+				self.reset_bump();
+				let (ptr, len) = self.marshal_strlike_arg(&args[0], alloc, store);
+				self.ins(Instruction::I32Const(types::TAG_EXTERN));
+				self.ins(Instruction::LocalGet(ptr));
+				self.ins(Instruction::LocalGet(len));
+				self.ins(Instruction::Call(idx));
+				self.ins(Instruction::StructNew(types::T_EXTERN));
+			}
+			// `(externref, externref) -> ()`.
+			DomKind::Append => {
+				self.unbox_extern(&args[0]);
+				self.unbox_extern(&args[1]);
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(externref, ptr, len) -> ()`. Marshal the string first (it writes scratch),
+			// then push the node handle so the stack is `[externref, ptr, len]`.
+			DomKind::SetText => {
+				let (Some(alloc), Some(store)) = (alloc, store) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
+				self.reset_bump();
+				let (ptr, len) = self.marshal_strlike_arg(&args[1], alloc, store);
+				self.unbox_extern(&args[0]);
+				self.ins(Instruction::LocalGet(ptr));
+				self.ins(Instruction::LocalGet(len));
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(externref, np, nl, vp, vl) -> ()`: node + two scratch strings.
+			DomKind::SetAttr => {
+				let (Some(alloc), Some(store)) = (alloc, store) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
+				self.reset_bump();
+				let (np, nl) = self.marshal_strlike_arg(&args[1], alloc, store);
+				let (vp, vl) = self.marshal_strlike_arg(&args[2], alloc, store);
+				self.unbox_extern(&args[0]);
+				self.ins(Instruction::LocalGet(np));
+				self.ins(Instruction::LocalGet(nl));
+				self.ins(Instruction::LocalGet(vp));
+				self.ins(Instruction::LocalGet(vl));
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+			// `(externref, dst, cap) -> len`: probe-read the node's `.value` into a `$str`.
+			DomKind::GetValue => {
+				let (Some(alloc), Some(load)) = (alloc, load) else {
+					self
+						.diags
+						.push(format!("`{tag}` needs the marshalling helpers"));
+					self.push_nothing();
+					return;
+				};
+				self.emit_dom_get_value(idx, &args[0], alloc, load);
+			}
+			// `(externref, token) -> ()`: register the handler closure, pass its token.
+			DomKind::Listen => {
+				let Some(register) = self.runtime.idx(Helper::DomRegister) else {
+					self.diags.push(format!("`{tag}` needs __dom_register"));
+					self.push_nothing();
+					return;
+				};
+				self.unbox_extern(&args[0]);
+				self.atom(&args[1]); // the handler closure
+				self.ins(Instruction::Call(register)); // -> i32 token
+				self.ins(Instruction::Call(idx));
+				self.push_nothing();
+			}
+		}
+	}
+
+	/// `dom.get-value node`: `(externref, dst, cap) -> len` — the host writes the node's
+	/// `.value` into scratch at `dst`; build a `$str` from `(dst, len)`. A fixed `CAP`,
+	/// no overflow drain (M1: input values are short; a longer value clamps to `CAP`).
+	fn emit_dom_get_value(&mut self, idx: u32, node: &Atom, alloc: u32, load: u32) {
+		const CAP: i32 = 4096;
+		self.reset_bump();
+		let dst = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		self.unbox_extern(node);
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::Call(idx)); // -> i32 len
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		// Clamp the length to CAP (the host writes ≤ CAP bytes into scratch).
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::I32GtS);
+		self.ins(Instruction::If(BlockType::Empty));
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::LocalSet(len));
+		self.ins(Instruction::End);
+		self.ins(Instruction::I32Const(types::TAG_STR));
 		self.ins(Instruction::LocalGet(dst));
 		self.ins(Instruction::LocalGet(len));
 		self.ins(Instruction::Call(load));

@@ -1,3 +1,4 @@
+mod browser_bundle;
 mod colors;
 mod printing;
 
@@ -403,12 +404,7 @@ fn build_command(args: Vec<String>) {
 
 	let platform = match target.as_str() {
 		"server" => Platform::Server,
-		"browser" => {
-			print_error(
-				"The browser target is not yet available — the WasmGC frontend is pending (see notes/DEPLOY.md). Use `--target server` to emit a WasmGC artifact.",
-			);
-			std::process::exit(1);
-		}
+		"browser" => Platform::Browser,
 		other => {
 			print_error(format!(
 				"Unknown --target `{other}`. Expected `server` or `browser`."
@@ -446,15 +442,15 @@ fn build_command(args: Vec<String>) {
 			.to_string()
 	});
 
+	let bytes = match wasm::emit(&program) {
+		Ok(b) => b,
+		Err(diags) => {
+			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
+			std::process::exit(1);
+		}
+	};
 	match platform {
 		Platform::Server => {
-			let bytes = match wasm::emit(&program) {
-				Ok(b) => b,
-				Err(diags) => {
-					print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
-					std::process::exit(1);
-				}
-			};
 			let wasm_path = format!("{base}.wasm");
 			if let Err(e) = std::fs::write(&wasm_path, &bytes) {
 				print_error(format!("writing {wasm_path}: {e}"));
@@ -462,9 +458,26 @@ fn build_command(args: Vec<String>) {
 			}
 			println!("wrote {wasm_path} (run with `pluma run {wasm_path}`)");
 		}
-		// `--target browser` exits earlier in this fn (WasmGC frontend pending);
-		// only `Platform::Server` reaches the emit.
-		_ => unreachable!("non-server build target should have exited before emit"),
+		// The browser bundle: the wasm artifact plus the JS loader + HTML shell that run
+		// it against the real DOM. Written into a `<base>/` directory; serve it over HTTP
+		// (WasmGC needs a real origin, not file://) and open `index.html`.
+		Platform::Browser => {
+			let dir = std::path::PathBuf::from(&base);
+			if let Err(e) = browser_bundle::write_bundle(&dir, &bytes) {
+				print_error(format!("writing browser bundle to {}: {e}", dir.display()));
+				std::process::exit(1);
+			}
+			println!(
+				"wrote {0}/app.wasm, {0}/loader.js, {0}/index.html\n\
+				 serve with `python3 -m http.server --directory {0}` and open the printed URL",
+				dir.display()
+			);
+		}
+		// `Native` is the analysis/dev profile, never a deploy build target.
+		Platform::Native => {
+			print_error("`build` needs --target server or browser, not the native profile");
+			std::process::exit(1);
+		}
 	}
 }
 

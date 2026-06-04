@@ -16,6 +16,7 @@ use crate::runtime::{Helper, Helper as H, HelperCtx, HelperSet, Ty};
 
 mod bytes;
 mod dict;
+mod dom;
 mod eq;
 mod io;
 mod list;
@@ -763,6 +764,34 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::EntryError,
 		deps: &[H::ToString, H::MarshalSend],
 		build: |c| marshal::build_entry_error_fn(c.dep(H::ToString), c.dep(H::MarshalSend)),
+	},
+	HelperDef {
+		id: H::DomRegister,
+		// `(value) -> i32` — the same shape as `EntryError`.
+		fn_type: Ty::EntryError,
+		deps: &[H::ListPush],
+		build: |c| {
+			dom::build_dom_register_fn(
+				c.rt
+					.dom_handlers
+					.expect("__dom_register needs the dom_handlers global"),
+				c.dep(H::ListPush),
+			)
+		},
+	},
+	HelperDef {
+		id: H::DomDispatch,
+		fn_type: Ty::DomDispatch,
+		deps: &[],
+		build: |c| {
+			let arity1 = c.arity(1);
+			dom::build_dom_dispatch_fn(
+				c.rt
+					.dom_handlers
+					.expect("__dom_dispatch needs the dom_handlers global"),
+				arity1,
+			)
+		},
 	},
 ];
 

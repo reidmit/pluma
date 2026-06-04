@@ -1,0 +1,29 @@
+# A click counter — the smallest real `core.dom` app.
+#
+# Build it for the browser and serve the bundle:
+#
+#     pluma build --target browser examples/browser/counter.pa -o /tmp/counter
+#     python3 -m http.server --directory /tmp/counter
+#
+# then open http://localhost:8000/ . Clicking the button increments the label.
+
+use core.dom
+
+def main = fun {
+	let root = dom.body ()
+
+	let label = dom.create-element "span"
+	dom.set-text label "0"
+
+	let btn = dom.create-element "button"
+	dom.set-text btn "increment"
+
+	dom.append-child root label
+	dom.append-child root btn
+
+	let count = ref.new 0
+	dom.on-click btn fun _e {
+		ref.set count (ref.get count + 1)
+		dom.set-text label (to-string (ref.get count))
+	}
+}
