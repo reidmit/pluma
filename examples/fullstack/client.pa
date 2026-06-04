@@ -52,7 +52,7 @@ def view :: fun model -> html.html msg = fun state {
 
 def main = fun {
 	# No base-URL plumbing in code: `pluma build/dev --server-url` bakes where the
-	# stubs point (default `http://localhost:8080` for `build`, the dev origin for
+	# stubs point (default `http://localhost:8080` for `build`; same-origin for
 	# `dev`, which proxies `/rpc/*` to the server). `rpc.set-base-url` can still
 	# override it at runtime if you need to.
 	app.element init update view

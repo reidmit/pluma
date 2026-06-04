@@ -65,10 +65,11 @@ pub(crate) fn dev_command(args: Vec<String>) {
 
 	// A fullstack directory (`server.pa` + `client.pa`) runs both halves: the server
 	// as a subprocess, the client served + live-reloaded, with `/rpc/*` proxied to
-	// the server (same origin, so no CORS). The client posts to the dev origin by
-	// default (the proxy forwards it); `--server-url` overrides for an external server.
+	// the server (same origin, so no CORS). The client posts same-origin by default
+	// (a relative `/rpc/...`, which the proxy forwards regardless of how the page was
+	// reached — localhost vs 127.0.0.1); `--server-url` overrides for an external server.
 	if Compiler::is_fullstack_dir(&entry_path) {
-		let base = server_url.unwrap_or_else(|| format!("http://localhost:{port}"));
+		let base = server_url.unwrap_or_default();
 		dev_fullstack(entry_path, port, base);
 		return;
 	}
