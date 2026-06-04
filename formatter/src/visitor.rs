@@ -46,6 +46,7 @@ impl<'a> Formatter<'a> {
 				parts.push(hardline());
 			}
 			parts.push(self.format_use(u));
+			parts.push(self.trailing_comment(u.range.end.line));
 		}
 
 		// Blank line between import block and def block.
@@ -64,6 +65,7 @@ impl<'a> Formatter<'a> {
 			}
 			parts.push(self.drain_leading(def.range.start.line));
 			parts.push(self.format_definition(def));
+			parts.push(self.trailing_comment(def.range.end.line));
 		}
 
 		// Remaining comments at end of file (e.g. notes after the last def).
@@ -127,6 +129,25 @@ impl<'a> Formatter<'a> {
 		}
 
 		concat(parts)
+	}
+
+	// A comment sharing a node's last line sits after that node's final token
+	// — a `#` comment runs to end of line — so it's a trailing comment for the
+	// node. Emit it inline as ` # ...` and mark it consumed, so `drain_leading`
+	// won't later hoist it onto its own line above the following item (which
+	// would also detach it from the value it annotates). Returns nil when no
+	// unconsumed comment lands on `end_line`.
+	fn trailing_comment(&self, end_line: usize) -> Doc {
+		if self.consumed.borrow().contains(&end_line) {
+			return nil();
+		}
+		match self.comments.get(&end_line) {
+			Some(body) => {
+				self.consumed.borrow_mut().insert(end_line);
+				text(format!(" #{}", body))
+			}
+			None => nil(),
+		}
 	}
 
 	// --- use ----------------------------------------------------------
@@ -232,6 +253,7 @@ impl<'a> Formatter<'a> {
 			}
 			body.push(self.drain_leading(v.range.start.line));
 			body.push(self.format_enum_variant(v));
+			body.push(self.trailing_comment(v.range.end.line));
 			prev_line = Some(v.range.end.line);
 		}
 
@@ -275,6 +297,7 @@ impl<'a> Formatter<'a> {
 			}
 			body.push(self.drain_leading(m.range.start.line));
 			body.push(self.format_trait_method(m));
+			body.push(self.trailing_comment(m.range.end.line));
 			prev_line = Some(m.range.end.line);
 		}
 
@@ -321,6 +344,7 @@ impl<'a> Formatter<'a> {
 			}
 			body.push(self.drain_leading(m.range.start.line));
 			body.push(self.format_definition(m));
+			body.push(self.trailing_comment(m.range.end.line));
 			prev_line = Some(m.range.end.line);
 		}
 
@@ -558,6 +582,7 @@ impl<'a> Formatter<'a> {
 			}
 			parts.push(self.drain_leading(expr.range.start.line));
 			parts.push(self.fmt_tail(expr, 0));
+			parts.push(self.trailing_comment(expr.range.end.line));
 			prev_end = Some(expr.range.end.line);
 		}
 		concat(parts)
@@ -638,12 +663,18 @@ impl<'a> Formatter<'a> {
 			self.format_pattern(&t.pattern),
 			text(" = "),
 			self.fmt_prec(&t.value, 0, tail),
+			// The binding's value ends this line, so a comment on it is trailing.
+			// Unlike a plain `let`, a `try`'s binding line isn't its own statement
+			// in `format_statements` (the continuation is folded into `rest`), so
+			// the trailing comment must be picked up here or it would be hoisted.
+			self.trailing_comment(t.value.range.end.line),
 		];
 		// The continuation expressions are siblings in the enclosing block,
 		// so each is itself a statement and carries the same tail position.
 		for e in &t.rest {
 			parts.push(hardline());
 			parts.push(self.fmt_prec(e, 0, tail));
+			parts.push(self.trailing_comment(e.range.end.line));
 		}
 		concat(parts)
 	}

@@ -1,0 +1,20 @@
+use std.list # list helpers
+
+# A leading comment stays on its own line above the def.
+def xs = [1, 2, 3] # and a trailing one stays inline
+
+enum color {
+	red # primary
+	green
+	blue # last variant
+}
+
+def main = fun {
+	let total = list.sum xs # trailing on a let
+	print total # trailing on a statement
+
+	# A trailing comment on a `try` binding line is interior to the chain;
+	# it must stay inline, not get hoisted above the next statement.
+	try first = list.head xs # trailing on a try binding
+	print first # trailing on the last statement must not escape the body
+}
