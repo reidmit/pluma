@@ -1,0 +1,41 @@
+# Building the `request` value passed to a `remote` call. The `request` type
+# itself is built in (see the prelude) and carries transport metadata -- the
+# headers a client attaches and the server reads. Import this module
+# (`use std.request`) for the builders below.
+#
+#     try outcome = users.fetch (request.new ()) 7
+#     try outcome = users.fetch
+#         (request.header (request.new ()) "x-trace-id" trace) 7
+#
+# Identity is never set here. A client presents credentials (an
+# `authorization` header or a cookie the transport attaches); the server
+# derives and validates the authenticated user with a server-only query.
+
+use std.dict
+
+# A fresh request with no extra metadata. The common authenticated call
+# needs nothing more -- the transport attaches cookies on its own.
+#
+#     request.new ()
+public def new :: fun nothing -> request = fun {
+	request-with (dict.empty ())
+}
+
+# Attaches (or overwrites) one header on a request, returning the updated
+# request. Use it for trace ids, idempotency keys, or a custom
+# `authorization` header.
+#
+#     request.header (request.new ()) "x-trace-id" trace
+public def header :: fun request string string -> request = fun req key value {
+	when req is request-with headers {
+		request-with (dict.insert headers key value)
+	}
+}
+
+# The headers attached to a request, as a plain dict. The transport reads
+# this to turn metadata into outbound HTTP headers.
+public def headers :: fun request -> dict string string = fun req {
+	when req is request-with h {
+		h
+	}
+}

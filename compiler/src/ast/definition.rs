@@ -20,6 +20,12 @@ pub struct DefinitionNode {
 	pub name: IdentifierNode,
 	pub kind: DefinitionKind,
 	pub visibility: Visibility,
+	// Whether this def is an RPC endpoint, marked with the `remote` modifier
+	// (`public remote def`). A `remote def` is a server-target island: its
+	// signature is the client/server contract, its body is compiled only for
+	// the server, and the client closure stops at it (FULLSTACK.md Layer 2).
+	// Only valid on value defs; the parser rejects it elsewhere.
+	pub is_remote: bool,
 	pub ty: Type,
 	// Number of hidden dictionary parameters codegen prepends to this
 	// def's user-facing arity. Equal to the number of class constraints
@@ -58,10 +64,14 @@ impl std::fmt::Debug for DefinitionNode {
 			Visibility::Opaque => "opaque ",
 			Visibility::Public => "public ",
 		};
-		f.debug_struct(&format!("{}def({:#?}) :: {}", vis, self.range, self.ty))
-			.field("name", &self.name)
-			.field("kind", &self.kind)
-			.finish()
+		let remote = if self.is_remote { "remote " } else { "" };
+		f.debug_struct(&format!(
+			"{}{}def({:#?}) :: {}",
+			vis, remote, self.range, self.ty
+		))
+		.field("name", &self.name)
+		.field("kind", &self.kind)
+		.finish()
 	}
 }
 

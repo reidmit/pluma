@@ -369,3 +369,115 @@ def status-names :: dict int string = dict.from-entries [
 	(405, "Method Not Allowed"),
 	(500, "Internal Server Error"),
 ]
+
+# --- the client ----------------------------------------------------------
+
+# Makes one HTTP/1.1 request and returns the response. `url` looks like
+# "http://127.0.0.1:8080/path" (the `http://` scheme is optional). Plain TCP
+# only -- no TLS -- and the connection is closed after the single exchange
+# (`Connection: close`). `err`s as an `ok`-wrapped failure string if the host
+# can't be reached or the exchange breaks down.
+#
+#     try resp = http.fetch
+#         "http://127.0.0.1:8080/echo" method.post (string.to-bytes "hi")
+public def fetch :: fun string method bytes -> task (result response string) = fun url verb body {
+	let split = split-url url
+	let authority = split.0
+	let path = split.1
+	try c = net.connect authority
+	when c is ok conn {
+		try _ = write-all conn (serialize-request verb path authority body)
+		try resp-r = read-response conn
+		let _ = net.close conn
+		task.return resp-r
+	} is err e {
+		task.return (err e)
+	}
+}
+
+# Splits "http://host:port/a/b?x" into `("host:port", "/a/b?x")`. A missing
+# path defaults to "/"; the `http://` scheme prefix is stripped if present.
+def split-url :: fun string -> (string, string) = fun url {
+	let after-scheme = if string.starts-with url "http://" {
+		string.drop url 7
+	} else {
+		url
+	}
+	let segs = string.split after-scheme "/"
+	let authority = list.head segs ?? after-scheme
+	let path = "/" ++ string.join (list.drop segs 1) "/"
+	(authority, path)
+}
+
+# Render a request as HTTP/1.1 bytes: request line, Host, the computed
+# Content-Length, Connection: close, a blank line, then body.
+def serialize-request :: fun method string string bytes -> bytes = fun verb path authority body {
+	let request-line = method-name verb ++ " " ++ path ++ " HTTP/1.1\r\n"
+	let host-line = "Host: " ++ authority ++ "\r\n"
+	let length-line = "Content-Length: " ++ to-string (bytes.length body) ++ "\r\n"
+	let head = request-line ++ host-line ++ length-line ++ "Connection: close\r\n\r\n"
+	bytes.concat (string.to-bytes head) body
+}
+
+def method-name :: fun method -> string = fun m {
+	when m is get {
+		"GET"
+	} is post {
+		"POST"
+	} is put {
+		"PUT"
+	} is delete {
+		"DELETE"
+	} is patch {
+		"PATCH"
+	} is head {
+		"HEAD"
+	} is options {
+		"OPTIONS"
+	} is other name {
+		name
+	}
+}
+
+# Read and parse one response off `conn`: the status line + headers, then the
+# body sized by Content-Length (whatever already arrived with the headers
+# counts toward it).
+def read-response :: fun net.connection -> task (result response string) = fun conn {
+	try raw-r = read-until-headers conn (string.to-bytes "")
+	when raw-r is ok raw {
+		let parsed = parse-response-head raw
+		try body-r = read-body conn parsed.body-start parsed.content-length
+		when body-r is ok body {
+			task.return (ok {status: parsed.status, headers: parsed.headers, body})
+		} is err e {
+			task.return (err e)
+		}
+	} is err e {
+		task.return (err e)
+	}
+}
+
+# Split the raw bytes at the header/body boundary and parse the status line +
+# headers. The dual of `parse-head`, for the client side.
+def parse-response-head :: fun bytes -> {
+	status :: int,
+	headers :: dict string string,
+	content-length :: int,
+	body-start :: bytes,
+} = fun raw {
+	let parts = bytes.split raw crlf2
+	let head = list.head parts ?? string.to-bytes ""
+	let body-start = bytes.join (list.drop parts 1) crlf2
+	let header-str = bytes.to-string head ?? ""
+	let lines = string.split header-str "\r\n"
+	let status-line = list.head lines ?? ""
+	let sl = string.split status-line " "
+	let status = string.to-int (nth sl 1 "0") ?? 0
+	let headers = list.fold (list.drop lines 1) (dict.empty ()) parse-header
+	let clen = when dict.lookup headers "content-length" is some v {
+		string.to-int v ?? 0
+	} is none {
+		0
+	}
+	{status, headers, content-length: clen, body-start}
+}

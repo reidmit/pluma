@@ -1,0 +1,7 @@
+use std.request
+
+# A `remote def` must return a `task` — the call is async, so `try` over it
+# reads like a local await. A plain `int` return is rejected.
+public remote def add-one :: fun request int -> int = fun _req n {
+	n + 1
+}

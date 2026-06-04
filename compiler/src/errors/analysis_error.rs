@@ -72,6 +72,19 @@ pub enum AnalysisErrorKind {
 		ty: Type,
 		detail: String,
 	},
+	// A `remote def` (RPC endpoint) was declared without `public`. The client
+	// can't see a private endpoint, so it could never call it — almost always
+	// a mistake, and Pluma stays explicit rather than silently widening.
+	RemoteDefNotPublic {
+		name: String,
+	},
+	// A `remote def`'s signature isn't a valid RPC endpoint contract. The
+	// shape must be `fun request A.. -> task R`: the first parameter is the
+	// transport `request`, and the result is a `task` (the call is async).
+	// `detail` says which rule was broken.
+	RemoteDefSignature {
+		detail: String,
+	},
 	UnsupportedInstanceHead {
 		head: Type,
 	},
@@ -231,6 +244,18 @@ impl fmt::Display for AnalysisError {
 				write!(f, "Can't send `{}` across the wire: {}.", ty, detail)
 			}
 
+			RemoteDefNotPublic { name } => {
+				write!(f, "A `remote def` must be `public`: `{}` is private.", name)
+			}
+
+			RemoteDefSignature { detail } => {
+				write!(
+					f,
+					"A `remote def` must be `fun request A.. -> task R`: {}.",
+					detail
+				)
+			}
+
 			UnsupportedInstanceHead { head } => {
 				write!(f, "Instance head `{}` is not supported.", head)
 			}
@@ -349,6 +374,8 @@ impl Reportable for AnalysisError {
 			DuplicateDefinition { .. } => "E0112",
 			NoInstance { .. } => "E0113",
 			NotWireDerivable { .. } => "E0114",
+			RemoteDefNotPublic { .. } => "E0133",
+			RemoteDefSignature { .. } => "E0134",
 			UnsupportedInstanceHead { .. } => "E0115",
 			IncompleteInstance { .. } => "E0116",
 			AmbiguousTraitMethod { .. } => "E0117",

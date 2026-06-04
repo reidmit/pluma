@@ -1,0 +1,7 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: `remote` can only modify a top-level `def`.
+> 1 | remote enum color {
+      ^^^^^^

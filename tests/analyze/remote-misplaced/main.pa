@@ -1,0 +1,4 @@
+remote enum color {
+	red
+	green
+}

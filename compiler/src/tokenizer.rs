@@ -582,6 +582,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"manual" => KeywordManual,
 						b"opaque" => KeywordOpaque,
 						b"public" => KeywordPublic,
+						b"remote" => KeywordRemote,
 						b"scope" => KeywordScope,
 						b"try" => KeywordTry,
 						b"trait" => KeywordTrait,

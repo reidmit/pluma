@@ -1,0 +1,48 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/remote-def/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-5:1) [
+            use(0:0-0:12) `std.task`,
+            use(1:0-1:15) `std.request`,
+        ] [
+            public remote def(3:0-5:1) :: nothing {
+                name: ident(3:18-3:24) `double`,
+                kind: expr(3:58-5:1) :: request int -> task int {
+                    kind: fun(3:58-5:1) {
+                        params: [
+                            ident(3:62-3:66) `_req` :: request,
+                            ident(3:67-3:68) `n` :: int,
+                        ],
+                        body: [
+                            expr(4:1-4:20) :: task int {
+                                kind: call(4:1-4:20) {
+                                    callee: expr(4:1-4:12) :: 'a -> task 'a {
+                                        kind: namespace-access `task.return`,
+                                    },
+                                    args: [
+                                        expr(4:13-4:20) :: int {
+                                            kind: expr(4:14-4:19) :: int {
+                                                kind: binary op(4:16-4:17) `*` {
+                                                    left: expr(4:14-4:15) :: int {
+                                                        kind: ident(4:14-4:15) `n`,
+                                                    },
+                                                    right: expr(4:18-4:19) :: int {
+                                                        kind: literal(4:18-4:19) int 2,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

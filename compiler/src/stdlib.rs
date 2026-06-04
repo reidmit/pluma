@@ -21,6 +21,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std.random", include_str!("../../std/random.pa")),
 		("std.ref", include_str!("../../std/ref.pa")),
 		("std.regex", include_str!("../../std/regex.pa")),
+		("std.request", include_str!("../../std/request.pa")),
 		("std.result", include_str!("../../std/result.pa")),
 		("std.string", include_str!("../../std/string.pa")),
 		("std.task", include_str!("../../std/task.pa")),

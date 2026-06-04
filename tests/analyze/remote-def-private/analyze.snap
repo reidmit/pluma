@@ -1,0 +1,7 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: A `remote def` must be `public`: `double` is private.
+> 4 | remote def double :: fun request int -> task int = fun _req n {
+                 ^^^^^^

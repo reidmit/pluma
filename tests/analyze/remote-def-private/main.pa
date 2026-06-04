@@ -1,0 +1,6 @@
+use std.task
+use std.request
+
+remote def double :: fun request int -> task int = fun _req n {
+	task.return (n * 2)
+}

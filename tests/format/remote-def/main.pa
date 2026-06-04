@@ -1,0 +1,7 @@
+public remote def double :: fun int -> int = fun x {
+	x * 2
+}
+
+remote def increment :: fun int -> int = fun x {
+	x + 1
+}

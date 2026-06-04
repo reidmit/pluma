@@ -1,0 +1,7 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Can't send `int -> int` across the wire: functions aren't serializable.
+> 6 | public remote def apply-twice :: fun request (fun int -> int) int -> task int = fun _req f n {
+                        ^^^^^^^^^^^

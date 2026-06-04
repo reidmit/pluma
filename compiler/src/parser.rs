@@ -411,6 +411,7 @@ impl<'a> Parser<'a> {
 				| Token::KeywordImplement(..)
 				| Token::KeywordPublic(..)
 				| Token::KeywordOpaque(..)
+				| Token::KeywordRemote(..)
 		)
 	}
 
@@ -2464,7 +2465,26 @@ impl<'a> Parser<'a> {
 			}
 			_ => (Visibility::Private, None),
 		};
-		let mod_start = modifier_span.map(|(s, _)| s);
+
+		// Optional `remote` modifier, after any visibility and before `def`:
+		// `public remote def`. Marks the def as an RPC endpoint (FULLSTACK.md
+		// Layer 2). Only valid on a `def` — rejected below otherwise.
+		let (is_remote, remote_span) = match self.current_token {
+			Some(Token::KeywordRemote(s, e)) => {
+				self.advance();
+				(
+					true,
+					Some((self.offset_to_point(s), self.offset_to_point(e))),
+				)
+			}
+			_ => (false, None),
+		};
+
+		// The definition's range starts at the first modifier present, in
+		// source order: visibility (`public`/`opaque`) precedes `remote`.
+		let mod_start = modifier_span
+			.map(|(s, _)| s)
+			.or_else(|| remote_span.map(|(s, _)| s));
 
 		// `public`/`opaque` only modify a `def`, `enum`, or `alias`, and
 		// `opaque` only an `enum`. Reject anything else (instances, traits,
@@ -2491,6 +2511,16 @@ impl<'a> Parser<'a> {
 			}
 		}
 
+		// `remote` only modifies a `def` (it marks an RPC endpoint). Reject it
+		// on an enum/alias/trait/instance or a dangling modifier.
+		if is_remote && !matches!(self.current_token, Some(Token::KeywordDef(..))) {
+			let (start, end) = remote_span.unwrap();
+			return self.error(ParseError {
+				range: Range::between(start, end),
+				kind: ParseErrorKind::MisplacedRemote,
+			});
+		}
+
 		// Instance: `implement TRAIT TYPE [where ...] { defs }`.
 		if let Some(Token::KeywordImplement(start_offset, _)) = self.current_token {
 			let start = self.offset_to_point(start_offset);
@@ -2510,6 +2540,7 @@ impl<'a> Parser<'a> {
 				range: Range::between(start, enum_node.range.end),
 				kind: DefinitionKind::Enum(enum_node),
 				visibility,
+				is_remote: false,
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
@@ -2529,6 +2560,7 @@ impl<'a> Parser<'a> {
 				range: Range::between(start, type_expr.range.end),
 				kind: DefinitionKind::Alias(type_expr),
 				visibility,
+				is_remote: false,
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
@@ -2550,6 +2582,7 @@ impl<'a> Parser<'a> {
 				// Traits aren't subject to the visibility ladder yet; the
 				// guard above guarantees `visibility` is `Private` here.
 				visibility,
+				is_remote: false,
 				ty: Type::Unknown,
 				dict_param_count: 0,
 				type_annotation: None,
@@ -2609,6 +2642,7 @@ impl<'a> Parser<'a> {
 			range: Range::between(start, value.range.end),
 			kind: DefinitionKind::Expr(value),
 			visibility,
+			is_remote,
 			ty: Type::Unknown,
 			dict_param_count: 0,
 			type_annotation,
@@ -2774,6 +2808,7 @@ impl<'a> Parser<'a> {
 		Some(DefinitionNode {
 			name: synthesized_name,
 			range: instance_range,
+			is_remote: false,
 			kind: DefinitionKind::Instance(InstanceNode {
 				range: instance_range,
 				trait_name,

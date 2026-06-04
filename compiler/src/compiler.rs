@@ -157,6 +157,10 @@ impl Compiler {
 		// else. Its exported instances are implicitly visible to every
 		// user module's analyzer.
 		self.load_prelude();
+		// FULLSTACK Layer 2: discover `remote def` endpoints (a syntactic scan
+		// over the parsed sources) and synthesize the `rpc-client`/`rpc-server`
+		// modules before analysis, so user code that imports them resolves.
+		self.generate_rpc_modules();
 		let mut visiting = HashSet::new();
 		for entry in self.entry_modules.clone() {
 			self.load_module(&entry, &mut visiting);
@@ -167,6 +171,56 @@ impl Compiler {
 		} else {
 			Ok(())
 		}
+	}
+
+	// FULLSTACK Layer 2: scan the entry modules and their transitive user
+	// imports for `remote def` endpoints, and (if any) synthesize the
+	// `rpc-client`/`rpc-server` modules into the in-memory cache so the later
+	// analysis pass resolves user code that imports them. The scan is purely
+	// syntactic — an endpoint's signature is its contract — and parsing is
+	// idempotent: `load_module` reuses the modules this populates rather than
+	// re-reading them. A no-op for programs with no `remote def`.
+	fn generate_rpc_modules(&mut self) {
+		let mut to_visit: Vec<String> = self.entry_modules.clone();
+		let mut seen: HashSet<String> = HashSet::new();
+		let mut endpoints: Vec<crate::rpc::Endpoint> = Vec::new();
+
+		while let Some(name) = to_visit.pop() {
+			if !seen.insert(name.clone()) {
+				continue;
+			}
+			// Only user modules carry endpoints; the prelude and stdlib don't,
+			// and the generated modules themselves don't exist on disk yet.
+			if name == "__prelude__"
+				|| name == crate::rpc::CLIENT_MODULE
+				|| name == crate::rpc::SERVER_MODULE
+				|| lookup_stdlib_source(&name).is_some()
+			{
+				continue;
+			}
+			// Parse on demand; `load_module` reuses what we insert here.
+			if !self.modules.contains_key(&name) {
+				let path = to_module_path(&self.root_dir, &name);
+				let mut module = Module::new(name.clone(), path);
+				module.parse(&mut self.diagnostics);
+				self.modules.insert(name.clone(), module);
+			}
+			let Some(ast) = self.modules.get(&name).and_then(|m| m.ast.as_ref()) else {
+				continue;
+			};
+			endpoints.extend(crate::rpc::endpoints_in(&name, ast));
+			for u in &ast.uses {
+				to_visit.push(u.module_name());
+			}
+		}
+
+		if endpoints.is_empty() {
+			return;
+		}
+		let client = crate::rpc::generate_client(&endpoints);
+		let server = crate::rpc::generate_server(&endpoints);
+		self.set_module_source(crate::rpc::CLIENT_MODULE.to_string(), client.into_bytes());
+		self.set_module_source(crate::rpc::SERVER_MODULE.to_string(), server.into_bytes());
 	}
 
 	// Parse + analyze the synthetic prelude module. The source is baked

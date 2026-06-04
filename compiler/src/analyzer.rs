@@ -69,6 +69,11 @@ pub struct Analyzer<'compiler> {
 	// Fresh class constraints minted during Gen/Inst processing (one set
 	// per Inst-against-Gen match). Picked up by `analyze` for discharge.
 	fresh_class_constraints: Vec<ClassConstraint>,
+	// `remote def` endpoints captured during constraint generation: the
+	// def's range and its resolved-annotation type (which still holds fresh
+	// vars for `request`/aliases). Validated post-solve, once the
+	// substitution has bound those vars to concrete types (see `analyze`).
+	remote_endpoints: Vec<(Range, Type)>,
 	// Per-def class constraints from resolve_forwarded — one entry per
 	// dict param of the def's scheme. Used to build cross-module
 	// `value_constraints` exports so importing modules can stitch in
@@ -519,6 +524,7 @@ impl<'compiler> Analyzer<'compiler> {
 			traits: HashMap::new(),
 			instances: HashMap::new(),
 			fresh_class_constraints: Vec::new(),
+			remote_endpoints: Vec::new(),
 			def_value_constraints: HashMap::new(),
 			def_where_clauses: HashMap::new(),
 			prelude_exports: None,
@@ -805,6 +811,18 @@ impl<'compiler> Analyzer<'compiler> {
 			);
 		}
 
+		// Validate `remote def` endpoint contracts now that solving is done:
+		// the substitution has bound the `request`/alias vars in each captured
+		// annotation to concrete types, so the argument and result shapes are
+		// visible. Draining keeps this from leaking across modules.
+		for (range, ty) in std::mem::take(&mut self.remote_endpoints) {
+			let resolved = match &substitution {
+				Some(s) => s.apply_to_type(&ty),
+				None => ty,
+			};
+			self.validate_remote_endpoint(range, &resolved);
+		}
+
 		// Build the module's exports. Values come from the inferred types of
 		// each top-level expr def. Aliases are resolved by applying the
 		// substitution to the alias's type binding. Enums are pulled from
@@ -814,6 +832,18 @@ impl<'compiler> Analyzer<'compiler> {
 			for def in &ast.body {
 				match &def.kind {
 					DefinitionKind::Expr(expr) => {
+						// A `remote def` is an RPC endpoint the client calls, so it
+						// must be reachable from the client — i.e. `public`. A
+						// private one could never be called; flag it rather than
+						// silently widening (Pluma stays private-by-default).
+						if def.is_remote && def.visibility != Visibility::Public {
+							self.error(
+								def.name.range,
+								AnalysisErrorKind::RemoteDefNotPublic {
+									name: def.name.name.clone(),
+								},
+							);
+						}
 						// Value defs are either `public` (exported) or private
 						// (the default). `opaque` is rejected on them at parse
 						// time, so only these two cases reach here.
@@ -1232,6 +1262,7 @@ impl<'compiler> Analyzer<'compiler> {
 							range: instance_node.range,
 							kind: DefinitionKind::Expr(default_expr.clone()),
 							visibility: Visibility::Private,
+							is_remote: false,
 							ty: Type::Unknown,
 							dict_param_count: 0,
 							type_annotation: None,
@@ -1573,6 +1604,25 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 				None => (None, HashMap::new()),
 			};
+
+			// A `remote def`'s annotation is the client/server contract, so it's
+			// mandatory and must shape up as `fun request A.. -> task R`. The
+			// resolved annotation already has `request` and any `task`/`list`
+			// expanded, so checking it here (rather than the inferred body type)
+			// sees concrete argument and result types.
+			if definition.is_remote {
+				match &annotated_ty {
+					Some(ty) => self
+						.remote_endpoints
+						.push((definition.name.range, ty.clone())),
+					None => self.error(
+						definition.name.range,
+						AnalysisErrorKind::RemoteDefSignature {
+							detail: "it needs a type annotation (the signature is the contract)".to_string(),
+						},
+					),
+				}
+			}
 
 			// Explicit `where (trait param, ...)` constraints on the
 			// signature. Bind each `param` to the tyvar the annotation
@@ -6607,6 +6657,87 @@ impl<'compiler> Analyzer<'compiler> {
 				defining_module: "__prelude__".into(),
 			},
 		);
+	}
+
+	// Whether `ty` is the built-in `request` type (the transport metadata an
+	// RPC call carries). It's a nominal prelude enum, so it resolves to a
+	// named `Enum` and is recognized by name — robust even when the request
+	// parameter is unused in the body (which would leave a structural alias
+	// as a free var). The first parameter of every `remote def` must be this.
+	fn is_request_type(ty: &Type) -> bool {
+		matches!(ty, Type::Enum(name, args) if name == "__prelude__.request" && args.is_empty())
+	}
+
+	// Validates a `remote def`'s signature is a well-formed RPC endpoint
+	// contract: `fun request A1..An -> task R`. The `request` (parameter 0)
+	// carries transport metadata and is never sent across the wire; every
+	// other argument and the task's result `R` must be `wire`-derivable so
+	// they can cross the network. Diagnostics are accumulated, never raised.
+	fn validate_remote_endpoint(&mut self, range: Range, ty: &Type) {
+		let Type::Fun(params, ret) = ty else {
+			self.error(
+				range,
+				AnalysisErrorKind::RemoteDefSignature {
+					detail: "it must be a function taking a `request`".to_string(),
+				},
+			);
+			return;
+		};
+
+		// Parameter 0 is the transport `request`.
+		match params.first() {
+			Some(p) if Self::is_request_type(p) => {}
+			_ => {
+				self.error(
+					range,
+					AnalysisErrorKind::RemoteDefSignature {
+						detail: "its first parameter must be a `request`".to_string(),
+					},
+				);
+				return;
+			}
+		}
+
+		// The result is a `task` — a remote call is async, so `try` over it
+		// reads exactly like a local await.
+		let Type::Enum(name, args) = ret.as_ref() else {
+			self.error(
+				range,
+				AnalysisErrorKind::RemoteDefSignature {
+					detail: "it must return a `task` (the call is async)".to_string(),
+				},
+			);
+			return;
+		};
+		if name != "__prelude__.task" || args.len() != 1 {
+			self.error(
+				range,
+				AnalysisErrorKind::RemoteDefSignature {
+					detail: "it must return a `task` (the call is async)".to_string(),
+				},
+			);
+			return;
+		}
+
+		// Every argument after the request, plus the task's result, crosses
+		// the wire — so each must be `wire`-derivable, with attribution when
+		// it isn't (the same boundary diagnostic `wire` uses everywhere).
+		let mut boundary: Vec<&Type> = params[1..].iter().collect();
+		boundary.push(&args[0]);
+		for t in boundary {
+			if self.build_wire_shape(t, &mut Vec::new()).is_none() {
+				let detail = self
+					.wire_underivable_detail(t, &mut Vec::new())
+					.unwrap_or_else(|| "it isn't serializable".to_string());
+				self.error(
+					range,
+					AnalysisErrorKind::NotWireDerivable {
+						ty: t.clone(),
+						detail,
+					},
+				);
+			}
+		}
 	}
 
 	// Synthesize a `wire` schema shape for `ty`, or `None` if `ty` is not

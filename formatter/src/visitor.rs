@@ -179,7 +179,16 @@ impl<'a> Formatter<'a> {
 				// and `where` clause are the def's contract — they must be
 				// re-emitted or the formatter would silently drop the program's
 				// declared type.
-				let mut parts: Vec<Doc> = vec![text("def "), text(def.name.name.clone())];
+				// `remote def` — the endpoint modifier sits between visibility
+				// and `def`, so it's emitted here (inner) and `public` is
+				// prepended below: `public remote def`. Dropping it would
+				// silently demote an RPC endpoint to a plain def.
+				let mut parts: Vec<Doc> = Vec::new();
+				if def.is_remote {
+					parts.push(text("remote "));
+				}
+				parts.push(text("def "));
+				parts.push(text(def.name.name.clone()));
 				if let Some(ty) = &def.type_annotation {
 					parts.push(text(" :: "));
 					parts.push(self.format_type_expr(ty));

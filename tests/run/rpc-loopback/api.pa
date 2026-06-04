@@ -1,0 +1,21 @@
+# Shared RPC endpoints (FULLSTACK Layer 2). Each `remote def` is the contract
+# the compiler turns into a client stub and a server dispatch entry. The body
+# is the server-side handler. These cover the three argument shapes the
+# generated code handles: zero, one, and several arguments.
+use std.task
+use std.request
+
+# Zero user arguments: just the request.
+public remote def ping :: fun request -> task string = fun _req {
+	task.return "pong"
+}
+
+# One argument.
+public remote def greet :: fun request string -> task string = fun _req name {
+	task.return ("hello, " ++ name)
+}
+
+# Several arguments (sent as an encoded tuple).
+public remote def add :: fun request int int -> task int = fun _req a b {
+	task.return (a + b)
+}

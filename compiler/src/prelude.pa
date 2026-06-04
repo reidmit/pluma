@@ -161,6 +161,19 @@ public enum regex-pattern {
 	p-capture string regex-pattern
 }
 
+# Transport metadata for a `remote` call (FULLSTACK Layer 2): the headers a
+# client attaches and the server reads. It is symmetric -- client and server
+# share the one type. Identity is never a field here: a client presents
+# credentials (a header/cookie), and the server validates them via a
+# server-only query, so there is nothing to forge. It is a nominal type (not
+# a bare record) so the endpoint checker can recognize an RPC `request`
+# parameter by name. Build one with `request.new ()` and attach metadata with
+# `request.header` (`std.request`); the single constructor stays an internal
+# detail of that module.
+public enum request {
+	request-with (dict string string)
+}
+
 # The rules below teach `option` and `result` how to compare and hash,
 # so that anything built out of them can be sorted or used as a dict key
 # whenever the values they wrap can. An option compares by its contents,

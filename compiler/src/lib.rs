@@ -9,6 +9,7 @@ mod module;
 mod parser;
 mod platform;
 mod render;
+mod rpc;
 mod stdlib;
 mod suggest;
 mod tokenizer;

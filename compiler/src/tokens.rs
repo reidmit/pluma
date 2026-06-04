@@ -171,6 +171,10 @@ pub enum Token {
 	/// `public` keyword (visibility: export a top-level def fully)
 	KeywordPublic(usize, usize),
 
+	/// `remote` keyword (marks a `def` as an RPC endpoint: a server-target
+	/// island whose signature is the client/server contract)
+	KeywordRemote(usize, usize),
+
 	/// `trait` keyword
 	KeywordTrait(usize, usize),
 
@@ -351,6 +355,7 @@ impl Token {
 			| KeywordManual(start, end)
 			| KeywordOpaque(start, end)
 			| KeywordPublic(start, end)
+			| KeywordRemote(start, end)
 			| KeywordTrait(start, end)
 			| KeywordTry(start, end)
 			| KeywordUse(start, end)
@@ -459,6 +464,7 @@ impl fmt::Display for Token {
 			&KeywordManual(..) => "keyword `manual`",
 			&KeywordOpaque(..) => "keyword `opaque`",
 			&KeywordPublic(..) => "keyword `public`",
+			&KeywordRemote(..) => "keyword `remote`",
 			&KeywordTrait(..) => "keyword `trait`",
 			&KeywordTry(..) => "keyword `try`",
 			&KeywordUse(..) => "keyword `use`",

@@ -40,6 +40,7 @@ pub enum ParseErrorKind {
 	UnexpectedToken { actual: Token, expected: Token },
 	UnexpectedTopLevelToken { actual: Token },
 	MisplacedVisibility { keyword: &'static str },
+	MisplacedRemote,
 	// An expression was required here (a def body, or the operand after a
 	// prefix/infix operator) but the next token can't start one. `found` is
 	// the offending token, or `None` at end of file.
@@ -132,6 +133,9 @@ impl fmt::Display for ParseError {
 					)
 				}
 			}
+			MisplacedRemote => {
+				write!(f, "`remote` can only modify a top-level `def`.")
+			}
 			ExpectedExpression { found } => match found {
 				Some(token) => write!(f, "Expected an expression, but found {}.", token),
 				None => write!(
@@ -176,6 +180,7 @@ impl Reportable for ParseError {
 			UnexpectedTopLevelToken { .. } => "E0027",
 			MisplacedVisibility { .. } => "E0028",
 			ExpectedExpression { .. } => "E0029",
+			MisplacedRemote => "E0030",
 		}
 	}
 
