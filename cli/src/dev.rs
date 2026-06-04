@@ -35,6 +35,7 @@ pub(crate) fn dev_command(args: Vec<String>) {
 	let mut entry_path: Option<String> = None;
 	let mut target = String::from("sys");
 	let mut port: u16 = 2222;
+	let mut server_url: Option<String> = None;
 	let mut iter = args.into_iter();
 	while let Some(a) = iter.next() {
 		match a.as_str() {
@@ -50,6 +51,7 @@ pub(crate) fn dev_command(args: Vec<String>) {
 					std::process::exit(1);
 				}
 			},
+			"--server-url" => server_url = iter.next(),
 			_ => entry_path = Some(a),
 		}
 	}
@@ -63,9 +65,11 @@ pub(crate) fn dev_command(args: Vec<String>) {
 
 	// A fullstack directory (`server.pa` + `client.pa`) runs both halves: the server
 	// as a subprocess, the client served + live-reloaded, with `/rpc/*` proxied to
-	// the server (same origin, so no CORS).
+	// the server (same origin, so no CORS). The client posts to the dev origin by
+	// default (the proxy forwards it); `--server-url` overrides for an external server.
 	if Compiler::is_fullstack_dir(&entry_path) {
-		dev_fullstack(entry_path, port);
+		let base = server_url.unwrap_or_else(|| format!("http://localhost:{port}"));
+		dev_fullstack(entry_path, port, base);
 		return;
 	}
 
@@ -307,7 +311,7 @@ es.onerror = () => {};\n\
 // The port the server subprocess binds (the example's `server.pa` uses 8080).
 const FULLSTACK_SERVER_PORT: u16 = 8080;
 
-fn dev_fullstack(entry_path: String, port: u16) {
+fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 	let exe = match std::env::current_exe() {
 		Ok(p) => p,
 		Err(e) => {
@@ -316,7 +320,7 @@ fn dev_fullstack(entry_path: String, port: u16) {
 		}
 	};
 	// Both halves must compile before we serve anything.
-	let (server_bytes, client_bytes) = match build_fullstack_artifacts(&entry_path) {
+	let (server_bytes, client_bytes) = match build_fullstack_artifacts(&entry_path, &server_url) {
 		Ok(pair) => pair,
 		Err(diags) => {
 			print_diagnostics(diags);
@@ -371,7 +375,7 @@ fn dev_fullstack(entry_path: String, port: u16) {
 			continue;
 		}
 		last = now;
-		match build_fullstack_artifacts(&entry_path) {
+		match build_fullstack_artifacts(&entry_path, &server_url) {
 			Ok((server_bytes, client_bytes)) => {
 				// Restart the server with the new artifact, swap the client, reload.
 				let _ = child.kill();
@@ -395,8 +399,12 @@ fn dev_fullstack(entry_path: String, port: u16) {
 /// Compile a fullstack directory to its two artifacts (server wasm, client web
 /// bundle wasm), or return the analysis diagnostics. Post-analysis lower/codegen
 /// failures print and return empty diags (fatal, unrelated to source typos).
-fn build_fullstack_artifacts(entry_path: &str) -> Result<(Vec<u8>, Vec<u8>), Vec<Diagnostic>> {
-	let mut compiler = Compiler::from_fullstack_dir(entry_path.to_string())?;
+fn build_fullstack_artifacts(
+	entry_path: &str,
+	server_url: &str,
+) -> Result<(Vec<u8>, Vec<u8>), Vec<Diagnostic>> {
+	let mut compiler =
+		Compiler::from_fullstack_dir(entry_path.to_string())?.with_rpc_base_url(server_url.to_string());
 	compiler.check()?;
 	compiler.gate_fullstack()?;
 	let server = compiler.entry_modules[0].clone();

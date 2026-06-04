@@ -70,6 +70,10 @@ pub struct Compiler {
 	// (`entry_modules[0]`=server→`Sys`, `[1]`=client→`Web`) via `gate_fullstack`, and
 	// the generated `rpc-client` targets the web transport (`fetch.post`).
 	pub fullstack: bool,
+	// The server origin the generated `rpc-client` stubs POST to (baked into the
+	// module as `base-url`'s default; `pluma build/dev --server-url`). `None` keeps
+	// the built-in fallback. Empty string = same-origin (`/rpc/...`).
+	pub rpc_base_url: Option<String>,
 }
 
 impl Compiler {
@@ -86,6 +90,7 @@ impl Compiler {
 			target: None,
 			hmr: false,
 			fullstack: false,
+			rpc_base_url: None,
 		})
 	}
 
@@ -120,6 +125,7 @@ impl Compiler {
 			target: None,
 			hmr: false,
 			fullstack: false,
+			rpc_base_url: None,
 		}
 	}
 
@@ -128,6 +134,14 @@ impl Compiler {
 	// client is web (`fetch.post` transport) and enables `gate_fullstack`.
 	pub fn with_fullstack(mut self, fullstack: bool) -> Self {
 		self.fullstack = fullstack;
+		self
+	}
+
+	// Set the server origin the generated `rpc-client` stubs default to (`pluma
+	// build/dev --server-url`). Must be called before `check()` (RPC codegen reads
+	// it). An empty string bakes a same-origin base (`/rpc/...`).
+	pub fn with_rpc_base_url(mut self, url: String) -> Self {
+		self.rpc_base_url = Some(url);
 		self
 	}
 
@@ -353,7 +367,11 @@ impl Compiler {
 		// `fetch` on web (a `--target web` build or the client half of a fullstack
 		// build), `http.fetch` over `std.sys.net` otherwise.
 		let web = self.fullstack || self.target == Some(crate::platform::Target::Web);
-		let client = crate::rpc::generate_client(&endpoints, &fingerprint, web);
+		let base_url = self
+			.rpc_base_url
+			.as_deref()
+			.unwrap_or("http://127.0.0.1:8080");
+		let client = crate::rpc::generate_client(&endpoints, &fingerprint, web, base_url);
 		let server = crate::rpc::generate_server(&endpoints, &fingerprint);
 		self.set_module_source(crate::rpc::CLIENT_MODULE.to_string(), client.into_bytes());
 		self.set_module_source(crate::rpc::SERVER_MODULE.to_string(), server.into_bytes());

@@ -388,6 +388,7 @@ fn build_command(args: Vec<String>) {
 	let mut entry_path: Option<String> = None;
 	let mut out_base: Option<String> = None;
 	let mut target = String::from("sys");
+	let mut server_url: Option<String> = None;
 	let mut iter = args.into_iter();
 	while let Some(a) = iter.next() {
 		match a.as_str() {
@@ -397,6 +398,7 @@ fn build_command(args: Vec<String>) {
 				}
 			}
 			"-o" | "--out" => out_base = iter.next(),
+			"--server-url" => server_url = iter.next(),
 			_ => entry_path = Some(a),
 		}
 	}
@@ -408,11 +410,15 @@ fn build_command(args: Vec<String>) {
 		}
 	};
 
+	// Where the generated RPC client stubs point. Default to the server's default
+	// bind; `--server-url` overrides (use "" for same-origin behind a proxy).
+	let server_url = server_url.unwrap_or_else(|| "http://localhost:8080".to_string());
+
 	// FULLSTACK: a directory with both `server.pa` and `client.pa` builds two
 	// artifacts from one source — `server.wasm` + a browser client bundle —
 	// regardless of `--target` (each half has its own).
 	if Compiler::is_fullstack_dir(&entry_path) {
-		build_fullstack(entry_path, out_base);
+		build_fullstack(entry_path, out_base, server_url);
 		return;
 	}
 
@@ -428,7 +434,7 @@ fn build_command(args: Vec<String>) {
 	};
 
 	let mut compiler = match Compiler::from_entry_path(entry_path.clone()) {
-		Ok(c) => c.with_target(Some(target)),
+		Ok(c) => c.with_target(Some(target)).with_rpc_base_url(server_url),
 		Err(diagnostics) => {
 			print_diagnostics(diagnostics);
 			std::process::exit(1);
@@ -502,9 +508,9 @@ fn build_command(args: Vec<String>) {
 // fingerprint stamped into both, per-artifact target gating, and the emitter's
 // reachability prune carves each side out of the shared IR (the server-only `remote
 // def` bodies are never reached from the client's `main`, and vice versa).
-fn build_fullstack(entry_path: String, out_base: Option<String>) {
+fn build_fullstack(entry_path: String, out_base: Option<String>, server_url: String) {
 	let mut compiler = match Compiler::from_fullstack_dir(entry_path.clone()) {
-		Ok(c) => c,
+		Ok(c) => c.with_rpc_base_url(server_url),
 		Err(diagnostics) => {
 			print_diagnostics(diagnostics);
 			std::process::exit(1);

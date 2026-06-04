@@ -91,7 +91,7 @@ fn endpoint_arity(ann: &TypeExprNode) -> Option<usize> {
 // endpoint. The transport is the target's arm of the Phase 3 seam — `http.fetch`
 // over `std.sys.net` on a sys/native build, the host page's `fetch.post` (the
 // browser's `fetch`) on a web build.
-pub fn generate_client(eps: &[Endpoint], fingerprint: &str, web: bool) -> String {
+pub fn generate_client(eps: &[Endpoint], fingerprint: &str, web: bool, base_url: &str) -> String {
 	let mut s = String::new();
 	s.push_str("# Generated RPC client stubs (FULLSTACK Layer 2). Do not edit.\n");
 	if web {
@@ -104,7 +104,13 @@ pub fn generate_client(eps: &[Endpoint], fingerprint: &str, web: bool) -> String
 	s.push_str("use std.string\n");
 	s.push_str("use std.dict\n");
 	s.push_str("use std.request\n\n");
-	s.push_str("def base-url :: ref string = ref.new \"http://127.0.0.1:8080\"\n\n");
+	// The server origin stubs POST to, baked in at build time (`pluma build/dev
+	// --server-url`); empty means same-origin (`/rpc/...`, what `pluma dev` proxies).
+	// `set-base-url` can still override it at runtime (e.g. a test binding port 0).
+	s.push_str(&format!(
+		"def base-url :: ref string = ref.new \"{}\"\n\n",
+		base_url.replace('\\', "\\\\").replace('"', "\\\"")
+	));
 	s.push_str("# Points the stubs at a server origin (e.g. \"http://127.0.0.1:8080\").\n");
 	s.push_str("public def set-base-url :: fun string -> nothing = fun u {\n");
 	s.push_str("\tref.set base-url u\n}\n\n");
