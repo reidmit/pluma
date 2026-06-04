@@ -51,6 +51,10 @@ def view :: fun model -> html.html msg = fun state {
 }
 
 def main = fun {
-	rpc.set-base-url "http://127.0.0.1:8080"
+	# Same-origin: the stubs POST to `/rpc/<name>` on whatever host served the
+	# page. `pluma dev` proxies `/rpc/*` to the server subprocess; a production
+	# deploy puts both behind one reverse proxy (see notes/FULLSTACK.md). Set an
+	# absolute origin here instead if the server lives elsewhere (and give it CORS).
+	rpc.set-base-url ""
 	app.element init update view
 }

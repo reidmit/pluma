@@ -8,3 +8,4 @@
 dist
 node_modules
 .claude/settings.local.json
+/out

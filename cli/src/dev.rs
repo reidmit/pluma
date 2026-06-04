@@ -12,7 +12,7 @@
 // and a mtime-polling watcher. A full rebuild is ~tens of ms (the whole pipeline
 // runs in-process), so polling at a quarter-second is plenty responsive.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
@@ -60,6 +60,14 @@ pub(crate) fn dev_command(args: Vec<String>) {
 			std::process::exit(1);
 		}
 	};
+
+	// A fullstack directory (`server.pa` + `client.pa`) runs both halves: the server
+	// as a subprocess, the client served + live-reloaded, with `/rpc/*` proxied to
+	// the server (same origin, so no CORS).
+	if Compiler::is_fullstack_dir(&entry_path) {
+		dev_fullstack(entry_path, port);
+		return;
+	}
 
 	match target.as_str() {
 		"web" => dev_web(entry_path, port),
@@ -211,7 +219,12 @@ fn handle_conn(stream: TcpStream, served: Served, clients: Clients) {
 	}
 
 	let path = request_line.split_whitespace().nth(1).unwrap_or("/");
-	let mut stream = stream;
+	serve_static(path, stream, &served, &clients);
+}
+
+/// Serve the dev shell / loader / live wasm / SSE channel for `path`. Shared by the
+/// web and fullstack dev servers (the fullstack one handles `/rpc/*` first).
+fn serve_static(path: &str, mut stream: TcpStream, served: &Served, clients: &Clients) {
 	match path {
 		"/" | "/index.html" => respond(
 			&mut stream,
@@ -286,6 +299,219 @@ es.onerror = () => {};\n\
 </script>\n\
 </body>\n\
 </html>\n";
+
+// --------------------------------------------------------------------------
+// Fullstack mode: run the server subprocess + serve the client, proxying RPC.
+// --------------------------------------------------------------------------
+
+// The port the server subprocess binds (the example's `server.pa` uses 8080).
+const FULLSTACK_SERVER_PORT: u16 = 8080;
+
+fn dev_fullstack(entry_path: String, port: u16) {
+	let exe = match std::env::current_exe() {
+		Ok(p) => p,
+		Err(e) => {
+			print_error(format!("could not locate the pluma binary: {e}"));
+			std::process::exit(1);
+		}
+	};
+	// Both halves must compile before we serve anything.
+	let (server_bytes, client_bytes) = match build_fullstack_artifacts(&entry_path) {
+		Ok(pair) => pair,
+		Err(diags) => {
+			print_diagnostics(diags);
+			std::process::exit(1);
+		}
+	};
+
+	// The server runs as a `pluma run <server.wasm>` child, rebuilt + restarted on
+	// change. Keep the wasm in a temp file the child re-reads.
+	let server_path = std::env::temp_dir().join("pluma-dev-server.wasm");
+	if let Err(e) = std::fs::write(&server_path, &server_bytes) {
+		print_error(format!("writing {}: {e}", server_path.display()));
+		std::process::exit(1);
+	}
+	let mut child = spawn_run(&exe, &server_path.to_string_lossy());
+
+	let served: Served = Arc::new(Mutex::new(client_bytes));
+	let clients: Clients = Arc::new(Mutex::new(Vec::new()));
+
+	let listener = match TcpListener::bind(("127.0.0.1", port)) {
+		Ok(l) => l,
+		Err(e) => {
+			print_error(format!(
+				"could not bind 127.0.0.1:{port}: {e} (is another `pluma dev` running? try --port)"
+			));
+			std::process::exit(1);
+		}
+	};
+	{
+		let served = served.clone();
+		let clients = clients.clone();
+		thread::spawn(move || {
+			for stream in listener.incoming().flatten() {
+				let served = served.clone();
+				let clients = clients.clone();
+				thread::spawn(move || handle_conn_fs(stream, served, clients));
+			}
+		});
+	}
+
+	println!("pluma dev — fullstack {entry_path}");
+	println!("  http://localhost:{port}/  (client, live-reload on save)");
+	println!("  /rpc/* → 127.0.0.1:{FULLSTACK_SERVER_PORT}  (server subprocess)");
+	println!("  ctrl-c to stop");
+
+	let root = watch_root(&entry_path);
+	let mut last = scan(&root);
+	loop {
+		thread::sleep(POLL);
+		let now = scan(&root);
+		if now == last {
+			continue;
+		}
+		last = now;
+		match build_fullstack_artifacts(&entry_path) {
+			Ok((server_bytes, client_bytes)) => {
+				// Restart the server with the new artifact, swap the client, reload.
+				let _ = child.kill();
+				let _ = child.wait();
+				if let Err(e) = std::fs::write(&server_path, &server_bytes) {
+					print_error(format!("writing {}: {e}", server_path.display()));
+				}
+				child = spawn_run(&exe, &server_path.to_string_lossy());
+				*served.lock().unwrap() = client_bytes;
+				let n = broadcast_reload(&clients);
+				println!("[pluma dev] rebuilt both halves — reloaded {n} client(s)");
+			}
+			Err(diags) => {
+				print_diagnostics(diags);
+				eprintln!("[pluma dev] build failed — keeping previous version");
+			}
+		}
+	}
+}
+
+/// Compile a fullstack directory to its two artifacts (server wasm, client web
+/// bundle wasm), or return the analysis diagnostics. Post-analysis lower/codegen
+/// failures print and return empty diags (fatal, unrelated to source typos).
+fn build_fullstack_artifacts(entry_path: &str) -> Result<(Vec<u8>, Vec<u8>), Vec<Diagnostic>> {
+	let mut compiler = Compiler::from_fullstack_dir(entry_path.to_string())?;
+	compiler.check()?;
+	compiler.gate_fullstack()?;
+	let server = compiler.entry_modules[0].clone();
+	let client = compiler.entry_modules[1].clone();
+	let emit = |entry: &str, browser: bool| -> Result<Vec<u8>, Vec<Diagnostic>> {
+		let program = ir::lower_entry(&compiler, entry).map_err(|msg| {
+			print_error(format!("ir::lower: {msg}"));
+			Vec::new()
+		})?;
+		wasm::emit_with_options(
+			&program,
+			wasm::EmitOptions {
+				browser,
+				..Default::default()
+			},
+		)
+		.map_err(|diags| {
+			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
+			Vec::new()
+		})
+	};
+	let server_bytes = emit(&server, false)?;
+	let client_bytes = emit(&client, true)?;
+	Ok((server_bytes, client_bytes))
+}
+
+/// Like `handle_conn`, but proxies `/rpc/*` to the server subprocess (same origin,
+/// so the browser needs no CORS) and serves the client bundle for everything else.
+fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients) {
+	let clone = match stream.try_clone() {
+		Ok(s) => s,
+		Err(_) => return,
+	};
+	let mut reader = BufReader::new(clone);
+	let mut request_line = String::new();
+	if reader.read_line(&mut request_line).is_err() {
+		return;
+	}
+	// Collect the raw header lines (kept verbatim for the proxy) + the body length.
+	let mut headers: Vec<String> = Vec::new();
+	let mut content_length = 0usize;
+	loop {
+		let mut h = String::new();
+		match reader.read_line(&mut h) {
+			Ok(0) => break,
+			Ok(_) if h == "\r\n" || h == "\n" => break,
+			Ok(_) => {
+				if let Some(v) = h
+					.split_once(':')
+					.filter(|(k, _)| k.trim().eq_ignore_ascii_case("content-length"))
+				{
+					content_length = v.1.trim().parse().unwrap_or(0);
+				}
+				headers.push(h);
+			}
+			Err(_) => break,
+		}
+	}
+
+	let path = request_line
+		.split_whitespace()
+		.nth(1)
+		.unwrap_or("/")
+		.to_string();
+	let mut stream = stream;
+	if path.starts_with("/rpc/") {
+		let mut body = vec![0u8; content_length];
+		if content_length > 0 && reader.read_exact(&mut body).is_err() {
+			respond(&mut stream, "400 Bad Request", "text/plain", b"short body");
+			return;
+		}
+		proxy_rpc(&mut stream, &request_line, &headers, &body);
+		return;
+	}
+	serve_static(&path, stream, &served, &clients);
+}
+
+/// Forward one RPC request verbatim to the server subprocess and relay its response
+/// back. The server speaks `Connection: close`, so reading to EOF gets the whole
+/// reply. A down server surfaces as a 502 (the client stub turns it into a clean
+/// transport failure).
+fn proxy_rpc(downstream: &mut TcpStream, request_line: &str, headers: &[String], body: &[u8]) {
+	let mut up = match TcpStream::connect(("127.0.0.1", FULLSTACK_SERVER_PORT)) {
+		Ok(u) => u,
+		Err(_) => {
+			respond(
+				downstream,
+				"502 Bad Gateway",
+				"text/plain",
+				b"server not running",
+			);
+			return;
+		}
+	};
+	let mut req = Vec::new();
+	req.extend_from_slice(request_line.as_bytes());
+	for h in headers {
+		req.extend_from_slice(h.as_bytes());
+	}
+	req.extend_from_slice(b"\r\n");
+	req.extend_from_slice(body);
+	if up.write_all(&req).and_then(|_| up.flush()).is_err() {
+		respond(
+			downstream,
+			"502 Bad Gateway",
+			"text/plain",
+			b"server write failed",
+		);
+		return;
+	}
+	let mut resp = Vec::new();
+	let _ = up.read_to_end(&mut resp);
+	let _ = downstream.write_all(&resp);
+	let _ = downstream.flush();
+}
 
 // --------------------------------------------------------------------------
 // Server mode: restart a `pluma run` child on change.
