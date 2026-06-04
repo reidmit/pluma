@@ -1680,6 +1680,12 @@ impl<'a> FnEmitter<'a> {
 			self.push_nothing();
 			return;
 		};
+		// `std.web.fetch` (the browser HTTP transport): a string→string host call,
+		// marshalled and shaped like an io read but wrapped in a Pure `$task`.
+		if tag == "web-fetch" {
+			self.emit_web_fetch(idx, args);
+			return;
+		}
 		// Byte-payload writers (`print`/`io.write*`/`io.fail`): render the arg into the
 		// scratch memory and pass `(ptr=0, len)` to the `(i32,i32) -> ()` host import.
 		if is_byte_writer(tag) {
@@ -2709,6 +2715,51 @@ impl<'a> FnEmitter<'a> {
 			});
 			self.ins(Instruction::StructNew(types::T_TASK));
 		}
+	}
+
+	/// `web-fetch req` (the browser HTTP transport, `std.web.fetch`): marshal the
+	/// request string into scratch, call the io-read-shaped `(req_ptr, req_len, dst,
+	/// cap) -> len` host import (the host runs the exchange and writes the reply,
+	/// `len < 0` = failure, an overflow draining via `__io_copyout`), shape the reply
+	/// `$str` through `__io_result` (`ok reply` / `err (io-last-error())`), and wrap it
+	/// in a Pure `$task` to match the builtin's `task (result string string)` type.
+	fn emit_web_fetch(&mut self, idx: u32, args: &[Atom]) {
+		let (Some(alloc), Some(store)) = (
+			self.runtime.idx(Helper::MarshalAlloc),
+			self.runtime.idx(Helper::MarshalStore),
+		) else {
+			self
+				.diags
+				.push("`web-fetch` needs the marshalling helpers".to_string());
+			self.push_nothing();
+			return;
+		};
+		// Responses are typically small; start with a generous cap and let the io-read
+		// overflow drain handle anything bigger.
+		const CAP: i32 = 1 << 16;
+		self.reset_bump();
+		let (rp, rl) = self.marshal_strlike_arg(&args[0], alloc, store);
+		// Reuse the io read path: `(req_ptr, req_len, dst, cap) -> len`; it probes,
+		// drains overflow, builds the `$str`, and wraps it in `ok`/`err` via `__io_result`.
+		self.emit_io_read(
+			"web-fetch",
+			idx,
+			Some((rp, rl)),
+			IoKind::ReadFileStr,
+			CAP,
+			alloc,
+		);
+		// Wrap the `result` (on the stack) in `task.return result` — a Pure `$task`.
+		let r = self.fresh_local(types::value_ref());
+		self.ins(Instruction::LocalSet(r));
+		self.ins(Instruction::I32Const(types::TAG_TASK));
+		self.ins(Instruction::I32Const(task_kind::PURE));
+		self.ins(Instruction::LocalGet(r));
+		self.ins(Instruction::ArrayNewFixed {
+			array_type_index: types::T_VALARRAY,
+			array_size: 1,
+		});
+		self.ins(Instruction::StructNew(types::T_TASK));
 	}
 
 	/// Shape a net op's `(status, socket-id)` return (on the stack) into a `result`:

@@ -246,3 +246,88 @@ impl HostNet {
 		}
 	}
 }
+
+// --- std.web.fetch transport (the native/V8 host) ------------------------------
+//
+// In the browser the `web-fetch` host call is a synchronous `XMLHttpRequest`; for
+// the V8 host it's a blocking HTTP/1.1 exchange over `std::net` (the engine-side
+// counterpart, used by `tests/run` and `pluma run`). The wasm side marshals one
+// request string in and reads one reply string out (`emit_web_fetch`); this is the
+// engine-independent body the V8 callback (`v8host::net::cb_web_fetch`) wraps.
+
+/// Perform one blocking HTTP/1.1 request. `req` is `"<method>\t<url>\t<headers>\t
+/// <hex-body>"` (headers as `k:v;k:v`); the reply is `"<status>\t<hex-body>"`. Plain
+/// TCP only (no TLS), `Connection: close`. `Err` carries the message (stashed in
+/// `last_error`, surfaced to Pluma as `err` via `__io_result`).
+pub fn web_fetch(req: &str) -> Result<String, String> {
+	let mut it = req.splitn(4, '\t');
+	let method = it.next().unwrap_or("POST");
+	let url = it.next().ok_or("web-fetch: malformed request")?;
+	let headers = it.next().unwrap_or("");
+	let body = hex_decode(it.next().unwrap_or("")).ok_or("web-fetch: bad hex body")?;
+	let (authority, path) = split_url(url);
+
+	let mut stream = TcpStream::connect(&authority).map_err(|e| e.to_string())?;
+	let mut head = format!("{method} {path} HTTP/1.1\r\nHost: {authority}\r\n");
+	for h in headers.split(';').filter(|h| !h.is_empty()) {
+		if let Some(i) = h.find(':') {
+			head.push_str(&format!("{}: {}\r\n", &h[..i], &h[i + 1..]));
+		}
+	}
+	head.push_str(&format!("Content-Length: {}\r\n", body.len()));
+	head.push_str("Connection: close\r\n\r\n");
+	let mut wire = head.into_bytes();
+	wire.extend_from_slice(&body);
+	stream.write_all(&wire).map_err(|e| e.to_string())?;
+	stream.flush().map_err(|e| e.to_string())?;
+
+	// `Connection: close` → read to EOF, then split off the header block.
+	let mut resp = Vec::new();
+	stream.read_to_end(&mut resp).map_err(|e| e.to_string())?;
+	let (status, resp_body) = parse_http_response(&resp).ok_or("web-fetch: malformed response")?;
+	Ok(format!("{status}\t{}", hex_encode(&resp_body)))
+}
+
+/// Split `"http://host:port/a/b?x"` into `("host:port", "/a/b?x")` (the `http://`
+/// scheme prefix is stripped; a missing path defaults to `/`).
+fn split_url(url: &str) -> (String, String) {
+	let rest = url.strip_prefix("http://").unwrap_or(url);
+	match rest.find('/') {
+		Some(i) => (rest[..i].to_string(), rest[i..].to_string()),
+		None => (rest.to_string(), "/".to_string()),
+	}
+}
+
+/// Parse `(status, body)` out of a raw HTTP/1.1 response: the status code from the
+/// first line, the body as everything after the blank `\r\n\r\n` separator.
+fn parse_http_response(resp: &[u8]) -> Option<(u16, Vec<u8>)> {
+	let sep = resp.windows(4).position(|w| w == b"\r\n\r\n")?;
+	let head = &resp[..sep];
+	let body = resp[sep + 4..].to_vec();
+	let first = head.split(|&b| b == b'\r').next().unwrap_or(head);
+	let status = std::str::from_utf8(first)
+		.ok()?
+		.split(' ')
+		.nth(1)?
+		.parse()
+		.ok()?;
+	Some((status, body))
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+	let mut s = String::with_capacity(bytes.len() * 2);
+	for b in bytes {
+		s.push_str(&format!("{b:02x}"));
+	}
+	s
+}
+
+fn hex_decode(s: &str) -> Option<Vec<u8>> {
+	if s.len() % 2 != 0 {
+		return None;
+	}
+	(0..s.len())
+		.step_by(2)
+		.map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
+		.collect()
+}

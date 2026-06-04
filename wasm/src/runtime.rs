@@ -1028,6 +1028,13 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: true,
 		}),
+		// `std.web.fetch` (the Web target HTTP transport): one request string in, the
+		// reply marshalled back. Shaped at the emit site (`emit_web_fetch`) like an io
+		// read; this entry only drives the "is this a host builtin?" classification.
+		"web-fetch" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
 		_ => None,
 	}
 }

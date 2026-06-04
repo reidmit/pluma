@@ -37,6 +37,8 @@ const dec = new TextDecoder();
 const enc = new TextEncoder();
 let memory;   // the module's exported WebAssembly.Memory
 let exports;  // the instance's exports (for the event-dispatch callback)
+let lastError = "";              // errno-style channel for io-last-error
+let readStash = new Uint8Array(0); // overflow buffer drained by io-copyout
 
 // Re-read the backing buffer on every access — a memory.grow swaps it out.
 const u8 = () => new Uint8Array(memory.buffer);
@@ -47,6 +49,23 @@ const writeStr = (dst, cap, s) => {
   const n = Math.min(b.length, cap < 0 ? 0 : cap);
   u8().set(b.subarray(0, n), dst);
   return b.length;
+};
+// Deliver raw bytes into the caller's `(dst, cap)` buffer, stashing the overflow for
+// `io-copyout` (the marshalling-ABI probe-read shape) — returns the true length.
+const deliverBytes = (dst, cap, b) => {
+  if (b.length <= (cap < 0 ? 0 : cap)) u8().set(b, dst);
+  else readStash = b;
+  return b.length;
+};
+const hexEncode = (b) => {
+  let s = "";
+  for (let i = 0; i < b.length; i++) s += (b[i] & 0xff).toString(16).padStart(2, "0");
+  return s;
+};
+const hexDecode = (s) => {
+  const b = new Uint8Array(s.length >> 1);
+  for (let i = 0; i < b.length; i++) b[i] = parseInt(s.substr(i * 2, 2), 16);
+  return b;
 };
 
 // `__tostring` delegates float formatting here: integers render as `N.0`, the
@@ -95,6 +114,34 @@ const pluma = {
     let v = "";
     try { v = localStorage.getItem(readStr(kp, kl)) || ""; } catch (e) {}
     return writeStr(dst, cap, v);
+  },
+  // std.sys.io error/overflow channels, shared by std.web.fetch's marshalled read.
+  "io-last-error": (dst, cap) => writeStr(dst, cap, lastError),
+  "io-copyout": (dst) => { u8().set(readStash, dst); readStash = new Uint8Array(0); },
+  // std.web.fetch — the browser HTTP transport (the web arm of FULLSTACK Layer 2).
+  // The request is "POST\t<url>\t<headers>\t<hex-body>"; the reply written back is
+  // "<status>\t<hex-body>". Uses a *synchronous* XHR — an async fetch returns a
+  // Promise the blocking wasm call can't consume. Binary bodies ride as hex; the
+  // `x-user-defined` charset keeps each response byte intact.
+  "web-fetch": (rp, rl, dst, cap) => {
+    const parts = readStr(rp, rl).split("\t");
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open(parts[0] || "POST", parts[1] || "", false);
+      xhr.overrideMimeType("text/plain; charset=x-user-defined");
+      for (const h of (parts[2] || "").split(";")) {
+        const i = h.indexOf(":");
+        if (i > 0) xhr.setRequestHeader(h.slice(0, i), h.slice(i + 1));
+      }
+      xhr.send(hexDecode(parts[3] || ""));
+      const raw = xhr.responseText;
+      let hex = "";
+      for (let i = 0; i < raw.length; i++) hex += (raw.charCodeAt(i) & 0xff).toString(16).padStart(2, "0");
+      return deliverBytes(dst, cap, enc.encode(xhr.status + "\t" + hex));
+    } catch (e) {
+      lastError = String(e);
+      return -1;
+    }
   },
 };
 

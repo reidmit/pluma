@@ -40,6 +40,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std.web.app", include_str!("../../std/web/app.pa")),
 		("std.web.dom", include_str!("../../std/web/dom.pa")),
 		("std.web.events", include_str!("../../std/web/events.pa")),
+		("std.web.fetch", include_str!("../../std/web/fetch.pa")),
 		("std.web.html", include_str!("../../std/web/html.pa")),
 	]
 }

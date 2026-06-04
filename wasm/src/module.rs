@@ -224,6 +224,24 @@ impl Module {
 						_ => {}
 					}
 				}
+				// `std.web.fetch`: the browser HTTP transport. Marshalled like an io read
+				// (`(req_ptr, req_len, dst, cap) -> len`, overflow drained via `io-copyout`)
+				// and shaped through `__io_result`; its own host import is registered by the
+				// generic path just below.
+				if tag == "web-fetch" {
+					requested.insert(Helper::MarshalAlloc);
+					requested.insert(Helper::MarshalStore);
+					requested.insert(Helper::MarshalLoad);
+					requested.insert(Helper::IoResult);
+					if !host_index.contains_key("io-last-error") {
+						host_index.insert("io-last-error".to_string(), host_order.len() as u32);
+						host_order.push("io-last-error".to_string());
+					}
+					if !host_index.contains_key("io-copyout") {
+						host_index.insert("io-copyout".to_string(), host_order.len() as u32);
+						host_order.push("io-copyout".to_string());
+					}
+				}
 				if !host_index.contains_key(tag) {
 					if host_sig(tag).is_none() {
 						diags.push(format!("unsupported host builtin `{tag}`"));
@@ -838,6 +856,9 @@ impl Module {
 				ftypes.for_io_copyout()
 			} else if tag == "io-last-error" {
 				ftypes.for_io2()
+			} else if tag == "web-fetch" {
+				// `(req_ptr, req_len, dst, cap) -> len` — the same shape as a path io read.
+				ftypes.for_io4()
 			} else if is_io_host(tag) {
 				if io_uses_io4(tag) {
 					ftypes.for_io4()

@@ -228,6 +228,8 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "net-write", cb_net_write);
 	register(scope, pluma, data, "net-poll", cb_net_poll);
 	register(scope, pluma, data, "net-unwatch", cb_net_unwatch);
+	// std.web.fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
+	register(scope, pluma, data, "web-fetch", cb_web_fetch);
 	let imports = v8::Object::new(scope);
 	let pluma_key = v8::String::new(scope, "pluma").unwrap();
 	imports.set(scope, pluma_key.into(), pluma.into());

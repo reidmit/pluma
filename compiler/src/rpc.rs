@@ -88,11 +88,17 @@ fn endpoint_arity(ann: &TypeExprNode) -> Option<usize> {
 }
 
 // The `rpc-client` module source: a settable base URL plus one stub per
-// endpoint.
-pub fn generate_client(eps: &[Endpoint], fingerprint: &str) -> String {
+// endpoint. The transport is the target's arm of the Phase 3 seam — `http.fetch`
+// over `std.sys.net` on a sys/native build, the host page's `fetch.post` (the
+// browser's `fetch`) on a web build.
+pub fn generate_client(eps: &[Endpoint], fingerprint: &str, web: bool) -> String {
 	let mut s = String::new();
 	s.push_str("# Generated RPC client stubs (FULLSTACK Layer 2). Do not edit.\n");
-	s.push_str("use std.sys.http\n");
+	if web {
+		s.push_str("use std.web.fetch\n");
+	} else {
+		s.push_str("use std.sys.http\n");
+	}
 	s.push_str("use std.task\n");
 	s.push_str("use std.ref\n");
 	s.push_str("use std.string\n");
@@ -132,10 +138,20 @@ pub fn generate_client(eps: &[Endpoint], fingerprint: &str) -> String {
 			"\tlet headers = dict.from-entries [(\"x-rpc-fingerprint\", \"{}\")]\n",
 			fingerprint
 		));
-		s.push_str(&format!(
-			"\ttry resp = http.fetch (ref.get base-url ++ \"/rpc/{}\") post headers {}\n",
-			route, body
-		));
+		// The transport call — same `task (result response string)` shape on both
+		// targets, so the response handling below is identical.
+		let fetch_call = if web {
+			format!(
+				"fetch.post (ref.get base-url ++ \"/rpc/{}\") headers {}",
+				route, body
+			)
+		} else {
+			format!(
+				"http.fetch (ref.get base-url ++ \"/rpc/{}\") post headers {}",
+				route, body
+			)
+		};
+		s.push_str(&format!("\ttry resp = {}\n", fetch_call));
 		s.push_str("\twhen resp is ok r {\n");
 		s.push_str("\t\tif r.status == 409 {\n");
 		s.push_str("\t\t\ttask.fail \"rpc: client out of date — reload\"\n");

@@ -280,7 +280,10 @@ impl Compiler {
 		// modules — a client and server built together agree; a drifted client
 		// is rejected with a clean transport error (version-skew protection).
 		let fingerprint = crate::rpc::surface_fingerprint(&endpoints);
-		let client = crate::rpc::generate_client(&endpoints, &fingerprint);
+		// The client stub's transport follows the build target: the browser's
+		// `fetch` on web, `http.fetch` over `std.sys.net` otherwise.
+		let web = self.target == Some(crate::platform::Target::Web);
+		let client = crate::rpc::generate_client(&endpoints, &fingerprint, web);
 		let server = crate::rpc::generate_server(&endpoints, &fingerprint);
 		self.set_module_source(crate::rpc::CLIENT_MODULE.to_string(), client.into_bytes());
 		self.set_module_source(crate::rpc::SERVER_MODULE.to_string(), server.into_bytes());

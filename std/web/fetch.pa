@@ -1,0 +1,77 @@
+# std.web.fetch -- the browser's HTTP transport for RPC client stubs.
+#
+# In the browser there are no raw TCP sockets, so a remote call can't ride
+# `std.sys.net`/`std.sys.http` the way the server and native clients do.
+# Instead it goes through the host page's `fetch` -- a single request the
+# host performs on the program's behalf, blocking from wasm's point of view
+# (a synchronous `XMLHttpRequest`). `post` hands the host one request
+# string and gets one response string back.
+#
+# This module only exists in a browser build (the `web-fetch` built-in is
+# gated to the web target, like `std.web.dom`). It is the web arm of the
+# FULLSTACK Layer 2 transport seam; the sys arm is `http.fetch`. The result
+# shape matches `http.fetch`'s so a generated RPC stub reads `.status` and
+# `.body` the same way on both targets.
+
+use std.task
+use std.string
+use std.list
+use std.dict
+use std.hex
+
+# A reply from the server: the HTTP status code and the raw response body.
+# (Same structural shape as `http.response`; headers aren't surfaced -- an
+# RPC stub only needs the status and body.)
+public alias response {status :: int, headers :: dict string string, body :: bytes}
+
+# The host transport. The request marshals to a single tab-separated string
+# `"POST\t<url>\t<headers>\t<hex-body>"` (headers as `k:v;k:v`); the host
+# runs the exchange and replies with `"<status>\t<hex-body>"`. A transport
+# error comes back as `err` (the message is the host's). Built-in: a browser
+# build provides it; a server build does not (this module is web-gated).
+def web-fetch :: fun string -> task (result string string) = built-in "web-fetch"
+
+# POSTs `body` to `url` with `headers`, returning the server's response. The
+# web counterpart of `http.fetch ... post ...`.
+#
+#     try resp = fetch.post "http://host/rpc/x" headers body
+public def post :: fun string (dict string string) bytes -> task (result response string) = fun url headers body {
+	let req = string.join ["POST", url, render-headers headers, hex.encode body] "\t"
+	try resp = web-fetch req
+	when resp is ok s {
+		task.return (parse-response s)
+	} is err e {
+		task.return (err e)
+	}
+}
+
+# Render headers as `k:v;k:v` for the host to attach to the request.
+def render-headers :: fun (dict string string) -> string = fun headers {
+	string.join (list.map (dict.entries headers) render-pair) ";"
+}
+
+def render-pair :: fun (string, string) -> string = fun pair {
+	let (k, v) = pair
+	k ++ ":" ++ v
+}
+
+# Parse the host reply `"<status>\t<hex-body>"` into a `response`.
+def parse-response :: fun string -> result response string = fun s {
+	let parts = string.split s "\t"
+	let status = string.to-int (list.head parts ?? "0") ?? 0
+	let hex-body = nth parts 1 ""
+	when hex.decode hex-body is ok body {
+		ok {status, headers: dict.empty (), body}
+	} is err e {
+		err e
+	}
+}
+
+# The list element at `i`, or `fallback` if `i` is past the end.
+def nth :: fun (list string) int string -> string = fun xs i fallback {
+	if i < list.length xs {
+		list.get xs i
+	} else {
+		fallback
+	}
+}

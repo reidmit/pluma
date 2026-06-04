@@ -4,7 +4,7 @@
 // import result).
 
 use super::Ctx;
-use super::marshal::{argi, ctx_and_mem, read_mem, read_str, write_mem};
+use super::marshal::{argi, ctx_and_mem, deliver_read_v8, read_mem, read_str, write_mem};
 use crate::net::NetRet;
 
 /// Set a multi-result return as a `[a, b]` JS array.
@@ -179,4 +179,31 @@ pub(super) fn cb_net_unwatch(
 	let fid = argi(scope, &args, 0);
 	let (ctx, _mem) = ctx_and_mem(scope, &args);
 	ctx.state.net.unwatch(fid);
+}
+
+/// `web-fetch(req_ptr, req_len, dst, cap) -> i32 len` — the `std.web.fetch` transport
+/// (the browser's sync `fetch`, here a blocking HTTP/1.1 exchange over `std::net`).
+/// Reads the request string, runs the exchange (`crate::net::web_fetch`), and delivers
+/// the reply into the caller's `(dst, cap)` buffer (overflow → `read_stash` for
+/// `io-copyout`), returning the true length; on failure stashes the message in
+/// `last_error` and returns -1, which the wasm side shapes into `err` via `__io_result`.
+pub(super) fn cb_web_fetch(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (rp, rl) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (dst, cap) = (argi(scope, &args, 2), argi(scope, &args, 3));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let req = read_str(scope, mem, rp, rl);
+	match crate::net::web_fetch(&req) {
+		Ok(reply) => {
+			let n = deliver_read_v8(scope, mem, ctx, dst, cap, reply.into_bytes());
+			rv.set_int32(n);
+		}
+		Err(e) => {
+			ctx.state.last_error = e;
+			rv.set_int32(-1);
+		}
+	}
 }
