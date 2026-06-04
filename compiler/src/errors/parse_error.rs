@@ -188,6 +188,30 @@ impl Reportable for ParseError {
 				"write the tag as a plain literal, e.g. `built-in \"io.print\"`."
 			}
 			InvalidExpressionAfterDot => "use `.field` for a record field or `.0` for a tuple element.",
+
+			// The generic `expected }` / `expected {` recoveries are where the
+			// common record-vs-block mix-ups surface. The offending token tells
+			// us which mistake it almost certainly was, so we can hand back a
+			// targeted hint without inventing dedicated error kinds.
+			UnexpectedToken {
+				expected: Token::RightBrace(..),
+				actual: Token::Equal(..),
+			} => "record fields are separated with `:`, not `=` (e.g. `{ name: value }`).",
+			UnexpectedToken {
+				expected: Token::RightBrace(..),
+				actual: Token::KeywordLet(..) | Token::KeywordDef(..),
+			} => {
+				"`{ ... }` is a record literal; for a block of statements, write the body as `fun { ... }`."
+			}
+			UnexpectedToken {
+				expected: Token::RightBrace(..),
+				actual: Token::Identifier(..) | Token::Colon(..),
+			} => "record fields are separated with commas (e.g. `{ a: 1, b: 2 }`).",
+			UnexpectedToken {
+				expected: Token::LeftBrace(..),
+				actual: Token::Equal(..),
+			} => "function literals use a brace body and no arrow: `fun x { x + 1 }`.",
+
 			_ => return None,
 		};
 		Some(help.to_string())

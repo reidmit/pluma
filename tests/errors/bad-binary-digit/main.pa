@@ -1,0 +1,2 @@
+# A binary literal with a digit outside 0/1.
+def main = 0b12

@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0006]: Invalid hex digits.
+  ╭─▸ tests/errors/bad-hex-digit/main.pa:2:14
+  │
+2 │ def main = 0xZZ
+  │              ^^
+  │
+  ╰─ help: hex literals use `0`–`9` and `a`–`f` (e.g. `0x2a`).

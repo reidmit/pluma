@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0118]: Overlapping instance: another instance of trait `greet` for head `int` is already declared.
+  ╭─▸ tests/errors/overlapping-instance/main.pa:4:1
+  │
+4 │ implement greet int { def hello = fun x { to-string x } }
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─

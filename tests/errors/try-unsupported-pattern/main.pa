@@ -1,0 +1,7 @@
+# `try` only allows an identifier or `_` on the left-hand side.
+def f :: fun (option (int, int)) -> (option int) = fun o {
+	try (a, b) = o
+	some a
+}
+
+def main = print "x"

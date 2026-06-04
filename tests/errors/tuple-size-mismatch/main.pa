@@ -1,0 +1,5 @@
+# Destructuring a 3-tuple into a 2-element pattern.
+def main = fun {
+	let (a, b) = (1, 2, 3)
+	print (to-string (a + b))
+}

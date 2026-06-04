@@ -1,0 +1,4 @@
+# A trait method dispatched on a value whose type stays unbound.
+trait showable a { show :: fun a -> string }
+
+def main = print (show none)

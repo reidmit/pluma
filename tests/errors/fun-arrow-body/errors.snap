@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0026]: Unexpected token (a '='). Expected a '{'.
+  ╭─▸ tests/errors/fun-arrow-body/main.pa:2:15
+  │
+2 │ def f = fun x => x + 1
+  │               ^
+  │
+  ╰─ help: function literals use a brace body and no arrow: `fun x { x + 1 }`.

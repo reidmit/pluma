@@ -440,6 +440,27 @@ impl Reportable for AnalysisError {
 	fn notes(&self) -> Vec<String> {
 		use AnalysisErrorKind::*;
 		match &self.kind {
+			// Too-few arguments is what partial application looks like to
+			// someone coming from a curried language — say so plainly.
+			ParamCountMismatch { expected, found } if found < expected => vec![
+				"Pluma calls are uncurried, so this isn't partial application; pass every argument, or wrap it: `fun y { f x y }`."
+					.to_string(),
+			],
+
+			// `int` and `float` never mix implicitly; point at the explicit
+			// conversions rather than leaving a bare type mismatch.
+			TypeMismatch { expected, found }
+				if matches!(
+					(expected, found),
+					(Type::Int, Type::Float) | (Type::Float, Type::Int)
+				) =>
+			{
+				vec![
+					"Pluma never promotes between `int` and `float` automatically; convert explicitly with `math.to-float` or `math.to-int`."
+						.to_string(),
+				]
+			}
+
 			RecordFieldNotPresent { ty, .. } => match record_fields(ty) {
 				Some(fields) if !fields.is_empty() => {
 					vec![format!("available fields: {}", join_names(&fields))]

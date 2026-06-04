@@ -1,0 +1,2 @@
+# A \x escape in a bytes literal without two hex digits.
+def main = '\xZZ'

@@ -1,0 +1,8 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0025]: Unexpected end of file. Expected a '}'.
+  ╭─▸ tests/errors/unexpected-eof/main.pa:3:1
+  │
+  ╰─

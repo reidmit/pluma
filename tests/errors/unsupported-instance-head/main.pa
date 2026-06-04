@@ -1,0 +1,5 @@
+# An instance head that is not a concrete type or constructor.
+trait greet a { hello :: fun a -> string }
+implement greet (int, int) { def hello = fun x { "a" } }
+
+def main = print "x"

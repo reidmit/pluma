@@ -617,7 +617,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 										}
 
 										self.errors.push(ParseError {
-											range: Range::within_line(self.line, error_start, self.index),
+											range: self.span_to_single_line_range(error_start, self.index),
 											kind: InvalidBinaryDigit,
 										});
 

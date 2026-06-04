@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0005]: Invalid digits.
+  ╭─▸ tests/errors/bad-decimal-digit/main.pa:2:14
+  │
+2 │ def main = 12a3
+  │              ^^
+  │
+  ╰─ help: decimal literals use digits `0`–`9` (e.g. `47`).

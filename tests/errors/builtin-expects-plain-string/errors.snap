@@ -1,11 +1,11 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
-error[E0026]: Unexpected token (an identifier). Expected a string.
-  ╭─▸ tests/errors/builtin-expects-plain-string/main.pa:1:46
+error[E0021]: `built-in` requires a plain string literal naming the builtin tag.
+  ╭─▸ tests/errors/builtin-expects-plain-string/main.pa:2:37
   │
-1 │ def length :: fun (list a) -> int = built-in length
-  │                                              ^^^^^^
-  ╰─
+2 │ def f :: fun int -> int = built-in "io-$(n)"
+  │                                     ^^^^^^^
+  │
+  ╰─ help: write the tag as a plain literal, e.g. `built-in "io.print"`.

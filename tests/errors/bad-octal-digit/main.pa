@@ -1,0 +1,2 @@
+# An octal literal with a digit outside 0-7.
+def main = 0o89

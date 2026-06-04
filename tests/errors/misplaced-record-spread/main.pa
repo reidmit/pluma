@@ -1,0 +1,2 @@
+# A record update's `...spread` must come first; here it is last.
+def main = { a: 1, ...base }

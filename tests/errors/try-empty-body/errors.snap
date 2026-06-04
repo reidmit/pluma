@@ -1,0 +1,18 @@
+---
+source: tests/errors.rs
+expression: output
+---
+warning[E0101]: Name `x` is never used.
+  ╭─▸ tests/errors/try-empty-body/main.pa:3:6
+  │
+3 │  try x = o
+  │      ^
+  ╰─
+
+error[E0124]: `try` needs a continuation.
+  ╭─▸ tests/errors/try-empty-body/main.pa:3:2
+  │
+3 │  try x = o
+  │  ^^^^^^^^^
+  │
+  ╰─ help: at least one expression must follow it in the surrounding block.

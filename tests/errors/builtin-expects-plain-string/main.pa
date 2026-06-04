@@ -1,1 +1,2 @@
-def length :: fun (list a) -> int = built-in length
+# `built-in` needs a plain string literal tag, not an interpolated one.
+def f :: fun int -> int = built-in "io-$(n)"

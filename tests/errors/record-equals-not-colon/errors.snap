@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0026]: Unexpected token (a '='). Expected a '}'.
+  ╭─▸ tests/errors/record-equals-not-colon/main.pa:2:16
+  │
+2 │ def main = { a = 1 }
+  │                ^
+  │
+  ╰─ help: record fields are separated with `:`, not `=` (e.g. `{ name: value }`).

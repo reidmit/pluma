@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0129]: `built-in` may only appear as the immediate right-hand side of a top-level `def`.
+  ╭─▸ tests/errors/builtin-not-top-level/main.pa:3:10
+  │
+3 │  let x = built-in "io.print"
+  │          ^^^^^^^^^^^^^^^^^^^
+  ╰─

@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0117]: Can't resolve trait `showable` dispatch on type `option 'a`: the type contains unbound type variables.
+  ╭─▸ tests/errors/ambiguous-trait-method/main.pa:4:19
+  │
+4 │ def main = print (show none)
+  │                   ^^^^
+  │
+  ╰─ help: add a type annotation to disambiguate.

@@ -1,0 +1,2 @@
+# A block of statements needs `fun`; a bare `{` opens a record literal.
+def main = { let x = 5  x }

@@ -1,0 +1,6 @@
+# `??` on a left-hand side whose carrier type is never pinned.
+def f = fun x {
+	x ?? 0
+}
+
+def main = print "x"

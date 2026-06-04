@@ -1,0 +1,18 @@
+---
+source: tests/errors.rs
+expression: output
+---
+warning[E0101]: Name `b` is never used.
+  ╭─▸ tests/errors/try-unsupported-pattern/main.pa:3:10
+  │
+3 │  try (a, b) = o
+  │          ^
+  ╰─
+
+error[E0125]: `try` only supports an identifier or `_` pattern on the left-hand side.
+  ╭─▸ tests/errors/try-unsupported-pattern/main.pa:3:2
+  │
+3 │  try (a, b) = o
+  │  ^^^^^^^^^^^^^^
+  │
+  ╰─ help: bind to a name, then destructure with `let` on the next line.

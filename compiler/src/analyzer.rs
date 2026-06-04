@@ -2464,7 +2464,8 @@ impl<'compiler> Analyzer<'compiler> {
 							}
 						}
 						None => {
-							let enums = matches.iter().map(|(q, _)| q.clone()).collect();
+							let mut enums: Vec<String> = matches.iter().map(|(q, _)| q.clone()).collect();
+							enums.sort();
 							self.error(
 								ident.range,
 								AmbiguousVariant {
@@ -2506,7 +2507,10 @@ impl<'compiler> Analyzer<'compiler> {
 							return;
 						}
 						None => {
-							let traits = method_matches.iter().map(|(t, ..)| t.clone()).collect();
+							// `self.traits` is a HashMap, so sort for a stable message.
+							let mut traits: Vec<String> =
+								method_matches.iter().map(|(t, ..)| t.clone()).collect();
+							traits.sort();
 							self.error(
 								ident.range,
 								AmbiguousBareMethod {

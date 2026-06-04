@@ -1,6 +1,5 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0104]: Parameter count mismatch: expected 2, but found 1.
@@ -8,4 +7,5 @@ error[E0104]: Parameter count mismatch: expected 2, but found 1.
   │
 5 │ def main = add 1
   │            ^^^
-  ╰─
+  │
+  ╰─ note: Pluma calls are uncurried, so this isn't partial application; pass every argument, or wrap it: `fun y { f x y }`.

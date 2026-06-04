@@ -1,0 +1,6 @@
+# A trait `def` default for a method with no `name :: type` signature.
+trait greet a {
+	def hello = fun x { "hi" }
+}
+
+def main = print "x"

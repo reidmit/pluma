@@ -1,0 +1,2 @@
+# Indexing past the end of a 2-tuple.
+def main = (1, 2).5

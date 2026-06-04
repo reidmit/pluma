@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0116]: Instance for trait `greet` is missing method `bye`.
+  ╭─▸ tests/errors/incomplete-instance/main.pa:6:1
+  │
+6 │ implement greet int {
+  │ ^^^^^^^^^^^^^^^^^^^^^
+  ╰─

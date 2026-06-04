@@ -1,0 +1,3 @@
+# `opaque` may only modify a top-level `enum`.
+opaque def x = 1
+def main = print "x"

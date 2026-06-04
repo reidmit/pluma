@@ -1,0 +1,5 @@
+# The same field bound twice in one record pattern.
+def main = fun {
+	let { a, a } = { a: 1 }
+	print (to-string a)
+}

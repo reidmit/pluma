@@ -170,6 +170,22 @@ impl<'a> Parser<'a> {
 		errors.extend(self.tokenizer.errors.iter().cloned());
 		errors.sort_by_key(|e| (e.range.start.line, e.range.start.col));
 
+		// Drop duplicate diagnostics. When an inner parser fails on an
+		// unexpected token without consuming it, an enclosing `expect`
+		// (e.g. a `fun` body's closing `}`) re-reports the identical error at
+		// the same span. Collapse anything with the same span and message so
+		// the cascade reads as a single problem.
+		let mut seen = std::collections::HashSet::new();
+		errors.retain(|e| {
+			seen.insert((
+				e.range.start.line,
+				e.range.start.col,
+				e.range.end.line,
+				e.range.end.col,
+				format!("{}", e),
+			))
+		});
+
 		(
 			ModuleNode {
 				range: Range::between(start, end),

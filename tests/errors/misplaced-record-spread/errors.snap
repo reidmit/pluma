@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0024]: A record update allows a single `...spread`, and it must come first (`{ ...base, field: value }`).
+  ╭─▸ tests/errors/misplaced-record-spread/main.pa:2:20
+  │
+2 │ def main = { a: 1, ...base }
+  │                    ^^^
+  ╰─

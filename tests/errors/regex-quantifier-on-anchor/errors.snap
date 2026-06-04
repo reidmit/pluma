@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0009]: A quantifier cannot be applied to an anchor (`^`, `$`, or `%`).
+  ╭─▸ tests/errors/regex-quantifier-on-anchor/main.pa:2:14
+  │
+2 │ def main = `^*`
+  │              ^
+  ╰─

@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0016]: Overflowing duration literal.
+  ╭─▸ tests/errors/overflowing-duration/main.pa:2:12
+  │
+2 │ def main = 99999999999999999999d
+  │            ^^^^^^^^^^^^^^^^^^^^^
+  │
+  ╰─ help: durations are stored as nanoseconds in a signed 64-bit integer.

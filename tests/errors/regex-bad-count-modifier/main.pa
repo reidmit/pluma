@@ -1,0 +1,2 @@
+# A `{min,max}` repetition with max < min.
+def main = `a{2,1}`

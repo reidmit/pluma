@@ -1,0 +1,2 @@
+# An empty `()` group inside a regular expression.
+def main = `a()b`

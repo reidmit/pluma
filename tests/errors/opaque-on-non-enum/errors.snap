@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0028]: `opaque` can only modify a top-level `enum`.
+  ╭─▸ tests/errors/opaque-on-non-enum/main.pa:2:1
+  │
+2 │ opaque def x = 1
+  │ ^^^^^^
+  ╰─

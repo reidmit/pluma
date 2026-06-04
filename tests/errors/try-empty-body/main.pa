@@ -1,0 +1,6 @@
+# `try` with no continuation after it.
+def f :: fun (option int) -> int = fun o {
+	try x = o
+}
+
+def main = print "x"

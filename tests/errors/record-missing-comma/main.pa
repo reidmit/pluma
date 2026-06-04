@@ -1,0 +1,2 @@
+# Record fields are separated with commas.
+def main = { a: 1 b: 2 }

@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0020]: Invalid \x escape in bytes literal: expected two hex digits.
+  ╭─▸ tests/errors/bytes-invalid-hex-escape/main.pa:2:13
+  │
+2 │ def main = '\xZZ'
+  │             ^^^^
+  ╰─

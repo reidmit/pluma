@@ -1,6 +1,5 @@
 ---
 source: tests/errors.rs
-assertion_line: 50
 expression: output
 ---
 error[E0102]: Type mismatch: expected `int`, but found `float`.
@@ -8,4 +7,5 @@ error[E0102]: Type mismatch: expected `int`, but found `float`.
   │
 1 │ def main = 2 + 3.5
   │                ^^^
-  ╰─
+  │
+  ╰─ note: Pluma never promotes between `int` and `float` automatically; convert explicitly with `math.to-float` or `math.to-int`.

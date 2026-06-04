@@ -1,0 +1,2 @@
+# A quantifier applied to the start-anchor `^`.
+def main = `^*`

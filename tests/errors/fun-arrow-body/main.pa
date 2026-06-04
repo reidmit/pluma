@@ -1,0 +1,3 @@
+# Function literals use a brace body, not an arrow.
+def f = fun x => x + 1
+def main = print "x"

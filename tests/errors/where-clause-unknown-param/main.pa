@@ -1,0 +1,5 @@
+# A `where` constraint names a type variable absent from the signature.
+trait greet a { hello :: fun a -> string }
+def f :: fun int -> int where (greet b) = fun x { x }
+
+def main = print "x"

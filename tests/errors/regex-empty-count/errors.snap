@@ -1,0 +1,17 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0001]: Empty regular expression.
+  ╭─▸ tests/errors/regex-empty-count/main.pa:2:12
+  │
+2 │ def main = `a{}`
+  │            ^^^^^
+  ╰─
+
+error[E0003]: Empty repetition count in regular expression.
+  ╭─▸ tests/errors/regex-empty-count/main.pa:2:13
+  │
+2 │ def main = `a{}`
+  │             ^^^
+  ╰─

@@ -1,0 +1,2 @@
+# An unrecognized escape sequence in a bytes literal.
+def main = '\q'

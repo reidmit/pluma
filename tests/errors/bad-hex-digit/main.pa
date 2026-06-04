@@ -1,0 +1,2 @@
+# A hex literal with a non-hex digit.
+def main = 0xZZ

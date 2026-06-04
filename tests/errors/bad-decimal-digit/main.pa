@@ -1,0 +1,2 @@
+# A decimal literal with a non-decimal digit.
+def main = 12a3

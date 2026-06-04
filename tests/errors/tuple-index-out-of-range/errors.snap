@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0106]: Element 5 does not exist in tuple of type `(int, int)`.
+  ╭─▸ tests/errors/tuple-index-out-of-range/main.pa:2:12
+  │
+2 │ def main = (1, 2).5
+  │            ^^^^^^^^
+  ╰─

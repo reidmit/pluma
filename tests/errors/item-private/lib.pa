@@ -1,0 +1,7 @@
+public def public-fn = fun x {
+	x
+}
+
+def private-fn = fun x {
+	x
+}

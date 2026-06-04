@@ -1,0 +1,5 @@
+# `built-in` may only be a top-level def`s right-hand side.
+def main = fun {
+	let x = built-in "io.print"
+	x
+}

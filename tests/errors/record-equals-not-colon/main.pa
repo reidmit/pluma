@@ -1,0 +1,2 @@
+# Record fields use `:`, not `=`.
+def main = { a = 1 }

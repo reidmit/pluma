@@ -1,0 +1,2 @@
+# A function body opened with `{` and never closed.
+def main = fun {

@@ -1,0 +1,3 @@
+# A function type with `->` but no return type after it.
+def f :: fun int -> = 1
+def main = print "x"

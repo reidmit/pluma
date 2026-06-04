@@ -1,0 +1,17 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0111]: Method `hello` is ambiguous: qualify it as `greet.hello` or `salute.hello`.
+  ╭─▸ tests/errors/ambiguous-bare-method/main.pa:5:19
+  │
+5 │ def main = print (hello 5)
+  │                   ^^^^^
+  ╰─
+
+error[E0102]: Type mismatch: expected `int -> 'a`, but found `?`.
+  ╭─▸ tests/errors/ambiguous-bare-method/main.pa:5:19
+  │
+5 │ def main = print (hello 5)
+  │                   ^^^^^^^
+  ╰─
