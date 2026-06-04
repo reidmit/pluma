@@ -36,8 +36,12 @@ impl<'a> Formatter<'a> {
 			.unwrap_or(usize::MAX);
 		parts.push(self.drain_leading(first_line));
 
-		// Imports: one per line, no blank between consecutive imports.
-		for (i, u) in m.uses.iter().enumerate() {
+		// Imports: sorted into canonical order (stdlib, then package, then
+		// user; within each group by segment count, then alphabetically),
+		// one per line, no blank between consecutive imports.
+		let mut uses: Vec<&UseNode> = m.uses.iter().collect();
+		uses.sort_by_key(|u| (use_group_rank(u), u.path.len(), u.module_name()));
+		for (i, u) in uses.iter().enumerate() {
 			if i > 0 {
 				parts.push(hardline());
 			}
@@ -1070,6 +1074,17 @@ impl<'a> Formatter<'a> {
 			parts.push(self.format_type_expr(g));
 		}
 		concat(parts)
+	}
+}
+
+// Canonical import-group rank: stdlib (`std.`) sorts first, then package
+// (`pkg.`) imports, then user imports (any other leading segment). Within a
+// group, imports are ordered by segment count then alphabetically.
+fn use_group_rank(u: &UseNode) -> u8 {
+	match u.path.first().map(|s| s.name.as_str()) {
+		Some("std") => 0,
+		Some("pkg") => 1,
+		_ => 2,
 	}
 }
 
