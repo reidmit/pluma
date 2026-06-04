@@ -1,0 +1,16 @@
+# The shared contract. A `remote def`'s signature is the whole API: the
+# compiler generates a client stub and a server dispatcher from it, so the
+# client and server agree by construction (see notes/FULLSTACK.md).
+#
+# This module is compiled into BOTH artifacts. On the server the body below is
+# the real handler; on the client the body is never reached — the call goes
+# over the wire through the generated `rpc-client` stub.
+
+use std.task
+use std.request
+
+# Adds two numbers, on the server. (A toy stand-in for real server work — a
+# database read, a downstream call — that a browser can't do directly.)
+public remote def add :: fun request int int -> task int = fun _req a b {
+	task.return (a + b)
+}

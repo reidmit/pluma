@@ -65,6 +65,11 @@ pub struct Compiler {
 	// `pluma dev` hot-reload mode: the analyzer redirects `app.sandbox`/`app.element`
 	// to their model-persisting `-hmr` variants. Off everywhere else.
 	pub hmr: bool,
+	// FULLSTACK dual build (`server.pa` + `client.pa` in one directory). The two
+	// entries compile from one `check()`, then emit twice; gating runs per artifact
+	// (`entry_modules[0]`=server→`Sys`, `[1]`=client→`Web`) via `gate_fullstack`, and
+	// the generated `rpc-client` targets the web transport (`fetch.post`).
+	pub fullstack: bool,
 }
 
 impl Compiler {
@@ -80,6 +85,7 @@ impl Compiler {
 			native_modules: HashMap::new(),
 			target: None,
 			hmr: false,
+			fullstack: false,
 		})
 	}
 
@@ -113,11 +119,49 @@ impl Compiler {
 			native_modules: HashMap::new(),
 			target: None,
 			hmr: false,
+			fullstack: false,
 		}
+	}
+
+	// Mark this as a FULLSTACK dual build (`server.pa` + `client.pa`). The driver
+	// sets `entry_modules = [server, client]`; this flag tells RPC codegen the
+	// client is web (`fetch.post` transport) and enables `gate_fullstack`.
+	pub fn with_fullstack(mut self, fullstack: bool) -> Self {
+		self.fullstack = fullstack;
+		self
 	}
 
 	pub fn add_entry_module(&mut self, module_name: String) {
 		self.entry_modules.push(module_name);
+	}
+
+	// Whether `entry_path` names a FULLSTACK project directory — one holding BOTH
+	// `server.pa` and `client.pa`. The driver dispatches on this to build two
+	// artifacts from one source (`from_fullstack_dir`).
+	pub fn is_fullstack_dir(entry_path: &str) -> bool {
+		let dir = Path::new(entry_path);
+		dir.is_dir() && dir.join("server.pa").is_file() && dir.join("client.pa").is_file()
+	}
+
+	// Construct a FULLSTACK compiler from a directory holding `server.pa` +
+	// `client.pa`: `entry_modules = [server, client]`, `fullstack = true`. A `main.pa`
+	// alongside the pair is rejected — the entry would be ambiguous. Module names are
+	// resolved by the normal rule (honoring a `pluma.pa` package root above, if any),
+	// so both halves and their shared modules share one root.
+	pub fn from_fullstack_dir(entry_path: String) -> Result<Self, Vec<Diagnostic>> {
+		let dir = Path::new(&env::current_dir().unwrap()).join(&entry_path);
+		if dir.join("main.pa").is_file() {
+			return Err(vec![Diagnostic::error(
+				"a fullstack directory has `server.pa` + `client.pa`; remove `main.pa` \
+				 (the entry would be ambiguous)"
+					.to_string(),
+			)]);
+		}
+		let mut compiler = Self::from_entry_path(format!("{entry_path}/server"))?;
+		let (_, client) = resolve_entry(format!("{entry_path}/client"))?;
+		compiler.entry_modules.push(client);
+		compiler.fullstack = true;
+		Ok(compiler)
 	}
 
 	// Register a Rust-defined native module's exports so any user module that
@@ -185,8 +229,33 @@ impl Compiler {
 		let Some(target) = self.target else {
 			return;
 		};
+		let roots = self.entry_modules.clone();
+		self.gate_roots(&roots, target);
+	}
+
+	// FULLSTACK dual build: gate each artifact against its own target — the server
+	// half (`entry_modules[0]`) as `Sys`, the client half (`[1]`) as `Web`. A single
+	// `target` can't express the split (each side legitimately reaches the other
+	// tier's stdlib through its own root), so the dual build skips the single-target
+	// gate (`target` is `None`) and calls this instead, after `check()`.
+	pub fn gate_fullstack(&mut self) -> Result<(), Vec<Diagnostic>> {
+		if let [server, client] = self.entry_modules.clone().as_slice() {
+			self.gate_roots(&[server.clone()], Target::Sys);
+			self.gate_roots(&[client.clone()], Target::Web);
+		}
+		if self.diagnostics.is_empty() {
+			Ok(())
+		} else {
+			Err(self.diagnostics.to_vec())
+		}
+	}
+
+	// Reject any forbidden-tier module reachable from `roots` (through non-`remote
+	// def` code — the island stop rule). Shared by the single-target gate and the
+	// per-artifact fullstack gate.
+	fn gate_roots(&mut self, roots: &[String], target: Target) {
 		let mut reached: HashSet<String> = HashSet::new();
-		let mut work: Vec<String> = self.entry_modules.clone();
+		let mut work: Vec<String> = roots.to_vec();
 		// First importer of each followed module, for the diagnostic caret.
 		let mut via: HashMap<String, (String, PathBuf, Range)> = HashMap::new();
 
@@ -281,8 +350,9 @@ impl Compiler {
 		// is rejected with a clean transport error (version-skew protection).
 		let fingerprint = crate::rpc::surface_fingerprint(&endpoints);
 		// The client stub's transport follows the build target: the browser's
-		// `fetch` on web, `http.fetch` over `std.sys.net` otherwise.
-		let web = self.target == Some(crate::platform::Target::Web);
+		// `fetch` on web (a `--target web` build or the client half of a fullstack
+		// build), `http.fetch` over `std.sys.net` otherwise.
+		let web = self.fullstack || self.target == Some(crate::platform::Target::Web);
 		let client = crate::rpc::generate_client(&endpoints, &fingerprint, web);
 		let server = crate::rpc::generate_server(&endpoints, &fingerprint);
 		self.set_module_source(crate::rpc::CLIENT_MODULE.to_string(), client.into_bytes());

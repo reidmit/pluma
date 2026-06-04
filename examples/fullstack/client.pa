@@ -1,0 +1,56 @@
+# The client half — a browser MVU app that calls the server. `pluma build`
+# emits this to a web bundle (app.wasm + loader.js + index.html).
+#
+# The remote call is just an async function: `rpc.add (request.new ()) 2 3`
+# returns a `task int` exactly like a local task, and the MVU runtime runs it
+# as a command, feeding the result back into `update`. `rpc` is the generated
+# client-stub module; `set-base-url` points it at the running server.
+
+use std.web.html
+use std.web.events
+use std.web.app
+use std.task
+use std.request
+use rpc-client as rpc
+
+enum msg {
+	compute
+	got-sum int
+}
+
+# (sum, in-flight) — the last result and whether a call is outstanding.
+alias model {sum :: int, pending :: bool}
+
+def init :: (model, list (task msg)) = (
+	{sum: 0, pending: false},
+	[],
+)
+
+def update :: fun msg model -> (model, list (task msg)) = fun m state {
+	when m is compute {
+		# Fire the remote call as a command; its result returns as `got-sum`.
+		(
+			{sum: state.sum, pending: true},
+			[task.map (rpc.add (request.new ()) 2 3) (fun n { got-sum n })],
+		)
+	} is got-sum n {
+		({sum: n, pending: false}, [])
+	}
+}
+
+def view :: fun model -> html.html msg = fun state {
+	let label = if state.pending {
+		"computing 2 + 3 on the server…"
+	} else {
+		"2 + 3 = " ++ to-string state.sum
+	}
+	html.div [] [
+		html.span [] [html.text label],
+		html.button [events.on-click compute] [html.text "add on server"],
+	]
+}
+
+def main = fun {
+	rpc.set-base-url "http://127.0.0.1:8080"
+	app.element init update view
+}

@@ -61,6 +61,16 @@ pub fn lower_tests(compiler: &Compiler, color: bool) -> Result<IrProgram, String
 	lowerer.run()
 }
 
+/// Lower a FULLSTACK build rooted at a specific entry module's `main` (`server` or
+/// `client`), overriding `entry_modules[0]`. The whole analyzed program is lowered;
+/// only the program *entry* differs, so the emitter's reachability prune yields the
+/// one artifact's functions (the other side's code is never reached).
+pub fn lower_entry(compiler: &Compiler, entry: &str) -> Result<IrProgram, String> {
+	let mut lowerer = Lowerer::new(compiler);
+	lowerer.entry_override = Some(entry.to_string());
+	lowerer.run()
+}
+
 // --------------------------------------------------------------------------
 // The lowerer.
 // --------------------------------------------------------------------------
@@ -84,6 +94,12 @@ struct Lowerer<'a> {
 	// `Some(color)` when lowering for `pluma test`: `build_entry` then synthesizes
 	// a runner over every `tests` suite instead of the module's `main`.
 	test_color: Option<bool>,
+	// Which module's `main` is the program entry, overriding `entry_modules[0]`.
+	// Set for a FULLSTACK dual build, which lowers the one analyzed program twice —
+	// once rooted at `server`'s `main`, once at `client`'s — and lets the emitter's
+	// reachability prune carve out each artifact (the server-only `remote def` bodies
+	// are simply never reached from the client's `main`).
+	entry_override: Option<String>,
 }
 
 /// Per-function lowering state.
@@ -165,6 +181,7 @@ impl<'a> Lowerer<'a> {
 			imports: HashMap::new(),
 			poison: None,
 			test_color: None,
+			entry_override: None,
 		}
 	}
 
@@ -2014,12 +2031,15 @@ impl<'a> Lowerer<'a> {
 		if let Some(color) = self.test_color {
 			return self.build_test_entry(test_suites, color);
 		}
-		let main_module = self
-			.compiler
-			.entry_modules
-			.first()
-			.ok_or("no entry module")?
-			.clone();
+		let main_module = match &self.entry_override {
+			Some(m) => m.clone(),
+			None => self
+				.compiler
+				.entry_modules
+				.first()
+				.ok_or("no entry module")?
+				.clone(),
+		};
 		let main = match self.globals.lookup(&main_module, "main") {
 			Some(g) => g,
 			// No `main`, but `pluma test` programs are entered via a no-op (push
