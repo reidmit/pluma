@@ -2200,7 +2200,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// instantiated. `None` for anything that isn't one of these kernel defs.
 	// Codegen resolves the call via `lookup_global`, which ignores visibility,
 	// so nothing downstream needs the def to be public. Keep these in lockstep
-	// with the signatures in `compiler/src/stdlib/task.pa`.
+	// with the signatures in `std/task.pa`.
 	fn scope_kernel_def_type(&mut self, module: &str, def_name: &str) -> Option<Type> {
 		if module != "std.task" {
 			return None;
