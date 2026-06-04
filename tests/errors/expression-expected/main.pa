@@ -1,0 +1,2 @@
+# A def body that begins with a token that cannot start an expression.
+def main = * 2

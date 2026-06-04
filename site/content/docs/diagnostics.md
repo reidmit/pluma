@@ -88,6 +88,7 @@ information.
 | E0026 | Unexpected token |
 | E0027 | Unexpected token at the top level |
 | E0028 | Misplaced `public` / `opaque` |
+| E0029 | Expected an expression (e.g. a missing def body or operator operand) |
 
 ## Analysis & type errors (`E01xx`)
 

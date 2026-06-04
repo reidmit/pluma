@@ -350,6 +350,57 @@ impl<'a> Parser<'a> {
 		None
 	}
 
+	// Total diagnostics reported so far, across both the parser and the
+	// tokenizer. Lexer-level errors (bad digits, unclosed strings) live on the
+	// tokenizer and aren't merged into `self.errors` until `parse_module`
+	// finishes, so any "did a sub-parse already report something?" check must
+	// count both — otherwise a body that failed purely from a lexer error
+	// looks error-free and draws a spurious second diagnostic.
+	fn error_count(&self) -> usize {
+		self.errors.len() + self.tokenizer.errors.len()
+	}
+
+	// Report that an expression was required at the current position. Used at
+	// sites where the grammar guarantees an operand must follow (a def body,
+	// the operand after a prefix/infix operator) — otherwise a failed parse
+	// would silently drop the whole construct with no diagnostic.
+	fn expected_expression<A>(&mut self) -> Option<A> {
+		let (range, found) = match self.current_token {
+			Some(tok) => {
+				let (s, e) = tok.get_span();
+				(
+					Range::between(self.offset_to_point(s), self.offset_to_point(e)),
+					Some(tok),
+				)
+			}
+			None => (Range::collapsed(self.current_line, 0), None),
+		};
+		self.error(ParseError {
+			range,
+			kind: ParseErrorKind::ExpectedExpression { found },
+		})
+	}
+
+	// Treat a `None` from a *mandatory* expression parse as an error, unless
+	// the sub-parse already reported one (`errors_before` is the error count
+	// captured just before the attempt) — that keeps a partial failure like
+	// `(1 +` from stacking a second, redundant diagnostic on top of the first.
+	fn require_expression(
+		&mut self,
+		parsed: Option<ExprNode>,
+		errors_before: usize,
+	) -> Option<ExprNode> {
+		match parsed {
+			Some(expr) => Some(expr),
+			None => {
+				if self.error_count() == errors_before {
+					self.expected_expression::<()>();
+				}
+				None
+			}
+		}
+	}
+
 	fn is_top_level_start(tok: Token) -> bool {
 		matches!(
 			tok,
@@ -392,6 +443,22 @@ impl<'a> Parser<'a> {
 				_ => self.advance(),
 			}
 			just_started = false;
+		}
+	}
+
+	// Skip tokens up to and including the next backtick (the regex delimiter),
+	// or to EOF. Used to recover after a malformed regular expression so the
+	// closing backtick doesn't trip a second, unrelated diagnostic.
+	fn recover_to_backtick(&mut self) {
+		loop {
+			match self.current_token {
+				Some(Token::Backtick(..)) => {
+					self.advance();
+					return;
+				}
+				None => return,
+				_ => self.advance(),
+			}
 		}
 	}
 
@@ -801,6 +868,9 @@ impl<'a> Parser<'a> {
 					Token::Bang(..) => Operator::LogicalNot,
 					_ => Operator::from_token(t).unwrap(),
 				};
+				// Baseline before the advance: that advance lexes the operand
+				// token, so a lexer error in it counts as already-reported.
+				let errors_before = self.error_count();
 				self.advance();
 
 				let start_point = self.offset_to_point(start);
@@ -808,7 +878,8 @@ impl<'a> Parser<'a> {
 				// make sure to parse the expression following the operator with
 				// the correct binding power:
 				let (_, right_bp) = operator.prefix_binding_power();
-				let rhs_expr = self.parse_expression_with_binding_power(right_bp, restrict_brace)?;
+				let rhs = self.parse_expression_with_binding_power(right_bp, restrict_brace);
+				let rhs_expr = self.require_expression(rhs, errors_before)?;
 
 				Some(ExprNode {
 					range: Range::between(start_point, rhs_expr.range.end),
@@ -902,6 +973,11 @@ impl<'a> Parser<'a> {
 				} else {
 					let op_pos = self.current_token_points();
 
+					// Baseline before the advance: it lexes the right-hand
+					// operand's first token, so a lexer error there counts as
+					// already-reported (used by `require_expression` below).
+					let errors_before = self.error_count();
+
 					// advance past the operator token
 					self.advance();
 
@@ -916,7 +992,8 @@ impl<'a> Parser<'a> {
 						continue;
 					}
 
-					let rhs_expr = self.parse_expression_with_binding_power(right_bp, restrict_brace)?;
+					let rhs = self.parse_expression_with_binding_power(right_bp, restrict_brace);
+					let rhs_expr = self.require_expression(rhs, errors_before)?;
 
 					if let Operator::IndexAccess = operator {
 						// special case: the [ operator needs a closing ]
@@ -1990,15 +2067,28 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
+		let errors_before = self.error_count();
 		let maybe_reg_expr_node = self.parse_regular_expression_body();
 
 		self.skip_line_breaks();
+
+		// Recovery: a malformed sub-expression (empty group, bad count, …)
+		// reports its own specific error and returns `None`, often leaving the
+		// offending token unconsumed. Skip to the closing backtick and bail
+		// rather than letting the `expect` below pile on a misleading second
+		// diagnostic (a spurious "empty regex" or "unexpected token").
+		if maybe_reg_expr_node.is_none() && self.error_count() > errors_before {
+			self.recover_to_backtick();
+			return None;
+		}
 
 		let (_, end) = expect_token_and_advance!(self, Token::Backtick);
 
 		let regex = match maybe_reg_expr_node {
 			Some(expr) => expr,
 			None => {
+				// A genuinely empty regex (`` `` ``): nothing parsed and no
+				// inner error to explain why.
 				return self.error(ParseError {
 					range: Range::between(start, end),
 					kind: ParseErrorKind::EmptyRegularExpression,
@@ -2496,6 +2586,12 @@ impl<'a> Parser<'a> {
 
 		self.skip_line_breaks();
 
+		// Capture the diagnostic baseline *before* consuming `=`: the body's
+		// first token is lexed by that advance, so a lexer error in it (a bad
+		// digit, an unclosed string) must count as "already reported" and
+		// suppress the missing-body diagnostic below.
+		let errors_before = self.error_count();
+
 		expect_token_and_advance!(self, Token::Equal);
 
 		// Allow the RHS to wrap to the next line — long signatures
@@ -2503,7 +2599,8 @@ impl<'a> Parser<'a> {
 		// when the body starts on a fresh, indented line.
 		self.skip_line_breaks();
 
-		let value = self.parse_expression()?;
+		let parsed = self.parse_expression();
+		let value = self.require_expression(parsed, errors_before)?;
 
 		self.skip_line_breaks();
 

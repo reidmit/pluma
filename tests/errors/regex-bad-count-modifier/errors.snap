@@ -5,14 +5,6 @@ expression: output
 error[E0008]: Invalid regular expression count modifier.
   ╭─▸ tests/errors/regex-bad-count-modifier/main.pa:2:13
   │
-2 │ def main = `a{2,1}`
-  │             ^^^^^^
+2 │ def main = `digit{2,1}`
+  │             ^^^^^^^^^^
   ╰─
-
-error[E0130]: Unknown character class `a` in regular expression.
-  ╭─▸ tests/errors/regex-bad-count-modifier/main.pa:2:13
-  │
-2 │ def main = `a{2,1}`
-  │             ^
-  │
-  ╰─ note: known classes: `any`, `digit`, `letter`, `whitespace`, `word`.

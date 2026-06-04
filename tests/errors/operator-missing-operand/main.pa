@@ -1,0 +1,2 @@
+# A binary operator with no right-hand operand.
+def main = 1 +
