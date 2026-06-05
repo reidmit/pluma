@@ -1,0 +1,26 @@
+# Type errors for `std.local`. `local.get` requires a `local`, not a plain
+# value; `local.with`'s body must return a `task`; and the bound value must match
+# the cell's type.
+use std.local
+use std.task
+
+def cell :: local int = local.new 0
+
+# `local.get` on a non-`local` (a bare int) — error.
+def bad-get = fun {
+	local.get 5
+}
+
+# `local.with` body returns a plain value, not a `task` — error.
+def bad-with-body = fun {
+	local.with cell 1 fun {
+		local.get cell
+	}
+}
+
+# bound value type mismatches the cell (`local int` bound with a string) — error.
+def bad-bind = fun {
+	local.with cell "nope" fun {
+		task.return (local.get cell)
+	}
+}

@@ -464,6 +464,13 @@ pub(crate) fn build_spawn_command_fn(list_append: u32, g: TaskGlobals) -> Functi
 	);
 	w.struct_new(types::T_TUPLE);
 	w.call(list_append).global_set(g.fibers);
+	// Inherit the spawning context's binding env (empty at the root, where commands
+	// are dispatched) — uniform with the scope/spawn capture sites.
+	let cur = w.local(ValType::I32);
+	w.global_get(g.current_fiber).local_set(cur);
+	set_fld(&mut w, g.fibers, fid, fiber::ENV, |w| {
+		fld(w, g, g.fibers, cur, fiber::ENV);
+	});
 	// root scope.children.append(fid).
 	set_fld(&mut w, g.scopes, root_sid, scope::CHILDREN, |w| {
 		fld(w, g, g.scopes, root_sid, scope::CHILDREN);
@@ -475,6 +482,112 @@ pub(crate) fn build_spawn_command_fn(list_append: u32, g: TaskGlobals) -> Functi
 	// ready.append((fid, Start, task)).
 	ready_push(&mut w, g, list_append, fid, focus::START, |w| {
 		w.local_get(task);
+	});
+	push_nothing(&mut w);
+	w.finish()
+}
+
+// ==========================================================================
+// Task-local bindings (`std.local`).
+//
+// Each fiber carries a binding env in its `ENV` field: an immutable cons-chain of
+// `[cell, val, next]` `$tuple` nodes (null = empty). `local.with` brackets a body
+// with `enter`/`exit` (the latter `defer`'d), and children capture the parent's
+// env at spawn — so a `local.get` reads the binding active for its async context.
+// These helpers run only in async programs (where the scheduler globals exist); a
+// non-async `local.get` is lowered inline to a bare default read instead.
+// ==========================================================================
+
+/// `__local_get(cell) -> value`: walk the current fiber's binding env for `cell`
+/// (matched by `ref.eq`), returning its bound value or the cell's default.
+pub(crate) fn build_local_get_fn(g: TaskGlobals) -> Function {
+	let v = types::value_ref();
+	let mut w = Wat::new(1);
+	let cell = w.param(0);
+	let cur = w.local(ValType::I32);
+	let env = w.local(v);
+	let result = w.local(v);
+	let elems = w.local(types::valarray_ref());
+
+	// result defaults to the cell's `default` field.
+	w.local_get(cell)
+		.ref_cast(types::T_LOCAL)
+		.struct_get(types::T_LOCAL, 1)
+		.local_set(result);
+
+	w.block("done", |w| {
+		// No scheduler running (a sync `main` in a program that's "async" only because
+		// it imports an async fn, or a `local.get` outside any fiber) → `fibers` is
+		// null and nothing can have been bound: keep the default.
+		w.global_get(g.fibers).ref_is_null().br_if("done");
+		// env = fibers[current_fiber].ENV.
+		w.global_get(g.current_fiber).local_set(cur);
+		fld(w, g, g.fibers, cur, fiber::ENV);
+		w.local_set(env);
+		w.loop_("lp", |w| {
+			// empty env → keep the default.
+			w.local_get(env).ref_is_null().br_if("done");
+			// elems = this node's [cell, val, next].
+			w.local_get(env)
+				.ref_cast(types::T_TUPLE)
+				.struct_get(types::T_TUPLE, 1)
+				.local_set(elems);
+			// frame cell == the queried cell? → take its value and stop.
+			w.local_get(elems).i32(0).array_get(types::T_VALARRAY);
+			w.local_get(cell);
+			w.ref_eq();
+			w.if_(|w| {
+				w.local_get(elems)
+					.i32(1)
+					.array_get(types::T_VALARRAY)
+					.local_set(result);
+				w.br("done");
+			});
+			// else recurse into `next`.
+			w.local_get(elems)
+				.i32(2)
+				.array_get(types::T_VALARRAY)
+				.local_set(env);
+			w.br("lp");
+		});
+	});
+	w.local_get(result);
+	w.finish()
+}
+
+/// `__local_enter(cell, val) -> old-env`: cons `[cell, val]` onto the current
+/// fiber's binding env and return the previous env (so `__local_exit` can restore).
+pub(crate) fn build_local_enter_fn(g: TaskGlobals) -> Function {
+	let v = types::value_ref();
+	let mut w = Wat::new(2);
+	let (cell, val) = (w.param(0), w.param(1));
+	let cur = w.local(ValType::I32);
+	let old = w.local(v);
+
+	w.global_get(g.current_fiber).local_set(cur);
+	fld(&mut w, g, g.fibers, cur, fiber::ENV);
+	w.local_set(old);
+	// fibers[cur].ENV = $tuple[cell, val, old].
+	set_fld(&mut w, g.fibers, cur, fiber::ENV, |w| {
+		w.i32(types::TAG_TUPLE);
+		w.local_get(cell);
+		w.local_get(val);
+		w.local_get(old);
+		w.array_new_fixed(types::T_VALARRAY, 3);
+		w.struct_new(types::T_TUPLE);
+	});
+	w.local_get(old);
+	w.finish()
+}
+
+/// `__local_exit(old-env) -> nothing`: restore the current fiber's binding env.
+pub(crate) fn build_local_exit_fn(g: TaskGlobals) -> Function {
+	let mut w = Wat::new(1);
+	let saved = w.param(0);
+	let cur = w.local(ValType::I32);
+	w.global_get(g.current_fiber).local_set(cur);
+	set_fld(&mut w, g.fibers, cur, fiber::ENV, |w| {
+		w.local_get(saved);
 	});
 	push_nothing(&mut w);
 	w.finish()
@@ -533,6 +646,11 @@ pub(crate) fn build_pump_fn(
 	unbox_i(&mut w);
 	w.local_set(fkind);
 	w.local_get(fval0).local_set(fval);
+
+	// Publish the fiber we're running so the task-local builtins (`local-get`/
+	// `-enter`/`-exit`) index *this* fiber's binding env. Stable for the whole
+	// single-fiber pump call (shielded inline tasks stay on the same fiber).
+	w.local_get(fid).global_set(g.current_fiber);
 
 	// Load the fiber's activation chain into the working stack (a fresh copy).
 	load_act(&mut w, g, fid);
@@ -1063,6 +1181,17 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 		w.local_get(bf);
 	});
 
+	// The scope body runs in the creating fiber's binding context — inherit its env
+	// (any `s.spawn` inside the body already captured the same env via current_fiber).
+	let parent = w.local(ValType::I32);
+	w.local_get(fid_b).ref_cast(types::T_INT);
+	w.struct_get(types::T_INT, 1)
+		.i32_wrap_i64()
+		.local_set(parent);
+	set_fld(&mut w, g.fibers, bf, fiber::ENV, |w| {
+		fld(w, g, g.fibers, parent, fiber::ENV);
+	});
+
 	// ready.append((bf, Start, body_task)).
 	ready_push(&mut w, g, list_append, bf, focus::START, |w| {
 		w.local_get(body_task);
@@ -1104,6 +1233,15 @@ pub(crate) fn build_sched_spawn_fn(list_append: u32, g: TaskGlobals) -> Function
 	);
 	w.struct_new(types::T_TUPLE);
 	w.call(list_append).global_set(g.fibers);
+
+	// Capture-at-spawn: the child inherits the spawning fiber's binding env (an
+	// immutable cons-chain, so sharing the pointer is safe — a later parent `with`
+	// conses a fresh node and leaves this capture untouched → sibling isolation).
+	let cur = w.local(ValType::I32);
+	w.global_get(g.current_fiber).local_set(cur);
+	set_fld(&mut w, g.fibers, fid, fiber::ENV, |w| {
+		fld(w, g, g.fibers, cur, fiber::ENV);
+	});
 
 	// scope.children.append(fid).
 	set_fld(&mut w, g.scopes, sid, scope::CHILDREN, |w| {
@@ -1545,7 +1683,16 @@ pub(crate) fn build_reap_fiber_fn(
 				w.call(net.unwatch);
 			});
 		}
-		// Run the fiber's poll `defer`s, innermost (top of stack) first.
+		// Run the fiber's poll `defer`s, innermost (top of stack) first. These run
+		// OUTSIDE any pump, so publish the victim as the current fiber — a `local.get`
+		// (or the `local.with` `local-exit`) inside a cleanup must read THIS fiber's
+		// env. Save/restore through a local: reaping is re-entrant (the cancel_scope
+		// cascade above already ran nested reaps that touched current_fiber). Defer
+		// LIFO keeps the binding present: inner user defers run before the outer
+		// `local-exit` that pops it.
+		let saved_cf = w.local(ValType::I32);
+		w.global_get(g.current_fiber).local_set(saved_cf);
+		w.local_get(fid).global_set(g.current_fiber);
 		fld(w, g, g.fibers, fid, fiber::ACT);
 		w.ref_cast(types::T_LIST)
 			.struct_get(types::T_LIST, 1)
@@ -1574,6 +1721,7 @@ pub(crate) fn build_reap_fiber_fn(
 				w.br("lp");
 			});
 		});
+		w.local_get(saved_cf).global_set(g.current_fiber);
 	});
 	push_nothing(&mut w);
 	w.finish()
@@ -2329,6 +2477,7 @@ fn fiber_fields(w: &mut Wat, scope_id: impl FnOnce(&mut Wat), runs_scope: impl F
 	}); // ALIVE
 	empty_list(w); // WAITERS
 	push_nothing(w); // RETRY — the parked net `$task` (set on `wait::IO`)
+	push_nothing(w); // ENV — task-local binding env (null = empty); seeded from the parent at spawn
 	w.array_new_fixed(types::T_VALARRAY, fiber::COUNT);
 }
 

@@ -1418,6 +1418,54 @@ impl<'a> FnEmitter<'a> {
 			}
 			return;
 		}
+		// Task-local cells (`std.local`). `enter`/`exit` are async-only scheduler
+		// helpers (`local.with` is async, so they're only reachable then). `local.get`
+		// calls its helper when the scheduler exists; in a non-async program no binding
+		// can ever have been set, so it reads the cell's `default` field inline.
+		match tag {
+			"local-enter" | "local-exit" => {
+				let h = if tag == "local-enter" {
+					self.runtime.idx(Helper::LocalEnter)
+				} else {
+					self.runtime.idx(Helper::LocalExit)
+				};
+				match h {
+					Some(h) => {
+						for a in args {
+							self.atom(a);
+						}
+						self.ins(Instruction::Call(h));
+					}
+					None => {
+						self
+							.diags
+							.push(format!("`{tag}` needs its scheduler helper"));
+						self.push_nothing();
+					}
+				}
+				return;
+			}
+			"local-get" => {
+				match self.runtime.idx(Helper::LocalGet) {
+					Some(h) => {
+						self.atom(&args[0]);
+						self.ins(Instruction::Call(h));
+					}
+					None => {
+						self.atom(&args[0]);
+						self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+							types::T_LOCAL,
+						)));
+						self.ins(Instruction::StructGet {
+							struct_type_index: types::T_LOCAL,
+							field_index: 1,
+						});
+					}
+				}
+				return;
+			}
+			_ => {}
+		}
 		// Unary float math (log/exp/sin/cos): unbox the `$float`, call the raw
 		// `(f64) -> f64` host import, rebox. Keeps the GC poking in wasm.
 		if is_f64_unary_host(tag) {
@@ -2867,6 +2915,14 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::I32Const(types::TAG_REF));
 				self.atom(&args[0]);
 				self.ins(Instruction::StructNew(types::T_REF));
+			}
+			// local.new default : a fresh `$local` cell carrying its default value.
+			// The struct reference is the cell's identity (`ref.eq`); the binding env
+			// keyed off it lives per-fiber (see `helpers/task.rs`).
+			"local-new" => {
+				self.ins(Instruction::I32Const(types::TAG_LOCAL));
+				self.atom(&args[0]);
+				self.ins(Instruction::StructNew(types::T_LOCAL));
 			}
 			// ref.get r : the cell's current value.
 			"ref-get" => {

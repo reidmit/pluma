@@ -1,0 +1,59 @@
+# Task-local bindings -- a typed value that follows the running task tree.
+#
+# A `local a` is a cell holding a value that you bind for the dynamic extent of
+# some async work with `local.with`, and read back -- anywhere inside that work,
+# without threading it through every signature -- with `local.get`. The binding
+# flows into every task the work spawns, but concurrent siblings stay isolated:
+# each sees the value bound on its own branch of the tree. Reach for one for
+# genuinely ambient, cross-cutting context -- a request/trace id, an injected
+# clock for tests, structured-logging fields -- not as a shortcut around an
+# ordinary argument.
+#
+# `local` is the typed, concurrency-safe counterpart to `ref`: a `ref` is one
+# shared mutable cell (concurrent tasks clobber each other), whereas a `local`
+# binding is per-task-tree and immutable -- a nested `with` *shadows* it for its
+# own subtree and never disturbs anyone else's. Needs `use std.local`.
+use std.task
+
+# A task-local cell. You never see its contents directly -- make one with
+# `local.new`, read it with `local.get`, bind it with `local.with`.
+public enum local a {
+}
+
+# Makes a new cell whose default is `initial` -- the value `local.get` returns
+# whenever it's read outside any enclosing `local.with`. Declare one once at the
+# top level, like a `ref`:
+#
+#     def trace-id :: local string = local.new "-"
+public def new :: fun a -> local a = built-in "local-new"
+
+# Reads the value bound for the current task: the nearest enclosing `local.with`
+# on this branch of the task tree, or the cell's default if there is none.
+#
+#     local.get trace-id   # => "-" until something binds it
+public def get :: fun (local a) -> a = built-in "local-get"
+
+# The synchronous halves of `with` -- `enter` pushes a binding onto the running
+# fiber's env and returns the previous env; `exit` restores it. Private: `with`
+# is the only safe way to pair them (it `defer`s the `exit`). Their saved-env
+# value is opaque, so it rides a free type variable the call site bridges.
+def enter :: fun (local a) a -> e = built-in "local-enter"
+
+def exit :: fun e -> nothing = built-in "local-exit"
+
+# Runs `body` with the cell bound to `val`, for the body and every task it
+# spawns; restores the previous binding on the way out (by any path -- success,
+# failure, or cancellation). The binding is dynamically scoped: a nested `with`
+# on the same cell shadows this one within its own subtree, and concurrent
+# siblings each keep the value bound on their own branch.
+#
+#     local.with trace-id "req-42" (fun {
+#         try _ = handle-request ()   # any local.get trace-id in here sees "req-42"
+#         task.return ()
+#     })
+public def with :: fun (local a) a (fun nothing -> task b) -> task b = fun cell val body {
+	let saved = enter cell val
+	defer exit saved
+	try r = body ()
+	task.return r
+}

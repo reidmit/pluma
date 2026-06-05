@@ -1,0 +1,19 @@
+# A binding set by `local.with` survives an arbitrary chain of `try` suspensions
+# inside the body: the value is re-read correctly after each `task.sleep`, since
+# it rides the fiber across every park/resume.
+use std.local
+use std.task
+
+def stage :: local string = local.new "?"
+
+def main = fun {
+	local.with stage "running" fun {
+		try _ = task.sleep 1ms
+		print "1: $(local.get stage)"
+		try _ = task.sleep 1ms
+		print "2: $(local.get stage)"
+		try _ = task.sleep 1ms
+		print "3: $(local.get stage)"
+		task.return ()
+	}
+}

@@ -840,6 +840,24 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		deps: &[H::ListAppend],
 		build: |c| task::build_spawn_command_fn(c.dep(H::ListAppend), c.rt.taskg),
 	},
+	HelperDef {
+		id: H::LocalGet,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| task::build_local_get_fn(c.rt.taskg),
+	},
+	HelperDef {
+		id: H::LocalEnter,
+		fn_type: Ty::Helper(2),
+		deps: &[],
+		build: |c| task::build_local_enter_fn(c.rt.taskg),
+	},
+	HelperDef {
+		id: H::LocalExit,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| task::build_local_exit_fn(c.rt.taskg),
+	},
 ];
 
 /// The helper a builtin tag lowers to, if any. These are the builtins implemented

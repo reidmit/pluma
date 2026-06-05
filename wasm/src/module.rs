@@ -64,6 +64,12 @@ impl Module {
 		// constructors driven by the scheduler, and `poll`/`unwatch` are reached only
 		// from the emitted driver, so none surface as ordinary host calls here.
 		let mut uses_net = false;
+		// Whether the program reaches the task-local builtins. `local-get` walks the
+		// scheduler's per-fiber env (its helper is async-only); `local-enter`/`-exit`
+		// only appear inside `local.with`, which is async. Tracked here (like net) so
+		// the helper requests can be gated on `is_async`.
+		let mut uses_local_get = false;
+		let mut uses_local_kernel = false;
 
 		// Go through each reachable function...
 		for &func_id in &reach.order {
@@ -71,6 +77,14 @@ impl Module {
 			collect_host_calls(&p.functions[func_id as usize].body, &builtin_g, |tag| {
 				if is_net_builtin(tag) {
 					uses_net = true;
+					return;
+				}
+				if tag == "local-get" {
+					uses_local_get = true;
+					return;
+				}
+				if matches!(tag, "local-enter" | "local-exit") {
+					uses_local_kernel = true;
 					return;
 				}
 				classify_host_call(tag, &mut requested, &mut imports, diags);
@@ -175,6 +189,18 @@ impl Module {
 			requested.insert(Helper::SchedSpawn);
 			requested.insert(Helper::SchedCancel);
 			requested.insert(Helper::SchedCancelAfter);
+		}
+		// Task-local helpers reference the scheduler globals, so they only exist in an
+		// async program. `local-get` in a non-async program is lowered inline to a bare
+		// default read (no helper); `local-enter`/`-exit` can't be reached non-async.
+		if is_async {
+			if uses_local_get {
+				requested.insert(Helper::LocalGet);
+			}
+			if uses_local_kernel {
+				requested.insert(Helper::LocalEnter);
+				requested.insert(Helper::LocalExit);
+			}
 		}
 		close_deps(&mut requested);
 		// The `wire` encode/decode codec threads its recursive state through

@@ -68,7 +68,8 @@ pub(crate) mod sched {
 		pub(crate) const ALIVE: u32 = 7; // boxed int — 0/1
 		pub(crate) const WAITERS: u32 = 8; // $list of waiter fids (boxed ints)
 		pub(crate) const RETRY: u32 = 9; // value — parked net `$task` re-Started on socket readiness (wait::IO)
-		pub(crate) const COUNT: u32 = 10;
+		pub(crate) const ENV: u32 = 10; // value — task-local binding env: a cons-chain of `[cell, val, next]` `$tuple`s (null = empty). Captured parent→child at spawn; read by `local-get`.
+		pub(crate) const COUNT: u32 = 11;
 	}
 	/// `Scope` fields.
 	pub(crate) mod scope {
@@ -380,13 +381,26 @@ pub(crate) enum Helper {
 	/// `__spawn_command(task) -> value` — spawn an MVU command (`task msg`) as a
 	/// root-scoped fiber; its dispatch tail re-enters `update`.
 	SpawnCommand,
+	/// `__local_get(cell) -> value` — read a task-local cell: walk the current
+	/// fiber's binding env (`fibers[current_fiber].ENV`, a cons-chain of
+	/// `[cell, val, next]`) for `cell` (matched by `ref.eq`), returning its bound
+	/// value or the cell's default. Async-only (it indexes the scheduler globals);
+	/// a non-async `local.get` is emitted inline as a bare default read.
+	LocalGet,
+	/// `__local_enter(cell, val) -> old-env` — push `[cell, val]` onto the current
+	/// fiber's binding env and return the previous env (for `local-exit` to restore).
+	/// The synchronous half of `local.with`.
+	LocalEnter,
+	/// `__local_exit(old-env) -> nothing` — restore the current fiber's binding env
+	/// to `old-env`. The `defer`'d teardown of `local.with`.
+	LocalExit,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 88;
+	pub(crate) const COUNT: usize = 91;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -725,6 +739,7 @@ pub(crate) struct TaskGlobals {
 	pub(crate) out_val: u32, // mut ref null $value — on done: outcome value
 	pub(crate) out_arg: u32, // mut i32 — on park: wait arg (fid/sid), or sleep nanos low bits unused
 	pub(crate) out_arg64: u32, // mut i64 — on park sleep: nanos
+	pub(crate) current_fiber: u32, // mut i32 — fid of the fiber the pump is currently running (or reaping). The task-local builtins (`local-get`/`-enter`/`-exit`) index `fibers[current_fiber].ENV` through it.
 }
 
 /// What the async driver needs to build `result`/`option` variants and find a
@@ -1302,6 +1317,10 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "ref-get"
 			| "ref-set"
 			| "ref-update"
+			// task-local cell alloc: a `$local` struct holding the default value
+			// (identity by `ref.eq`). `get`/`enter`/`exit` are scheduler helpers (they
+			// index the current fiber's env), routed in `emit::host_call`.
+			| "local-new"
 			// math primitives WasmGC does with one f64/i64 opcode (the
 			// transcendentals log/exp/sin/cos still need a host import).
 			| "math-sqrt"

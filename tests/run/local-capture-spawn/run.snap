@@ -1,0 +1,11 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+worker a: acme
+worker b: globex
+parent: none
+== stderr ==

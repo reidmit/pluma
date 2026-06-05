@@ -41,7 +41,8 @@ pub const T_TASK: u32 = 16; // struct { i32 tag, i32 kind, (ref $valarray) paylo
 pub const T_DENTRY: u32 = 17; // struct { i32 tag, (ref null $value) key, (mut ref null $value) value, i64 hash }  — a $dict entry
 pub const T_EXTERN: u32 = 18; // struct { i32 tag, (ref null extern) handle }  — a host-owned resource handle
 pub const T_CNODE: u32 = 19; // struct { i32 tag, i32 dataMap, i32 nodeMap, (mut ref $valarray) entries, (mut ref $valarray) children, (mut ref null $value) edit }  — a persistent dict trie node
-const T_FIRST_FUNC: u32 = 20;
+pub const T_LOCAL: u32 = 20; // struct { i32 tag, (ref null $value) default }  — a task-local cell (identity by ref.eq)
+const T_FIRST_FUNC: u32 = 21;
 
 // --------------------------------------------------------------------------
 // Runtime tags carried in the `$value` discriminant field — one per runtime
@@ -97,6 +98,10 @@ pub const TAG_EXTERN: i32 = 19;
 /// reading field 0, without a concrete `ref.test`. Internal: never escapes to
 /// user code (only a `$dict` does), never printed.
 pub const TAG_CNODE: i32 = 20;
+/// A `local a` task-local cell: a `$local` struct `{ tag, default }` holding the
+/// cell's default value. Identity is the struct reference itself (`ref.eq`, like
+/// `$ref`) — the binding environment matches frames by cell identity. Never printed.
+pub const TAG_LOCAL: i32 = 21;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or
 /// variant payload).
@@ -901,6 +906,17 @@ impl FuncTypes {
 				val_field(valarray_ref(), true),
 				val_field(valarray_ref(), true),
 				val_field(value_ref(), true),
+			],
+			true,
+		));
+		// 20 $local — { tag, (ref null $value) default }. A task-local cell: the struct
+		// reference is the cell's identity (`ref.eq`, like `$ref`); `default` is what
+		// `local.get` returns outside any `local.with` binding. Immutable.
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
+				val_field(value_ref(), false),
 			],
 			true,
 		));

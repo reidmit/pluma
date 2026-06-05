@@ -195,6 +195,7 @@ pub(super) fn build_globals(
 			out_val: task_global(val, &null_val),
 			out_arg: task_global(ValType::I32, &zero_i32),
 			out_arg64: task_global(ValType::I64, &zero_i64),
+			current_fiber: task_global(ValType::I32, &zero_i32),
 		};
 	}
 

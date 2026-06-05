@@ -1,0 +1,25 @@
+# Type-level inference checks for `std.local`. `local.new` returns `local a`
+# with `a` from the argument; `local.get` returns the inner type; `local.with`
+# returns the body task's result type, and binds a value of the cell's type.
+use std.local
+use std.task
+
+def trace :: local string = local.new "-"
+
+def count = local.new 0
+
+def read-trace = fun {
+	local.get trace
+}
+
+def scoped = fun {
+	local.with trace "req" fun {
+		task.return (local.get trace)
+	}
+}
+
+def scoped-int = fun {
+	local.with count 42 fun {
+		task.return (local.get count)
+	}
+}
