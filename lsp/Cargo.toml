@@ -1,6 +1,6 @@
 [package]
 name = "pluma-language-server"
-version = "0.0.0"
+version.workspace = true
 edition = "2024"
 
 [dependencies]

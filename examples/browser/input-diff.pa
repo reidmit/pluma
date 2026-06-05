@@ -1,6 +1,6 @@
 # A *controlled* text input: the model owns the field's value, not the browser.
 #
-#     pluma build --target browser examples/browser/input-diff.pa -o /tmp/input
+#     pluma build --web examples/browser/input-diff.pa -o /tmp/input
 #     python3 -m http.server --directory /tmp/input
 #
 # then open the printed URL and type into the box. `update` upper-cases every

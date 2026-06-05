@@ -55,7 +55,7 @@ pub struct EmitOptions {
 	/// pass is sound, so turning it off only forgoes the perf win — the persistent
 	/// baseline it falls back to is the observational oracle the harness diffs against.
 	pub reuse: bool,
-	/// Emit for the browser target (`pluma build --target browser`): use the long-lived
+	/// Emit for the browser target (`pluma build --web`): use the long-lived
 	/// command runtime entry (`__browser_entry`) instead of the run-to-completion
 	/// `__task_entry`, export `__browser_resume`, and wire the `__dom_dispatch` pump tail.
 	pub browser: bool,

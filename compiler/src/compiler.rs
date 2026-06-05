@@ -96,8 +96,8 @@ impl Compiler {
 
 	// Select the deploy target whose tier gates module availability. Builder
 	// form so the ~14 existing constructor call sites (cli, lsp, tests) keep
-	// their default ungated (`None`) mode untouched; only a `pluma build
-	// --target sys|web` opts into gating.
+	// their default ungated (`None`) mode untouched; only `pluma build` opts
+	// into gating (`Web` with `--web`, `Sys` otherwise).
 	pub fn with_target(mut self, target: Option<Target>) -> Self {
 		self.target = target;
 		self
@@ -364,7 +364,7 @@ impl Compiler {
 		// is rejected with a clean transport error (version-skew protection).
 		let fingerprint = crate::rpc::surface_fingerprint(&endpoints);
 		// The client stub's transport follows the build target: the browser's
-		// `fetch` on web (a `--target web` build or the client half of a fullstack
+		// `fetch` on web (a `--web` build or the client half of a fullstack
 		// build), `http.fetch` over `std.sys.net` otherwise.
 		let web = self.fullstack || self.target == Some(crate::platform::Target::Web);
 		let base_url = self
@@ -840,7 +840,7 @@ mod platform_gating_tests {
 	#[test]
 	fn fullstack_gate_allows_each_tier_on_its_own_side() {
 		// The server half reaches `std.sys.*`, the client half `std.web.*` — each
-		// legal on its own artifact. A single `--target` couldn't admit both.
+		// legal on its own artifact. A single gating profile couldn't admit both.
 		let server = "use std.sys.io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
 		let client = "use std.web.dom\n\ndef main = fun {\n\tlet _ = dom.body ()\n\t()\n}\n";
 		let diags = gate_fullstack_multi(

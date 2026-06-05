@@ -12,7 +12,7 @@ run path:
 
 # compile a module to a WasmGC deploy artifact (run it with `pluma run <out>.wasm`)
 build-server path:
-  @ cargo run --bin cli --quiet -- build --target server {{path}}
+  @ cargo run --bin cli --quiet -- build {{path}}
 
 # format everything: Rust sources (cargo fmt) + the baked-in stdlib/prelude .pa sources
 format: format-stdlib

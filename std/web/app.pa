@@ -444,7 +444,7 @@ public def element :: fun (model, list (task msg)) (fun msg model -> (model, lis
 
 # --- HMR variants: model-preserving hot reload for `pluma dev` ---------------
 
-# `pluma dev --target web` redirects `app.sandbox` / `app.element` to these when
+# `pluma dev --web` redirects `app.sandbox` / `app.element` to these when
 # the model is wire-able, so the live model survives a reload. They are otherwise
 # identical to their plain counterparts; the only additions are restoring the
 # saved model on mount and persisting it on every message. The redirect (not the

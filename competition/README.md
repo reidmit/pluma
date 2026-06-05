@@ -30,7 +30,7 @@ summed and reported separately, not folded into the per-run numbers.
 
 | column | engine | shape |
 |---|---|---|
-| `pluma-v8`  | WasmGC artifact under **V8** | compiled to wasm once (`pluma build --target server`), then `pluma run <out>.wasm` — *run what you ship* |
+| `pluma-v8`  | WasmGC artifact under **V8** | compiled to wasm once (`pluma build`), then `pluma run <out>.wasm` — *run what you ship* |
 | `python3`   | CPython | bytecode interpreter |
 | `ruby`      | CRuby (MRI) | bytecode interpreter |
 | `node`      | V8 | JIT |

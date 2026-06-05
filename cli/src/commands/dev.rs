@@ -1,12 +1,12 @@
 // `pluma dev <path>` — the watch + live-reload loop (Tier 1: full reload).
 //
-// Two modes, mirroring `pluma build`'s `--target`:
-//   - `--target web`  → build the browser bundle, serve it over a built-in HTTP
+// Two modes, mirroring `pluma build`'s `--web`:
+//   - `--web`  → build the browser bundle, serve it over a built-in HTTP
 //     server (WasmGC needs a real origin, not file://), watch `*.pa` sources, and
 //     push a reload over Server-Sent Events on every successful rebuild. The page
 //     does a full `location.reload()` — state is lost (HMR is a later tier).
-//   - `--target sys` (default) → run the program as a child `pluma run` subprocess
-//     and restart it whenever a source file changes (classic nodemon-style).
+//   - default → run the program as a child `pluma run` subprocess and restart it
+//     whenever a source file changes (classic nodemon-style).
 //
 // No external dependencies: a hand-rolled HTTP/1.1 + SSE server over `std::net`,
 // and a mtime-polling watcher. A full rebuild is ~tens of ms (the whole pipeline
@@ -33,17 +33,13 @@ const POLL: Duration = Duration::from_millis(250);
 
 pub(crate) fn dev_command(args: Vec<String>) {
 	let mut entry_path: Option<String> = None;
-	let mut target = String::from("sys");
+	let mut web = false;
 	let mut port: u16 = 2222;
 	let mut server_url: Option<String> = None;
 	let mut iter = args.into_iter();
 	while let Some(a) = iter.next() {
 		match a.as_str() {
-			"--target" => {
-				if let Some(t) = iter.next() {
-					target = t;
-				}
-			}
+			"--web" => web = true,
 			"--port" => match iter.next().and_then(|p| p.parse::<u16>().ok()) {
 				Some(p) => port = p,
 				None => {
@@ -74,15 +70,10 @@ pub(crate) fn dev_command(args: Vec<String>) {
 		return;
 	}
 
-	match target.as_str() {
-		"web" => dev_web(entry_path, port),
-		"sys" => dev_server(entry_path),
-		other => {
-			print_error(format!(
-				"Unknown --target `{other}`. Expected `sys` or `web`."
-			));
-			std::process::exit(1);
-		}
+	if web {
+		dev_web(entry_path, port);
+	} else {
+		dev_server(entry_path);
 	}
 }
 

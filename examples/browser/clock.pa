@@ -1,6 +1,6 @@
 # A self-running clock -- the smallest MVU app with a *command*.
 #
-#     pluma build --target browser examples/browser/clock.pa -o /tmp/clock
+#     pluma build --web examples/browser/clock.pa -o /tmp/clock
 #     python3 -m http.server --directory /tmp/clock
 #
 # then open http://localhost:2222/ . The number counts up once per second with

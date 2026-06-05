@@ -1,7 +1,7 @@
 # std.web.dom -- building and reacting to a web page's DOM, from the browser.
 #
 # These functions only exist when you compile for the browser target
-# (`pluma build --target browser`): they reach the real DOM through the
+# (`pluma build --web`): they reach the real DOM through the
 # host page, so they're gated on the `Dom` capability (see
 # compiler/src/platform.rs) and are unavailable on the server.
 #

@@ -2,24 +2,25 @@
 //
 // Pluma compiles from one shared IR to one WasmGC backend, but a `.wasm` runs in
 // different host environments — a machine with an operating system underneath
-// (servers, CLIs, scripts, batch jobs, desktop) or a web/DOM sandbox. The two
-// `--target` values name that split: `sys` and `web`.
+// (servers, CLIs, scripts, batch jobs, desktop) or a web/DOM sandbox. The `Sys`
+// and `Web` profiles name that split.
 //
 // Gating is derived from the module's namespace prefix, not a capability table:
 //
-//   std.sys.*  → allowed only on the `sys` target
-//   std.web.*  → allowed only on the `web` target
+//   std.sys.*  → allowed only on the `Sys` profile
+//   std.web.*  → allowed only on the `Web` profile
 //   std.*      → allowed on both (pure compute / shared host surface)
 //
 // A `Target` is the chosen deploy profile. Most flows don't choose one: the
 // frontend/analysis path, the LSP, `pluma run`/`test`/`check`, and the
 // `tests/analyze` suite all compile and run locally under V8 with full host
 // capabilities, so they are *ungated* — modeled as `None` (no target). Only
-// `pluma build --target sys|web` selects a `Some(target)` and enforces gating at
-// the `use` site.
+// `pluma build` selects a `Some(target)`: `Web` when `--web` is passed (or the
+// client half of a fullstack build), `Sys` otherwise. Gating is enforced at the
+// `use` site.
 
-/// A deploy target. The two `--target` values. Not a third "native"/"ungated"
-/// variant — ungated mode is `Option::None` (see `gate`).
+/// A deploy target — the `Sys`/`Web` profile a build is gated against. Not a
+/// third "native"/"ungated" variant — ungated mode is `Option::None` (see `gate`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
 	/// A machine/OS host: servers, CLIs, scripts, batch jobs, desktop.
@@ -30,7 +31,7 @@ pub enum Target {
 }
 
 impl Target {
-	/// A human-facing name for diagnostics + the `--target` value.
+	/// A human-facing name for diagnostics.
 	pub fn label(self) -> &'static str {
 		match self {
 			Target::Sys => "sys",

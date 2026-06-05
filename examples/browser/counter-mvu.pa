@@ -1,6 +1,6 @@
 # A click counter, the Elm way -- pure `update` + `view`, no manual DOM.
 #
-#     pluma build --target browser examples/browser/counter-mvu.pa -o /tmp/counter-mvu
+#     pluma build --web examples/browser/counter-mvu.pa -o /tmp/counter-mvu
 #     python3 -m http.server --directory /tmp/counter-mvu
 #
 # then open http://localhost:2222/ . The runtime owns the model and the DOM;

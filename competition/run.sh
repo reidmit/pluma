@@ -145,7 +145,7 @@ time_src() {
 build_wasm() {
 	local src="$1" outbase="$2" err t
 	err="$(mktemp)"
-	timed_run /dev/null "$err" "$PLUMA" build --target server "$src" -o "$outbase"
+	timed_run /dev/null "$err" "$PLUMA" build "$src" -o "$outbase"
 	if [ "$?" -ne 0 ]; then
 		rm -f "$err"
 		echo "ERR"
