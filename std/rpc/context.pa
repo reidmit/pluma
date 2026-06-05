@@ -1,0 +1,81 @@
+# std.rpc.context -- the ambient request context a handler reads.
+#
+# A `remote def`'s contract is the pure logical signature (`fun A.. -> task R`) --
+# it has no `request` parameter, because the transport facts a handler sometimes
+# needs (headers, method, path) aren't part of what the *client* sends. The
+# synthesized dispatcher binds the inbound request for the dynamic extent of each
+# handler invocation, and the handler reads it back here -- without threading it
+# through every signature.
+#
+# This carries *transport facts only*; it has no notion of identity. Authentication
+# is app territory built on the same task-local primitive (`std.local`): a handler
+# reads a credential header through `context.header`, validates it, and binds its
+# own typed principal. The binding rides `std.local`, so it survives `try`/await
+# and concurrent requests stay isolated (each connection runs in its own task, so a
+# shared `ref` would let one request clobber another's context -- a `local` can't).
+#
+# On the client artifact every `remote def` body is a transport stub, so these
+# reads are unreachable there and DCE drops the module -- reading context can't
+# pull server-only deps into the bundle.
+use std.dict
+use std.local
+use std.sys.http
+
+# The inbound request for the handler running on this branch of the task tree.
+# `none` outside a dispatch (a handler called in-process, or a client read).
+def current :: local (option http.request) = local.new none
+
+# Binds `req` as the ambient request for `body` and every task it spawns. The
+# synthesized dispatcher wraps each handler invocation in this; it is not meant
+# for application use (handlers *read* context, they don't bind it).
+public def with-request :: fun http.request (fun nothing -> task a) -> task a = fun req body {
+	local.with current (some req) body
+}
+
+# The whole inbound request -- the escape hatch when a typed accessor doesn't
+# cover what you need. `none` when read outside a dispatch.
+public def request :: fun nothing -> option http.request = fun {
+	local.get current
+}
+
+# The inbound request headers (lower-cased names), or an empty dict off-dispatch.
+public def headers :: fun nothing -> dict string string = fun {
+	when local.get current is some req {
+		req.headers
+	} is none {
+		dict.empty ()
+	}
+}
+
+# One inbound header by (lower-cased) name -- cookie, authorization, x-trace-id,
+# .... `none` if absent (or read outside a dispatch).
+public def header :: fun string -> option string = fun key {
+	when local.get current is some req {
+		dict.lookup req.headers key
+	} is none {
+		none
+	}
+}
+
+# The request method. Defaults to `get` off-dispatch (a handler always runs under
+# a bound request, so the default is only a misuse fallback, never a real method).
+public def method :: fun nothing -> http.method = fun {
+	when local.get current is some req {
+		req.method
+	} is none {
+		get
+	}
+}
+
+# The request path (`/rpc/<route>` for an rpc call). Empty off-dispatch.
+public def path :: fun nothing -> string = fun {
+	when local.get current is some req {
+		req.path
+	} is none {
+		""
+	}
+}
+
+# (`peer` -- the remote address -- is deferred: `std.sys.http`'s `request` carries
+# no remote-addr field yet. Add it here once the server surfaces one.)
+

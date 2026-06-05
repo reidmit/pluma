@@ -1,0 +1,66 @@
+# Ambient request context + in-handler authorization over a real loopback socket.
+# The endpoint reads `context.header "x-role"` — a transport fact the synthesized
+# dispatcher binds for the handler, with no `request` parameter in the contract —
+# and `rpc.reject`s the unauthorized cases. A hand-written probe POSTs the encoded
+# args with different `x-role` headers and reports the HTTP status the dispatcher
+# returns (which a client transport would map back to `unauthorized`/`forbidden`):
+# no header -> 401, a non-admin -> 403, an admin -> 200 with the decoded sum.
+#
+# The fingerprint is the route fingerprint for `fun int int -> task int` (shared
+# with rpc-skew); if the fingerprint algorithm changes, update it and re-accept.
+use std.dict
+use std.rpc
+use std.task
+use std.sys.http
+use std.sys.net
+use api
+
+def route-fp :: string = "3046392278730166848"
+
+# POST the encoded args with the given headers; for a 200, decode and return the
+# sum, otherwise report the status code (a reject surfaces as its HTTP status).
+def probe :: fun string (dict string string) -> task int = fun url headers {
+	try resp = http.fetch url post (dict.insert headers "x-rpc-fingerprint" route-fp) (wire.encode (
+		2,
+		3,
+	))
+	when resp is ok r {
+		if r.status == 200 {
+			let decoded :: result int wire-error = wire.decode r.body
+			when decoded is ok n {
+				task.return n
+			} is err _e {
+				task.return (0 - 1)
+			}
+		} else {
+			task.return r.status
+		}
+	} is err _e {
+		task.return 0
+	}
+}
+
+def main = fun {
+	if net.listen "127.0.0.1:0" is ok server {
+		if net.local-addr server is ok addr {
+			scope as s {
+				let _ = s.spawn (http.serve-on server rpc.dispatch)
+				let url = "http://" ++ addr ++ "/rpc/api.guarded-add"
+				try anon = probe url (dict.empty ())
+				print "anonymous -> $(to-string anon)"
+				try user = probe url (dict.from-entries [("x-role", "user")])
+				print "user -> $(to-string user)"
+				try admin = probe url (dict.from-entries [("x-role", "admin")])
+				print "admin -> $(to-string admin)"
+				s.cancel ()
+				task.return 0
+			}
+		} else {
+			print "local-addr failed"
+			task.return 1
+		}
+	} else {
+		print "listen failed"
+		task.return 1
+	}
+}

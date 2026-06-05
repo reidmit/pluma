@@ -13,21 +13,49 @@
 # `std.rpc.http-web` -- one per deploy target -- so this core never imports a
 # target-specific module.
 use std.dict
+use std.list
+use std.local
 use std.router
 use std.task
+use std.rpc.context
 use std.sys.http
 
 # Infrastructure failures of a remote call, carried on the (erased) task-failure
 # channel and recovered typed via `task.attempt`. Domain errors stay inside the
 # success payload (`task (result a e)`); these are the wire/transport faults that
-# aren't any single endpoint's concern.
+# aren't any single endpoint's concern. Auth failures are infrastructure too --
+# 401/403 are cross-cutting and HTTP-shaped, so they ride here rather than every
+# endpoint's payload.
 public enum rpc-error {
 	transport string # couldn't reach the server / connection dropped (detail)
 	timeout
 	schema-skew string # client built against a drifted endpoint (route)
 	bad-request # the server couldn't decode the arguments
+	unauthorized # 401 -- not authenticated
+	forbidden # 403 -- authenticated but not allowed
 	server-fault int # the handler failed uncaught (status)
 	not-found # no such route
+}
+
+# Maps a non-200 status from a dispatcher into the typed `rpc-error` a caller
+# recovers. The recognised statuses get their own case (so a client can branch on
+# `unauthorized` without scraping a number); `route` names the endpoint for the
+# 409 skew case; anything else is an opaque `server-fault`. Both transports share
+# this so the status<->error mapping lives in exactly one place.
+public def status-error :: fun string int -> rpc-error = fun route status {
+	if status == 400 {
+		bad-request
+	} else if status == 401 {
+		unauthorized
+	} else if status == 403 {
+		forbidden
+	} else if status == 404 {
+		not-found
+	} else if status == 409 {
+		schema-skew route
+	} else {
+		server-fault status
+	}
 }
 
 # A transport: one request/response round-trip. An implementation succeeds with
@@ -56,13 +84,43 @@ public def configure :: fun sender -> nothing = fun f {
 # runtime: a client always talks to exactly the origin it was built for.
 public def server-origin :: string = built-in "rpc-server-origin"
 
+# Outbound headers bound by an enclosing `with-headers`, merged onto every call
+# made inside it. A task-local (not a `ref`): concurrent calls each carry their
+# own scoped headers, and a nested `with-headers` shadows rather than clobbers.
+def outbound-headers :: local (list (string, string)) = local.new []
+
+# Runs `body` with `headers` attached to every endpoint call inside it (the only
+# thing the old `request` argument bought at a call site). Nested scopes merge,
+# inner keys winning. Per-call concerns that aren't wire metadata already ride the
+# `task` layer over a remote call for free -- deadline (`task.with-timeout`), retry
+# (`task.retry`), cancellation (`scope`) -- so only headers need carrying here.
+#
+#     rpc.with-headers [("x-trace-id", trace)] (fun {
+#         try a = api.add 2 3   # the call attaches x-trace-id
+#         task.return a
+#     })
+public def with-headers :: fun (list (string, string)) (fun nothing -> task a) -> task a = fun headers body {
+	local.with outbound-headers [...local.get outbound-headers, ...headers] body
+}
+
+# The header dict for one outbound call: the route fingerprint, plus any headers
+# bound by an enclosing `with-headers` folded on top (so a `with-headers` entry
+# can't drop the fingerprint, but later -- inner -- entries win over earlier ones).
+def outbound :: fun string -> dict string string = fun fp {
+	let base = dict.from-entries [("x-rpc-fingerprint", fp)]
+	list.fold (local.get outbound-headers) base fun d pair {
+		let (k, v) = pair
+		dict.insert d k v
+	}
+}
+
 # Performs one unary call over the ambient transport: attaches the route's
-# fingerprint header and round-trips the encoded body. The synthesized client
-# stub wraps this with the wire encode/decode for the endpoint's types. Fails
-# with `rpc-error` if no transport is installed.
+# fingerprint plus any `with-headers` headers and round-trips the encoded body.
+# The synthesized client stub wraps this with the wire encode/decode for the
+# endpoint's types. Fails with `rpc-error` if no transport is installed.
 public def call-unary :: fun string string bytes -> task bytes = fun route fp body {
 	when ref.get current is some send {
-		send route body (dict.from-entries [("x-rpc-fingerprint", fp)])
+		send route body (outbound fp)
 	} is none {
 		task.fail (transport "no rpc transport configured")
 	}
@@ -95,6 +153,57 @@ public def fingerprint-ok :: fun http.request string -> bool = fun req expected 
 # 409, the status the client maps back to `schema-skew`.
 public def skew-response :: fun nothing -> http.response = fun {
 	http.text 409 "rpc: schema mismatch"
+}
+
+# --- handler invocation: ambient context + reject ------------------------
+
+# A handler aborts with a specific HTTP status by `reject`ing. The status can't
+# ride the (erased) task-failure value safely -- the dispatcher would have to
+# pattern-match an arbitrary failure, and matching a non-variant value traps -- so
+# it rides a per-request `ref` the dispatcher binds via `local`: `reject` writes
+# the status into it, then fails the task so the handler unwinds. `respond` reads
+# the ref after catching the failure, never inspecting the failure value itself.
+def reject-status :: local (ref (option int)) = local.new (ref.new none)
+
+# Aborts the current handler with `status` as the HTTP response code (which the
+# client maps back to an `rpc-error` -- 401 -> `unauthorized`, 403 -> `forbidden`,
+# ...). The in-handler authorization guard an app builds on `context`:
+#
+#     public def require-auth :: fun nothing -> task nothing = fun {
+#         when context.header "authorization" is some _tok { task.return () }
+#         is none { rpc.reject 401 }
+#     }
+public def reject :: fun int -> task a = fun status {
+	let _ = ref.set (local.get reject-status) (some status)
+	task.fail "rpc-reject"
+}
+
+# Runs one endpoint invocation and shapes its outcome into an HTTP response. The
+# synthesized dispatcher hands us the inbound request and a thunk that, when run,
+# calls the real handler and wire-encodes its result to bytes. We bind the request
+# as ambient `context` (so the handler can read headers) and a fresh `reject` box,
+# run the handler reifying any failure with `task.attempt` -- WITHOUT inspecting
+# the failure value, since matching an erased failure would trap -- and shape the
+# outcome: 200 + bytes on success, the rejected status on a `reject`, 500 on any
+# other failure. Running `produce` *inside* the bindings is what makes
+# `context`/`reject` visible to the handler (a synchronous read sees the binding
+# directly; an awaited one sees it reinstalled on resume).
+public def respond :: fun http.request (fun nothing -> task bytes) -> task http.response = fun req produce {
+	context.with-request req fun {
+		let box = ref.new none
+		local.with reject-status box fun {
+			try outcome = task.attempt (produce ())
+			when outcome is ok b {
+				task.return {status: 200, headers: dict.empty (), body: b}
+			} is err _e {
+				when ref.get box is some status {
+					task.return (http.text status "")
+				} is none {
+					task.return (http.text 500 "rpc: handler failed")
+				}
+			}
+		}
+	}
 }
 
 # The server-side RPC handler: routes a `/rpc/<route>` request to the matching

@@ -601,27 +601,19 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// Invoke one endpoint (assuming its fingerprint already checked out): decode
-	/// the request body against the arg shape, call the real handler global, and
-	/// `task.map` the result into a 200 response (a malformed body → 400). Assigns
-	/// the `task response` to `result`. Emits into the caller's block buffer.
+	/// the request body against the arg shape, then route the handler through
+	/// `std.rpc.respond` (ambient context + reject + 200/4xx/5xx shaping). A
+	/// malformed body short-circuits to 400 before the handler runs. Assigns the
+	/// `task response` to `result`. Emits into the caller's block buffer.
 	fn dispatch_invoke(
 		&mut self,
 		req: &Atom,
 		result: VarId,
 		ep: &compiler::rpc::RpcEndpointMeta,
 	) -> Result<(), String> {
-		let handler = self.rpc_global(&ep.module, &ep.name, SYNTHETIC)?;
-
 		if ep.arity == 0 {
-			// Nothing to decode — call the handler with the unit arg.
-			let task = self.emit_let(
-				Rvalue::CallClosure(handler, vec![Atom::Const(Const::Unit)]),
-				SYNTHETIC,
-			);
-			let enc = self.synthesize_encode_closure(&ep.result_shape)?;
-			let mapped = self.task_combinator("map", task, enc)?;
-			self.push_stmt(StmtKind::Let(result, Rvalue::Use(mapped)), SYNTHETIC);
-			return Ok(());
+			// Nothing to decode — invoke straight through `respond`.
+			return self.dispatch_respond(req, result, ep, &[]);
 		}
 
 		// Decode the argument(s): `wire.decode <argschema> req.body` → `result args string`.
@@ -641,14 +633,11 @@ impl<'a> Lowerer<'a> {
 			Pattern::Tuple(argvars.iter().map(|v| Pattern::Bind(*v)).collect())
 		};
 
-		// ok arm: call the handler and encode the result into a 200 response.
+		// ok arm: invoke the handler through `respond` (binds context + reject).
 		let ok_saved = self.take_stmts();
-		let call_args: Vec<Atom> = argvars.iter().map(|v| Atom::Var(*v)).collect();
-		let task = self.emit_let(Rvalue::CallClosure(handler, call_args), SYNTHETIC);
-		let enc = self.synthesize_encode_closure(&ep.result_shape)?;
-		let mapped = self.task_combinator("map", task, enc)?;
-		self.push_stmt(StmtKind::Let(result, Rvalue::Use(mapped)), SYNTHETIC);
+		let invoke = self.dispatch_respond(req, result, ep, &argvars);
 		let ok_block = Block(self.restore_stmts(ok_saved));
+		invoke?;
 
 		// err arm: a malformed request body → 400.
 		let err_saved = self.take_stmts();
@@ -692,10 +681,12 @@ impl<'a> Lowerer<'a> {
 		Ok(())
 	}
 
-	/// A dispatch arm's response builder: `fun res { {status: 200, headers:
-	/// dict.empty (), body: wire.encode <resultschema> res} }`. The result schema
-	/// is lowered inside this closure. Captures nothing.
-	fn synthesize_encode_closure(
+	/// A handler's result encoder: `fun res { wire.encode <resultschema> res }`,
+	/// producing the reply bytes. The 200-response wrapping lives in `std.rpc`'s
+	/// `respond` (which also binds context and catches a `reject`); this closure
+	/// just turns the handler's value into bytes. The schema is lowered inside the
+	/// closure. Captures nothing.
+	fn synthesize_encode_bytes_closure(
 		&mut self,
 		result_shape: &compiler::ast::WireShape,
 	) -> Result<Atom, String> {
@@ -704,25 +695,81 @@ impl<'a> Lowerer<'a> {
 		let schema = self.lower_wire_shape(result_shape, SYNTHETIC)?;
 		let enc = self.rpc_global("__prelude__", "wire-encode", SYNTHETIC)?;
 		let bytes = self.emit_let(Rvalue::CallClosure(enc, vec![schema, res]), SYNTHETIC);
-		let empty = self.rpc_global("std.dict", "empty", SYNTHETIC)?;
-		let headers = self.emit_let(
-			Rvalue::CallClosure(empty, vec![Atom::Const(Const::Unit)]),
-			SYNTHETIC,
-		);
-		// Field order is name-sorted to match the record-shape layout the backends
-		// expect from `MakeRecord` (`body` < `headers` < `status`).
-		let resp = self.emit_let(
-			Rvalue::MakeRecord(vec![
-				("body".to_string(), bytes),
-				("headers".to_string(), headers),
-				("status".to_string(), Atom::Const(Const::Int(200))),
-			]),
-			SYNTHETIC,
-		);
-		self.push_stmt(StmtKind::Return(resp), SYNTHETIC);
+		self.push_stmt(StmtKind::Return(bytes), SYNTHETIC);
 		let scope = self.scopes.pop().unwrap();
 		let fid = self.add_function(finish_scope(scope));
 		Ok(self.emit_let(Rvalue::MakeClosure(fid, Vec::new()), SYNTHETIC))
+	}
+
+	/// The thunk `std.rpc.respond` runs to invoke one endpoint:
+	/// `fun { task.map (<module>.<name> <args>) (fun res { wire.encode <rs> res }) }`
+	/// — a zero-arg closure capturing the decoded argument vars from the arm. The
+	/// handler is invoked *inside* this closure (not eagerly), because `respond`
+	/// runs it under the ambient `context` + `reject` bindings: capturing the args
+	/// and deferring the call is what places the handler's invocation — and any
+	/// synchronous `context.*` read it does — inside those bindings.
+	fn synthesize_invoke_thunk(
+		&mut self,
+		ep: &compiler::rpc::RpcEndpointMeta,
+		args: &[VarId],
+	) -> Result<Atom, String> {
+		self.push_scope(
+			format!("{}.{}@rpc-invoke", self.current_module, ep.name),
+			&[],
+		);
+		let inner = self.scopes.len() - 1;
+		// Capture each decoded argument from the parent (dispatch) scope.
+		let arg_atoms: Vec<Atom> = args
+			.iter()
+			.enumerate()
+			.map(|(i, &pv)| {
+				let slot = self.add_capture(inner, &format!("a{}", i), CaptureSrc::ParentLocal(pv));
+				match slot {
+					ScopeSlot::Capture(ci) => Atom::Var(self.scopes[inner].captures[ci].var),
+					_ => unreachable!("add_capture returns a Capture slot"),
+				}
+			})
+			.collect();
+		let handler = self.rpc_global(&ep.module, &ep.name, SYNTHETIC)?;
+		// Arity 0 takes the unit arg; otherwise pass the captured arguments.
+		let call_args = if args.is_empty() {
+			vec![Atom::Const(Const::Unit)]
+		} else {
+			arg_atoms
+		};
+		let task = self.emit_let(Rvalue::CallClosure(handler, call_args), SYNTHETIC);
+		let enc = self.synthesize_encode_bytes_closure(&ep.result_shape)?;
+		let mapped = self.task_combinator("map", task, enc)?;
+		self.push_stmt(StmtKind::Return(mapped), SYNTHETIC);
+		let scope = self.scopes.pop().unwrap();
+		let capture_atoms: Vec<Atom> = scope
+			.captures
+			.iter()
+			.map(|c| self.capture_src_atom(&c.src))
+			.collect();
+		let fid = self.add_function(finish_scope(scope));
+		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms), SYNTHETIC))
+	}
+
+	/// `result = std.rpc.respond <req> <invoke-thunk>` — hand the inbound request
+	/// and the endpoint's invocation thunk to `respond`, which binds the ambient
+	/// context + reject box, runs the handler, and shapes success / `reject` / fault
+	/// into an HTTP response. Emits into the caller's block buffer.
+	fn dispatch_respond(
+		&mut self,
+		req: &Atom,
+		result: VarId,
+		ep: &compiler::rpc::RpcEndpointMeta,
+		args: &[VarId],
+	) -> Result<(), String> {
+		let thunk = self.synthesize_invoke_thunk(ep, args)?;
+		let respond = self.rpc_global("std.rpc", "respond", SYNTHETIC)?;
+		let resp = self.emit_let(
+			Rvalue::CallClosure(respond, vec![req.clone(), thunk]),
+			SYNTHETIC,
+		);
+		self.push_stmt(StmtKind::Let(result, Rvalue::Use(resp)), SYNTHETIC);
+		Ok(())
 	}
 
 	/// `std.rpc.server-origin`, a baked build-time constant: a thunk returning the

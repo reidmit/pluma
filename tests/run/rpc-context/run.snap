@@ -1,0 +1,11 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+anonymous -> 401
+user -> 403
+admin -> 5
+== stderr ==

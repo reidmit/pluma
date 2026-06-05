@@ -26,6 +26,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std.request", include_str!("../../std/request.pa")),
 		("std.result", include_str!("../../std/result.pa")),
 		("std.rpc", include_str!("../../std/rpc.pa")),
+		("std.rpc.context", include_str!("../../std/rpc/context.pa")),
 		("std.rpc.sys", include_str!("../../std/rpc/sys.pa")),
 		("std.rpc.web", include_str!("../../std/rpc/web.pa")),
 		("std.router", include_str!("../../std/router.pa")),
