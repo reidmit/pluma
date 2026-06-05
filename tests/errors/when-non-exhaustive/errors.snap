@@ -6,6 +6,6 @@ error[E0109]: Non-exhaustive `when`: missing case for `node`.
   │
   ├─𜱶 help: add an arm for each missing case, or a wildcard `_` arm.
   │
-7 │   when t is empty {
-  │   ^^^^^^^^^^^^^^^^^
+7 │   when t is tree.empty {
+  │   ^^^^^^^^^^^^^^^^^^^^^^
   ╰─𜱶 tests/errors/when-non-exhaustive/main.pa:7:3

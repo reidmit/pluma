@@ -52,7 +52,7 @@ print (show 42)           # int instance
 print (show true)         # bool instance
 ```
 
-Dispatch is by argument type — the compiler picks the instance from the call site's types. Local `def`s (and bare enum variants) shadow trait methods with the same name. When two in-scope traits export the same method name, you get an ambiguity error and must qualify:
+Dispatch is by argument type — the compiler picks the instance from the call site's types. Local `def`s shadow trait methods with the same name. When two in-scope traits export the same method name, you get an ambiguity error and must qualify:
 
 ```pluma
 print (showable.show 42)  # explicit form, always legal

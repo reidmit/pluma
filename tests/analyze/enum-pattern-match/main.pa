@@ -4,9 +4,9 @@ enum tree {
 }
 
 def value-at-root = fun t {
-	when t is empty {
+	when t is tree.empty {
 		0
-	} is node val _l _r {
+	} is tree.node val _l _r {
 		val
 	}
 }

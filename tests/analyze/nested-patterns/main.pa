@@ -21,7 +21,7 @@ def tuple-destructure = fun t {
 }
 
 def grouping = fun t {
-	if t is empty {
+	if t is tree.empty {
 		0
 	}
 }

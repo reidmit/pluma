@@ -36,8 +36,16 @@ module `main` (tests/analyze/if-patterns/main.pa) {
                             expr(6:1-8:2) :: nothing {
                                 kind: if(6:1-8:2) expr(6:4-6:5) :: tree {
                                     kind: ident(6:4-6:5) `t`,
-                                } pattern(6:9-6:14) Identifier(
-                                    ident(6:9-6:14) `empty`,
+                                } pattern(6:9-6:19) Constructor(
+                                    ConstructorHead {
+                                        range: 6:9-6:19,
+                                        module: None,
+                                        enum_name: Some(
+                                            ident(6:9-6:13) `tree`,
+                                        ),
+                                        variant: ident(6:14-6:19) `empty`,
+                                    },
+                                    [],
                                 ) [
                                     expr(7:2-7:3) :: int {
                                         kind: literal(7:2-7:3) int 0,
@@ -59,17 +67,24 @@ module `main` (tests/analyze/if-patterns/main.pa) {
                             expr(12:1-14:2) :: nothing {
                                 kind: if(12:1-14:2) expr(12:4-12:5) :: tree {
                                     kind: ident(12:4-12:5) `t`,
-                                } pattern(12:9-12:23) Constructor(
-                                    ident(12:9-12:13) `node`,
+                                } pattern(12:9-12:28) Constructor(
+                                    ConstructorHead {
+                                        range: 12:9-12:18,
+                                        module: None,
+                                        enum_name: Some(
+                                            ident(12:9-12:13) `tree`,
+                                        ),
+                                        variant: ident(12:14-12:18) `node`,
+                                    },
                                     [
-                                        pattern(12:14-12:17) Identifier(
-                                            ident(12:14-12:17) `val`,
+                                        pattern(12:19-12:22) Identifier(
+                                            ident(12:19-12:22) `val`,
                                         ),
-                                        pattern(12:18-12:20) Identifier(
-                                            ident(12:18-12:20) `_l`,
+                                        pattern(12:23-12:25) Identifier(
+                                            ident(12:23-12:25) `_l`,
                                         ),
-                                        pattern(12:21-12:23) Identifier(
-                                            ident(12:21-12:23) `_r`,
+                                        pattern(12:26-12:28) Identifier(
+                                            ident(12:26-12:28) `_r`,
                                         ),
                                     ],
                                 ) [

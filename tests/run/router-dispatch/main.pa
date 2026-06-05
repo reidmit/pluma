@@ -45,14 +45,14 @@ def main = fun {
 		}),
 	]
 
-	try _ = hit app get "/"                    # 200 home
-	try _ = hit app get "/health"              # 200 ok
-	try _ = hit app post "/users"              # 201 created
-	try _ = hit app get "/dup"                 # 200 first  (earlier route wins)
-	try _ = hit app get "/static/index.html"   # 200 the index  (exact before prefix)
-	try _ = hit app get "/static/app.css"      # 200 file /static/app.css  (prefix)
-	try _ = hit app get "/users"               # 404  (path exists, wrong method)
-	try _ = hit app post "/"                   # 404  (path exists, wrong method)
-	try _ = hit app get "/missing"             # 404  (no route)
+	try _ = hit app http.method.get "/"                    # 200 home
+	try _ = hit app http.method.get "/health"              # 200 ok
+	try _ = hit app http.method.post "/users"              # 201 created
+	try _ = hit app http.method.get "/dup"                 # 200 first  (earlier route wins)
+	try _ = hit app http.method.get "/static/index.html"   # 200 the index  (exact before prefix)
+	try _ = hit app http.method.get "/static/app.css"      # 200 file /static/app.css  (prefix)
+	try _ = hit app http.method.get "/users"               # 404  (path exists, wrong method)
+	try _ = hit app http.method.post "/"                   # 404  (path exists, wrong method)
+	try _ = hit app http.method.get "/missing"             # 404  (no route)
 	task.return 0
 }

@@ -18,9 +18,9 @@ trait describable a {
 
 implement describable shape {
 	def describe = fun s {
-		when s is circle r {
+		when s is shape.circle r {
 			"circle radius $(to-string r)"
-		} is rect w h {
+		} is shape.rect w h {
 			"rect $(to-string w) x $(to-string h)"
 		}
 	}

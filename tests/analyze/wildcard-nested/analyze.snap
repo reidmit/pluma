@@ -35,19 +35,34 @@ module `main` (tests/analyze/wildcard-nested/main.pa) {
                         body: [
                             expr(6:1-10:2) :: bool {
                                 kind: when(6:1-10:2) [
-                                    case(6:8-8:2) is pattern(6:11-6:16) Identifier(
-                                        ident(6:11-6:16) `empty`,
+                                    case(6:8-8:2) is pattern(6:11-6:21) Constructor(
+                                        ConstructorHead {
+                                            range: 6:11-6:21,
+                                            module: None,
+                                            enum_name: Some(
+                                                ident(6:11-6:15) `tree`,
+                                            ),
+                                            variant: ident(6:16-6:21) `empty`,
+                                        },
+                                        [],
                                     ) [
                                         expr(7:2-7:7) :: bool {
                                             kind: literal(7:2-7:7) bool false,
                                         },
                                     ],
-                                    case(8:3-10:2) is pattern(8:6-8:16) Constructor(
-                                        ident(8:6-8:10) `node`,
+                                    case(8:3-10:2) is pattern(8:6-8:21) Constructor(
+                                        ConstructorHead {
+                                            range: 8:6-8:15,
+                                            module: None,
+                                            enum_name: Some(
+                                                ident(8:6-8:10) `tree`,
+                                            ),
+                                            variant: ident(8:11-8:15) `node`,
+                                        },
                                         [
-                                            pattern(8:11-8:12) Underscore,
-                                            pattern(8:13-8:14) Underscore,
-                                            pattern(8:15-8:16) Underscore,
+                                            pattern(8:16-8:17) Underscore,
+                                            pattern(8:18-8:19) Underscore,
+                                            pattern(8:20-8:21) Underscore,
                                         ],
                                     ) [
                                         expr(9:2-9:6) :: bool {

@@ -983,8 +983,8 @@ impl<'a> Formatter<'a> {
 			PatternKind::Identifier(ident) => text(ident.name.clone()),
 			PatternKind::Underscore => text("_"),
 			PatternKind::Literal(lit) => self.format_literal(lit),
-			PatternKind::Constructor(name, args) => {
-				let mut parts: Vec<Doc> = vec![text(name.name.clone())];
+			PatternKind::Constructor(head, args) => {
+				let mut parts: Vec<Doc> = vec![text(head.dotted())];
 				for a in args {
 					parts.push(text(" "));
 					parts.push(self.format_pattern_arg(a));

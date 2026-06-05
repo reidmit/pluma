@@ -44,17 +44,17 @@ public enum rpc-error {
 # this so the status<->error mapping lives in exactly one place.
 public def status-error :: fun string int -> rpc-error = fun route status {
 	if status == 400 {
-		bad-request
+		rpc-error.bad-request
 	} else if status == 401 {
-		unauthorized
+		rpc-error.unauthorized
 	} else if status == 403 {
-		forbidden
+		rpc-error.forbidden
 	} else if status == 404 {
-		not-found
+		rpc-error.not-found
 	} else if status == 409 {
-		schema-skew route
+		rpc-error.schema-skew route
 	} else {
-		server-fault status
+		rpc-error.server-fault status
 	}
 }
 
@@ -122,7 +122,7 @@ public def call-unary :: fun string string bytes -> task bytes = fun route fp bo
 	when ref.get current is some send {
 		send route body (outbound fp)
 	} is none {
-		task.fail (transport "no rpc transport configured")
+		task.fail (rpc-error.transport "no rpc transport configured")
 	}
 }
 
@@ -133,7 +133,7 @@ public def lift :: fun (result a wire-error) -> task a = fun r {
 	when r is ok v {
 		task.return v
 	} is err _e {
-		task.fail (transport "malformed rpc reply")
+		task.fail (rpc-error.transport "malformed rpc reply")
 	}
 }
 

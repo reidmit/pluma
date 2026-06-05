@@ -9,6 +9,6 @@ enum foo {
 
 def main = fun {
 	let m = dict.empty ()
-	let m = dict.insert m a 1
+	let m = dict.insert m foo.a 1
 	print m
 }

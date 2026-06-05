@@ -650,8 +650,8 @@ impl Resolver {
 					self.bind_value(id, scope);
 				}
 			}
-			PatternKind::Constructor(name, inner) => {
-				self.reference(name, RefKind::Variant);
+			PatternKind::Constructor(head, inner) => {
+				self.reference(&head.variant, RefKind::Variant);
 				for ip in inner {
 					self.bind_pattern(ip, scope);
 				}

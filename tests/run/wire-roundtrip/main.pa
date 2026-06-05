@@ -39,7 +39,7 @@ def main = fun {
 	}
 
 	# User enum with payloads — tag is the variant's declaration index.
-	print "enum: $(to-string (wire.decode (wire.encode (rect 3 4)) ?? dot))"
+	print "enum: $(to-string (wire.decode (wire.encode (shape.rect 3 4)) ?? shape.dot))"
 
 	# Decode-failure channel: a 1-byte int can't satisfy a 2-int tuple.
 	let bad :: result (int, int) wire-error = wire.decode e-int

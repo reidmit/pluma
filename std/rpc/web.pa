@@ -21,7 +21,7 @@ def send :: fun string bytes (dict string string) -> task bytes = fun route body
 			task.fail (rpc.status-error route resp.status)
 		}
 	} is err e {
-		task.fail (transport e)
+		task.fail (rpc.rpc-error.transport e)
 	}
 }
 

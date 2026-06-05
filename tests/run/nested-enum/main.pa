@@ -9,13 +9,13 @@ enum result {
 }
 
 def unwrap = fun r {
-	when r is ok inner {
-		when inner is some x {
+	when r is result.ok inner {
+		when inner is option.some x {
 			x
-		} is none {
+		} is option.none {
 			0
 		}
-	} is err _msg {
+	} is result.err _msg {
 		0 - 1
 	}
 }

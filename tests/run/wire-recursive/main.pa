@@ -19,15 +19,15 @@ enum json {
 }
 
 def sum-tree :: fun tree -> int = fun t {
-	when t is leaf n {
+	when t is tree.leaf n {
 		n
-	} is node l r {
+	} is tree.node l r {
 		sum-tree l + sum-tree r
 	}
 }
 
 def main = fun {
-	let t = node (node (leaf 1) (leaf 2)) (leaf 3)
+	let t = tree.node (tree.node (tree.leaf 1) (tree.leaf 2)) (tree.leaf 3)
 	let encoded = wire.encode t
 	print "tree bytes: $(hex.encode encoded)"
 	let back :: result tree wire-error = wire.decode encoded
@@ -37,7 +37,7 @@ def main = fun {
 		print "tree failed"
 	}
 
-	let j = jarr [jnum 1, jstr "hi", jarr [jnull, jnum 2]]
+	let j = json.jarr [json.jnum 1, json.jstr "hi", json.jarr [json.jnull, json.jnum 2]]
 	let j2 :: result json wire-error = wire.decode (wire.encode j)
 	when j2 is ok v {
 		print "json round-trips: $(to-string (v == j))"

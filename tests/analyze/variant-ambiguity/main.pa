@@ -8,8 +8,9 @@ enum fruit {
 	apple
 }
 
-# `red` is ambiguous when the subject's enum type isn't known
-# (here `c` is a fresh type var until the pattern resolves it).
+# Bare `red` must be qualified: two enums declare it and the subject's type
+# isn't known here (`c` is a fresh type var), so the error names both
+# `color.red` and `fruit.red`.
 def check = fun c {
 	if c is red {
 		0

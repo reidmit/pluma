@@ -29,9 +29,9 @@ enum choice {
 }
 
 def via-when :: fun choice -> task int = fun c {
-	when c is now {
+	when c is choice.now {
 		helper 3
-	} is later {
+	} is choice.later {
 		try _ = task.sleep 1ms
 		helper 4
 	}
@@ -66,8 +66,8 @@ def main = fun {
 	try a = via-if false
 	try b = via-if true
 	print "via-if: $(to-string a) $(to-string b)"
-	try c = via-when now
-	try d = via-when later
+	try c = via-when choice.now
+	try d = via-when choice.later
 	print "via-when: $(to-string c) $(to-string d)"
 	try e = via-closure false
 	try f = via-closure true

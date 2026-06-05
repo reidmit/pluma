@@ -7,6 +7,28 @@ use crate::tokens::Token;
 use crate::types::*;
 use std::collections::{HashMap, VecDeque};
 
+// Build a `ConstructorHead` from 1-3 dotted pattern segments:
+//   [variant]                 — bare (prelude variant)
+//   [enum, variant]           — `enum.variant`
+//   [module, enum, variant]   — `module.enum.variant`
+// The segment count is bounded by the caller (at most 3).
+fn constructor_head_from_segments(mut segments: Vec<IdentifierNode>) -> ConstructorHead {
+	let variant = segments.pop().expect("at least one segment");
+	let enum_name = segments.pop();
+	let module = segments.pop();
+	let start = module
+		.as_ref()
+		.or(enum_name.as_ref())
+		.map(|i| i.range.start)
+		.unwrap_or(variant.range.start);
+	ConstructorHead {
+		range: Range::between(start, variant.range.end),
+		module,
+		enum_name,
+		variant,
+	}
+}
+
 fn hex_digit(byte: u8) -> Option<u8> {
 	match byte {
 		b'0'..=b'9' => Some(byte - b'0'),
@@ -1332,24 +1354,40 @@ impl<'a> Parser<'a> {
 	fn parse_pattern(&mut self) -> Option<PatternNode> {
 		match self.current_token {
 			Some(Token::Identifier(..)) => {
-				let id_node = self.parse_identifier().unwrap();
+				let first = self.parse_identifier().unwrap();
+
+				// A dotted head qualifies the variant by its enum, and (for an
+				// imported enum) its module: `enum.variant` or
+				// `module.enum.variant`. Collect up to two more segments; a
+				// fourth `.` is left for the caller to reject.
+				let mut segments = vec![first];
+				while segments.len() < 3 && matches!(self.current_token, Some(Token::Dot(..))) {
+					self.advance();
+					segments.push(self.expect_identifier()?);
+				}
 
 				let mut args = Vec::new();
 				while let Some(arg) = self.parse_pattern_atom() {
 					args.push(arg);
 				}
 
-				if !args.is_empty() {
-					let end = args.last().unwrap().range.end;
+				// A single bare segment with no payload is an ordinary binding
+				// (or, resolved later against the subject, a bare nullary
+				// prelude variant). Everything else is a variant constructor.
+				if segments.len() == 1 && args.is_empty() {
+					let id_node = segments.pop().unwrap();
 					return Some(PatternNode {
-						range: Range::between(id_node.range.start, end),
-						kind: PatternKind::Constructor(id_node, args),
+						range: id_node.range,
+						kind: PatternKind::Identifier(id_node),
 					});
 				}
 
+				let head = constructor_head_from_segments(segments);
+				let start = head.range.start;
+				let end = args.last().map(|a| a.range.end).unwrap_or(head.range.end);
 				Some(PatternNode {
-					range: id_node.range,
-					kind: PatternKind::Identifier(id_node),
+					range: Range::between(start, end),
+					kind: PatternKind::Constructor(head, args),
 				})
 			}
 

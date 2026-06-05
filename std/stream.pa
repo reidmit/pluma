@@ -77,7 +77,7 @@ public def from-seed :: fun s (fun s -> task (option (a, s))) -> stream a = fun 
 		ref.set cell none
 		task.return ()
 	}
-	stream pull stop
+	stream.stream pull stop
 }
 
 # A resource-owning producer. `open` acquires the resource lazily on the first
@@ -99,17 +99,17 @@ public def from-resource :: fun {
 	next :: fun r -> task (option a),
 	close :: fun r -> task nothing,
 } -> stream a = fun cfg {
-	let cell = ref.new fresh
+	let cell = ref.new phase.fresh
 	# Release: run `close` once if a resource is live, otherwise just mark closed.
 	# Shielded so a concurrent cancel can't tear teardown apart partway through.
 	let stop = fun {
-		when ref.get cell is live r {
-			ref.set cell closed
+		when ref.get cell is phase.live r {
+			ref.set cell phase.closed
 			task.shielded (cfg.close r)
-		} is fresh {
-			ref.set cell closed
+		} is phase.fresh {
+			ref.set cell phase.closed
 			task.return ()
-		} is closed {
+		} is phase.closed {
 			task.return ()
 		}
 	}
@@ -124,17 +124,17 @@ public def from-resource :: fun {
 		}
 	}
 	let pull = fun {
-		when ref.get cell is fresh {
+		when ref.get cell is phase.fresh {
 			try r = cfg.open ()
-			ref.set cell (live r)
+			ref.set cell (phase.live r)
 			from-live r
-		} is live r {
+		} is phase.live r {
 			from-live r
-		} is closed {
+		} is phase.closed {
 			task.return none
 		}
 	}
-	stream pull stop
+	stream.stream pull stop
 }
 
 # --- transformers (lazy) -----------------------------------------------------
@@ -142,7 +142,7 @@ public def from-resource :: fun {
 # Applies `f` to every element as it is pulled. Lazy: `f` runs once per element,
 # at pull time. Shares the source's release.
 public def map :: fun (stream a) (fun a -> b) -> stream b = fun s f {
-	when s is stream pull stop {
+	when s is stream.stream pull stop {
 		let mapped = fun {
 			try out = pull ()
 			when out is some x {
@@ -151,17 +151,17 @@ public def map :: fun (stream a) (fun a -> b) -> stream b = fun s f {
 				task.return none
 			}
 		}
-		stream mapped stop
+		stream.stream mapped stop
 	}
 }
 
 # Keeps only the elements satisfying `keep`, pulling past the rejected ones. Lazy.
 public def filter :: fun (stream a) (fun a -> bool) -> stream a = fun s keep {
-	when s is stream pull stop {
+	when s is stream.stream pull stop {
 		let kept = fun {
 			pull-matching pull keep
 		}
-		stream kept stop
+		stream.stream kept stop
 	}
 }
 
@@ -183,7 +183,7 @@ def pull-matching :: fun (fun nothing -> task (option a)) (fun a -> bool) -> tas
 # releasing) the upstream once the bound is reached. Fewer than `n` available just
 # ends early.
 public def take :: fun (stream a) int -> stream a = fun s n {
-	when s is stream pull stop {
+	when s is stream.stream pull stop {
 		let left = ref.new n
 		let bounded = fun {
 			if ref.get left > 0 {
@@ -199,7 +199,7 @@ public def take :: fun (stream a) int -> stream a = fun s n {
 				task.return none
 			}
 		}
-		stream bounded stop
+		stream.stream bounded stop
 	}
 }
 
@@ -207,7 +207,7 @@ public def take :: fun (stream a) int -> stream a = fun s n {
 # ends the stream and terminates (releases) the upstream. The failing element is
 # consumed from the upstream but not emitted.
 public def take-while :: fun (stream a) (fun a -> bool) -> stream a = fun s keep {
-	when s is stream pull stop {
+	when s is stream.stream pull stop {
 		let done = ref.new false
 		let bounded = fun {
 			if ref.get done {
@@ -227,7 +227,7 @@ public def take-while :: fun (stream a) (fun a -> bool) -> stream a = fun s keep
 				}
 			}
 		}
-		stream bounded stop
+		stream.stream bounded stop
 	}
 }
 
@@ -285,7 +285,7 @@ public def drain :: fun (stream a) -> task nothing = fun s {
 # the stream's release on its own. Reach for `for-each` / `fold` / `drain`, which
 # release for you, unless you specifically need manual control.
 public def next :: fun (stream a) -> task (option a) = fun s {
-	when s is stream pull _stop {
+	when s is stream.stream pull _stop {
 		pull ()
 	}
 }
@@ -293,7 +293,7 @@ public def next :: fun (stream a) -> task (option a) = fun s {
 # Releases a stream's resource (idempotent). Private: consumers run it through the
 # shielded `defer`; `from-resource` is what makes it run the user's `close` once.
 def release :: fun (stream a) -> task nothing = fun s {
-	when s is stream _pull stop {
+	when s is stream.stream _pull stop {
 		stop ()
 	}
 }

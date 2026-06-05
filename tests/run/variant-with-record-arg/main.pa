@@ -11,15 +11,15 @@ enum entry {
 }
 
 def describe = fun e {
-	when e is found ({name: n, score: s}) {
+	when e is entry.found ({name: n, score: s}) {
 		"$(n): $(to-string s)"
-	} is missing {
+	} is entry.missing {
 		"absent"
 	}
 }
 
 def main = fun {
-	print (describe (found {name: "reid", score: 90}))
-	print (describe (found {name: "alice", score: 80}))
-	print (describe missing)
+	print (describe (entry.found {name: "reid", score: 90}))
+	print (describe (entry.found {name: "alice", score: 80}))
+	print (describe entry.missing)
 }

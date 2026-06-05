@@ -45,9 +45,9 @@ enum vnode msg {
 
 # The live DOM node a `vnode` is paired with.
 def node-of :: fun (vnode msg) -> dom.node = fun v {
-	when v is v-el n _tag _attrs _toks _kids {
+	when v is vnode.v-el n _tag _attrs _toks _kids {
 		n
-	} is v-txt n _s {
+	} is vnode.v-txt n _s {
 		n
 	}
 }
@@ -58,7 +58,7 @@ def node-of :: fun (vnode msg) -> dom.node = fun v {
 # time, so the one closure registered at render time always reaches the live
 # dispatch (and breaks the dispatch/render self-reference -- see `sandbox`).
 def render :: fun (html.html msg) (ref (fun msg -> nothing)) -> vnode msg = fun vdom box {
-	when vdom is el tag attrs kids {
+	when vdom is html.html.el tag attrs kids {
 		let node = dom.create-element tag
 		let toks = render-attrs node attrs box
 		let kid-nodes :: list (vnode msg) = []
@@ -67,9 +67,9 @@ def render :: fun (html.html msg) (ref (fun msg -> nothing)) -> vnode msg = fun 
 			dom.append-child node (node-of vk)
 			list.push kid-nodes vk
 		}
-		v-el node tag attrs toks kid-nodes
-	} is txt s {
-		v-txt (dom.create-text s) s
+		vnode.v-el node tag attrs toks kid-nodes
+	} is html.html.txt s {
+		vnode.v-txt (dom.create-text s) s
 	}
 }
 
@@ -78,13 +78,13 @@ def render :: fun (html.html msg) (ref (fun msg -> nothing)) -> vnode msg = fun 
 def render-attrs :: fun dom.node (list (html.attribute msg)) (ref (fun msg -> nothing)) -> list int = fun node attrs box {
 	let toks :: list int = []
 	list.each attrs fun a {
-		when a is a-set k v {
+		when a is html.attribute.a-set k v {
 			dom.set-attribute node k v
-		} is a-prop-str k v {
+		} is html.attribute.a-prop-str k v {
 			dom.set-string-property node k v
-		} is a-prop-bool k v {
+		} is html.attribute.a-prop-bool k v {
 			dom.set-bool-property node k v
-		} is a-on name handler {
+		} is html.attribute.a-on name handler {
 			let id = dom.add-listener node name fun e {
 				(ref.get box) (handler e)
 			}
@@ -102,28 +102,28 @@ def render-attrs :: fun dom.node (list (html.attribute msg)) (ref (fun msg -> no
 # set never changes and we only ever *overwrite* handler slots). Otherwise
 # build fresh and replace.
 def diff :: fun dom.node (vnode msg) (html.html msg) (ref (fun msg -> nothing)) -> vnode msg = fun parent old new box {
-	when old is v-el old-node old-tag old-attrs old-toks old-kids {
-		when new is el new-tag new-attrs new-kids {
+	when old is vnode.v-el old-node old-tag old-attrs old-toks old-kids {
+		when new is html.html.el new-tag new-attrs new-kids {
 			if (old-tag == new-tag) && (names-eq (handler-names old-attrs) (handler-names new-attrs)) {
 				diff-attrs old-node old-attrs new-attrs
 				update-handlers old-toks new-attrs box
 				let new-kid-vnodes = diff-children old-node old-kids new-kids box
-				v-el old-node new-tag new-attrs old-toks new-kid-vnodes
+				vnode.v-el old-node new-tag new-attrs old-toks new-kid-vnodes
 			} else {
 				replace parent old new box
 			}
-		} is txt _s {
+		} is html.html.txt _s {
 			replace parent old new box
 		}
-	} is v-txt old-node old-str {
-		when new is el _new-tag _new-attrs _new-kids {
+	} is vnode.v-txt old-node old-str {
+		when new is html.html.el _new-tag _new-attrs _new-kids {
 			replace parent old new box
-		} is txt new-str {
+		} is html.html.txt new-str {
 			if old-str == new-str {
 				old
 			} else {
 				dom.set-text old-node new-str
-				v-txt old-node new-str
+				vnode.v-txt old-node new-str
 			}
 		}
 	}
@@ -143,7 +143,7 @@ def replace :: fun dom.node (vnode msg) (html.html msg) (ref (fun msg -> nothing
 # `update-handlers`.
 def diff-attrs :: fun dom.node (list (html.attribute msg)) (list (html.attribute msg)) -> nothing = fun node old new {
 	list.each new fun a {
-		when a is a-set k v {
+		when a is html.attribute.a-set k v {
 			when (lookup-attr old k) is some ov {
 				if ov == v {
 					()
@@ -153,7 +153,7 @@ def diff-attrs :: fun dom.node (list (html.attribute msg)) (list (html.attribute
 			} is none {
 				dom.set-attribute node k v
 			}
-		} is a-prop-str k v {
+		} is html.attribute.a-prop-str k v {
 			when (lookup-str-prop old k) is some ov {
 				if ov == v {
 					()
@@ -163,7 +163,7 @@ def diff-attrs :: fun dom.node (list (html.attribute msg)) (list (html.attribute
 			} is none {
 				dom.set-string-property node k v
 			}
-		} is a-prop-bool k v {
+		} is html.attribute.a-prop-bool k v {
 			when (lookup-bool-prop old k) is some ov {
 				if ov == v {
 					()
@@ -173,30 +173,30 @@ def diff-attrs :: fun dom.node (list (html.attribute msg)) (list (html.attribute
 			} is none {
 				dom.set-bool-property node k v
 			}
-		} is a-on _name _handler {
+		} is html.attribute.a-on _name _handler {
 			()
 		}
 	}
 	list.each old fun a {
-		when a is a-set k _v {
+		when a is html.attribute.a-set k _v {
 			when (lookup-attr new k) is some _nv {
 				()
 			} is none {
 				dom.remove-attribute node k
 			}
-		} is a-prop-str k _v {
+		} is html.attribute.a-prop-str k _v {
 			when (lookup-str-prop new k) is some _nv {
 				()
 			} is none {
 				dom.set-string-property node k ""
 			}
-		} is a-prop-bool k _v {
+		} is html.attribute.a-prop-bool k _v {
 			when (lookup-bool-prop new k) is some _nv {
 				()
 			} is none {
 				dom.set-bool-property node k false
 			}
-		} is a-on _name _handler {
+		} is html.attribute.a-on _name _handler {
 			()
 		}
 	}
@@ -211,17 +211,17 @@ def lookup-attr-from :: fun (list (html.attribute msg)) string int -> option str
 	if i == (list.length attrs) {
 		none
 	} else {
-		when (list.get attrs i) is a-set k v {
+		when (list.get attrs i) is html.attribute.a-set k v {
 			if k == key {
 				some v
 			} else {
 				lookup-attr-from attrs key (i + 1)
 			}
-		} is a-prop-str _k _v {
+		} is html.attribute.a-prop-str _k _v {
 			lookup-attr-from attrs key (i + 1)
-		} is a-prop-bool _k _v {
+		} is html.attribute.a-prop-bool _k _v {
 			lookup-attr-from attrs key (i + 1)
-		} is a-on _name _handler {
+		} is html.attribute.a-on _name _handler {
 			lookup-attr-from attrs key (i + 1)
 		}
 	}
@@ -236,17 +236,17 @@ def lookup-str-prop-from :: fun (list (html.attribute msg)) string int -> option
 	if i == (list.length attrs) {
 		none
 	} else {
-		when (list.get attrs i) is a-prop-str k v {
+		when (list.get attrs i) is html.attribute.a-prop-str k v {
 			if k == key {
 				some v
 			} else {
 				lookup-str-prop-from attrs key (i + 1)
 			}
-		} is a-set _k _v {
+		} is html.attribute.a-set _k _v {
 			lookup-str-prop-from attrs key (i + 1)
-		} is a-prop-bool _k _v {
+		} is html.attribute.a-prop-bool _k _v {
 			lookup-str-prop-from attrs key (i + 1)
-		} is a-on _name _handler {
+		} is html.attribute.a-on _name _handler {
 			lookup-str-prop-from attrs key (i + 1)
 		}
 	}
@@ -261,17 +261,17 @@ def lookup-bool-prop-from :: fun (list (html.attribute msg)) string int -> optio
 	if i == (list.length attrs) {
 		none
 	} else {
-		when (list.get attrs i) is a-prop-bool k v {
+		when (list.get attrs i) is html.attribute.a-prop-bool k v {
 			if k == key {
 				some v
 			} else {
 				lookup-bool-prop-from attrs key (i + 1)
 			}
-		} is a-set _k _v {
+		} is html.attribute.a-set _k _v {
 			lookup-bool-prop-from attrs key (i + 1)
-		} is a-prop-str _k _v {
+		} is html.attribute.a-prop-str _k _v {
 			lookup-bool-prop-from attrs key (i + 1)
-		} is a-on _name _handler {
+		} is html.attribute.a-on _name _handler {
 			lookup-bool-prop-from attrs key (i + 1)
 		}
 	}
@@ -282,13 +282,13 @@ def lookup-bool-prop-from :: fun (list (html.attribute msg)) string int -> optio
 def handler-names :: fun (list (html.attribute msg)) -> list string = fun attrs {
 	let names :: list string = []
 	list.each attrs fun a {
-		when a is a-set _k _v {
+		when a is html.attribute.a-set _k _v {
 			()
-		} is a-prop-str _k _v {
+		} is html.attribute.a-prop-str _k _v {
 			()
-		} is a-prop-bool _k _v {
+		} is html.attribute.a-prop-bool _k _v {
 			()
-		} is a-on name _handler {
+		} is html.attribute.a-on name _handler {
 			list.push names name
 		}
 	}
@@ -326,13 +326,13 @@ def update-handlers-from :: fun (list int) (list (html.attribute msg)) (ref (fun
 	if ai == (list.length attrs) {
 		()
 	} else {
-		when (list.get attrs ai) is a-set _k _v {
+		when (list.get attrs ai) is html.attribute.a-set _k _v {
 			update-handlers-from toks attrs box ti (ai + 1)
-		} is a-prop-str _k _v {
+		} is html.attribute.a-prop-str _k _v {
 			update-handlers-from toks attrs box ti (ai + 1)
-		} is a-prop-bool _k _v {
+		} is html.attribute.a-prop-bool _k _v {
 			update-handlers-from toks attrs box ti (ai + 1)
-		} is a-on _name handler {
+		} is html.attribute.a-on _name handler {
 			dom.set-handler (list.get toks ti) fun e {
 				(ref.get box) (handler e)
 			}

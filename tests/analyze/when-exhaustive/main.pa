@@ -4,15 +4,15 @@ enum tree {
 }
 
 def by-all-variants = fun t {
-	when t is empty {
+	when t is tree.empty {
 		0
-	} is node val _l _r {
+	} is tree.node val _l _r {
 		val
 	}
 }
 
 def by-wildcard = fun t {
-	when t is empty {
+	when t is tree.empty {
 		0
 	} else {
 		1

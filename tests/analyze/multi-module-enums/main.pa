@@ -3,11 +3,11 @@ use colors
 def favorite = colors.color.red
 
 def describe = fun c {
-	when c is red {
+	when c is colors.color.red {
 		"red"
-	} is green {
+	} is colors.color.green {
 		"green"
-	} is blue {
+	} is colors.color.blue {
 		"blue"
 	}
 }

@@ -110,7 +110,12 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                     expr(11:2-15:3) :: task 'a {
                                                         kind: when(11:2-15:3) [
                                                             case(11:13-13:3) is pattern(11:16-11:22) Constructor(
-                                                                ident(11:16-11:20) `some`,
+                                                                ConstructorHead {
+                                                                    range: 11:16-11:20,
+                                                                    module: None,
+                                                                    enum_name: None,
+                                                                    variant: ident(11:16-11:20) `some`,
+                                                                },
                                                                 [
                                                                     pattern(11:21-11:22) Identifier(
                                                                         ident(11:21-11:22) `r`,
@@ -120,7 +125,12 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                 expr(12:3-12:60) :: task 'a {
                                                                     kind: when(12:3-12:60) [
                                                                         case(12:10-12:35) is pattern(12:13-12:17) Constructor(
-                                                                            ident(12:13-12:15) `ok`,
+                                                                            ConstructorHead {
+                                                                                range: 12:13-12:15,
+                                                                                module: None,
+                                                                                enum_name: None,
+                                                                                variant: ident(12:13-12:15) `ok`,
+                                                                            },
                                                                             [
                                                                                 pattern(12:16-12:17) Identifier(
                                                                                     ident(12:16-12:17) `v`,
@@ -141,7 +151,12 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                             },
                                                                         ],
                                                                         case(12:36-12:60) is pattern(12:39-12:44) Constructor(
-                                                                            ident(12:39-12:42) `err`,
+                                                                            ConstructorHead {
+                                                                                range: 12:39-12:42,
+                                                                                module: None,
+                                                                                enum_name: None,
+                                                                                variant: ident(12:39-12:42) `err`,
+                                                                            },
                                                                             [
                                                                                 pattern(12:43-12:44) Identifier(
                                                                                     ident(12:43-12:44) `e`,

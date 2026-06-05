@@ -1,0 +1,10 @@
+enum color {
+	red
+	green
+}
+
+# Bare `red` is rejected: variants must be written `enum.variant`. Only one
+# enum declares it, so the help points straight at `color.red`.
+def pick = fun {
+	red
+}

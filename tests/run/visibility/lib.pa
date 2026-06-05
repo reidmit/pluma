@@ -16,7 +16,7 @@ public def counter-of :: fun int -> counter = fun n {
 }
 
 public def value-of :: fun counter -> int = fun c {
-	when c is mk n {
+	when c is counter.mk n {
 		n
 	}
 }

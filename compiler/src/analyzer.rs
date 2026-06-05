@@ -13,7 +13,26 @@ use std::path::PathBuf;
 enum VariantResolution {
 	Found(String, Vec<Type>),
 	NotFound,
-	Ambiguous,
+	// A diagnostic was already emitted (ambiguous, variant-not-present, or a
+	// bare variant that needs qualifying). The caller should produce no binding
+	// and no further error.
+	Reported,
+}
+
+// Prelude enums are the one set whose variants stay usable bare (`some`,
+// `none`, `ok`, ...). They're keyed in `enum_defs` under the synthetic
+// `__prelude__` module, so a qualified-name prefix check identifies them.
+fn is_prelude_enum(qualified_enum: &str) -> bool {
+	qualified_enum.starts_with("__prelude__.")
+}
+
+// Strip a qualified enum name (`module.color`) down to its user-facing bare
+// name (`color`) for diagnostics.
+fn bare_enum_name(qualified_enum: &str) -> String {
+	qualified_enum
+		.rsplit_once('.')
+		.map(|(_, b)| b.to_string())
+		.unwrap_or_else(|| qualified_enum.to_string())
 }
 
 // Resolved enum definition. `param_vars` are the type-var ids minted when
@@ -2509,39 +2528,49 @@ impl<'compiler> Analyzer<'compiler> {
 				};
 
 				// Bare variant constructor: `some 5` instead of `option.some 5`.
-				// Look up the bare name in variant_constructors; resolve uniquely
-				// or report ambiguity. Local-module variants shadow imported/
-				// prelude ones with the same name.
+				// Only prelude variants may be written bare; a bare user-enum
+				// variant is a needs-qualifier error pointing at `enum.variant`.
 				if let Some(matches) = self.variant_constructors.get(&ident.name).cloned() {
-					let resolved = self.disambiguate_variant_matches(&matches);
-					match resolved {
-						Some((qualified_enum, variant_name)) => {
-							if let Some(enum_def) = self.enum_defs.get(&qualified_enum).cloned() {
-								let (enum_ty, variant_params, found) =
-									self.instantiate_variant(&qualified_enum, &variant_name, &enum_def);
-								if found.is_some() {
-									if variant_params.is_empty() {
-										expr.ty = enum_ty;
-									} else {
-										expr.ty = Type::Fun(variant_params, enum_ty.into());
+					let (prelude, user): (Vec<_>, Vec<_>) = matches
+						.iter()
+						.cloned()
+						.partition(|(q, _)| is_prelude_enum(q));
+					if !prelude.is_empty() {
+						match self.disambiguate_variant_matches(&prelude) {
+							Some((qualified_enum, variant_name)) => {
+								if let Some(enum_def) = self.enum_defs.get(&qualified_enum).cloned() {
+									let (enum_ty, variant_params, found) =
+										self.instantiate_variant(&qualified_enum, &variant_name, &enum_def);
+									if found.is_some() {
+										if variant_params.is_empty() {
+											expr.ty = enum_ty;
+										} else {
+											expr.ty = Type::Fun(variant_params, enum_ty.into());
+										}
+										return;
 									}
-									return;
 								}
 							}
+							None => {
+								let mut enums: Vec<String> =
+									prelude.iter().map(|(q, _)| bare_enum_name(q)).collect();
+								enums.sort();
+								self.error(
+									ident.range,
+									AmbiguousVariant {
+										name: ident.name.clone(),
+										enums,
+									},
+								);
+								expr.ty = Type::Unknown;
+								return;
+							}
 						}
-						None => {
-							let mut enums: Vec<String> = matches.iter().map(|(q, _)| q.clone()).collect();
-							enums.sort();
-							self.error(
-								ident.range,
-								AmbiguousVariant {
-									name: ident.name.clone(),
-									enums,
-								},
-							);
-							expr.ty = Type::Unknown;
-							return;
-						}
+					} else if !user.is_empty() {
+						let enums: Vec<String> = user.iter().map(|(q, _)| q.clone()).collect();
+						self.bare_variant_error(ident, &enums);
+						expr.ty = Type::Unknown;
+						return;
 					}
 				}
 
@@ -3619,14 +3648,15 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			PatternKind::Identifier(ident) => {
-				// A bare ident might be a nullary variant match. Use the subject
-				// type to disambiguate; otherwise require global uniqueness.
+				// A bare ident is a binding unless it names a bare-allowed
+				// (prelude) nullary variant; user-enum variants must be written
+				// `enum.variant` and resolve via `Constructor` instead.
 				match self.resolve_variant_pattern(ident, &subject_ty, /* nullary_only */ true) {
 					VariantResolution::Found(enum_name, _) => {
 						let enum_ty = self.resolve_subject_enum_type(&subject_ty, &enum_name);
 						constraints.push(eq_constraint(subject_ty, enum_ty).at(pattern.range));
 					}
-					VariantResolution::Ambiguous => {
+					VariantResolution::Reported => {
 						// error already reported
 					}
 					VariantResolution::NotFound => {
@@ -3639,8 +3669,16 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
-			PatternKind::Constructor(name, args) => {
-				match self.resolve_variant_pattern(name, &subject_ty, /* nullary_only */ false) {
+			PatternKind::Constructor(head, args) => {
+				// A qualified head (`enum.variant`) resolves against the named
+				// enum directly; a bare head is a prelude variant resolved via
+				// the subject type.
+				let resolution = if head.is_bare() {
+					self.resolve_variant_pattern(&head.variant, &subject_ty, /* nullary_only */ false)
+				} else {
+					self.resolve_qualified_pattern(head)
+				};
+				match resolution {
 					VariantResolution::Found(enum_name, params) => {
 						let enum_ty = self.resolve_subject_enum_type(&subject_ty, &enum_name);
 						let enum_args = match &enum_ty {
@@ -3677,15 +3715,15 @@ impl<'compiler> Analyzer<'compiler> {
 							self.constrain_pattern(arg, subst.apply_to_type(&param_ty), constraints);
 						}
 					}
-					VariantResolution::Ambiguous => {
+					VariantResolution::Reported => {
 						// error already reported
 					}
 					VariantResolution::NotFound => {
-						let suggestion = self.suggest_value(&name.name);
+						let suggestion = self.suggest_value(&head.variant.name);
 						self.error(
-							name.range,
+							head.variant.range,
 							NameNotBound {
-								name: name.name.clone(),
+								name: head.variant.name.clone(),
 								suggestion,
 							},
 						);
@@ -3792,12 +3830,16 @@ impl<'compiler> Analyzer<'compiler> {
 				PatternKind::Underscore => return,
 
 				PatternKind::Identifier(ident) => {
-					// A bare ident either names a nullary variant of the subject enum
-					// (covers just that variant) or is a binding (catch-all).
+					// A bare ident covers a single variant only for a prelude
+					// enum (where bare nullary variants are still allowed); for
+					// any other subject it's a binding (catch-all).
 					let is_nullary_variant = match subject_ty {
-						Type::Enum(enum_name, _) => self
-							.find_variant_in_enum(enum_name, &ident.name)
-							.map_or(false, |p| p.is_empty()),
+						Type::Enum(enum_name, _) => {
+							is_prelude_enum(enum_name)
+								&& self
+									.find_variant_in_enum(enum_name, &ident.name)
+									.map_or(false, |p| p.is_empty())
+						}
 						_ => false,
 					};
 					if is_nullary_variant {
@@ -3807,7 +3849,7 @@ impl<'compiler> Analyzer<'compiler> {
 					}
 				}
 
-				PatternKind::Constructor(name, args) => {
+				PatternKind::Constructor(head, args) => {
 					// Only count the variant as fully covered if every arg is
 					// itself a catch-all sub-pattern (recursively — a tuple
 					// payload like `some (x, y)` counts iff the tuple itself
@@ -3815,7 +3857,7 @@ impl<'compiler> Analyzer<'compiler> {
 					// in just a slice of the value space, so we skip.
 					let all_catch = args.iter().all(|arg| self.pattern_is_catch_all(arg));
 					if all_catch {
-						covered.insert(name.name.clone());
+						covered.insert(head.variant.name.clone());
 					}
 				}
 
@@ -3971,9 +4013,13 @@ impl<'compiler> Analyzer<'compiler> {
 	fn pattern_is_catch_all(&self, pattern: &PatternNode) -> bool {
 		match &pattern.kind {
 			PatternKind::Underscore => true,
+			// A bare ident is a binding (catch-all) unless it names a prelude
+			// nullary variant; user-enum variants are written qualified and
+			// reach `pattern_is_catch_all` as `Constructor`, never here.
 			PatternKind::Identifier(ident) => self
 				.find_variant_globally(&ident.name)
 				.iter()
+				.filter(|(q, _)| is_prelude_enum(q))
 				.all(|(_, p)| !p.is_empty()),
 			PatternKind::Tuple(entries) => entries.iter().all(|e| self.pattern_is_catch_all(e)),
 			PatternKind::Record { fields, .. } => {
@@ -3995,68 +4041,213 @@ impl<'compiler> Analyzer<'compiler> {
 		subject_ty: &Type,
 		nullary_only: bool,
 	) -> VariantResolution {
-		match subject_ty {
-			Type::Enum(enum_name, _) => match self.find_variant_in_enum(enum_name, &name.name) {
+		// Subject type known: resolve directly against that enum. Only prelude
+		// variants resolve bare; a bare user-enum variant is a needs-qualifier
+		// error pointing at `enum.variant`.
+		if let Type::Enum(enum_name, _) = subject_ty {
+			return match self.find_variant_in_enum(enum_name, &name.name) {
 				Some(params) => {
 					if nullary_only && !params.is_empty() {
 						return VariantResolution::NotFound;
 					}
-					VariantResolution::Found(enum_name.clone(), params)
+					if is_prelude_enum(enum_name) {
+						VariantResolution::Found(enum_name.clone(), params)
+					} else {
+						let enum_name = enum_name.clone();
+						self.bare_variant_error(name, &[enum_name]);
+						VariantResolution::Reported
+					}
 				}
 				None => VariantResolution::NotFound,
-			},
+			};
+		}
 
-			_ => {
-				let mut candidates = self.find_variant_globally(&name.name);
-				if nullary_only {
-					candidates.retain(|(_, p)| p.is_empty());
+		// Subject type not yet known: fall back to a global name lookup. Bare
+		// resolution only succeeds for prelude variants; user variants found
+		// this way must be qualified.
+		let mut candidates = self.find_variant_globally(&name.name);
+		if nullary_only {
+			candidates.retain(|(_, p)| p.is_empty());
+		}
+		if candidates.is_empty() {
+			return VariantResolution::NotFound;
+		}
+		let (prelude, user): (Vec<_>, Vec<_>) = candidates
+			.into_iter()
+			.partition(|(q, _)| is_prelude_enum(q));
+		if !prelude.is_empty() {
+			return match prelude.len() {
+				1 => {
+					let (enum_name, params) = prelude.into_iter().next().unwrap();
+					VariantResolution::Found(enum_name, params)
 				}
-				if candidates.is_empty() {
-					return VariantResolution::NotFound;
+				_ => {
+					let mut enums: Vec<String> = prelude
+						.into_iter()
+						.map(|(n, _)| bare_enum_name(&n))
+						.collect();
+					enums.sort();
+					self.error(
+						name.range,
+						AmbiguousVariant {
+							name: name.name.clone(),
+							enums,
+						},
+					);
+					VariantResolution::Reported
 				}
-				// Local-module enums shadow imported/prelude ones (mirrors
-				// `disambiguate_variant_matches` in expression position).
-				if candidates.len() > 1 {
-					if let Some(module_name) = &self.module_name {
-						let prefix = format!("{}.", module_name);
-						let local: Vec<_> = candidates
-							.iter()
-							.filter(|(q, _)| q.starts_with(&prefix))
-							.cloned()
-							.collect();
-						if local.len() == 1 {
-							candidates = local;
-						}
+			};
+		}
+		// Only user enums declare this variant — require qualification.
+		let enums: Vec<String> = user.into_iter().map(|(n, _)| n).collect();
+		self.bare_variant_error(name, &enums);
+		VariantResolution::Reported
+	}
+
+	// Resolve a *qualified* variant pattern head (`enum.variant` or
+	// `module.enum.variant`) to its enum, independent of the subject type —
+	// the explicit enum is what disambiguates. Emits a precise diagnostic and
+	// returns `Reported` on any miss.
+	fn resolve_qualified_pattern(&mut self, head: &ConstructorHead) -> VariantResolution {
+		let enum_id = match &head.enum_name {
+			Some(e) => e,
+			// A bare head has no qualifier; the caller routes it elsewhere.
+			None => return VariantResolution::NotFound,
+		};
+
+		let qualified_enum = match &head.module {
+			// `module.enum.variant` — an imported enum.
+			Some(module) => match self.imports.get(&module.name) {
+				Some(exports) if exports.enums.contains_key(&enum_id.name) => {
+					let qualified_module = self
+						.import_qualified
+						.get(&module.name)
+						.cloned()
+						.unwrap_or_else(|| module.name.clone());
+					format!("{}.{}", qualified_module, enum_id.name)
+				}
+				Some(exports) => {
+					let suggestion = crate::suggest::closest(&enum_id.name, exports.enums.keys().cloned());
+					self.error(
+						enum_id.range,
+						NameNotBound {
+							name: format!("{}.{}", module.name, enum_id.name),
+							suggestion,
+						},
+					);
+					return VariantResolution::Reported;
+				}
+				None => {
+					let suggestion = crate::suggest::closest(
+						&module.name,
+						self.imports.keys().cloned().collect::<Vec<_>>(),
+					);
+					self.error(
+						module.range,
+						NameNotBound {
+							name: module.name.clone(),
+							suggestion,
+						},
+					);
+					return VariantResolution::Reported;
+				}
+			},
+			// `enum.variant` — a local enum type name in scope.
+			None => match self.type_scope.get(&enum_id.name).map(|b| b.ty.clone()) {
+				Some(Type::Enum(name, _)) => name,
+				_ => {
+					let names: Vec<String> = self
+						.type_scope
+						.iter()
+						.filter(|(_, b)| matches!(b.ty, Type::Enum(_, _)))
+						.map(|(k, _)| k.clone())
+						.collect();
+					let suggestion = crate::suggest::closest(&enum_id.name, names);
+					self.error(
+						enum_id.range,
+						NameNotBound {
+							name: enum_id.name.clone(),
+							suggestion,
+						},
+					);
+					return VariantResolution::Reported;
+				}
+			},
+		};
+
+		match self.find_variant_in_enum(&qualified_enum, &head.variant.name) {
+			Some(params) => VariantResolution::Found(qualified_enum, params),
+			None => {
+				let enum_ty = match self.enum_defs.get(&qualified_enum).cloned() {
+					Some(def) => {
+						self
+							.instantiate_variant(&qualified_enum, &head.variant.name, &def)
+							.0
 					}
-				}
-				match candidates.len() {
-					1 => {
-						let (enum_name, params) = candidates.into_iter().next().unwrap();
-						VariantResolution::Found(enum_name, params)
-					}
-					_ => {
-						let mut enums: Vec<String> = candidates
-							.into_iter()
-							.map(|(n, _)| {
-								// Display the bare enum name; the qualifier is
-								// internal-only and would be redundant when both
-								// candidates share the same defining module.
-								n.rsplit_once('.').map(|(_, b)| b.to_string()).unwrap_or(n)
-							})
-							.collect();
-						enums.sort();
-						self.error(
-							name.range,
-							AmbiguousVariant {
-								name: name.name.clone(),
-								enums,
-							},
-						);
-						VariantResolution::Ambiguous
-					}
-				}
+					None => Type::Enum(qualified_enum.clone(), vec![]),
+				};
+				let suggestion = self.enum_defs.get(&qualified_enum).and_then(|d| {
+					crate::suggest::closest(
+						&head.variant.name,
+						d.variants.iter().map(|(v, _)| v.clone()),
+					)
+				});
+				self.error(
+					head.variant.range,
+					EnumVariantNotPresent {
+						variant: head.variant.name.clone(),
+						ty: enum_ty,
+						suggestion,
+					},
+				);
+				VariantResolution::Reported
 			}
 		}
+	}
+
+	// Emit the "must qualify this variant" diagnostic. `qualified_enums` are the
+	// internal enum names; the message shows the exact qualified path the user
+	// should write for each.
+	fn bare_variant_error(&mut self, name: &IdentifierNode, qualified_enums: &[String]) {
+		let mut suggestions: Vec<String> = qualified_enums
+			.iter()
+			.map(|q| self.qualified_form_for(q, &name.name))
+			.collect();
+		suggestions.sort();
+		suggestions.dedup();
+		self.error(
+			name.range,
+			BareVariantNeedsQualifier {
+				name: name.name.clone(),
+				suggestions,
+			},
+		);
+	}
+
+	// The qualified path a user should write to name `variant` of an enum whose
+	// internal (module-qualified) name is `qualified_enum`:
+	//   - a local enum (defined in this module) → `enum.variant`
+	//   - an imported enum → `alias.enum.variant`, using the local import alias
+	//   - otherwise (no matching import) → `enum.variant` as a best effort
+	fn qualified_form_for(&self, qualified_enum: &str, variant: &str) -> String {
+		let (module, enum_bare) = match qualified_enum.rsplit_once('.') {
+			Some((m, e)) => (m, e),
+			None => return format!("{}.{}", qualified_enum, variant),
+		};
+		// Local enum: the bare enum name is in scope directly.
+		if self.module_name.as_deref() == Some(module) {
+			return format!("{}.{}", enum_bare, variant);
+		}
+		// Imported enum: find the local alias bound to this module.
+		if let Some(alias) = self
+			.import_qualified
+			.iter()
+			.find(|(_, full)| full.as_str() == module)
+			.map(|(alias, _)| alias.clone())
+		{
+			return format!("{}.{}.{}", alias, enum_bare, variant);
+		}
+		format!("{}.{}", enum_bare, variant)
 	}
 
 	fn unify(&mut self, constraints: &[Constraint]) -> Substitution {

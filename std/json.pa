@@ -64,23 +64,23 @@ public def parse :: fun string -> result value error = fun input {
 #     json.stringify (json.value.array [json.value.int 1, json.value.int 2])
 #     # => "[1,2]"
 public def stringify :: fun value -> string = fun v {
-	when v is null {
+	when v is value.null {
 		"null"
-	} is bool b {
+	} is value.bool b {
 		if b {
 			"true"
 		} else {
 			"false"
 		}
-	} is int n {
+	} is value.int n {
 		to-string n
-	} is float x {
+	} is value.float x {
 		to-string x
-	} is string s {
+	} is value.string s {
 		escape-string s
-	} is array xs {
+	} is value.array xs {
 		"[" ++ string.join (list.map xs stringify) "," ++ "]"
-	} is object o {
+	} is value.object o {
 		let parts = list.map (dict.entries o) fun e {
 			let (k, val) = e
 			escape-string k ++ ":" ++ stringify val
@@ -109,7 +109,7 @@ public def stringify-pretty :: fun value -> string = fun v {
 #     json.is-null json.value.null      # => true
 #     json.is-null (json.value.int 0)   # => false
 public def is-null :: fun value -> bool = fun v {
-	when v is null {
+	when v is value.null {
 		true
 	} else {
 		false
@@ -123,7 +123,7 @@ public def is-null :: fun value -> bool = fun v {
 #     json.get-field doc "name"   # => some (value.string "Ada")
 #     json.get-field doc "age"    # => none
 public def get-field :: fun value string -> option value = fun v key {
-	when v is object o {
+	when v is value.object o {
 		dict.lookup o key
 	} else {
 		none
@@ -136,7 +136,7 @@ public def get-field :: fun value string -> option value = fun v key {
 #     json.get-int (json.value.int 42)       # => some 42
 #     json.get-int (json.value.string "x")   # => none
 public def get-int :: fun value -> option int = fun v {
-	when v is int n {
+	when v is value.int n {
 		some n
 	} else {
 		none
@@ -149,7 +149,7 @@ public def get-int :: fun value -> option int = fun v {
 #     json.get-float (json.value.float 3.5)   # => some 3.5
 #     json.get-float (json.value.int 3)        # => none
 public def get-float :: fun value -> option float = fun v {
-	when v is float x {
+	when v is value.float x {
 		some x
 	} else {
 		none
@@ -163,9 +163,9 @@ public def get-float :: fun value -> option float = fun v {
 #     json.get-number (json.value.int 42)      # => some 42.0
 #     json.get-number (json.value.float 3.5)   # => some 3.5
 public def get-number :: fun value -> option float = fun v {
-	when v is float x {
+	when v is value.float x {
 		some x
-	} is int n {
+	} is value.int n {
 		some (math.to-float n)
 	} else {
 		none
@@ -177,7 +177,7 @@ public def get-number :: fun value -> option float = fun v {
 #     json.get-bool (json.value.bool true)   # => some true
 #     json.get-bool (json.value.int 1)        # => none
 public def get-bool :: fun value -> option bool = fun v {
-	when v is bool b {
+	when v is value.bool b {
 		some b
 	} else {
 		none
@@ -189,7 +189,7 @@ public def get-bool :: fun value -> option bool = fun v {
 #     json.get-string (json.value.string "hi")   # => some "hi"
 #     json.get-string (json.value.int 1)           # => none
 public def get-string :: fun value -> option string = fun v {
-	when v is string s {
+	when v is value.string s {
 		some s
 	} else {
 		none
@@ -202,7 +202,7 @@ public def get-string :: fun value -> option string = fun v {
 #     json.get-array (json.value.array [json.value.int 1, json.value.int 2])
 #     # => some [value.int 1, value.int 2]
 public def get-array :: fun value -> option (list value) = fun v {
-	when v is array xs {
+	when v is value.array xs {
 		some xs
 	} else {
 		none
@@ -216,7 +216,7 @@ public def get-array :: fun value -> option (list value) = fun v {
 #     try doc = json.parse "{\"a\": 1}"
 #     json.get-object doc   # => some {a: value.int 1}
 public def get-object :: fun value -> option (dict string value) = fun v {
-	when v is object o {
+	when v is value.object o {
 		some o
 	} else {
 		none
@@ -318,7 +318,7 @@ def parse-value :: fun bytes int int -> result (value, int) error = fun bs n sta
 		if b == 34 {
 			when parse-string bs n pos is ok sp {
 				let (s, p) = sp
-				ok (string s, p)
+				ok (value.string s, p)
 			} is err e {
 				err e
 			}
@@ -328,19 +328,19 @@ def parse-value :: fun bytes int int -> result (value, int) error = fun bs n sta
 			parse-array bs n pos
 		} else if b == 110 {
 			if lit-at bs n pos (string.to-bytes "null") {
-				ok (null, pos + 4)
+				ok (value.null, pos + 4)
 			} else {
 				err (fail bs pos "expected value")
 			}
 		} else if b == 116 {
 			if lit-at bs n pos (string.to-bytes "true") {
-				ok (bool true, pos + 4)
+				ok (value.bool true, pos + 4)
 			} else {
 				err (fail bs pos "expected value")
 			}
 		} else if b == 102 {
 			if lit-at bs n pos (string.to-bytes "false") {
-				ok (bool false, pos + 5)
+				ok (value.bool false, pos + 5)
 			} else {
 				err (fail bs pos "expected value")
 			}
@@ -361,13 +361,13 @@ def parse-number :: fun bytes int int -> result (value, int) error = fun bs n po
 	when bytes.to-string (bytes.slice bs pos end) is ok raw {
 		if num-has-frac bs pos end {
 			when string.to-float raw is ok x {
-				ok (float x, end)
+				ok (value.float x, end)
 			} is err _m {
 				err (fail bs pos "invalid number")
 			}
 		} else {
 			when string.to-int raw is ok i {
-				ok (int i, end)
+				ok (value.int i, end)
 			} is err _m {
 				err (fail bs pos "invalid number")
 			}
@@ -659,7 +659,7 @@ def parse-array :: fun bytes int int -> result (value, int) error = fun bs n pos
 	if p1 >= n {
 		err (fail bs p1 "EOF while parsing a list")
 	} else if bytes.get bs p1 == 93 {
-		ok (array [], p1 + 1)
+		ok (value.array [], p1 + 1)
 	} else {
 		parse-array-elems bs n p1 []
 	}
@@ -679,7 +679,7 @@ def parse-array-elems :: fun bytes int int (list value) -> result (value, int) e
 		} else {
 			let b = bytes.get bs p1
 			if b == 93 {
-				ok (array acc, p1 + 1)
+				ok (value.array acc, p1 + 1)
 			} else if b == 44 {
 				parse-array-elems bs n (p1 + 1) acc
 			} else {
@@ -698,7 +698,7 @@ def parse-object :: fun bytes int int -> result (value, int) error = fun bs n po
 	if p1 >= n {
 		err (fail bs p1 "EOF while parsing an object")
 	} else if bytes.get bs p1 == 125 {
-		ok (object (dict.empty ()), p1 + 1)
+		ok (value.object (dict.empty ()), p1 + 1)
 	} else {
 		parse-object-entries bs n p1 (dict.empty ())
 	}
@@ -723,7 +723,7 @@ def parse-object-entries :: fun bytes int int (dict string value) -> result (val
 					} else {
 						let b = bytes.get bs p3
 						if b == 125 {
-							ok (object acc, p3 + 1)
+							ok (value.object acc, p3 + 1)
 						} else if b == 44 {
 							parse-object-entries bs n (skip-ws bs n (p3 + 1)) acc
 						} else {
@@ -814,21 +814,21 @@ def hex-nibble :: fun int -> string = fun v {
 # out one element per line with a 2-space indent. Empty containers stay
 # compact (`[]`, `{}`).
 def render-pretty :: fun value int -> string = fun v depth {
-	when v is null {
+	when v is value.null {
 		"null"
-	} is bool b {
+	} is value.bool b {
 		if b {
 			"true"
 		} else {
 			"false"
 		}
-	} is int n {
+	} is value.int n {
 		to-string n
-	} is float x {
+	} is value.float x {
 		to-string x
-	} is string s {
+	} is value.string s {
 		escape-string s
-	} is array xs {
+	} is value.array xs {
 		if list.is-empty xs {
 			"[]"
 		} else {
@@ -837,7 +837,7 @@ def render-pretty :: fun value int -> string = fun v depth {
 			}
 			"[\n" ++ string.join items ",\n" ++ "\n" ++ pad depth ++ "]"
 		}
-	} is object o {
+	} is value.object o {
 		let es = dict.entries o
 		if list.is-empty es {
 			"{}"

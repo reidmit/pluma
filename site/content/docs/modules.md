@@ -57,7 +57,7 @@ alias themed {
     shape   :: shapes.circle
 }
 
-def my-favorite = red
+def my-favorite = colors.color.red
 ```
 
 | Form | Meaning |
@@ -67,12 +67,23 @@ def my-favorite = red
 | `module.enum-name.variant` | Access a variant of an imported enum. |
 | `module.alias-name` | The alias constructor for an imported record alias. |
 
-## Bare variants
+## Variants are always qualified
 
-Variants of imported enums can be used bare when the subject type is known or when there's no ambiguity. When two enums in scope (one local, one imported, or two imported) share a variant name, the local-module enum wins; if both are non-local, you'll get an `AmbiguousVariant` error and need to qualify:
+Everything an import brings in is reached *through the name you imported* — there are no bare names injected into your scope. That holds for enum variants too: a variant is always written `enum.variant`, mirroring how its type is named.
+
+- A **local** enum is reached through its bare name: `color.red`.
+- An **imported** enum is reached through the module, like its type: `use colors` makes the type `colors.color`, so the variant is `colors.color.red`.
+
+This is true in expressions *and* patterns (`when c is colors.color.red { … }`). A bare variant name is rejected with a diagnostic that names the exact qualified form to write. (Prelude variants — `some`, `none`, `ok`, `err` — are the sole exception and stay bare.)
 
 ```pluma
 let c :: colors.color = colors.color.red
+
+when c is colors.color.red {
+    "primary"
+} else {
+    "other"
+}
 ```
 
 ## Cycles

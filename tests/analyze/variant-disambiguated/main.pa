@@ -11,9 +11,9 @@ enum fruit {
 def is-red = fun {
 	let x = color.red
 
-	when x is red {
+	when x is color.red {
 		0
-	} is green {
+	} is color.green {
 		1
 	}
 }

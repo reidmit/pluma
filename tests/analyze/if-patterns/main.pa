@@ -4,13 +4,13 @@ enum tree {
 }
 
 def match-nullary = fun t {
-	if t is empty {
+	if t is tree.empty {
 		0
 	}
 }
 
 def match-constructor = fun t {
-	if t is node val _l _r {
+	if t is tree.node val _l _r {
 		val
 	}
 }

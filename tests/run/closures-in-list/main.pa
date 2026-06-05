@@ -4,9 +4,9 @@ enum fn-list {
 }
 
 def apply-each = fun lst x {
-	when lst is empty {
+	when lst is fn-list.empty {
 		0
-	} is cons f rest {
+	} is fn-list.cons f rest {
 		f x + apply-each rest x
 	}
 }

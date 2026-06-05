@@ -152,13 +152,13 @@ def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun reques
 		task.return ()
 	} is some outcome {
 		when outcome is ok ev {
-			when ev is arrived conn {
+			when ev is serve-event.arrived conn {
 				let _ = s.spawn (handle-child conn handler)
 				let _ = s.spawn (accept-one server)
 				serve-loop s server handler
-			} is served {
+			} is serve-event.served {
 				serve-loop s server handler
-			} is closed {
+			} is serve-event.closed {
 				serve-loop s server handler
 			}
 		} is err _ {
@@ -421,21 +421,21 @@ def serialize-request :: fun method string string (dict string string) bytes -> 
 }
 
 def method-name :: fun method -> string = fun m {
-	when m is get {
+	when m is method.get {
 		"GET"
-	} is post {
+	} is method.post {
 		"POST"
-	} is put {
+	} is method.put {
 		"PUT"
-	} is delete {
+	} is method.delete {
 		"DELETE"
-	} is patch {
+	} is method.patch {
 		"PATCH"
-	} is head {
+	} is method.head {
 		"HEAD"
-	} is options {
+	} is method.options {
 		"OPTIONS"
-	} is other name {
+	} is method.other name {
 		name
 	}
 }

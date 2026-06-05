@@ -4,9 +4,9 @@ enum tree {
 }
 
 def sum = fun t {
-	when t is empty {
+	when t is tree.empty {
 		0
-	} is node val l r {
+	} is tree.node val l r {
 		val + sum l + sum r
 	}
 }

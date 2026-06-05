@@ -63,7 +63,7 @@ public def method :: fun nothing -> http.method = fun {
 	when local.get current is some req {
 		req.method
 	} is none {
-		get
+		http.method.get
 	}
 }
 

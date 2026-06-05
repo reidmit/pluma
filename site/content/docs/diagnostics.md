@@ -127,6 +127,9 @@ information.
 | E0130 | Unknown regex character class |
 | E0131 | `where`-clause type variable not in the signature |
 | E0132 | Item is private to its module |
+| E0133 | `remote def` (RPC endpoint) is not `public` |
+| E0134 | `remote def` has an invalid endpoint signature |
+| E0135 | Bare variant must be qualified by its enum |
 
 The authoritative source for these codes is the `code()` method on `ParseError`
 and `AnalysisError` in the `compiler` crate; this table mirrors it. The

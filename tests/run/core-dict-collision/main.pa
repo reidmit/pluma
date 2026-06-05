@@ -16,36 +16,36 @@ implement hash color {
 
 def main = fun {
 	let m = dict.empty ()
-	let m = dict.insert m red "r"
-	let m = dict.insert m green "g"
-	let m = dict.insert m blue "b"
+	let m = dict.insert m color.red "r"
+	let m = dict.insert m color.green "g"
+	let m = dict.insert m color.blue "b"
 	print (dict.size m)
-	when dict.lookup m red is some s {
+	when dict.lookup m color.red is some s {
 		print s
 	} is none {
 		print "?"
 	}
-	when dict.lookup m green is some s {
+	when dict.lookup m color.green is some s {
 		print s
 	} is none {
 		print "?"
 	}
-	when dict.lookup m blue is some s {
+	when dict.lookup m color.blue is some s {
 		print s
 	} is none {
 		print "?"
 	}
 
 	# Remove the middle entry; the others must still resolve.
-	let m = dict.remove m green
+	let m = dict.remove m color.green
 	print (dict.size m)
-	print (dict.contains-key m green)
-	when dict.lookup m red is some s {
+	print (dict.contains-key m color.green)
+	when dict.lookup m color.red is some s {
 		print s
 	} is none {
 		print "?"
 	}
-	when dict.lookup m blue is some s {
+	when dict.lookup m color.blue is some s {
 		print s
 	} is none {
 		print "?"

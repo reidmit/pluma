@@ -12,8 +12,13 @@ pub struct PatternNode {
 pub enum PatternKind {
 	// e.g. if val is x { ... }
 	Identifier(IdentifierNode),
-	// e.g. if val is enum-variant a b { ... }
-	Constructor(IdentifierNode, Vec<PatternNode>),
+	// A variant match, e.g. `if val is color.red { ... }` (nullary) or
+	// `is color.some x { ... }` (with payload). The head names the variant,
+	// qualified by its enum (`enum.variant`) and, for an imported enum, its
+	// module (`module.enum.variant`); a bare head (`variant`) is reserved for
+	// prelude variants. `args` is empty for a nullary variant written
+	// qualified.
+	Constructor(ConstructorHead, Vec<PatternNode>),
 	// e.g. if val is (a, b) { ... }
 	Tuple(Vec<PatternNode>),
 	// e.g. if val is {a: 1, b: 2} { ... }
@@ -37,6 +42,42 @@ pub enum PatternKind {
 	Literal(LiteralNode),
 	// e.g. if name is "$(first) $(last)" { ... }
 	Interpolation(Vec<ExprNode>),
+}
+
+// The head of a `Constructor` pattern: the variant name, optionally qualified.
+// Three shapes, distinguished by how the source dotted the path:
+//   `variant`               — bare: module = None, enum_name = None (prelude only)
+//   `enum.variant`          — module = None, enum_name = Some
+//   `module.enum.variant`   — module = Some, enum_name = Some (imported enum)
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub struct ConstructorHead {
+	pub range: Range,
+	pub module: Option<IdentifierNode>,
+	pub enum_name: Option<IdentifierNode>,
+	pub variant: IdentifierNode,
+}
+
+impl ConstructorHead {
+	// A bare head carries only the variant name — no enum/module qualifier.
+	// These are reserved for prelude variants (`some`, `none`, `ok`, ...).
+	pub fn is_bare(&self) -> bool {
+		self.enum_name.is_none()
+	}
+
+	// The source form, re-joined with dots: `variant`, `enum.variant`, or
+	// `module.enum.variant`. Used by the formatter and diagnostics.
+	pub fn dotted(&self) -> String {
+		let mut parts: Vec<&str> = Vec::with_capacity(3);
+		if let Some(m) = &self.module {
+			parts.push(&m.name);
+		}
+		if let Some(e) = &self.enum_name {
+			parts.push(&e.name);
+		}
+		parts.push(&self.variant.name);
+		parts.join(".")
+	}
 }
 
 #[derive(Clone)]

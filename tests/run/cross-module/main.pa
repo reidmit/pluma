@@ -2,11 +2,11 @@ use colors
 use math
 
 def name-of = fun c {
-	when c is red {
+	when c is colors.color.red {
 		"red"
-	} is green {
+	} is colors.color.green {
 		"green"
-	} is blue {
+	} is colors.color.blue {
 		"blue"
 	}
 }

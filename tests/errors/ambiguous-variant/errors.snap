@@ -1,9 +1,0 @@
----
-source: tests/errors.rs
-expression: output
----
-error[E0110]: Variant `red` is ambiguous: it could refer to `color` or `fruit`.
-   │
-14 │  if c is red {
-   │          ^^^
-   ╰─𜱶 tests/errors/ambiguous-variant/main.pa:14:10

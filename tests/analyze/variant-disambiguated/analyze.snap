@@ -50,15 +50,31 @@ module `main` (tests/analyze/variant-disambiguated/main.pa) {
                             },
                             expr(13:1-17:2) :: int {
                                 kind: when(13:1-17:2) [
-                                    case(13:8-15:2) is pattern(13:11-13:14) Identifier(
-                                        ident(13:11-13:14) `red`,
+                                    case(13:8-15:2) is pattern(13:11-13:20) Constructor(
+                                        ConstructorHead {
+                                            range: 13:11-13:20,
+                                            module: None,
+                                            enum_name: Some(
+                                                ident(13:11-13:16) `color`,
+                                            ),
+                                            variant: ident(13:17-13:20) `red`,
+                                        },
+                                        [],
                                     ) [
                                         expr(14:2-14:3) :: int {
                                             kind: literal(14:2-14:3) int 0,
                                         },
                                     ],
-                                    case(15:3-17:2) is pattern(15:6-15:11) Identifier(
-                                        ident(15:6-15:11) `green`,
+                                    case(15:3-17:2) is pattern(15:6-15:17) Constructor(
+                                        ConstructorHead {
+                                            range: 15:6-15:17,
+                                            module: None,
+                                            enum_name: Some(
+                                                ident(15:6-15:11) `color`,
+                                            ),
+                                            variant: ident(15:12-15:17) `green`,
+                                        },
+                                        [],
                                     ) [
                                         expr(16:2-16:3) :: int {
                                             kind: literal(16:2-16:3) int 1,

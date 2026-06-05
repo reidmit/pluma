@@ -20,7 +20,7 @@ def route-fp :: string = "3046392278730166848"
 
 # POST encoded args to the dispatcher with the given headers; report the status.
 def probe :: fun string (dict string string) -> task int = fun url headers {
-	try resp = http.fetch url post headers (wire.encode (2, 3))
+	try resp = http.fetch url http.method.post headers (wire.encode (2, 3))
 	when resp is ok r {
 		task.return r.status
 	} is err _e {

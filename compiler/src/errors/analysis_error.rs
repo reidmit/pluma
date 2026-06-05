@@ -54,6 +54,15 @@ pub enum AnalysisErrorKind {
 		name: String,
 		enums: Vec<String>,
 	},
+	// A bare variant name was used where a qualified form is now required.
+	// `suggestions` holds the ready-to-write qualified path(s) for this variant
+	// — `enum.variant` for a local enum, `module.enum.variant` for an imported
+	// one — so the help points exactly at what to type. (Prelude variants like
+	// `some`/`ok` remain usable bare and never reach here.)
+	BareVariantNeedsQualifier {
+		name: String,
+		suggestions: Vec<String>,
+	},
 	AmbiguousBareMethod {
 		name: String,
 		traits: Vec<String>,
@@ -219,6 +228,10 @@ impl fmt::Display for AnalysisError {
 				)
 			}
 
+			BareVariantNeedsQualifier { name, .. } => {
+				write!(f, "Variant `{}` must be qualified by its enum.", name)
+			}
+
 			AmbiguousBareMethod { name, traits } => {
 				let formatted = traits
 					.iter()
@@ -370,6 +383,7 @@ impl Reportable for AnalysisError {
 			EnumVariantNotPresent { .. } => "E0108",
 			WhenNotExhaustive { .. } => "E0109",
 			AmbiguousVariant { .. } => "E0110",
+			BareVariantNeedsQualifier { .. } => "E0135",
 			AmbiguousBareMethod { .. } => "E0111",
 			DuplicateDefinition { .. } => "E0112",
 			NoInstance { .. } => "E0113",
@@ -407,6 +421,20 @@ impl Reportable for AnalysisError {
 			EnumVariantNotPresent { suggestion, .. } => {
 				suggestion.as_ref().map(|s| format!("did you mean `{}`?", s))
 			}
+
+			BareVariantNeedsQualifier { suggestions, .. } => match suggestions.as_slice() {
+				[single] => Some(format!("write `{}`.", single)),
+				[first, ..] => Some(format!(
+					"qualify it, e.g. `{}` (one of: {}).",
+					first,
+					suggestions
+						.iter()
+						.map(|s| format!("`{}`", s))
+						.collect::<Vec<_>>()
+						.join(", ")
+				)),
+				[] => None,
+			},
 
 			RecordFieldNotPresent { ty, field } => record_fields(ty)
 				.and_then(|fields| suggest::closest(field, fields))

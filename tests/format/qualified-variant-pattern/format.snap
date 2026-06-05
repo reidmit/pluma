@@ -1,0 +1,17 @@
+---
+source: tests/format.rs
+expression: once
+---
+# Variant patterns keep their qualifier when formatted: `enum.variant` and
+# `module.enum.variant`, with payload args spaced as usual.
+def f = fun e {
+	when e is color.red {
+		0
+	} is shapes.shape.circle r {
+		r
+	} is option.some (pair.both x y) {
+		x
+	} else {
+		1
+	}
+}

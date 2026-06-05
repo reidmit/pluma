@@ -1927,10 +1927,13 @@ impl<'a> Lowerer<'a> {
 				Ok(Pattern::Bind(v))
 			}
 			PatternKind::Literal(lit) => Ok(Pattern::Literal(literal_to_const(&lit.kind)?)),
-			PatternKind::Constructor(variant, subs) => {
+			PatternKind::Constructor(head, subs) => {
+				// The subject's enum type already disambiguates the tag, so the IR
+				// needs only the variant name — the enum/module qualifier is
+				// resolved away by analysis.
 				let fields = self.lower_sub_patterns(subs)?;
 				Ok(Pattern::Variant {
-					variant: variant.name.clone(),
+					variant: head.variant.name.clone(),
 					fields,
 				})
 			}

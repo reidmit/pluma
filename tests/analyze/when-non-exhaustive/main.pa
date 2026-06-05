@@ -4,15 +4,15 @@ enum tree {
 }
 
 def missing-variant = fun t {
-	when t is empty {
+	when t is tree.empty {
 		0
 	}
 }
 
 def partial-constructor = fun t {
-	when t is empty {
+	when t is tree.empty {
 		0
-	} is node 0 _l _r {
+	} is tree.node 0 _l _r {
 		1
 	}
 }

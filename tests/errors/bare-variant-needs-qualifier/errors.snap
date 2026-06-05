@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0135]: Variant `red` must be qualified by its enum.
+  │
+  ├─𜱶 help: write `color.red`.
+  │
+9 │  red
+  │  ^^^
+  ╰─𜱶 tests/errors/bare-variant-needs-qualifier/main.pa:9:2

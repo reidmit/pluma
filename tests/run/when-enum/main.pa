@@ -5,11 +5,11 @@ enum color {
 }
 
 def name-of = fun c {
-	when c is red {
+	when c is color.red {
 		"red"
-	} is green {
+	} is color.green {
 		"green"
-	} is blue {
+	} is color.blue {
 		"blue"
 	}
 }

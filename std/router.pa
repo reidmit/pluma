@@ -49,7 +49,7 @@ opaque enum route {
 # Builds a route from a match rule and a handler. The rule decides whether this
 # route answers a given request; if it does, the handler's task is what runs.
 def make :: fun (fun http.request -> bool) (fun http.request -> task http.response) -> route = fun matches handle {
-	route fun req {
+	route.route fun req {
 		if matches req {
 			some (handle req)
 		} else {
@@ -65,7 +65,7 @@ def make :: fun (fun http.request -> bool) (fun http.request -> task http.respon
 #     })
 public def get :: fun string (fun http.request -> task http.response) -> route = fun path handle {
 	make fun req {
-		if req.method is get {
+		if req.method is http.method.get {
 			req.path == path
 		} else {
 			false
@@ -81,7 +81,7 @@ public def get :: fun string (fun http.request -> task http.response) -> route =
 #     })
 public def post :: fun string (fun http.request -> task http.response) -> route = fun path handle {
 	make fun req {
-		if req.method is post {
+		if req.method is http.method.post {
 			req.path == path
 		} else {
 			false
@@ -104,7 +104,7 @@ public def prefix :: fun string (fun http.request -> task http.response) -> rout
 # `none` if no route in the list matches.
 def first-match :: fun (list route) http.request -> option (task http.response) = fun routes req {
 	when list.head routes is some r {
-		when r is route try-route {
+		when r is route.route try-route {
 			when try-route req is some t {
 				some t
 			} is none {

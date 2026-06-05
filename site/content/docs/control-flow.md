@@ -15,7 +15,7 @@ if some-value is 47 {
     print "ok cool"
 }
 
-if some-animal is dog name {
+if some-animal is animal.dog name {        # variants are qualified by their enum
     print "it's a dog called $(name)"
 }
 
@@ -63,7 +63,7 @@ when some-value is 47 {
 
 when result is ok value {
     print "success! got $(value)"
-} is error message {
+} is err message {
     print "failed: $(message)"
 }
 ```

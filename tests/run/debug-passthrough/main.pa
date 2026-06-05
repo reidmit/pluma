@@ -17,9 +17,9 @@ def main = fun {
 
 	# works on any type (compiler magic, same as to-string)
 	let c = debug color.red
-	when c is red {
+	when c is color.red {
 		print "it was red"
-	} is green {
+	} is color.green {
 		print "it was green"
 	}
 }

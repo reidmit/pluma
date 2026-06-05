@@ -41,14 +41,20 @@ enum bool {
 }
 ```
 
-Variants are accessed by qualifying with the enum name. Zero-arg variants are values of the enum type; payload variants are constructor functions.
+Variants are always accessed by qualifying with the enum name — the same way you reach a field through its record. Zero-arg variants are values of the enum type; payload variants are constructor functions. This holds everywhere a variant appears, **including patterns**:
 
 ```pluma
 let c = color.red                          # c : color
 let t = tree.node 1 tree.empty tree.empty
+
+when t is tree.empty {                     # qualified in patterns too
+    0
+} is tree.node n _ _ {
+    n
+}
 ```
 
-Bare variant names also work when unambiguous (`red` instead of `color.red`). If two enums in scope share a variant name, the local-module enum wins; if both are non-local, you get an `AmbiguousVariant` error and need to qualify.
+The qualifier mirrors how you name the enum *type*: a local enum is reached through its bare name (`color.red`); an enum imported from another module is reached through that module, like its type (`use shapes` → `shapes.color.red`). A bare variant name (`red`) is an error — the diagnostic points you at the qualified form to write. (The one exception is the [prelude enums](#prelude-enums) below, whose variants stay bare.)
 
 ### Generic enums
 

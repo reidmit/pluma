@@ -67,22 +67,22 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                                     },
                                 },
                             },
-                            expr(9:1-9:20) :: nothing {
-                                kind: let(9:1-9:20) {
+                            expr(9:1-9:24) :: nothing {
+                                kind: let(9:1-9:24) {
                                     pattern: pattern(9:5-9:6) Identifier(
                                         ident(9:5-9:6) `c`,
                                     ),
-                                    value: expr(9:9-9:20) :: box string {
-                                        kind: call(9:9-9:20) {
-                                            callee: expr(9:9-9:12) :: 'a 'a -> box 'a {
-                                                kind: ident(9:9-9:12) `two`,
+                                    value: expr(9:9-9:24) :: box string {
+                                        kind: call(9:9-9:24) {
+                                            callee: expr(9:9-9:16) :: 'a 'a -> box 'a {
+                                                kind: namespace-access `box.two`,
                                             },
                                             args: [
-                                                expr(9:14-9:16) :: string {
-                                                    kind: literal(9:14-9:16) string "x",
-                                                },
                                                 expr(9:18-9:20) :: string {
-                                                    kind: literal(9:18-9:20) string "y",
+                                                    kind: literal(9:18-9:20) string "x",
+                                                },
+                                                expr(9:22-9:24) :: string {
+                                                    kind: literal(9:22-9:24) string "y",
                                                 },
                                             ],
                                         },

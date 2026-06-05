@@ -7,7 +7,7 @@ enum box a {
 def main = fun {
 	let a = box.one 5
 	let b = box.empty
-	let c = two "x" "y"
+	let c = box.two "x" "y"
 	print a
 	print b
 	print c

@@ -4,9 +4,9 @@ enum tree {
 }
 
 def has-anything = fun t {
-	when t is empty {
+	when t is tree.empty {
 		false
-	} is node _ _ _ {
+	} is tree.node _ _ _ {
 		true
 	}
 }

@@ -21,7 +21,12 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
                             expr(5:1-9:2) :: string {
                                 kind: when(5:1-9:2) [
                                     case(5:10-7:2) is pattern(5:13-5:24) Constructor(
-                                        ident(5:13-5:17) `some`,
+                                        ConstructorHead {
+                                            range: 5:13-5:17,
+                                            module: None,
+                                            enum_name: None,
+                                            variant: ident(5:13-5:17) `some`,
+                                        },
                                         [
                                             pattern(5:18-5:24) Tuple(
                                                 [
@@ -97,7 +102,12 @@ module `main` (tests/analyze/exhaustive-nested-variant/main.pa) {
                             expr(13:1-17:2) :: string {
                                 kind: when(13:1-17:2) [
                                     case(13:10-15:2) is pattern(13:13-13:36) Constructor(
-                                        ident(13:13-13:17) `some`,
+                                        ConstructorHead {
+                                            range: 13:13-13:17,
+                                            module: None,
+                                            enum_name: None,
+                                            variant: ident(13:13-13:17) `some`,
+                                        },
                                         [
                                             pattern(13:19-13:36) Record {
                                                 fields: [

@@ -4,9 +4,9 @@ enum tree {
 }
 
 def bad = fun t {
-	when t is empty {
+	when t is tree.empty {
 		0
-	} is node x {
+	} is tree.node x {
 		x
 	}
 }

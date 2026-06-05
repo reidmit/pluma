@@ -510,8 +510,19 @@ impl AstWalker {
 			PatternKind::Identifier(id) => {
 				emit(out, &id.range, VARIABLE, id.name.len());
 			}
-			PatternKind::Constructor(name, inner) => {
-				emit(out, &name.range, ENUM_MEMBER, name.name.len());
+			PatternKind::Constructor(head, inner) => {
+				if let Some(module) = &head.module {
+					emit(out, &module.range, NAMESPACE, module.name.len());
+				}
+				if let Some(enum_name) = &head.enum_name {
+					emit(out, &enum_name.range, ENUM, enum_name.name.len());
+				}
+				emit(
+					out,
+					&head.variant.range,
+					ENUM_MEMBER,
+					head.variant.name.len(),
+				);
 				for ip in inner {
 					self.walk_pattern(ip, out);
 				}

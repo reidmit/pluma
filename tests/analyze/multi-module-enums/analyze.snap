@@ -24,22 +24,52 @@ module `main` (tests/analyze/multi-module-enums/main.pa) {
                         body: [
                             expr(5:1-11:2) :: string {
                                 kind: when(5:1-11:2) [
-                                    case(5:8-7:2) is pattern(5:11-5:14) Identifier(
-                                        ident(5:11-5:14) `red`,
+                                    case(5:8-7:2) is pattern(5:11-5:27) Constructor(
+                                        ConstructorHead {
+                                            range: 5:11-5:27,
+                                            module: Some(
+                                                ident(5:11-5:17) `colors`,
+                                            ),
+                                            enum_name: Some(
+                                                ident(5:18-5:23) `color`,
+                                            ),
+                                            variant: ident(5:24-5:27) `red`,
+                                        },
+                                        [],
                                     ) [
                                         expr(6:3-6:7) :: string {
                                             kind: literal(6:3-6:7) string "red",
                                         },
                                     ],
-                                    case(7:3-9:2) is pattern(7:6-7:11) Identifier(
-                                        ident(7:6-7:11) `green`,
+                                    case(7:3-9:2) is pattern(7:6-7:24) Constructor(
+                                        ConstructorHead {
+                                            range: 7:6-7:24,
+                                            module: Some(
+                                                ident(7:6-7:12) `colors`,
+                                            ),
+                                            enum_name: Some(
+                                                ident(7:13-7:18) `color`,
+                                            ),
+                                            variant: ident(7:19-7:24) `green`,
+                                        },
+                                        [],
                                     ) [
                                         expr(8:3-8:9) :: string {
                                             kind: literal(8:3-8:9) string "green",
                                         },
                                     ],
-                                    case(9:3-11:2) is pattern(9:6-9:10) Identifier(
-                                        ident(9:6-9:10) `blue`,
+                                    case(9:3-11:2) is pattern(9:6-9:23) Constructor(
+                                        ConstructorHead {
+                                            range: 9:6-9:23,
+                                            module: Some(
+                                                ident(9:6-9:12) `colors`,
+                                            ),
+                                            enum_name: Some(
+                                                ident(9:13-9:18) `color`,
+                                            ),
+                                            variant: ident(9:19-9:23) `blue`,
+                                        },
+                                        [],
                                     ) [
                                         expr(10:3-10:8) :: string {
                                             kind: literal(10:3-10:8) string "blue",

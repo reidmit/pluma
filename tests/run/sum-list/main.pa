@@ -14,9 +14,9 @@ def make-list = fun n {
 }
 
 def sum = fun xs {
-	when xs is empty {
+	when xs is int-list.empty {
 		0
-	} is cons head tail {
+	} is int-list.cons head tail {
 		head + sum tail
 	}
 }

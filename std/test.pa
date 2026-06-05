@@ -69,27 +69,27 @@ public alias suite list test
 
 # A single case: a name and a thunk returning `ok ()` to pass / `err msg` to fail.
 public def case :: fun string (fun nothing -> result nothing string) -> test = fun name body {
-	leaf name body
+	test.leaf name body
 }
 
 # A named group of nested cases/groups.
 public def group :: fun string (list test) -> test = fun name children {
-	nest name children
+	test.nest name children
 }
 
 # Mark a case or group as skipped — registered and reported, never run.
 public def skip :: fun test -> test = fun node {
-	omit node
+	test.omit node
 }
 
 # Mark a case or group as focused — if anything is focused, only focused runs.
 public def focus :: fun test -> test = fun node {
-	only node
+	test.only node
 }
 
 # A pending case: a name with no body yet.
 public def todo :: fun string -> test = fun name {
-	pend name
+	test.pend name
 }
 
 # --- flattening --------------------------------------------------------------
@@ -114,30 +114,30 @@ alias entry {
 # Flatten one node into entries, threading the enclosing group `path` and the
 # inherited skip/focus `stat` (innermost mark wins).
 def flatten-node :: fun (list string) run-status test -> list entry = fun path stat node {
-	when node is leaf name body {
+	when node is test.leaf name body {
 		[{path, name, status: stat, body}]
-	} is pend name {
-		[{path, name, status: pending, body: fun { ok () }}]
-	} is nest name children {
+	} is test.pend name {
+		[{path, name, status: run-status.pending, body: fun { ok () }}]
+	} is test.nest name children {
 		list.flat-map children fun child {
 			flatten-node [...path, name] stat child
 		}
-	} is omit inner {
-		flatten-node path skipped inner
-	} is only inner {
-		flatten-node path focused inner
+	} is test.omit inner {
+		flatten-node path run-status.skipped inner
+	} is test.only inner {
+		flatten-node path run-status.focused inner
 	}
 }
 
 # Flatten a whole suite into a flat, depth-first list of entries.
 def flatten :: fun (list test) -> list entry = fun nodes {
 	list.flat-map nodes fun n {
-		flatten-node [] normal n
+		flatten-node [] run-status.normal n
 	}
 }
 
 def is-focused :: fun run-status -> bool = fun s {
-	if s is focused {
+	if s is run-status.focused {
 		true
 	} else {
 		false
@@ -211,15 +211,15 @@ def run-entries :: fun bool bool (list entry) acc -> acc = fun color any-focused
 	list.fold entries a0 fun a e {
 		let a1 = {...a, printed: emit-headers color a.printed e.path}
 		let indent = spaces (list.length e.path + 1)
-		when e.status is pending {
+		when e.status is run-status.pending {
 			print (indent ++ paint color bold-yellow "○" ++ " " ++ e.name ++ " " ++ paint color dim "(todo)")
 			{...a1, todo: a1.todo + 1}
-		} is skipped {
+		} is run-status.skipped {
 			print (indent ++ paint color dim "-" ++ " " ++ e.name ++ " " ++ paint color dim "(skipped)")
 			{...a1, skipped: a1.skipped + 1}
-		} is focused {
+		} is run-status.focused {
 			run-case color indent e a1
-		} is normal {
+		} is run-status.normal {
 			if any-focused {
 				print (indent ++ paint color dim "-" ++ " " ++ e.name ++ " " ++ paint color dim "(not focused)")
 				{...a1, skipped: a1.skipped + 1}
