@@ -1,0 +1,30 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+drained:
+[drain] open
+  0
+  1
+  2
+[drain] close
+bounded:
+[bound] open
+  0
+  1
+[bound] close
+faulted:
+[fault] open
+  0
+[fault] close
+  recovered
+cancelled:
+[cancel] open
+  0
+  1
+[cancel] close
+  cancelled
+== stderr ==

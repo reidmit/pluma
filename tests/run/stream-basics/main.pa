@@ -1,0 +1,54 @@
+# std.stream's resourceless surface: a `from-seed` producer reshaped by the lazy
+# transformers (`map` / `filter` / `take` / `take-while`) and driven by the
+# consumers (`for-each` / `fold` / `drain`) plus the low-level `next`.
+use std.task
+use std.stream
+
+# 0, 1, 2, … up to (not including) `limit`.
+def counter :: fun int -> stream int = fun limit {
+	stream.from-seed 0 (fun n {
+		if n < limit {
+			task.return (some (n, n + 1))
+		} else {
+			task.return none
+		}
+	})
+}
+
+def main = fun {
+	# map ∘ filter ∘ take, consumed with for-each: even 0..99, ×10, first 4.
+	let evens = stream.filter (counter 100) (fun n {
+		n % 2 == 0
+	})
+	let doubled = stream.map evens (fun n {
+		n * 10
+	})
+	try _ = stream.for-each (stream.take doubled 4) (fun n {
+		print "take: $(to-string n)"
+		task.return ()
+	})
+
+	# take-while stops at the first element that fails the predicate.
+	try _ = stream.for-each (stream.take-while (counter 100) (fun n { n < 3 })) (fun n {
+		print "while: $(to-string n)"
+		task.return ()
+	})
+
+	# fold: sum of 0..4.
+	try total = stream.fold (counter 5) 0 (fun acc n {
+		task.return (acc + n)
+	})
+	print "fold sum = $(to-string total)"
+
+	# drain runs the pulls for effect and discards the elements.
+	try _ = stream.drain (stream.take (counter 1000000) 3)
+	print "drained"
+
+	# next pulls one element at a time; none once drained.
+	let s = counter 2
+	try a = stream.next s
+	try b = stream.next s
+	try c = stream.next s
+	print "next: $(to-string (a ?? -1)) $(to-string (b ?? -1)) $(to-string (c ?? -1))"
+	task.return 0
+}
