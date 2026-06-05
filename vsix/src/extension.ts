@@ -15,12 +15,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	log.appendLine("Activated Pluma extension!");
 
-	const command = process.env.SERVER_PATH || "pluma-language-server";
+	// The language server is a subcommand of the `pluma` CLI: `pluma language-server`.
+	// SERVER_PATH lets the dev loop point at a freshly-built binary (e.g.
+	// <repo>/target/debug/pluma); otherwise we resolve `pluma` on PATH.
+	const command = process.env.SERVER_PATH || "pluma";
 
-	log.appendLine(`Using language server at ${command}`);
+	log.appendLine(`Using language server: ${command} language-server`);
 
 	const runOptions: Executable = {
 		command,
+		args: ["language-server"],
 		options: {
 			env: {
 				...process.env,

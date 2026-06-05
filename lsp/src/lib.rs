@@ -414,8 +414,15 @@ fn full_document_range(text: &str) -> Range {
 	}
 }
 
-#[tokio::main]
-async fn main() {
+/// Run the Pluma language server over stdio until the client disconnects. This
+/// is the entry point for `pluma language-server`; it owns its own Tokio runtime
+/// so the (synchronous) CLI can call it directly.
+pub fn run() {
+	let runtime = tokio::runtime::Runtime::new().expect("failed to start the async runtime");
+	runtime.block_on(serve());
+}
+
+async fn serve() {
 	let stdin = tokio::io::stdin();
 	let stdout = tokio::io::stdout();
 

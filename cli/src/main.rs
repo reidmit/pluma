@@ -30,6 +30,7 @@ fn main() {
 		} => commands::dev::dev_command(web, port, server_url, path),
 		Command::Format { check, paths } => commands::format::format_command(check, paths),
 		Command::Test { filters, dir } => commands::test::test_command(filters, dir),
+		Command::LanguageServer => lsp::run(),
 		Command::Version => println!("v{}", compiler::VERSION),
 
 		#[cfg(debug_assertions)]

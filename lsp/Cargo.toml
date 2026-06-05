@@ -1,5 +1,5 @@
 [package]
-name = "pluma-language-server"
+name = "lsp"
 version.workspace = true
 edition = "2024"
 

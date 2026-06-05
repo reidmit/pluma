@@ -3,7 +3,7 @@
 A [Zed](https://zed.dev) extension for the Pluma language (`.pa` files).
 
 It is deliberately thin: it does nothing but tell Zed how to launch
-`pluma-language-server`. Every feature you see in the editor — diagnostics,
+`pluma language-server`. Every feature you see in the editor — diagnostics,
 hover types, formatting, and syntax highlighting — is served by that language
 server over LSP, so the same work benefits any editor with an LSP client (Zed,
 VS Code, Neovim, …) instead of being reimplemented per editor.
@@ -15,12 +15,13 @@ than a Tree-sitter grammar, which is why this extension ships no grammar.
 
 ### 1. Build the language server
 
-From the repo root:
+The language server is the `pluma language-server` subcommand of the CLI. From
+the repo root:
 
 ```sh
-cargo build --bin pluma-language-server          # -> target/debug/pluma-language-server
+cargo build --bin pluma                          # -> target/debug/pluma
 # or, to put it on your PATH:
-cargo install --path lsp
+cargo install --path cli
 ```
 
 ### 2. Install the extension into Zed
@@ -46,23 +47,26 @@ Add to your Zed `settings.json` (command palette → **zed: open settings**):
     "pluma": {
       "binary": {
         // Absolute path to the binary built in step 1. Skip this block
-        // entirely if you ran `cargo install --path lsp` (it's on PATH).
-        "path": "/absolute/path/to/pluma/target/debug/pluma-language-server"
+        // entirely if you ran `cargo install --path cli` (it's on PATH).
+        // The extension appends the `language-server` subcommand for you.
+        "path": "/absolute/path/to/pluma/target/debug/pluma"
       }
     }
   }
 }
 ```
 
-Pointing `binary.path` at `target/debug/pluma-language-server` is the smoothest
-dev loop: rebuild the server, then reload the Zed window to pick it up.
+Pointing `binary.path` at `target/debug/pluma` is the smoothest dev loop:
+rebuild the CLI, then reload the Zed window to pick it up.
 
 ## How the binary is located
 
 `language_server_command` (in `src/lib.rs`) resolves the server in this order:
 
 1. `lsp.pluma.binary.path` from your settings (with optional `binary.arguments`).
-2. `pluma-language-server` on `PATH`.
+2. `pluma` on `PATH`.
+
+Either way the extension invokes it as `pluma language-server`.
 
 If neither resolves, Zed surfaces an error explaining both options.
 

@@ -27,6 +27,10 @@ format-check:
 format-stdlib:
   @ cargo run --bin pluma --quiet -- format $(find compiler/src/stdlib compiler/src/prelude.pa -name "*.pa")
 
+# build the cli in debug mode; produces target/debug/pluma
+build:
+  @ cargo build --bin pluma
+
 # build the cli in release mode; produces target/release/pluma
 build-release:
   @ cargo build --release --bin pluma
@@ -56,20 +60,20 @@ site:
 
 # build & run the vscode extension in a new window for local testing
 vs-extension:
-  cargo build --bin pluma-language-server
+  cargo build --bin pluma
   rm -rf vsix/dist
   vsix/node_modules/.bin/esbuild vsix/src/extension.ts \
     --outdir=vsix/dist \
     --sourcemap \
     --platform=node \
     --format=cjs
-  SERVER_PATH=$(pwd)/target/debug/pluma-language-server \
+  SERVER_PATH=$(pwd)/target/debug/pluma \
     code --extensionDevelopmentPath=$(pwd)/vsix ./tests
 
-# build the language server + zed extension wasm; then install the dev
-# extension from Zed (cmd palette -> "zed: install dev extension" -> ./zed)
+# build the cli (which hosts `pluma language-server`) + zed extension wasm; then
+# install the dev extension from Zed (cmd palette -> "zed: install dev extension" -> ./zed)
 zed-extension:
-  cargo build --bin pluma-language-server
+  cargo build --bin pluma
   cd zed && cargo build --release --target wasm32-wasip1
   @ echo "Built. In Zed run 'zed: install dev extension' -> $(pwd)/zed (see zed/README.md for settings)."
 

@@ -111,6 +111,9 @@ pub(crate) enum Command {
 		dir: Option<String>,
 	},
 
+	/// Run the language server over stdio (spawned by editor extensions).
+	LanguageServer,
+
 	/// Print compiler version info.
 	Version,
 
