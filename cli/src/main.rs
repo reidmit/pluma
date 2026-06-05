@@ -1,33 +1,49 @@
 mod browser_bundle;
+mod cli;
 mod colors;
 mod commands;
 mod printing;
 
-use compiler::VERSION;
+use clap::Parser;
+
+use cli::{Cli, Command};
 
 fn main() {
-	let argv: Vec<String> = std::env::args().collect();
-
-	match argv.get(1).map(String::as_str) {
-		Some("run") => commands::run::run_command(argv[2..].to_vec()),
-		Some("build") => commands::build::build_command(argv[2..].to_vec()),
-		Some("dev") => commands::dev::dev_command(argv[2..].to_vec()),
-		Some("format") => commands::format::format_command(argv[2..].to_vec()),
-		Some("test") => commands::test::test_command(argv[2..].to_vec()),
+	match Cli::parse().command {
+		Command::Run {
+			vm,
+			path,
+			program_args,
+		} => commands::run::run_command(vm, path, program_args),
+		Command::Build {
+			web,
+			out,
+			server_url,
+			target,
+			path,
+		} => commands::build::build_command(web, out, server_url, target, path),
+		Command::Dev {
+			web,
+			port,
+			server_url,
+			path,
+		} => commands::dev::dev_command(web, port, server_url, path),
+		Command::Format { check, paths } => commands::format::format_command(check, paths),
+		Command::Test { filters, dir } => commands::test::test_command(filters, dir),
+		Command::Version => println!("v{}", compiler::VERSION),
 
 		#[cfg(debug_assertions)]
-		Some("tokenize") => commands::tokenize::tokenize_command(argv[2..].to_vec()),
+		Command::Analyze { path } => commands::analyze::analyze_command(path),
 		#[cfg(debug_assertions)]
-		Some("analyze") => commands::analyze::analyze_command(argv[2..].to_vec()),
+		Command::Tokenize { path } => commands::tokenize::tokenize_command(path),
 
-		Some("help") => commands::help::print_help(),
-		Some("version") => println!("v{}", VERSION),
-
-		// Anything else is treated as a path to run, so `pluma foo.pa` works as
-		// shorthand for `pluma run foo.pa` (on V8). Here the path is argv[1], so the
-		// program's own args start at argv[2].
-		Some(arg) => commands::run::run(arg.to_string(), argv[2..].to_vec()),
-
-		None => commands::help::print_help(),
+		// `pluma <path> [args…]`: an unrecognized first token is taken as a module
+		// path to run, so `pluma foo.pa` is shorthand for `pluma run foo.pa`. The
+		// path is the captured token; the rest is the program's own argv.
+		Command::External(args) => {
+			let mut args = args.into_iter();
+			let path = args.next().expect("external subcommand always has a token");
+			commands::run::run(path, args.collect());
+		}
 	}
 }

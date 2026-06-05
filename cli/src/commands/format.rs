@@ -1,15 +1,6 @@
 use crate::printing::*;
 
-pub(crate) fn format_command(args: Vec<String>) {
-	let mut check = false;
-	let mut paths: Vec<String> = Vec::new();
-	for a in args {
-		match a.as_str() {
-			"--check" => check = true,
-			_ => paths.push(a),
-		}
-	}
-
+pub(crate) fn format_command(check: bool, paths: Vec<String>) {
 	if paths.is_empty() {
 		print_error("No path given. Expected a file path or `-` for stdin.");
 		std::process::exit(1);

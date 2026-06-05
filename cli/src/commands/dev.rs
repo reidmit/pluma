@@ -31,34 +31,7 @@ type Clients = Arc<Mutex<Vec<TcpStream>>>;
 
 const POLL: Duration = Duration::from_millis(250);
 
-pub(crate) fn dev_command(args: Vec<String>) {
-	let mut entry_path: Option<String> = None;
-	let mut web = false;
-	let mut port: u16 = 2222;
-	let mut server_url: Option<String> = None;
-	let mut iter = args.into_iter();
-	while let Some(a) = iter.next() {
-		match a.as_str() {
-			"--web" => web = true,
-			"--port" => match iter.next().and_then(|p| p.parse::<u16>().ok()) {
-				Some(p) => port = p,
-				None => {
-					print_error("`--port` requires a number");
-					std::process::exit(1);
-				}
-			},
-			"--server-url" => server_url = iter.next(),
-			_ => entry_path = Some(a),
-		}
-	}
-	let entry_path = match entry_path {
-		Some(p) => p,
-		None => {
-			print_error("No module path given. Expected another argument.");
-			std::process::exit(1);
-		}
-	};
-
+pub(crate) fn dev_command(web: bool, port: u16, server_url: Option<String>, entry_path: String) {
 	// A fullstack directory (`server.pa` + `client.pa`) runs both halves: the server
 	// as a subprocess, the client served + live-reloaded, with `/rpc/*` proxied to
 	// the server (same origin, so no CORS). The client posts same-origin by default

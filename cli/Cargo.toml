@@ -3,8 +3,15 @@ name = "cli"
 version.workspace = true
 edition = "2024"
 
+# The package is `cli` (its workspace dir), but the shipped binary is `pluma` —
+# the name users type and that `--help`/usage prints.
+[[bin]]
+name = "pluma"
+path = "src/main.rs"
+
 [dependencies]
 atty = "0.2.13"
+clap = { version = "4", features = ["derive"] }
 compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
 # V8 is the `pluma run`/`pluma test` engine (ABI.md Phase 2): run the same WasmGC

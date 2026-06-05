@@ -5,26 +5,11 @@ use crate::printing::*;
 /// `pluma run <path> [args…]`. A source file is compiled to WasmGC and run on V8
 /// (the deploy engine — run what you ship); a prebuilt `.wasm` runs directly.
 /// Everything after the path is the program's own argv (`io.args`).
-pub(crate) fn run_command(args: Vec<String>) {
-	let mut entry_path: Option<String> = None;
-	let mut program_args: Vec<String> = Vec::new();
-	for a in args {
-		if entry_path.is_none() && a == "--vm" {
-			print_error("The `--vm` flag has been removed — `pluma run` uses V8 (the deploy engine).");
-			std::process::exit(1);
-		} else if entry_path.is_none() {
-			entry_path = Some(a);
-		} else {
-			program_args.push(a);
-		}
+pub(crate) fn run_command(vm: bool, entry_path: String, program_args: Vec<String>) {
+	if vm {
+		print_error("The `--vm` flag has been removed — `pluma run` uses V8 (the deploy engine).");
+		std::process::exit(1);
 	}
-	let entry_path = match entry_path {
-		Some(path) => path,
-		None => {
-			print_error("No module path given. Expected another argument.");
-			std::process::exit(1);
-		}
-	};
 	run(entry_path, program_args);
 }
 

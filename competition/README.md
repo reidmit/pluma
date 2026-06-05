@@ -8,7 +8,7 @@ the same thing before it trusts the timings.
 ## Running
 
 ```sh
-cargo build --release --bin cli   # build the Pluma CLI first
+cargo build --release --bin pluma   # build the Pluma CLI first
 competition/run.sh                # best of 5 runs (pass a number to change)
 competition/run.sh 10             # best of 10
 ```
@@ -16,7 +16,7 @@ competition/run.sh 10             # best of 10
 `run.sh` invokes each program the way you would from a shell —
 
 ```
-./target/release/cli run <prog>.wasm   python3 <prog>.py    ruby <prog>.rb
+./target/release/pluma run <prog>.wasm   python3 <prog>.py    ruby <prog>.rb
 node <prog>.js   bun <prog>.js   deno run <prog>.js   luajit <prog>.lua
 ./<prog>                                # the ghc -O2 binary
 ```

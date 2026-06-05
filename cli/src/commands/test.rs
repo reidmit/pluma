@@ -2,7 +2,7 @@ use compiler::*;
 
 use crate::printing::*;
 
-pub(crate) fn test_command(args: Vec<String>) {
+pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 	// PLUMA_TIMING=1 prints a per-phase wall-clock breakdown to stderr.
 	let timing = std::env::var("PLUMA_TIMING").is_ok();
 	let t_start = std::time::Instant::now();
@@ -14,35 +14,8 @@ pub(crate) fn test_command(args: Vec<String>) {
 		}
 	};
 
-	// Arg parsing: at most one positional (the starting directory) plus
-	// any number of `-f <name>` filters. No positional means start at cwd.
-	let mut positional: Option<String> = None;
-	let mut filters: Vec<String> = Vec::new();
-	let mut iter = args.into_iter();
-	while let Some(a) = iter.next() {
-		match a.as_str() {
-			"-f" => match iter.next() {
-				Some(v) => filters.push(v),
-				None => {
-					print_error("`-f` requires a filter argument");
-					std::process::exit(1);
-				}
-			},
-			s if s.starts_with('-') => {
-				print_error(format!("unknown flag `{}`", s));
-				std::process::exit(1);
-			}
-			_ => {
-				if positional.is_some() {
-					print_error("`pluma test` takes at most one directory argument");
-					std::process::exit(1);
-				}
-				positional = Some(a);
-			}
-		}
-	}
-
-	let start_dir: std::path::PathBuf = match positional {
+	// No directory given means start the walk-up from cwd.
+	let start_dir: std::path::PathBuf = match dir {
 		Some(arg) => {
 			let p = std::path::Path::new(&arg);
 			if !p.is_dir() {

@@ -44,7 +44,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PLUMA="$ROOT/target/release/cli"
+PLUMA="$ROOT/target/release/pluma"
 RUNS="${1:-5}"
 REPORT="$ROOT/competition/RESULTS.md"
 
@@ -187,7 +187,7 @@ ratio() {
 }
 
 if [ ! -x "$PLUMA" ]; then
-	echo "error: $PLUMA not found. Build it first:  cargo build --release --bin cli" >&2
+	echo "error: $PLUMA not found. Build it first:  cargo build --release --bin pluma" >&2
 	exit 1
 fi
 

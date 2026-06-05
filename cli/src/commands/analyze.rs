@@ -2,15 +2,7 @@ use compiler::*;
 
 use crate::printing::*;
 
-pub(crate) fn analyze_command(args: Vec<String>) {
-	let entry_path = match args.into_iter().next() {
-		Some(path) => path,
-		None => {
-			print_error("No module path given. Expected another argument.");
-			std::process::exit(1);
-		}
-	};
-
+pub(crate) fn analyze_command(entry_path: String) {
 	let mut compiler = match Compiler::from_entry_path(entry_path) {
 		Ok(c) => c,
 		Err(diagnostics) => {

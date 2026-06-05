@@ -1,18 +1,18 @@
 # run 'tokenize' on a single file path
 tokenize path:
-  @ cargo run --bin cli --quiet -- tokenize {{path}}
+  @ cargo run --bin pluma --quiet -- tokenize {{path}}
 
 # run 'analyze' on a single file path
 analyze path:
-  @ cargo run --bin cli --quiet -- analyze {{path}}
+  @ cargo run --bin pluma --quiet -- analyze {{path}}
 
 # run a module on V8 (compiles to WasmGC — the deploy engine)
 run path:
-  @ cargo run --bin cli --quiet -- run {{path}}
+  @ cargo run --bin pluma --quiet -- run {{path}}
 
 # compile a module to a WasmGC deploy artifact (run it with `pluma run <out>.wasm`)
 build-server path:
-  @ cargo run --bin cli --quiet -- build {{path}}
+  @ cargo run --bin pluma --quiet -- build {{path}}
 
 # format everything: Rust sources (cargo fmt) + the baked-in stdlib/prelude .pa sources
 format: format-stdlib
@@ -20,16 +20,16 @@ format: format-stdlib
 
 # verify that .pa files in the tree are already in canonical format
 format-check:
-  @ cargo run --bin cli --quiet -- format --check $(find tests/run tests/analyze compiler/src/prelude.pa -name "*.pa")
+  @ cargo run --bin pluma --quiet -- format --check $(find tests/run tests/analyze compiler/src/prelude.pa -name "*.pa")
 
 # format the baked-in stdlib + prelude .pa sources in place (modules,
 # their *.test.pa suites, prelude, and the stdlib package marker)
 format-stdlib:
-  @ cargo run --bin cli --quiet -- format $(find compiler/src/stdlib compiler/src/prelude.pa -name "*.pa")
+  @ cargo run --bin pluma --quiet -- format $(find compiler/src/stdlib compiler/src/prelude.pa -name "*.pa")
 
-# build the cli in release mode; produces target/release/cli
+# build the cli in release mode; produces target/release/pluma
 build-release:
-  @ cargo build --release --bin cli
+  @ cargo build --release --bin pluma
 
 # run the snapshot test suite (analyze + run + format fixtures under tests/).
 # `run` compiles each fixture to WasmGC and runs it under V8 (the deploy engine).
@@ -43,7 +43,7 @@ test-write:
 # run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
 # through `pluma test` — exercises the stdlib and the `std.test` runner under V8.
 test-stdlib:
-  @ cargo run --bin cli --quiet -- test compiler/src/stdlib
+  @ cargo run --bin pluma --quiet -- test compiler/src/stdlib
 
 # run the editor-grammar regression tests: TextMate (vsix/) + Tree-sitter
 # (tree-sitter/: corpus tests + parse every tests/run fixture)

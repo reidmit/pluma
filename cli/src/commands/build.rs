@@ -7,33 +7,19 @@ use crate::printing::*;
 /// By default this lowers the shared IR for a machine/OS host through the WasmGC
 /// backend and writes `<out>.wasm`, run with `pluma run <out>.wasm`. `--web` instead
 /// lowers for the web/DOM sandbox and writes a browser bundle (see notes/DEPLOY.md).
-pub(crate) fn build_command(args: Vec<String>) {
-	let mut entry_path: Option<String> = None;
-	let mut out_base: Option<String> = None;
-	let mut web = false;
-	let mut server_url: Option<String> = None;
-	let mut iter = args.into_iter();
-	while let Some(a) = iter.next() {
-		match a.as_str() {
-			"--web" => web = true,
-			"-o" | "--out" => out_base = iter.next(),
-			"--server-url" => server_url = iter.next(),
-			"--target" => {
-				print_error(
-					"`--target` was removed. Use `--web` for a browser build; omit it for a server/CLI build.",
-				);
-				std::process::exit(1);
-			}
-			_ => entry_path = Some(a),
-		}
+pub(crate) fn build_command(
+	web: bool,
+	out_base: Option<String>,
+	server_url: Option<String>,
+	target: Option<String>,
+	entry_path: String,
+) {
+	if target.is_some() {
+		print_error(
+			"`--target` was removed. Use `--web` for a browser build; omit it for a server/CLI build.",
+		);
+		std::process::exit(1);
 	}
-	let entry_path = match entry_path {
-		Some(p) => p,
-		None => {
-			print_error("No module path given. Expected another argument.");
-			std::process::exit(1);
-		}
-	};
 
 	// Where the generated RPC client stubs point. Default to the server's default
 	// bind; `--server-url` overrides (use "" for same-origin behind a proxy).
