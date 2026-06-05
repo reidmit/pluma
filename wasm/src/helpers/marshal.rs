@@ -14,10 +14,9 @@
 // it to 0 before encoding that call's args, then bumps once per payload. Host calls
 // are synchronous, so a payload only needs to outlive the single call it feeds.
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::Wat;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// `__alloc(n) -> ptr` — return the current bump cursor, advance it by `n`, and grow
 /// the linear memory (one page at a time) until it holds the new top. The exported

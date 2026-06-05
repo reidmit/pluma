@@ -17,9 +17,8 @@
 // its poll closure and interpreting the `__poll` result. The task primitives
 // (`task.return`/…) and the side-effecting scope kernel are lowered in `emit.rs`.
 
-use ir::{Atom, Block, Const, IrProgram, Rvalue, Stmt, StmtKind, VarId};
-
 use crate::runtime::task_kind;
+use ir::{Atom, Block, Const, IrProgram, Rvalue, Stmt, StmtKind, VarId};
 
 /// Synthetic enum name the async-fn constructor tags its `$task` with. `emit.rs`
 /// special-cases `MakeVariant{enum_name == TASK_ENUM}` to build a `$task` struct.

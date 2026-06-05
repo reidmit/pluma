@@ -8,11 +8,10 @@
 //   * `__dom_register(closure) -> token` — append + return the index (emit side).
 //   * `__dom_dispatch(token) -> ()`      — the exported entry the host calls.
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::list::{list_len, mk_list};
 use crate::helpers::wat::Wat;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// `__dom_register(closure) -> i32 token`: append `closure` to the `dom_handlers`
 /// registry (lazily creating the empty `$list` the first time), returning its

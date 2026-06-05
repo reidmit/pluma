@@ -1,9 +1,8 @@
 // Structural equality (`__eq`).
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::Wat;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// Build the structural-equality runtime helper `__eq(a, b) -> i32` (1 = equal).
 /// Recursive over variants; loops over string bytes. Implements structural

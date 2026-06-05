@@ -3,31 +3,34 @@
 // function (dense `FuncId -> wasm-index` numbering after the imports), the
 // synthetic `__*` runtime helpers and builtin wrappers it needs, a passive data
 // segment holding every string constant, and the entry export.
+//
+// The build is a linear pipeline; the bulkier phases live in submodules:
+//   - `imports` — the host-import table, per-tag classification, import types.
+//   - `globals` — the global-section assembly (scratch/wire/task/dom globals).
+//   - `lits`    — the per-enum literal tables the codecs/formatters dispatch on.
 
-use std::collections::{HashMap, HashSet};
-
-use ir::{GlobalInit, IrProgram, PreEval};
-use wasm_encoder::{
-	CodeSection, ConstExpr, DataCountSection, DataSection, ElementSection, Elements, ExportKind,
-	ExportSection, Function, FunctionSection, GlobalSection, GlobalType, HeapType, ImportSection,
-	MemorySection, MemoryType, Module as WasmModule, RefType, TableSection, TableType, TypeSection,
-	ValType,
-};
+mod globals;
+mod imports;
+mod lits;
 
 use crate::emit::FnEmitter;
-use crate::helpers::{REGISTRY, build_builtin_wrapper, builtin_arity, close_deps, helper_for_tag};
+use crate::helpers::{REGISTRY, build_builtin_wrapper, builtin_arity, close_deps};
 use crate::runtime::{
-	ClockKind, DomKind, GlobalKind, GlobalSlot, Helper, HelperCtx, HelperSet, IoKind, IoResultLits,
-	NetImports, OptionLits, OrderingLits, RngKind, Runtime, TaskGlobals, TaskLits, ToStringLits,
-	WireGlobals, WireResultLits, WireTags, clock_kind, dom_kind, host_sig, io_kind, io_uses_io4,
-	is_byte_writer, is_clock_host, is_dom_host, is_f64_unary_host, is_inline_builtin, is_io_host,
-	is_io_result, is_net_builtin, is_raw_writer, is_rng_host, rng_kind, scan_helpers,
-	task_builtin_kind,
+	Helper, HelperCtx, HelperSet, NetImports, Runtime, is_net_builtin, scan_helpers,
 };
 use crate::scan::{StrPool, collect_host_calls, collect_zero_arg_closures, scan_strings};
-use crate::types::{self, FuncTypes};
-use crate::util::{variant_display, variant_tag_in};
+use crate::types::FuncTypes;
 use crate::{Diagnostics, Reach, builtin_globals};
+use globals::build_globals;
+use imports::{HostImports, classify_host_call, import_type};
+use ir::{GlobalInit, IrProgram, PreEval};
+use lits::resolve_literals;
+use std::collections::{HashMap, HashSet};
+use wasm_encoder::{
+	CodeSection, ConstExpr, DataCountSection, DataSection, ElementSection, Elements, ExportKind,
+	ExportSection, Function, FunctionSection, ImportSection, MemorySection, MemoryType,
+	Module as WasmModule, RefType, TableSection, TableType, TypeSection,
+};
 
 pub(crate) struct Module;
 
@@ -45,213 +48,35 @@ impl Module {
 		let browser = browser && is_async;
 		let builtin_g = builtin_globals(p);
 
-		// Host imports: the builtin tags actually called in reachable functions.
-		// `to-string` is special — it's implemented in wasm (`__tostring`), not
-		// imported — so route it to a flag rather than the import table.
-		let mut host_index: HashMap<String, u32> = HashMap::new();
-		let mut host_order: Vec<String> = Vec::new();
+		// Host imports: the builtin tags actually called in reachable functions. The
+		// per-tag classification (which synthetic `__*` helpers + imports each call
+		// pulls in) lives in `imports::classify_host_call`.
+		let mut imports = HostImports::new();
+
 		// Synthetic `__*` helpers the program needs. Some are triggered by a named
-		// builtin call (via `helper_for_tag` here); the rest by IR construct (added
-		// by `scan_helpers` below).
+		// builtin call (in `classify_host_call`); the rest by IR construct (added by
+		// `scan_helpers` below).
 		let mut requested: HelperSet = HelperSet::new();
+
 		// Whether the program reaches a `std.sys.net` builtin. The seven socket ops plus
-		// the reactor's `net-poll`/`net-unwatch` are registered together once, after
-		// the scan (see below) — the suspending `accept`/`read`/`write` are `$task`
+		// the reactor's `net-poll`/`net-unwatch` are registered together once, after the
+		// scan (see below) — the suspending `accept`/`read`/`write` are `$task`
 		// constructors driven by the scheduler, and `poll`/`unwatch` are reached only
 		// from the emitted driver, so none surface as ordinary host calls here.
 		let mut uses_net = false;
-		for &fid in &reach.order {
-			collect_host_calls(&p.functions[fid as usize].body, &builtin_g, |tag| {
+
+		// Go through each reachable function...
+		for &func_id in &reach.order {
+			// Look it up the IR program,
+			collect_host_calls(&p.functions[func_id as usize].body, &builtin_g, |tag| {
 				if is_net_builtin(tag) {
 					uses_net = true;
 					return;
 				}
-				if let Some(h) = helper_for_tag(tag) {
-					requested.insert(h);
-					return;
-				}
-				// `debug` is emitted inline (see `emit_debug`): it renders the value
-				// via `__tostring`, concatenates the `[module:line]` prefix with
-				// `__bytesconcat`, and prints the line through the `print` host import.
-				if tag == "debug" {
-					requested.insert(Helper::ToString);
-					requested.insert(Helper::BytesConcat);
-					requested.insert(Helper::MarshalSend);
-					if !host_index.contains_key("print") {
-						host_index.insert("print".to_string(), host_order.len() as u32);
-						host_order.push("print".to_string());
-					}
-					return;
-				}
-				// Pure-compute builtins emitted inline at the call site (no import).
-				if is_inline_builtin(tag) {
-					return;
-				}
-				// `task.*` / `scope-new`/`scope-next` build a `$task` inline (no import);
-				// the side-effecting scope-kernel ops call driver helpers — both are
-				// handled in `emit`, never as host imports.
-				if task_builtin_kind(tag).is_some()
-					|| matches!(tag, "scope-spawn" | "scope-cancel" | "scope-cancel-after")
-				{
-					return;
-				}
-				// Unary float math: a `(f64) -> f64` host import (box/unbox emitted in
-				// wasm), registered like any import but typed separately below.
-				if is_f64_unary_host(tag) {
-					if !host_index.contains_key(tag) {
-						host_index.insert(tag.to_string(), host_order.len() as u32);
-						host_order.push(tag.to_string());
-					}
-					return;
-				}
-				// Byte-payload writers render their arg into scratch before the host
-				// call: they need `__send_bytes` (and `__tostring` for the formatted
-				// ones). They still register as ordinary host imports below.
-				if is_byte_writer(tag) {
-					requested.insert(Helper::MarshalSend);
-					if !is_raw_writer(tag) {
-						requested.insert(Helper::ToString);
-					}
-				}
-				// Marshalled `std.sys.io` ops encode their path/data args into scratch
-				// (`__alloc`/`__store_bytes`); reads also `__load_bytes` the payload and
-				// need the `io-copyout` overflow import, and `read-dir` splits names.
-				if is_io_host(tag) {
-					requested.insert(Helper::MarshalAlloc);
-					requested.insert(Helper::MarshalStore);
-					if let Some(kind) = io_kind(tag) {
-						let is_read = matches!(
-							kind,
-							IoKind::ReadStr
-								| IoKind::ReadBytes
-								| IoKind::ReadFileStr
-								| IoKind::ReadFileBytes
-								| IoKind::ReadDir
-								| IoKind::Args
-								| IoKind::EnvVar
-						);
-						if is_read {
-							requested.insert(Helper::MarshalLoad);
-							if !host_index.contains_key("io-copyout") {
-								host_index.insert("io-copyout".to_string(), host_order.len() as u32);
-								host_order.push("io-copyout".to_string());
-							}
-						}
-						// Both split a NUL-blob into a `$list` of `$str`.
-						if matches!(kind, IoKind::ReadDir | IoKind::Args) {
-							requested.insert(Helper::MarshalReadNames);
-						}
-					}
-				}
-				// `std.sys.io` result builtins need the `__io_result` shaper + the
-				// `io-last-error` channel it queries, on top of their own host import
-				// (registered by the generic path just below — fall through). `uuid-parse`
-				// rides this path too (it's classified as an io read).
-				if is_io_result(tag) {
-					requested.insert(Helper::IoResult);
-					if !host_index.contains_key("io-last-error") {
-						host_index.insert("io-last-error".to_string(), host_order.len() as u32);
-						host_order.push("io-last-error".to_string());
-					}
-				}
-				// `std.random`/`std.uuid` payload builders (`emit_rng`): the byte/string
-				// ones write to scratch and read it back (`random-bytes` may overflow);
-				// the scalars need no helpers. Their host import is registered below.
-				if is_rng_host(tag) {
-					match rng_kind(tag) {
-						Some(RngKind::BytesN) => {
-							requested.insert(Helper::MarshalAlloc);
-							requested.insert(Helper::MarshalLoad);
-							if !host_index.contains_key("io-copyout") {
-								host_index.insert("io-copyout".to_string(), host_order.len() as u32);
-								host_order.push("io-copyout".to_string());
-							}
-						}
-						Some(RngKind::UuidStr) => {
-							requested.insert(Helper::MarshalAlloc);
-							requested.insert(Helper::MarshalLoad);
-						}
-						_ => {}
-					}
-				}
-				// `std.time` clock imports (`emit_clock`). now/monotonic/sleep need no
-				// helpers; `time-parse` marshals two strings + a scratch i64 slot and
-				// shapes its `result instant string` through `__io_result` (so it needs
-				// the marshalling helpers + the `io-last-error` error channel).
-				if clock_kind(tag) == Some(ClockKind::Parse) {
-					requested.insert(Helper::MarshalAlloc);
-					requested.insert(Helper::MarshalStore);
-					requested.insert(Helper::MarshalLoad);
-					requested.insert(Helper::IoResult);
-					if !host_index.contains_key("io-last-error") {
-						host_index.insert("io-last-error".to_string(), host_order.len() as u32);
-						host_order.push("io-last-error".to_string());
-					}
-				}
-				// `std.web.dom` (`emit_dom`): string-carrying node ops marshal their args into
-				// scratch; `dom-get-value` reads a payload back; `on-click` stows its handler
-				// in the dispatch registry (the `__dom_register`/`__dom_dispatch` helpers,
-				// whose dep `__list_push` and the `dom_handlers` global come in below). The
-				// dom host import itself is registered by the generic path just after.
-				if is_dom_host(tag) {
-					match dom_kind(tag) {
-						Some(
-							DomKind::Make
-							| DomKind::SetText
-							| DomKind::SetAttr
-							| DomKind::SetProp
-							| DomKind::SetBoolProp
-							| DomKind::DevStoreSet,
-						) => {
-							requested.insert(Helper::MarshalAlloc);
-							requested.insert(Helper::MarshalStore);
-						}
-						Some(DomKind::GetValue) => {
-							requested.insert(Helper::MarshalAlloc);
-							requested.insert(Helper::MarshalLoad);
-						}
-						// `dom-dev-store-get` marshals the key string out *and* reads the
-						// value back, so it needs all three.
-						Some(DomKind::DevStoreGet) => {
-							requested.insert(Helper::MarshalAlloc);
-							requested.insert(Helper::MarshalStore);
-							requested.insert(Helper::MarshalLoad);
-						}
-						Some(DomKind::Listen) => {
-							requested.insert(Helper::DomRegister);
-							requested.insert(Helper::DomDispatch);
-						}
-						_ => {}
-					}
-				}
-				// `std.web.fetch`: the browser HTTP transport. Marshalled like an io read
-				// (`(req_ptr, req_len, dst, cap) -> len`, overflow drained via `io-copyout`)
-				// and shaped through `__io_result`; its own host import is registered by the
-				// generic path just below.
-				if tag == "web-fetch" {
-					requested.insert(Helper::MarshalAlloc);
-					requested.insert(Helper::MarshalStore);
-					requested.insert(Helper::MarshalLoad);
-					requested.insert(Helper::IoResult);
-					if !host_index.contains_key("io-last-error") {
-						host_index.insert("io-last-error".to_string(), host_order.len() as u32);
-						host_order.push("io-last-error".to_string());
-					}
-					if !host_index.contains_key("io-copyout") {
-						host_index.insert("io-copyout".to_string(), host_order.len() as u32);
-						host_order.push("io-copyout".to_string());
-					}
-				}
-				if !host_index.contains_key(tag) {
-					if host_sig(tag).is_none() {
-						diags.push(format!("unsupported host builtin `{tag}`"));
-						return;
-					}
-					host_index.insert(tag.to_string(), host_order.len() as u32);
-					host_order.push(tag.to_string());
-				}
+				classify_host_call(tag, &mut requested, &mut imports, diags);
 			});
 		}
+
 		// Every program exports `__entry_error`, which renders a `result.err` message
 		// via `__tostring` + `__send_bytes` — request them here, *before* the
 		// `float_to_str` gate below, so `__tostring`'s float-format import is registered
@@ -262,32 +87,23 @@ impl Module {
 		requested.insert(Helper::MarshalSend);
 		// `__tostring` delegates float formatting to a host import.
 		if requested.contains(&Helper::ToString) {
-			host_index.insert("float_to_str".to_string(), host_order.len() as u32);
-			host_order.push("float_to_str".to_string());
+			imports.register("float_to_str");
 		}
 		// `std.sys.net`: register the whole import set together when any net builtin is
 		// reachable (the sync ops shaped at the call site, the suspending ops + the
 		// reactor controls driven by the scheduler). The host defines all nine
 		// unconditionally, so importing the full set even when only some are used is
 		// harmless; it keeps the indices a single contiguous block.
-		let net_imports = uses_net.then(|| {
-			let mut reg = |name: &str| -> u32 {
-				let idx = host_order.len() as u32;
-				host_index.insert(name.to_string(), idx);
-				host_order.push(name.to_string());
-				idx
-			};
-			NetImports {
-				listen: reg("net-listen"),
-				close: reg("net-close"),
-				local_addr: reg("net-local-addr"),
-				connect: reg("net-connect"),
-				accept: reg("net-accept"),
-				read: reg("net-read"),
-				write: reg("net-write"),
-				poll: reg("net-poll"),
-				unwatch: reg("net-unwatch"),
-			}
+		let net_imports = uses_net.then(|| NetImports {
+			listen: imports.register("net-listen"),
+			close: imports.register("net-close"),
+			local_addr: imports.register("net-local-addr"),
+			connect: imports.register("net-connect"),
+			accept: imports.register("net-accept"),
+			read: imports.register("net-read"),
+			write: imports.register("net-write"),
+			poll: imports.register("net-poll"),
+			unwatch: imports.register("net-unwatch"),
 		});
 		// `std.sys.net` shapes its results through `__io_result` (the same `ok`/`err` +
 		// `io-last-error` channel as `std.sys.io`) and marshals byte payloads (addr/data,
@@ -297,10 +113,7 @@ impl Module {
 			requested.insert(Helper::MarshalAlloc);
 			requested.insert(Helper::MarshalStore);
 			requested.insert(Helper::MarshalLoad);
-			if !host_index.contains_key("io-last-error") {
-				host_index.insert("io-last-error".to_string(), host_order.len() as u32);
-				host_order.push("io-last-error".to_string());
-			}
+			imports.register("io-last-error");
 		}
 		// Browser MVU command runtime: the long-lived `__browser_entry` (replacing the
 		// run-to-completion `__task_entry`), the `__browser_resume` timer callback, and
@@ -309,12 +122,9 @@ impl Module {
 		if browser {
 			requested.insert(Helper::BrowserEntry);
 			requested.insert(Helper::BrowserResume);
-			if !host_index.contains_key("dom-set-timeout") {
-				host_index.insert("dom-set-timeout".to_string(), host_order.len() as u32);
-				host_order.push("dom-set-timeout".to_string());
-			}
+			imports.register("dom-set-timeout");
 		}
-		let num_imports = host_order.len() as u32;
+		let num_imports = imports.len();
 
 		// Dense FuncId -> wasm function index (imports occupy the low indices).
 		let mut wasm_index: HashMap<u32, u32> = HashMap::new();
@@ -383,10 +193,10 @@ impl Module {
 				next_synth += 1;
 			}
 		}
-		runtime.float_to_str = host_index.get("float_to_str").copied();
-		runtime.io_last_error = host_index.get("io-last-error").copied();
+		runtime.float_to_str = imports.get("float_to_str");
+		runtime.io_last_error = imports.get("io-last-error");
 		runtime.net = net_imports;
-		runtime.dom_set_timeout = host_index.get("dom-set-timeout").copied();
+		runtime.dom_set_timeout = imports.get("dom-set-timeout");
 		let wrapper_base = next_synth;
 
 		let mut sorted_globals: Vec<u32> = reach.globals.iter().copied().collect();
@@ -426,180 +236,19 @@ impl Module {
 			}
 		}
 
-		// Lazily-initialized globals: two wasm globals each (cached value + init
-		// flag). Top-level-def thunks and method-dicts; builtins are call-only and
-		// Const globals aren't realized yet.
-		let mut gmap: HashMap<u32, GlobalSlot> = HashMap::new();
-		let mut globals_sec = GlobalSection::new();
-		let mut gidx = 0u32;
-		// The marshalling scratch bump cursor (`Runtime.bump`): a mutable `i32` holding
-		// the next free offset in the exported linear memory. Allocated first and
-		// unconditionally — the memory + this global are emitted for every module — so
-		// any host-import emit site can encode `(ptr,len)` payloads without gating.
-		runtime.bump = gidx;
-		globals_sec.global(
-			GlobalType {
-				val_type: ValType::I32,
-				mutable: true,
-				shared: false,
-			},
-			&ConstExpr::i32_const(0),
+		// Lazily-initialized globals + the wire/async/dom module-level scratch (see
+		// `globals::build_globals`); sets the corresponding `Runtime` indices in place.
+		let (globals_sec, gmap) = build_globals(
+			p,
+			&sorted_globals,
+			&wasm_index,
+			&methoddicts,
+			&wrapper_idx,
+			&requested,
+			needs_wire_codec,
+			is_async,
+			&mut runtime,
 		);
-		gidx += 1;
-		let alloc_slot = |globals_sec: &mut GlobalSection, gidx: &mut u32| {
-			let val_idx = *gidx;
-			globals_sec.global(
-				GlobalType {
-					val_type: types::value_ref(),
-					mutable: true,
-					shared: false,
-				},
-				&ConstExpr::ref_null(HeapType::Concrete(types::T_VALUE)),
-			);
-			globals_sec.global(
-				GlobalType {
-					val_type: ValType::I32,
-					mutable: true,
-					shared: false,
-				},
-				&ConstExpr::i32_const(0),
-			);
-			*gidx += 2;
-			(val_idx, val_idx + 1)
-		};
-		for &gid in &sorted_globals {
-			let kind = match &p.globals[gid as usize] {
-				GlobalInit::Thunk(fid) => wasm_index.get(&fid.0).map(|&w| GlobalKind::Thunk(w)),
-				_ => None,
-			};
-			if let Some(kind) = kind {
-				let (val_idx, init_idx) = alloc_slot(&mut globals_sec, &mut gidx);
-				gmap.insert(
-					gid,
-					GlobalSlot {
-						val_idx,
-						init_idx,
-						kind,
-					},
-				);
-			}
-		}
-		for (gid, tags) in &methoddicts {
-			let wrappers: Vec<u32> = tags.iter().map(|t| wrapper_idx[t]).collect();
-			let (val_idx, init_idx) = alloc_slot(&mut globals_sec, &mut gidx);
-			gmap.insert(
-				*gid,
-				GlobalSlot {
-					val_idx,
-					init_idx,
-					kind: GlobalKind::MethodDict(wrappers),
-				},
-			);
-		}
-		// The `wire` codec's scratch globals (heterogeneous types, so not via
-		// `alloc_slot`). Reset at each `wire-encode`/`wire-decode` call site; the
-		// ref-typed ones (`buf`/`input`/`ctx`) start null and are pre-initialized
-		// before any array op so they never trap.
-		if needs_wire_codec {
-			let mut wire_global = |val_type: ValType, init: &ConstExpr| -> u32 {
-				let idx = gidx;
-				globals_sec.global(
-					GlobalType {
-						val_type,
-						mutable: true,
-						shared: false,
-					},
-					init,
-				);
-				gidx += 1;
-				idx
-			};
-			let null_bytes = ConstExpr::ref_null(HeapType::Concrete(types::T_BYTES));
-			let null_arr = ConstExpr::ref_null(HeapType::Concrete(types::T_VALARRAY));
-			let zero_i32 = ConstExpr::i32_const(0);
-			let zero_i64 = ConstExpr::i64_const(0);
-			let nullable = |t: u32| {
-				ValType::Ref(RefType {
-					nullable: true,
-					heap_type: HeapType::Concrete(t),
-				})
-			};
-			runtime.wireg = WireGlobals {
-				buf: wire_global(nullable(types::T_BYTES), &null_bytes),
-				len: wire_global(ValType::I32, &zero_i32),
-				input: wire_global(nullable(types::T_BYTES), &null_bytes),
-				pos: wire_global(ValType::I32, &zero_i32),
-				err: wire_global(ValType::I32, &zero_i32),
-				errval: wire_global(ValType::I64, &zero_i64),
-				ctx: wire_global(nullable(types::T_VALARRAY), &null_arr),
-				ctxlen: wire_global(ValType::I32, &zero_i32),
-			};
-		}
-		// The `std.web.dom` event-handler registry (`dom_handlers`): a mutable `(ref null
-		// $list)` of handler closures, indexed by the token `dom.on-click` hands the host.
-		// Allocated (and `__dom_dispatch` exported, below) only when a listener is
-		// reachable — `__dom_register` lazily fills it on the first registration.
-		if requested.contains(&Helper::DomDispatch) {
-			let idx = gidx;
-			globals_sec.global(
-				GlobalType {
-					val_type: ValType::Ref(RefType {
-						nullable: true,
-						heap_type: HeapType::Concrete(types::T_LIST),
-					}),
-					mutable: true,
-					shared: false,
-				},
-				&ConstExpr::ref_null(HeapType::Concrete(types::T_LIST)),
-			);
-			gidx += 1;
-			runtime.dom_handlers = Some(idx);
-		}
-		// The async scheduler's module-level state: the current fiber's activation
-		// stack plus the fiber/scope tables, ready deque, timers, and the pump's
-		// output channel. Ref-typed globals start null (set on each `run`).
-		if is_async {
-			let mut task_global = |val_type: ValType, init: &ConstExpr| -> u32 {
-				let idx = gidx;
-				globals_sec.global(
-					GlobalType {
-						val_type,
-						mutable: true,
-						shared: false,
-					},
-					init,
-				);
-				gidx += 1;
-				idx
-			};
-			let null_arr = ConstExpr::ref_null(HeapType::Concrete(types::T_VALARRAY));
-			let null_val = ConstExpr::ref_null(HeapType::Concrete(types::T_VALUE));
-			let zero_i32 = ConstExpr::i32_const(0);
-			let zero_i64 = ConstExpr::i64_const(0);
-			let arr = ValType::Ref(RefType {
-				nullable: true,
-				heap_type: HeapType::Concrete(types::T_VALARRAY),
-			});
-			let val = types::value_ref();
-			runtime.taskg = TaskGlobals {
-				act: task_global(arr, &null_arr),
-				actlen: task_global(ValType::I32, &zero_i32),
-				fibers: task_global(val, &null_val),
-				scopes: task_global(val, &null_val),
-				ready: task_global(val, &null_val),
-				rhead: task_global(ValType::I32, &zero_i32),
-				timers: task_global(val, &null_val),
-				pending: task_global(val, &null_val),
-				now: task_global(ValType::I64, &zero_i64),
-				root_kind: task_global(ValType::I32, &zero_i32),
-				root_val: task_global(val, &null_val),
-				out_kind: task_global(ValType::I32, &zero_i32),
-				out_okerr: task_global(ValType::I32, &zero_i32),
-				out_val: task_global(val, &null_val),
-				out_arg: task_global(ValType::I32, &zero_i32),
-				out_arg64: task_global(ValType::I64, &zero_i64),
-			};
-		}
 
 		// String-constant pool: one passive data segment, every `Const::Str`
 		// concatenated, recorded by (offset, len).
@@ -607,315 +256,29 @@ impl Module {
 		for &fid in &reach.order {
 			scan_strings(&p.functions[fid as usize].body, &mut strpool, &p.enums);
 		}
-		// `__tostring`'s fixed literals go in the same data segment.
-		if requested.contains(&Helper::ToString) {
-			runtime.lits = ToStringLits {
-				unit: strpool.intern("()"),
-				tru: strpool.intern("true"),
-				fals: strpool.intern("false"),
-				lparen: strpool.intern("("),
-				rparen: strpool.intern(")"),
-				lbrack: strpool.intern("["),
-				rbrack: strpool.intern("]"),
-				lbrace: strpool.intern("{"),
-				rbrace: strpool.intern("}"),
-				comma_sp: strpool.intern(", "),
-				colon_sp: strpool.intern(": "),
-				space: strpool.intern(" "),
-				ref_pfx: strpool.intern("ref "),
-			};
-		}
-		// `__dict_lookup` builds `some v` / `none`; intern those variant display
-		// names and resolve their within-enum tags (the `option` enum). `io.env`
-		// (`emit_env`) builds the same `some`/`none` variants inline, so it needs the
-		// option lits populated too.
-		if requested.contains(&Helper::DictLookup) || host_index.contains_key("io-env") {
-			let opt_enum = p
-				.enums
-				.iter()
-				.find(|(_, vs)| vs.iter().any(|(n, _)| n == "some"))
-				.map(|(name, _)| name.clone());
-			match (
-				opt_enum,
-				variant_tag_in(&p.enums, "some"),
-				variant_tag_in(&p.enums, "none"),
-			) {
-				(Some(en), Some(some_tag), Some(none_tag)) => {
-					runtime.opt = OptionLits {
-						some_tag,
-						none_tag,
-						some_name: strpool.intern(&variant_display(&en, some_tag, &p.enums)),
-						none_name: strpool.intern(&variant_display(&en, none_tag, &p.enums)),
-					};
-				}
-				_ => diags.push("dict.lookup needs the `option` enum".to_string()),
-			}
-		}
-		// The `*-compare` wrappers build an `ordering` variant; intern its `lt`/
-		// `eq`/`gt` display names and resolve their within-enum tags.
-		if wrapper_order.iter().any(|t| t.ends_with("-compare")) {
-			let ord_enum = p
-				.enums
-				.iter()
-				.find(|(_, vs)| vs.iter().any(|(n, _)| n == "lt"))
-				.map(|(name, _)| name.clone());
-			match (
-				ord_enum,
-				variant_tag_in(&p.enums, "lt"),
-				variant_tag_in(&p.enums, "eq"),
-				variant_tag_in(&p.enums, "gt"),
-			) {
-				(Some(en), Some(lt_tag), Some(eq_tag), Some(gt_tag)) => {
-					runtime.ord = OrderingLits {
-						lt_tag,
-						eq_tag,
-						gt_tag,
-						lt_name: strpool.intern(&variant_display(&en, lt_tag, &p.enums)),
-						eq_name: strpool.intern(&variant_display(&en, eq_tag, &p.enums)),
-						gt_name: strpool.intern(&variant_display(&en, gt_tag, &p.enums)),
-					};
-				}
-				_ => diags.push("`compare` needs the `ordering` enum".to_string()),
-			}
-		}
-		// The `wire` codec helpers dispatch on a schema node's `vtag`; resolve the
-		// `wire-schema` enum's per-variant tags (declaration order = wire tag).
-		if requested.contains(&Helper::WireFp) || needs_wire_codec {
-			match p.enums.get("__prelude__.wire-schema") {
-				Some(vs) => {
-					let pos = |name: &str| vs.iter().position(|(n, _)| n == name).map(|i| i as u32);
-					match (
-						pos("s-int"),
-						pos("s-float"),
-						pos("s-bool"),
-						pos("s-string"),
-						pos("s-bytes"),
-						pos("s-duration"),
-						pos("s-nothing"),
-						pos("s-list"),
-						pos("s-dict"),
-						pos("s-enum-ref"),
-						pos("s-tuple"),
-						pos("s-record"),
-						pos("s-enum"),
-					) {
-						(
-							Some(s_int),
-							Some(s_float),
-							Some(s_bool),
-							Some(s_string),
-							Some(s_bytes),
-							Some(s_duration),
-							Some(s_nothing),
-							Some(s_list),
-							Some(s_dict),
-							Some(s_enum_ref),
-							Some(s_tuple),
-							Some(s_record),
-							Some(s_enum),
-						) => {
-							runtime.wire = WireTags {
-								s_int,
-								s_float,
-								s_bool,
-								s_string,
-								s_bytes,
-								s_duration,
-								s_nothing,
-								s_list,
-								s_dict,
-								s_enum_ref,
-								s_tuple,
-								s_record,
-								s_enum,
-							};
-						}
-						_ => diags.push("`wire` needs the `wire-schema` enum variants".to_string()),
-					}
-				}
-				None => diags.push("`wire` needs the `wire-schema` enum".to_string()),
-			}
-		}
-		// `wire-decode` wraps its result in `ok`/`err`; resolve the `result` and
-		// `wire-error` variant tags + display names `__wire_result` builds.
-		if requested.contains(&Helper::WireDec) {
-			let res = "__prelude__.result";
-			let werr = "__prelude__.wire-error";
-			let tag_in = |qual: &str, name: &str| {
-				p.enums
-					.get(qual)
-					.and_then(|vs| vs.iter().position(|(n, _)| n == name))
-					.map(|i| i as u32)
-			};
-			match (tag_in(res, "ok"), tag_in(res, "err")) {
-				(Some(ok_tag), Some(err_tag)) => {
-					// `wire-error` variants, indexed by error code minus one.
-					let err_names = [
-						"unexpected-end",
-						"invalid-tag",
-						"invalid-utf8",
-						"trailing-bytes",
-						"malformed",
-					];
-					let mut errors = [(0u32, (0u32, 0u32)); 5];
-					let mut ok = true;
-					for (i, name) in err_names.iter().enumerate() {
-						match tag_in(werr, name) {
-							Some(t) => errors[i] = (t, strpool.intern(&variant_display(werr, t, &p.enums))),
-							None => ok = false,
-						}
-					}
-					if ok {
-						runtime.wirelits = WireResultLits {
-							ok_tag,
-							err_tag,
-							ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
-							err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
-							errors,
-						};
-					} else {
-						diags.push("`wire.decode` needs the `wire-error` enum variants".to_string());
-					}
-				}
-				_ => diags.push("`wire.decode` needs the `result` enum".to_string()),
-			}
-		}
 
-		// The async driver builds `result`/`option` variants (`task.attempt`,
-		// `s.next`, root failure) and scans poll states for their `__defers` field.
-		if is_async {
-			let res = "__prelude__.result";
-			let opt = "__prelude__.option";
-			let tag_in = |qual: &str, name: &str| {
-				p.enums
-					.get(qual)
-					.and_then(|vs| vs.iter().position(|(n, _)| n == name))
-					.map(|i| i as u32)
-			};
-			match (
-				tag_in(res, "ok"),
-				tag_in(res, "err"),
-				tag_in(opt, "some"),
-				tag_in(opt, "none"),
-			) {
-				(Some(ok_tag), Some(err_tag), Some(some_tag), Some(none_tag)) => {
-					runtime.tasklits = TaskLits {
-						ok_tag,
-						err_tag,
-						ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
-						err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
-						some_tag,
-						none_tag,
-						some_name: strpool.intern(&variant_display(opt, some_tag, &p.enums)),
-						none_name: strpool.intern(&variant_display(opt, none_tag, &p.enums)),
-						defers_name: strpool.intern("__defers"),
-						cancelled_msg: strpool.intern("scope cancelled"),
-					};
-				}
-				_ => diags.push("async runtime needs the `result` + `option` enums".to_string()),
-			}
-		}
-
-		// `std.sys.io` result builtins wrap their host return in `ok`/`err` via
-		// `__io_result`; resolve the `result` enum's variant tags + display names.
-		if requested.contains(&Helper::IoResult) {
-			let res = "__prelude__.result";
-			let tag_in = |name: &str| {
-				p.enums
-					.get(res)
-					.and_then(|vs| vs.iter().position(|(n, _)| n == name))
-					.map(|i| i as u32)
-			};
-			match (tag_in("ok"), tag_in("err")) {
-				(Some(ok_tag), Some(err_tag)) => {
-					runtime.ioreslits = IoResultLits {
-						ok_tag,
-						err_tag,
-						ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
-						err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
-					};
-				}
-				_ => diags.push("`std.sys.io` needs the `result` enum".to_string()),
-			}
-		}
+		// The per-enum literal tables the codecs/formatters dispatch on (`__tostring`'s
+		// fixed strings, the `option`/`ordering`/`wire`/`result` variant tags + display
+		// names); interns into `strpool`, fills `runtime`. See `lits::resolve_literals`.
+		resolve_literals(
+			p,
+			&requested,
+			&wrapper_order,
+			&imports,
+			needs_wire_codec,
+			is_async,
+			&mut strpool,
+			&mut runtime,
+			diags,
+		);
 
 		// Function-type interning + section building.
 		let mut ftypes = FuncTypes::new();
 
-		let mut imports = ImportSection::new();
-		for tag in &host_order {
-			let ty = if tag == "float_to_str" {
-				ftypes.for_float_to_str()
-			} else if tag == "dom-set-timeout" {
-				// `(i32 delay_ms, i32 token) -> ()` — the browser real-timer source.
-				ftypes.for_dom_set_timeout()
-			} else if is_byte_writer(tag) {
-				ftypes.for_host_write()
-			} else if tag == "io-copyout" || tag == "io-exit" {
-				// Both are `(i32) -> ()`: io-copyout's `dst`, io-exit's `code`.
-				ftypes.for_io_copyout()
-			} else if tag == "io-last-error" {
-				ftypes.for_io2()
-			} else if tag == "web-fetch" {
-				// `(req_ptr, req_len, dst, cap) -> len` — the same shape as a path io read.
-				ftypes.for_io4()
-			} else if is_io_host(tag) {
-				if io_uses_io4(tag) {
-					ftypes.for_io4()
-				} else {
-					ftypes.for_io2()
-				}
-			} else if is_f64_unary_host(tag) {
-				ftypes.for_f64_unary()
-			} else if is_clock_host(tag) {
-				match clock_kind(tag) {
-					// now/monotonic: `() -> i64`, same shape as `random-int`.
-					Some(ClockKind::NowInstant | ClockKind::MonotonicDuration) => ftypes.for_rng_i64(),
-					Some(ClockKind::Sleep) => ftypes.for_time_sleep(),
-					Some(ClockKind::Parse) | None => ftypes.for_time_parse(),
-				}
-			} else if is_rng_host(tag) {
-				match rng_kind(tag) {
-					Some(RngKind::ScalarI64) => ftypes.for_rng_i64(),
-					Some(RngKind::ScalarF64) => ftypes.for_rng_f64(),
-					Some(RngKind::RangeI64) => ftypes.for_rng_range(),
-					Some(RngKind::BytesN) => ftypes.for_rng_bytes(),
-					// uuid-v4/v7: `(dst, cap) -> len`, same shape as a two-arg io read.
-					Some(RngKind::UuidStr) | None => ftypes.for_io2(),
-				}
-			} else if is_dom_host(tag) {
-				match dom_kind(tag) {
-					Some(DomKind::Body) => ftypes.for_dom_body(),
-					Some(DomKind::Make) => ftypes.for_dom_make(),
-					Some(DomKind::Append | DomKind::Append2) => ftypes.for_dom_append(),
-					// `SetProp` shares `SetAttr`'s `(externref, np, nl, vp, vl)` shape;
-					// `SetBoolProp` shares `Listen`'s `(externref, np, nl, i32)` shape.
-					Some(DomKind::SetAttr | DomKind::SetProp) => ftypes.for_dom_set_attr(),
-					Some(DomKind::SetText | DomKind::NodeStr) => ftypes.for_dom_node_str(),
-					Some(DomKind::GetValue) => ftypes.for_dom_get_value(),
-					Some(DomKind::Extern3) => ftypes.for_dom_extern3(),
-					Some(DomKind::Extern1) => ftypes.for_dom_extern1(),
-					Some(DomKind::DevStoreSet) => ftypes.for_dom_dev_store_set(),
-					Some(DomKind::DevStoreGet) => ftypes.for_dom_dev_store_get(),
-					Some(DomKind::Listen | DomKind::SetBoolProp) | None => ftypes.for_dom_listen(),
-				}
-			} else if tag == "net-listen" || tag == "net-connect" || tag == "net-accept" {
-				ftypes.for_net_listen()
-			} else if tag == "net-close" {
-				ftypes.for_net_close()
-			} else if tag == "net-local-addr" {
-				ftypes.for_net_local_addr()
-			} else if tag == "net-read" || tag == "net-write" {
-				ftypes.for_net_rw()
-			} else if tag == "net-poll" {
-				ftypes.for_net_poll()
-			} else if tag == "net-unwatch" {
-				ftypes.for_net_unwatch()
-			} else {
-				let sig = host_sig(tag).unwrap();
-				ftypes.for_host(sig.arity, sig.returns_value)
-			};
-			imports.import("pluma", tag, wasm_encoder::EntityType::Function(ty));
+		let mut import_sec = ImportSection::new();
+		for tag in imports.order() {
+			let ty = import_type(tag, &mut ftypes);
+			import_sec.import("pluma", tag, wasm_encoder::EntityType::Function(ty));
 		}
 
 		let mut functions = FunctionSection::new();
@@ -929,7 +292,7 @@ impl Module {
 				f,
 				fid,
 				&wasm_index,
-				&host_index,
+				imports.index_map(),
 				&builtin_g,
 				&gmap,
 				&runtime,
@@ -943,6 +306,7 @@ impl Module {
 			let func = em.emit();
 			code.function(&func);
 		}
+
 		// Append the synthetic helpers after the IR functions, walking `REGISTRY` in
 		// the same order their indices were assigned above. Each builder receives its
 		// own index, the resolved deps/literals, and the type interner via `HelperCtx`.
@@ -957,6 +321,7 @@ impl Module {
 				code.function(&(def.build)(&mut ctx));
 			}
 		}
+
 		// Then the builtin method-dict wrappers (keyed by tag, not in the helper
 		// catalog): each pure-compute trait method (`int-add`, `string-compare`, …)
 		// gets an unbox/compute/rebox wrapper. (Builtins used as a first-class
@@ -1050,7 +415,7 @@ impl Module {
 
 		let mut module = WasmModule::new();
 		module.section(&types);
-		module.section(&imports);
+		module.section(&import_sec);
 		module.section(&functions);
 		module.section(&tables);
 		module.section(&memory);

@@ -1,10 +1,9 @@
 // List helpers: `...rest` tail, tabulating builders, and value-array concat
 // (`__list_tail`, `__list_build`, `__list_collect`, `__arrconcat`).
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::{Local, Wat};
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// Build a `$list` value from the value-array in `arr`, leaving it on the stack.
 /// The logical `length` field is set to the array's capacity — the single

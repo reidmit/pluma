@@ -1,11 +1,10 @@
 // `to-string` rendering: decimal int formatting + the recursive `__tostring`
 // (the canonical `to-string` formatting in wasm).
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::{Local, Wat};
 use crate::runtime::ToStringLits;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// Build `__int_str(boxed-int) -> str`: decimal formatting of an i64 — the
 /// canonical int rendering (`-` sign, no leading zeros, "0" for zero).

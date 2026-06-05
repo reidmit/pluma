@@ -1,10 +1,9 @@
 // Bytes helpers: tabulating builder + byte-array concat
 // (`__bytes_build`, `__bytesconcat`).
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::Wat;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// Build `__bytes_build(n, f) -> bytes`: tabulate an `n`-byte sequence, calling
 /// `f` per index and storing its int result (truncated to 8 bits by the packed

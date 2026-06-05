@@ -39,9 +39,7 @@ pub const T_REF: u32 = 14; // struct { i32 tag, (mut ref null $value) cell }  �
 pub const T_DICT: u32 = 15; // struct { i32 tag, (mut ref null $value) root, (mut i32) size }  — persistent HAMT
 pub const T_TASK: u32 = 16; // struct { i32 tag, i32 kind, (ref $valarray) payload }  — a cold async `task`
 pub const T_DENTRY: u32 = 17; // struct { i32 tag, (ref null $value) key, (mut ref null $value) value, i64 hash }  — a $dict entry
-#[allow(dead_code)] // the type is emitted (encode); the const is referenced once the Phase-3 DOM/fetch emitter builds an $extern
 pub const T_EXTERN: u32 = 18; // struct { i32 tag, (ref null extern) handle }  — a host-owned resource handle
-#[allow(dead_code)] // the type is emitted (encode); the const is referenced once the persistent-dict rewrite (notes/DICT.md) lands
 pub const T_CNODE: u32 = 19; // struct { i32 tag, i32 dataMap, i32 nodeMap, (mut ref $valarray) entries, (mut ref $valarray) children, (mut ref null $value) edit }  — a persistent dict trie node
 const T_FIRST_FUNC: u32 = 20;
 
@@ -56,7 +54,6 @@ pub const TAG_INT: i32 = 2;
 pub const TAG_FLOAT: i32 = 3;
 pub const TAG_STR: i32 = 4;
 pub const TAG_DURATION: i32 = 5;
-#[allow(dead_code)] // part of the tag contract; emitted once instants are boxed
 pub const TAG_INSTANT: i32 = 6;
 pub const TAG_CLOSURE: i32 = 7;
 pub const TAG_VARIANT: i32 = 8;
@@ -99,7 +96,6 @@ pub const TAG_EXTERN: i32 = 19;
 /// A distinct tag so the trie walk distinguishes a leaf entry from a sub-node by
 /// reading field 0, without a concrete `ref.test`. Internal: never escapes to
 /// user code (only a `$dict` does), never printed.
-#[allow(dead_code)] // referenced once the persistent-dict rewrite (notes/DICT.md) lands
 pub const TAG_CNODE: i32 = 20;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or

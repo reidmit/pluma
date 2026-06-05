@@ -5,11 +5,6 @@
 // fixed by its arity; `var_reprs` says which locals are unboxed i64/f64/i32 and
 // `Box`/`Unbox` mark the GC-ref boundaries the coercion pass already inserted.
 
-use std::collections::{HashMap, HashSet};
-
-use ir::{Atom, Block, Callee, Const, Repr, Rvalue, StmtKind};
-use wasm_encoder::*;
-
 use crate::Diagnostics;
 use crate::async_lower::TASK_ENUM;
 use crate::runtime::{
@@ -21,6 +16,9 @@ use crate::runtime::{
 use crate::scan::{StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags};
 use crate::types::{self, FuncTypes};
 use crate::util::{EnumTable, binop_instr, repr_valtype, variant_display};
+use ir::{Atom, Block, Callee, Const, Repr, Rvalue, StmtKind};
+use std::collections::{HashMap, HashSet};
+use wasm_encoder::*;
 
 pub(crate) struct FnEmitter<'a> {
 	f: &'a ir::Function,

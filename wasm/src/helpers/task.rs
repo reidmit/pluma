@@ -24,12 +24,11 @@
 // logical clock to the earliest deadline. Stage-1 single-fiber fixtures fall out
 // as the degenerate one-fiber case.
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::{Local, Wat};
 use crate::runtime::sched::{NO_AWAITER, NO_SCOPE, ROOT_SCOPE, fiber, focus, outcome, scope, wait};
 use crate::runtime::{NetImports, NetMarshal, TaskGlobals, TaskLits, act_kind, task_kind};
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 // ==========================================================================
 // Entry + the scheduler loop.

@@ -10,9 +10,8 @@
 // to emit — so adding a helper is one row here plus its `build_*_fn` (no scattered
 // field/branch/dependency edits).
 
-use wasm_encoder::Function;
-
 use crate::runtime::{Helper, Helper as H, HelperCtx, HelperSet, Ty};
+use wasm_encoder::Function;
 
 mod bytes;
 mod dict;
@@ -23,7 +22,7 @@ mod list;
 mod marshal;
 mod record;
 mod task;
-mod tostring;
+mod to_string;
 mod wat;
 mod wire;
 mod wrapper;
@@ -94,7 +93,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::MarshalLoad,
 		],
 		build: |c| {
-			tostring::build_tostring_fn(
+			to_string::build_tostring_fn(
 				c.self_idx,
 				c.dep(H::IntStr),
 				c.dep(H::BytesConcat),
@@ -111,7 +110,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		id: H::IntStr,
 		fn_type: Ty::Helper(1),
 		deps: &[],
-		build: |_| tostring::build_int_str_fn(),
+		build: |_| to_string::build_int_str_fn(),
 	},
 	HelperDef {
 		id: H::ListBuild,

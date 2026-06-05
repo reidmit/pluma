@@ -23,11 +23,10 @@
 // hash box is reused, shifts are `i31` immediates), so they're ordinary `Ty::Helper`
 // functions recursing through their own index.
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::{Local, Wat};
 use crate::runtime::OptionLits;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 // FNV-1a 64-bit constants. `__hash` need only be *consistent with `__eq`* (equal
 // values hash equal); the exact mixing is internal, so these match no other

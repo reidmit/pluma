@@ -12,9 +12,8 @@
 //! An unsupported IR node becomes a `Diagnostic` rather than a silent
 //! miscompile; the `tests/run` snapshot suite is the regression guard.
 
-use std::collections::{HashMap, HashSet};
-
 use ir::{Block, Callee, GlobalInit, IrProgram, PreEval, Rvalue, StmtKind};
+use std::collections::{HashMap, HashSet};
 
 mod async_lower;
 mod emit;

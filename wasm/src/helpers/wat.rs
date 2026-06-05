@@ -17,11 +17,10 @@
 // so `Wat` adds no indirection or table over the old hand-built functions: it's the
 // same bytes, authored legibly.
 
+use crate::types;
 use wasm_encoder::{BlockType, Function, HeapType, Instruction, MemArg, ValType};
 
 use Instruction as I;
-
-use crate::types;
 
 /// A local (or param) slot, returned by [`Wat::param`]/[`Wat::local`] so callers
 /// reference locals by name rather than a hand-tracked `u32`.

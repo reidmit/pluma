@@ -18,9 +18,8 @@
 //! and call rewrites live in the cloned program, the shape metadata in the returned
 //! side map.
 
-use std::collections::HashMap;
-
 use ir::{Atom, Block, Callee, IrProgram, Pattern, RecordShape, Rvalue, StmtKind};
+use std::collections::HashMap;
 
 /// Cap on distinct shape-specializations per source function — a code-size
 /// bound. Calls beyond the cap keep the uniform (name-scan) path.

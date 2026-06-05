@@ -4,11 +4,10 @@
 // wasm, so a real server/browser host (Rust/WASI/JS) never needs the `result`
 // variant tags or layout. See `host_sig`/the emit call site for the contract.
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::Wat;
 use crate::runtime::IoResultLits;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// Cap for the `io-last-error` message read. Errno strings are short; the host
 /// truncates to this and returns the written length, so no overflow path is needed.

@@ -1,9 +1,8 @@
 // Record field access + update (`__getfield`, `__record_update`).
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::Wat;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// Build `__getfield(record, name) -> value`: linear-scan the record's
 /// name-sorted `names` array, comparing each to `name` via `__eq`; return the

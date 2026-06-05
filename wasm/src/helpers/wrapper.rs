@@ -2,11 +2,10 @@
 // pure-compute builtin used as a method-dict method (`builtin_arity`,
 // `build_builtin_wrapper`).
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::Wat;
 use crate::runtime::OrderingLits;
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// The arity of a pure-compute builtin we can emit a wasm wrapper for, or `None`
 /// if unsupported (string/bytes compare, hashes, … — later milestones).

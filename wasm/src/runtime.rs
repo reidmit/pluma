@@ -5,11 +5,9 @@
 // the host-vs-inline classification of builtin tags. The per-helper knowledge
 // (type, deps, builder) lives in `helpers::REGISTRY`, walked in `Helper` order.
 
-use std::collections::HashSet;
-
-use ir::{Block, Rvalue, StmtKind};
-
 use crate::types::FuncTypes;
+use ir::{Block, Rvalue, StmtKind};
+use std::collections::HashSet;
 
 /// The `$task` `kind` discriminants — the `TaskRepr` cases the async driver
 /// dispatches on (`helpers/task.rs`). The async-fn lowering and the task-primitive

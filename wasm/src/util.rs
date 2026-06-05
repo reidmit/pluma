@@ -2,12 +2,10 @@
 // and the string-pre-scan: the enum table alias, variant display-name rendering,
 // and the IR-repr / binop -> wasm-type/instruction mappings.
 
-use std::collections::HashMap;
-
-use ir::Repr;
-use wasm_encoder::{Instruction, ValType};
-
 use crate::types;
+use ir::Repr;
+use std::collections::HashMap;
+use wasm_encoder::{Instruction, ValType};
 
 /// The enum table the backend reads: fully-qualified enum name -> its ordered
 /// variants (each `(name, payload-arity)`).

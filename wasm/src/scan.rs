@@ -2,11 +2,9 @@
 // walks that collect host-call tags, map locals to the builtin / variant-ctor
 // they hold, and find zero-arg closures. All are read-only over the IR.
 
-use std::collections::{HashMap, HashSet};
-
-use ir::{Atom, Block, Callee, Const, IrProgram, Rvalue, StmtKind};
-
 use crate::util::{EnumTable, variant_display};
+use ir::{Atom, Block, Callee, Const, IrProgram, Rvalue, StmtKind};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
 pub(crate) struct StrPool {

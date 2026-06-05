@@ -2,11 +2,10 @@
 // (`__wire_mix_len`, `__wire_mix_str`, `__wire_fp`), plus the native encode/decode
 // over the `$value` GC layout.
 
-use wasm_encoder::{Function, ValType};
-
 use crate::helpers::wat::{Local, Wat};
 use crate::runtime::{WIRE_FNV_PRIME, WireGlobals, WireResultLits, WireTags};
 use crate::types;
+use wasm_encoder::{Function, ValType};
 
 /// Build `__wire_mix_len(i64 h, i64 n) -> i64`: fold `mix_byte` over `n`'s 8
 /// little-endian bytes (the `wire` format mixes lengths as `u64` LE).
