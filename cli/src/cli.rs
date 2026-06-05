@@ -26,10 +26,6 @@ pub(crate) enum Command {
 	/// A `.pa` source is compiled fresh; a prebuilt `.wasm` runs directly.
 	/// Everything after the path is passed to the program as its own argv.
 	Run {
-		/// Removed — `pluma run` always uses V8.
-		#[arg(long, hide = true)]
-		vm: bool,
-
 		/// Module to run: a `.pa` source file or a prebuilt `.wasm` artifact.
 		path: String,
 

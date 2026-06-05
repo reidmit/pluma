@@ -10,11 +10,10 @@ use cli::{Cli, Command};
 
 fn main() {
 	match Cli::parse().command {
-		Command::Run {
-			vm,
-			path,
-			program_args,
-		} => commands::run::run_command(vm, path, program_args),
+		Command::Version => println!("v{}", compiler::VERSION),
+
+		Command::Run { path, program_args } => commands::run::run_command(path, program_args),
+
 		Command::Build {
 			web,
 			out,
@@ -22,19 +21,23 @@ fn main() {
 			target,
 			path,
 		} => commands::build::build_command(web, out, server_url, target, path),
+
 		Command::Dev {
 			web,
 			port,
 			server_url,
 			path,
 		} => commands::dev::dev_command(web, port, server_url, path),
+
 		Command::Format { check, paths } => commands::format::format_command(check, paths),
+
 		Command::Test { filters, dir } => commands::test::test_command(filters, dir),
+
 		Command::LanguageServer => lsp::run(),
-		Command::Version => println!("v{}", compiler::VERSION),
 
 		#[cfg(debug_assertions)]
 		Command::Analyze { path } => commands::analyze::analyze_command(path),
+
 		#[cfg(debug_assertions)]
 		Command::Tokenize { path } => commands::tokenize::tokenize_command(path),
 
@@ -44,7 +47,7 @@ fn main() {
 		Command::External(args) => {
 			let mut args = args.into_iter();
 			let path = args.next().expect("external subcommand always has a token");
-			commands::run::run(path, args.collect());
+			commands::run::run_command(path, args.collect());
 		}
 	}
 }

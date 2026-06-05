@@ -1,19 +1,10 @@
-use compiler::*;
-
 use crate::printing::*;
+use compiler::*;
 
 /// `pluma run <path> [args…]`. A source file is compiled to WasmGC and run on V8
 /// (the deploy engine — run what you ship); a prebuilt `.wasm` runs directly.
 /// Everything after the path is the program's own argv (`io.args`).
-pub(crate) fn run_command(vm: bool, entry_path: String, program_args: Vec<String>) {
-	if vm {
-		print_error("The `--vm` flag has been removed — `pluma run` uses V8 (the deploy engine).");
-		std::process::exit(1);
-	}
-	run(entry_path, program_args);
-}
-
-pub(crate) fn run(entry_path: String, program_args: Vec<String>) {
+pub(crate) fn run_command(entry_path: String, program_args: Vec<String>) {
 	// A prebuilt WasmGC artifact (`pluma build`) runs directly under V8.
 	if entry_path.ends_with(".wasm") {
 		let bytes = match std::fs::read(&entry_path) {
