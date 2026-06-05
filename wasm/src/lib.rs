@@ -85,8 +85,9 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 	let mut p = program.clone();
 	// Async lowering FIRST: cps-transform awaiting functions into poll fns and
 	// rewrite their bodies into `$task` constructors (so the Await-bodies never
-	// reach the emitter). `is_async` gates the driver emission + entry wrapping.
-	let is_async = async_lower::lower(&mut p);
+	// reach the emitter). Every program is driven by the scheduler — a fully sync
+	// `main` just returns a plain value the entry wrapper hands straight back.
+	async_lower::lower(&mut p);
 	ir::resolve::resolve_direct_calls(&mut p);
 	// Turn self-tail-recursion into a `Loop` over the params. Behavior-neutral; the
 	// enabler for intra-function reuse analysis (see `notes/REUSE.md`). Needs
@@ -121,14 +122,7 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 
 	// 3. Build and encode the module.
 	let mut diags = Diagnostics::default();
-	let bytes = module::Module::build(
-		&p,
-		&reach,
-		&param_shapes,
-		is_async,
-		opts.browser,
-		&mut diags,
-	);
+	let bytes = module::Module::build(&p, &reach, &param_shapes, opts.browser, &mut diags);
 	if diags.is_empty() {
 		Ok(bytes)
 	} else {

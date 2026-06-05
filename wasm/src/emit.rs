@@ -1418,10 +1418,10 @@ impl<'a> FnEmitter<'a> {
 			}
 			return;
 		}
-		// Task-local cells (`std.local`). `enter`/`exit` are async-only scheduler
-		// helpers (`local.with` is async, so they're only reachable then). `local.get`
-		// calls its helper when the scheduler exists; in a non-async program no binding
-		// can ever have been set, so it reads the cell's `default` field inline.
+		// Task-local cells (`std.local`). All three lower to scheduler helpers — the
+		// driver runs for every program, so the helpers always exist. `local.get`'s
+		// helper falls back to the cell's `default` when no binding is in scope (incl.
+		// a fully sync `main`, where the scheduler never spun up).
 		match tag {
 			"local-enter" | "local-exit" => {
 				let h = if tag == "local-enter" {
@@ -1452,14 +1452,10 @@ impl<'a> FnEmitter<'a> {
 						self.ins(Instruction::Call(h));
 					}
 					None => {
-						self.atom(&args[0]);
-						self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-							types::T_LOCAL,
-						)));
-						self.ins(Instruction::StructGet {
-							struct_type_index: types::T_LOCAL,
-							field_index: 1,
-						});
+						self
+							.diags
+							.push(format!("`{tag}` needs its scheduler helper"));
+						self.push_nothing();
 					}
 				}
 				return;

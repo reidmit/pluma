@@ -24,10 +24,12 @@ use ir::{Atom, Block, Const, IrProgram, Rvalue, Stmt, StmtKind, VarId};
 /// special-cases `MakeVariant{enum_name == TASK_ENUM}` to build a `$task` struct.
 pub(crate) const TASK_ENUM: &str = "__task";
 
-/// Run the async lowering in place. Returns `true` if the program is async (any
-/// function awaited, so a poll fn was generated) — the caller gates the driver
-/// emission + entry wrapping on it.
-pub(crate) fn lower(p: &mut IrProgram) -> bool {
+/// Run the async lowering in place. Rewrites every awaiting function's body into a
+/// `$task` constructor (over the poll fn `cps_transform` minted). A program with no
+/// awaiting functions is left untouched — but every program is still driven by the
+/// scheduler (the entry wrapper tolerates a plain-value `main`), so there's no
+/// program-level "is async" distinction to report back.
+pub(crate) fn lower(p: &mut IrProgram) {
 	ir::cps::cps_transform(p);
 
 	// Functions cps just rewrote to poll style (`poll_fn` set). Snapshot first;
@@ -39,9 +41,6 @@ pub(crate) fn lower(p: &mut IrProgram) -> bool {
 		.filter(|(_, f)| f.poll_fn.is_some())
 		.map(|(i, _)| i)
 		.collect();
-	if targets.is_empty() {
-		return false;
-	}
 
 	for i in targets {
 		let f = &p.functions[i];
@@ -86,5 +85,4 @@ pub(crate) fn lower(p: &mut IrProgram) -> bool {
 		f.is_async = false;
 		f.poll_fn = None;
 	}
-	true
 }

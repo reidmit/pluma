@@ -23,7 +23,6 @@ pub(super) fn build_globals(
 	wrapper_idx: &HashMap<String, u32>,
 	requested: &HelperSet,
 	needs_wire_codec: bool,
-	is_async: bool,
 	runtime: &mut Runtime,
 ) -> (GlobalSection, HashMap<u32, GlobalSlot>) {
 	let mut gmap: HashMap<u32, GlobalSlot> = HashMap::new();
@@ -154,50 +153,49 @@ pub(super) fn build_globals(
 	}
 	// The async scheduler's module-level state: the current fiber's activation stack
 	// plus the fiber/scope tables, ready deque, timers, and the pump's output
-	// channel. Ref-typed globals start null (set on each `run`).
-	if is_async {
-		let mut task_global = |val_type: ValType, init: &ConstExpr| -> u32 {
-			let idx = gidx;
-			globals_sec.global(
-				GlobalType {
-					val_type,
-					mutable: true,
-					shared: false,
-				},
-				init,
-			);
-			gidx += 1;
-			idx
-		};
-		let null_arr = ConstExpr::ref_null(HeapType::Concrete(types::T_VALARRAY));
-		let null_val = ConstExpr::ref_null(HeapType::Concrete(types::T_VALUE));
-		let zero_i32 = ConstExpr::i32_const(0);
-		let zero_i64 = ConstExpr::i64_const(0);
-		let arr = ValType::Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(types::T_VALARRAY),
-		});
-		let val = types::value_ref();
-		runtime.taskg = TaskGlobals {
-			act: task_global(arr, &null_arr),
-			actlen: task_global(ValType::I32, &zero_i32),
-			fibers: task_global(val, &null_val),
-			scopes: task_global(val, &null_val),
-			ready: task_global(val, &null_val),
-			rhead: task_global(ValType::I32, &zero_i32),
-			timers: task_global(val, &null_val),
-			pending: task_global(val, &null_val),
-			now: task_global(ValType::I64, &zero_i64),
-			root_kind: task_global(ValType::I32, &zero_i32),
-			root_val: task_global(val, &null_val),
-			out_kind: task_global(ValType::I32, &zero_i32),
-			out_okerr: task_global(ValType::I32, &zero_i32),
-			out_val: task_global(val, &null_val),
-			out_arg: task_global(ValType::I32, &zero_i32),
-			out_arg64: task_global(ValType::I64, &zero_i64),
-			current_fiber: task_global(ValType::I32, &zero_i32),
-		};
-	}
+	// channel. Allocated for every program (the scheduler always drives `main`).
+	// Ref-typed globals start null (set on each `run`).
+	let mut task_global = |val_type: ValType, init: &ConstExpr| -> u32 {
+		let idx = gidx;
+		globals_sec.global(
+			GlobalType {
+				val_type,
+				mutable: true,
+				shared: false,
+			},
+			init,
+		);
+		gidx += 1;
+		idx
+	};
+	let null_arr = ConstExpr::ref_null(HeapType::Concrete(types::T_VALARRAY));
+	let null_val = ConstExpr::ref_null(HeapType::Concrete(types::T_VALUE));
+	let zero_i32 = ConstExpr::i32_const(0);
+	let zero_i64 = ConstExpr::i64_const(0);
+	let arr = ValType::Ref(RefType {
+		nullable: true,
+		heap_type: HeapType::Concrete(types::T_VALARRAY),
+	});
+	let val = types::value_ref();
+	runtime.taskg = TaskGlobals {
+		act: task_global(arr, &null_arr),
+		actlen: task_global(ValType::I32, &zero_i32),
+		fibers: task_global(val, &null_val),
+		scopes: task_global(val, &null_val),
+		ready: task_global(val, &null_val),
+		rhead: task_global(ValType::I32, &zero_i32),
+		timers: task_global(val, &null_val),
+		pending: task_global(val, &null_val),
+		now: task_global(ValType::I64, &zero_i64),
+		root_kind: task_global(ValType::I32, &zero_i32),
+		root_val: task_global(val, &null_val),
+		out_kind: task_global(ValType::I32, &zero_i32),
+		out_okerr: task_global(ValType::I32, &zero_i32),
+		out_val: task_global(val, &null_val),
+		out_arg: task_global(ValType::I32, &zero_i32),
+		out_arg64: task_global(ValType::I64, &zero_i64),
+		current_fiber: task_global(ValType::I32, &zero_i32),
+	};
 
 	(globals_sec, gmap)
 }

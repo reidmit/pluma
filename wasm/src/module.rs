@@ -39,13 +39,9 @@ impl Module {
 		p: &IrProgram,
 		reach: &Reach,
 		param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
-		is_async: bool,
 		browser: bool,
 		diags: &mut Diagnostics,
 	) -> Vec<u8> {
-		// A Browser MVU build drives the long-lived command runtime; only meaningful
-		// for an async program (`app.element` returns a `task`).
-		let browser = browser && is_async;
 		let builtin_g = builtin_globals(p);
 
 		// Host imports: the builtin tags actually called in reachable functions. The
@@ -65,9 +61,9 @@ impl Module {
 		// from the emitted driver, so none surface as ordinary host calls here.
 		let mut uses_net = false;
 		// Whether the program reaches the task-local builtins. `local-get` walks the
-		// scheduler's per-fiber env (its helper is async-only); `local-enter`/`-exit`
-		// only appear inside `local.with`, which is async. Tracked here (like net) so
-		// the helper requests can be gated on `is_async`.
+		// scheduler's per-fiber env; `local-enter`/`-exit` only appear inside
+		// `local.with`. Tracked here (like net) so their helper requests can be gated
+		// on actual use.
 		let mut uses_local_get = false;
 		let mut uses_local_kernel = false;
 
@@ -181,26 +177,21 @@ impl Module {
 		if requested.contains(&Helper::WireDec) {
 			requested.insert(Helper::WireResult);
 		}
-		// An async program exports `__task_entry` as `_entry`; that pulls in the whole
+		// Every program exports `__task_entry` as `_entry`; that pulls in the whole
 		// driver (`TaskDrive` + its deps) via `close_deps`. `SchedSpawn` is reached
 		// only from `emit`'s `s.spawn` (not a helper dep), so request it explicitly.
-		if is_async {
-			requested.insert(Helper::TaskEntry);
-			requested.insert(Helper::SchedSpawn);
-			requested.insert(Helper::SchedCancel);
-			requested.insert(Helper::SchedCancelAfter);
+		requested.insert(Helper::TaskEntry);
+		requested.insert(Helper::SchedSpawn);
+		requested.insert(Helper::SchedCancel);
+		requested.insert(Helper::SchedCancelAfter);
+		// Task-local helpers reference the scheduler globals; request them when their
+		// builtins are reached.
+		if uses_local_get {
+			requested.insert(Helper::LocalGet);
 		}
-		// Task-local helpers reference the scheduler globals, so they only exist in an
-		// async program. `local-get` in a non-async program is lowered inline to a bare
-		// default read (no helper); `local-enter`/`-exit` can't be reached non-async.
-		if is_async {
-			if uses_local_get {
-				requested.insert(Helper::LocalGet);
-			}
-			if uses_local_kernel {
-				requested.insert(Helper::LocalEnter);
-				requested.insert(Helper::LocalExit);
-			}
+		if uses_local_kernel {
+			requested.insert(Helper::LocalEnter);
+			requested.insert(Helper::LocalExit);
 		}
 		close_deps(&mut requested);
 		// The `wire` encode/decode codec threads its recursive state through
@@ -272,7 +263,6 @@ impl Module {
 			&wrapper_idx,
 			&requested,
 			needs_wire_codec,
-			is_async,
 			&mut runtime,
 		);
 
@@ -292,7 +282,6 @@ impl Module {
 			&wrapper_order,
 			&imports,
 			needs_wire_codec,
-			is_async,
 			&mut strpool,
 			&mut runtime,
 			diags,
@@ -407,14 +396,13 @@ impl Module {
 		let mut exports = ExportSection::new();
 		exports.export("memory", ExportKind::Memory, 0);
 		// A Browser MVU program enters through `__browser_entry` (init + pump + return,
-		// long-lived); a server async program through `__task_entry` (drive to
-		// completion); a sync program enters the IR entry directly.
+		// long-lived); every other program through `__task_entry`, which drives the
+		// task `main` returns to completion — or, for a fully sync `main`, hands its
+		// plain return value straight back.
 		let entry_export = if browser {
 			runtime.idx(Helper::BrowserEntry)
-		} else if is_async {
-			runtime.idx(Helper::TaskEntry)
 		} else {
-			wasm_index.get(&p.entry.0).copied()
+			runtime.idx(Helper::TaskEntry)
 		};
 		if let Some(w) = entry_export {
 			exports.export("_entry", ExportKind::Func, w);

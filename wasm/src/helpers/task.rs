@@ -34,12 +34,31 @@ use wasm_encoder::{Function, ValType};
 // Entry + the scheduler loop.
 // ==========================================================================
 
-/// `__task_entry(env) -> value`: the async program entry — call the real IR
-/// entry (`main`), then drive the cold task it returns. Exported as `_entry`.
+/// `__task_entry(env) -> value`: the program entry — call the real IR entry
+/// (`main`), then *tolerantly* drive its result. Every program routes through
+/// here; `main` may return a cold `$task` (drive it to completion via
+/// `__run_task`) or, when it's fully synchronous, a plain value. The distinct
+/// `TAG_TASK` discriminant tells the two apart; a plain value is handed straight
+/// back rather than fed to the driver (which would trap on a non-task root).
+/// Exported as `_entry`.
 pub(crate) fn build_task_entry_fn(entry_idx: u32, run_task: u32) -> Function {
 	let mut w = Wat::new(1);
 	let env = w.param(0);
-	w.local_get(env).call(entry_idx).call(run_task);
+	let result = w.local(types::value_ref());
+	w.local_get(env).call(entry_idx).local_set(result);
+	w.local_get(result)
+		.value_tag()
+		.i32(types::TAG_TASK)
+		.i32_eq();
+	w.if_result(
+		types::value_ref(),
+		|w| {
+			w.local_get(result).call(run_task);
+		},
+		|w| {
+			w.local_get(result);
+		},
+	);
 	w.finish()
 }
 

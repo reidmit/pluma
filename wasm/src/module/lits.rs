@@ -33,7 +33,6 @@ pub(super) fn resolve_literals(
 	wrapper_order: &[String],
 	imports: &HostImports,
 	needs_wire_codec: bool,
-	is_async: bool,
 	strpool: &mut StrPool,
 	runtime: &mut Runtime,
 	diags: &mut Diagnostics,
@@ -205,8 +204,9 @@ pub(super) fn resolve_literals(
 		}
 	}
 	// The async driver builds `result`/`option` variants (`task.attempt`, `s.next`,
-	// root failure) and scans poll states for their `__defers` field.
-	if is_async {
+	// root failure) and scans poll states for their `__defers` field. The driver runs
+	// for every program, so these are always resolved.
+	{
 		let res = "__prelude__.result";
 		let opt = "__prelude__.option";
 		match (
