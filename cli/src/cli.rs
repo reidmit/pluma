@@ -3,7 +3,16 @@
 //! nothing but parse this and dispatch. Doc comments here ARE the `--help` text,
 //! so keep them tight and user-facing.
 
+use clap::builder::Styles;
+use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
+
+/// clap's default help styling, but with the underlines dropped from the section
+/// headers and the usage line — they're `bold().underline()` by default; we keep
+/// the bold and lose the underline. Every other role keeps its default.
+const HELP_STYLES: Styles = Styles::styled()
+	.header(Style::new().bold())
+	.usage(Style::new().bold());
 
 /// Compiler & toolchain for the Pluma programming language.
 #[derive(Parser)]
@@ -11,6 +20,7 @@ use clap::{Parser, Subcommand};
 	name = "pluma",
 	version = compiler::VERSION,
 	about,
+	styles = HELP_STYLES,
 	// `pluma` with no arguments prints help instead of erroring.
 	arg_required_else_help = true
 )]
@@ -21,9 +31,11 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
-	/// Compile a module to WasmGC and run it on V8 (the deploy engine).
+	/// Compile and run a module or package.
 	///
-	/// A `.pa` source is compiled fresh; a prebuilt `.wasm` runs directly.
+	/// A `.pa` source is compiled fresh and then run; a prebuilt `.wasm` runs
+	/// directly.
+	///
 	/// Everything after the path is passed to the program as its own argv.
 	Run {
 		/// Module to run: a `.pa` source file or a prebuilt `.wasm` artifact.
@@ -36,9 +48,12 @@ pub(crate) enum Command {
 
 	/// Compile a module to a deploy artifact.
 	///
-	/// By default writes `<out>.wasm` (a server/CLI artifact); run it with
-	/// `pluma run <out>.wasm`. `--web` instead writes a browser bundle. A
-	/// fullstack directory (`server.pa` + `client.pa`) builds both halves.
+	/// If given a `main.pa` file, generates a WASM file to be run with `pluma run <out>.wasm`.
+	///
+	/// If given a directory with a `client.pa` and `server.pa`, builds in "fullstack"
+	/// mode. Generates `<out>.wasm` for the server, and a bundle of HTML/JS/WASM files for the client.
+	///
+	/// To build only a client bundle, do `pluma build --web path/to/client.pa`.
 	Build {
 		/// Build a browser bundle instead of a server/CLI artifact.
 		#[arg(long)]
