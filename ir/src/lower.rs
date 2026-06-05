@@ -234,9 +234,13 @@ impl<'a> Lowerer<'a> {
 		self.imports = build_imports(ast);
 		for def in &ast.body {
 			match &def.kind {
-				DefinitionKind::Expr(expr) => {
-					self.lower_value_def(module, &def.name.name, def.dict_param_count, expr)
-				}
+				DefinitionKind::Expr(expr) => self.lower_value_def(
+					module,
+					&def.name.name,
+					def.dict_param_count,
+					def.is_remote,
+					expr,
+				),
 				DefinitionKind::Alias(_) => {
 					// Alias constructor (`fun x { x }`) — supported later.
 					if let Some(g) = self.globals.lookup(module, &def.name.name) {
@@ -249,16 +253,60 @@ impl<'a> Lowerer<'a> {
 		}
 	}
 
-	fn lower_value_def(&mut self, module: &str, name: &str, dict_param_count: u16, expr: &ExprNode) {
+	fn lower_value_def(
+		&mut self,
+		module: &str,
+		name: &str,
+		dict_param_count: u16,
+		is_remote: bool,
+		expr: &ExprNode,
+	) {
 		let gid = match self.globals.lookup(module, name) {
 			Some(g) => g,
 			None => return,
 		};
+		// On the client artifact, a `remote def`'s written body is dead — replace it
+		// with a transport stub (encode args → `rpc.call-unary` → decode reply). The
+		// emitter's DCE then drops the server-only helpers the real body referenced.
+		// (A remote def whose contract failed validation has no metadata; fall through
+		// and lower its real body so the analyzer's error is the one surfaced.)
+		if is_remote && self.is_client_emit() {
+			if let Some(ep) = self.rpc_endpoint(module, name) {
+				match self
+					.synthesize_client_stub(name, &ep)
+					.and_then(|stub| self.thunk_returning_closure("rpc-stub", stub))
+				{
+					Ok(thunk) => self.globals.set_thunk(gid, thunk),
+					Err(_) => self.poison_global(gid),
+				}
+				return;
+			}
+		}
 		// `built-in "tag"` RHS: a pre-evaluated builtin value, no thunk. Capture the
 		// builtin's *declared* return repr from its annotated type (`def get :: fun
 		// bytes int -> int`) so a deploy backend can read a scalar-returning builtin's
 		// result unboxed — the analyzer already knows this type, so don't discard it.
 		if let ExprKind::Builtin(tag) = &expr.kind {
+			// The RPC builtins aren't host imports: their bodies are synthesized from
+			// the discovered endpoints (`rpc-dispatch`) or baked from a build flag
+			// (`rpc-server-origin`). Intercept before the generic host-builtin path.
+			if tag == "rpc-dispatch" {
+				match self
+					.synthesize_dispatch()
+					.and_then(|f| self.thunk_returning_closure("dispatch", f))
+				{
+					Ok(thunk) => self.globals.set_thunk(gid, thunk),
+					Err(_) => self.poison_global(gid),
+				}
+				return;
+			}
+			if tag == "rpc-server-origin" {
+				match self.synthesize_server_origin() {
+					Ok(fid) => self.globals.set_thunk(gid, fid),
+					Err(_) => self.poison_global(gid),
+				}
+				return;
+			}
 			let ret = match &expr.ty {
 				Type::Fun(_, ret) => crate::repr::repr_of_type(ret),
 				_ => Repr::Boxed,
@@ -292,6 +340,397 @@ impl<'a> Lowerer<'a> {
 			self.scopes.pop();
 			return Err(e);
 		}
+		let scope = self.scopes.pop().unwrap();
+		Ok(self.add_function(finish_scope(scope)))
+	}
+
+	/// Wrap a synthesized parameter-taking function in a def's value thunk: a
+	/// zero-arg function returning `MakeClosure(inner, [])`. A top-level def's
+	/// global is the *thunk*, evaluated lazily to the closure value — so a
+	/// synthesized `fun … { … }` (dispatch, a client stub) must be wrapped this
+	/// way, exactly as `lower_thunk` does for a written `def f = fun …`.
+	fn thunk_returning_closure(&mut self, label: &str, inner: FuncId) -> Result<FuncId, String> {
+		self.push_scope(format!("{}.{}@thunk", self.current_module, label), &[]);
+		let c = self.emit_let(Rvalue::MakeClosure(inner, Vec::new()), SYNTHETIC);
+		self.push_stmt(StmtKind::Return(c), SYNTHETIC);
+		let scope = self.scopes.pop().unwrap();
+		Ok(self.add_function(finish_scope(scope)))
+	}
+
+	// ---- RPC synthesis (client stubs + server dispatch) ----------------
+
+	/// Whether this emit is the *client* artifact: every `remote def` body is
+	/// swapped for a transport stub. A fullstack build picks the side by entry
+	/// (`entry_modules` is `[server, client]`); a single build keys on the Web
+	/// target; `pluma run`/`test` are server context (real handler bodies, so an
+	/// in-process endpoint test calls the handler directly — RPC.md §7a).
+	fn is_client_emit(&self) -> bool {
+		if self.compiler.fullstack {
+			matches!(
+				(self.entry_override.as_deref(), self.compiler.entry_modules.get(1)),
+				(Some(e), Some(client)) if e == client.as_str()
+			)
+		} else {
+			self.compiler.target == Some(compiler::Target::Web)
+		}
+	}
+
+	/// The validated metadata for `<module>.<name>` if it's a known endpoint.
+	/// Cloned so the borrow of `self.compiler` doesn't outlive the `&mut self`
+	/// synthesis calls.
+	fn rpc_endpoint(&self, module: &str, name: &str) -> Option<compiler::rpc::RpcEndpointMeta> {
+		self
+			.compiler
+			.rpc_endpoints
+			.iter()
+			.find(|e| e.module == module && e.name == name)
+			.cloned()
+	}
+
+	/// Load a top-level global as an atom, for synthesized IR that references the
+	/// stdlib / prelude / handler globals by qualified name.
+	fn rpc_global(&mut self, module: &str, name: &str, range: Range) -> Result<Atom, String> {
+		let g = self
+			.globals
+			.lookup(module, name)
+			.ok_or_else(|| format!("`{}.{}` not registered (RPC synthesis)", module, name))?;
+		Ok(self.emit_let(Rvalue::GlobalRef(g), range))
+	}
+
+	/// `task.map task fn` / `task.then task fn` — a call through the std.task
+	/// global, the spine of every synthesized stub/dispatch.
+	fn task_combinator(&mut self, op: &str, task: Atom, f: Atom) -> Result<Atom, String> {
+		let g = self.rpc_global("std.task", op, SYNTHETIC)?;
+		Ok(self.emit_let(Rvalue::CallClosure(g, vec![task, f]), SYNTHETIC))
+	}
+
+	/// `task.return value` as an atom.
+	fn task_return(&mut self, value: Atom) -> Result<Atom, String> {
+		let g = self.rpc_global("std.task", "return", SYNTHETIC)?;
+		Ok(self.emit_let(Rvalue::CallClosure(g, vec![value]), SYNTHETIC))
+	}
+
+	/// The client stub for one endpoint:
+	/// `fun a0..an { task.then (rpc.call-unary "<route>" "<fp>" (wire.encode <argschema> <args>))
+	///               (fun b { rpc.lift (wire.decode <resultschema> b) }) }`.
+	/// Returns the stub function's id; the def's global thunk returns its closure.
+	fn synthesize_client_stub(
+		&mut self,
+		name: &str,
+		ep: &compiler::rpc::RpcEndpointMeta,
+	) -> Result<FuncId, String> {
+		// The stub function `fun a0..an { ... }`.
+		let param_names: Vec<String> = (0..ep.arity).map(|i| format!("a{}", i)).collect();
+		let param_refs: Vec<&str> = param_names.iter().map(String::as_str).collect();
+		self.push_scope(
+			format!("{}.{}@rpc-stub", self.current_module, name),
+			&param_refs,
+		);
+		let params: Vec<VarId> = self.scopes.last().unwrap().params.clone();
+
+		// Encode the arguments to bytes: nothing for arity 0, the single value for
+		// arity 1, an encoded tuple for arity ≥ 2 (matching the dispatch decode).
+		let body_bytes = if ep.arity == 0 {
+			Atom::Const(Const::Bytes(Vec::new()))
+		} else {
+			let value = if ep.arity == 1 {
+				Atom::Var(params[0])
+			} else {
+				let elems: Vec<Atom> = params.iter().map(|v| Atom::Var(*v)).collect();
+				self.emit_let(Rvalue::MakeTuple(elems), SYNTHETIC)
+			};
+			let schema = self.lower_wire_shape(&ep.arg_shape, SYNTHETIC)?;
+			let enc = self.rpc_global("__prelude__", "wire-encode", SYNTHETIC)?;
+			self.emit_let(Rvalue::CallClosure(enc, vec![schema, value]), SYNTHETIC)
+		};
+
+		// rpc.call-unary "<route>" "<fp>" body  →  task bytes
+		let call_unary = self.rpc_global("std.rpc", "call-unary", SYNTHETIC)?;
+		let task_bytes = self.emit_let(
+			Rvalue::CallClosure(
+				call_unary,
+				vec![
+					Atom::Const(Const::Str(ep.route())),
+					Atom::Const(Const::Str(ep.route_fp.clone())),
+					body_bytes,
+				],
+			),
+			SYNTHETIC,
+		);
+
+		// task.then over the decode callback (which itself returns a task).
+		let decode_cb = self.synthesize_decode_closure(&ep.result_shape)?;
+		let result = self.task_combinator("then", task_bytes, decode_cb)?;
+		self.push_stmt(StmtKind::Return(result), SYNTHETIC);
+
+		let scope = self.scopes.pop().unwrap();
+		Ok(self.add_function(finish_scope(scope)))
+	}
+
+	/// The stub's decode callback: `fun b { rpc.lift (wire.decode <resultschema> b) }`.
+	/// The result schema is lowered *inside* this closure's scope so its helper
+	/// `let`s land here, not in the caller. Captures nothing; returned as a
+	/// `MakeClosure` atom emitted into the caller's block.
+	fn synthesize_decode_closure(
+		&mut self,
+		result_shape: &compiler::ast::WireShape,
+	) -> Result<Atom, String> {
+		self.push_scope(format!("{}@rpc-decode", self.current_module), &["b"]);
+		let b = Atom::Var(self.scopes.last().unwrap().params[0]);
+		let schema = self.lower_wire_shape(result_shape, SYNTHETIC)?;
+		let dec = self.rpc_global("__prelude__", "wire-decode", SYNTHETIC)?;
+		let decoded = self.emit_let(Rvalue::CallClosure(dec, vec![schema, b]), SYNTHETIC);
+		let lift = self.rpc_global("std.rpc", "lift", SYNTHETIC)?;
+		let lifted = self.emit_let(Rvalue::CallClosure(lift, vec![decoded]), SYNTHETIC);
+		self.push_stmt(StmtKind::Return(lifted), SYNTHETIC);
+		let scope = self.scopes.pop().unwrap();
+		let fid = self.add_function(finish_scope(scope));
+		Ok(self.emit_let(Rvalue::MakeClosure(fid, Vec::new()), SYNTHETIC))
+	}
+
+	/// The server `dispatch` handler, synthesized from every discovered endpoint:
+	/// `fun req { match req.path { "/rpc/<route>" => <decode→call→encode> … _ => 404 } }`.
+	/// With no endpoints it's an always-404 router. The function isn't `is_async`
+	/// (it builds task values and returns them; the server awaits the result).
+	fn synthesize_dispatch(&mut self) -> Result<FuncId, String> {
+		let endpoints = self.compiler.rpc_endpoints.clone();
+		self.push_scope(format!("{}.dispatch@rpc", self.current_module), &["req"]);
+		let req = Atom::Var(self.scopes.last().unwrap().params[0]);
+		let path = self.emit_let(
+			Rvalue::GetField(req.clone(), "path".to_string(), None),
+			SYNTHETIC,
+		);
+		let result = self.alloc_var();
+
+		let mut arms: Vec<MatchArm> = Vec::new();
+		for ep in &endpoints {
+			let route_path = format!("/rpc/{}", ep.route());
+			let saved = self.take_stmts();
+			let r = self.build_dispatch_arm(&req, result, ep);
+			let block = Block(self.restore_stmts(saved));
+			r?;
+			arms.push(MatchArm {
+				pattern: Pattern::Literal(Const::Str(route_path)),
+				body: block,
+			});
+		}
+
+		// Default: no such route → 404.
+		let saved = self.take_stmts();
+		let nf = self.rpc_global("std.sys.http", "not-found", SYNTHETIC)?;
+		let resp = self.emit_let(
+			Rvalue::CallClosure(nf, vec![Atom::Const(Const::Unit)]),
+			SYNTHETIC,
+		);
+		let task_nf = self.task_return(resp)?;
+		self.push_stmt(StmtKind::Let(result, Rvalue::Use(task_nf)), SYNTHETIC);
+		let default_block = Block(self.restore_stmts(saved));
+		arms.push(MatchArm {
+			pattern: Pattern::Wildcard,
+			body: default_block,
+		});
+
+		self.push_stmt(
+			StmtKind::Match {
+				subject: path,
+				arms,
+			},
+			SYNTHETIC,
+		);
+		self.push_stmt(StmtKind::Return(Atom::Var(result)), SYNTHETIC);
+		let scope = self.scopes.pop().unwrap();
+		Ok(self.add_function(finish_scope(scope)))
+	}
+
+	/// One dispatch arm: guard the per-route fingerprint, then invoke the
+	/// endpoint. A mismatch (or missing fingerprint) short-circuits to a 409
+	/// schema-skew response without decoding. Assigns the `task response` to
+	/// `result`. Emits into the caller's (the arm's) block buffer.
+	fn build_dispatch_arm(
+		&mut self,
+		req: &Atom,
+		result: VarId,
+		ep: &compiler::rpc::RpcEndpointMeta,
+	) -> Result<(), String> {
+		let fpok_fn = self.rpc_global("std.rpc", "fingerprint-ok", SYNTHETIC)?;
+		let fpok = self.emit_let(
+			Rvalue::CallClosure(
+				fpok_fn,
+				vec![req.clone(), Atom::Const(Const::Str(ep.route_fp.clone()))],
+			),
+			SYNTHETIC,
+		);
+
+		// then: fingerprint matches → decode, call, encode.
+		let then_saved = self.take_stmts();
+		let invoke = self.dispatch_invoke(req, result, ep);
+		let then_block = Block(self.restore_stmts(then_saved));
+		invoke?;
+
+		// else: stale/missing fingerprint → 409.
+		let else_saved = self.take_stmts();
+		let skew = self.rpc_global("std.rpc", "skew-response", SYNTHETIC)?;
+		let resp = self.emit_let(
+			Rvalue::CallClosure(skew, vec![Atom::Const(Const::Unit)]),
+			SYNTHETIC,
+		);
+		let task_skew = self.task_return(resp)?;
+		self.push_stmt(StmtKind::Let(result, Rvalue::Use(task_skew)), SYNTHETIC);
+		let else_block = Block(self.restore_stmts(else_saved));
+
+		// A `Match` on the bool, mirroring how `if` lowers (a `Literal(Bool(true))`
+		// arm + a wildcard else) — `lower_if` itself compiles to a `Match`, so this
+		// is the path the backend's repr coercion expects for a boxed condition.
+		self.push_stmt(
+			StmtKind::Match {
+				subject: fpok,
+				arms: vec![
+					MatchArm {
+						pattern: Pattern::Literal(Const::Bool(true)),
+						body: then_block,
+					},
+					MatchArm {
+						pattern: Pattern::Wildcard,
+						body: else_block,
+					},
+				],
+			},
+			SYNTHETIC,
+		);
+		Ok(())
+	}
+
+	/// Invoke one endpoint (assuming its fingerprint already checked out): decode
+	/// the request body against the arg shape, call the real handler global, and
+	/// `task.map` the result into a 200 response (a malformed body → 400). Assigns
+	/// the `task response` to `result`. Emits into the caller's block buffer.
+	fn dispatch_invoke(
+		&mut self,
+		req: &Atom,
+		result: VarId,
+		ep: &compiler::rpc::RpcEndpointMeta,
+	) -> Result<(), String> {
+		let handler = self.rpc_global(&ep.module, &ep.name, SYNTHETIC)?;
+
+		if ep.arity == 0 {
+			// Nothing to decode — call the handler with the unit arg.
+			let task = self.emit_let(
+				Rvalue::CallClosure(handler, vec![Atom::Const(Const::Unit)]),
+				SYNTHETIC,
+			);
+			let enc = self.synthesize_encode_closure(&ep.result_shape)?;
+			let mapped = self.task_combinator("map", task, enc)?;
+			self.push_stmt(StmtKind::Let(result, Rvalue::Use(mapped)), SYNTHETIC);
+			return Ok(());
+		}
+
+		// Decode the argument(s): `wire.decode <argschema> req.body` → `result args string`.
+		let body = self.emit_let(
+			Rvalue::GetField(req.clone(), "body".to_string(), None),
+			SYNTHETIC,
+		);
+		let schema = self.lower_wire_shape(&ep.arg_shape, SYNTHETIC)?;
+		let dec = self.rpc_global("__prelude__", "wire-decode", SYNTHETIC)?;
+		let decoded = self.emit_let(Rvalue::CallClosure(dec, vec![schema, body]), SYNTHETIC);
+
+		// Bind each argument: a single var for arity 1, a tuple pattern for arity ≥ 2.
+		let argvars: Vec<VarId> = (0..ep.arity).map(|_| self.alloc_var()).collect();
+		let argpat = if ep.arity == 1 {
+			Pattern::Bind(argvars[0])
+		} else {
+			Pattern::Tuple(argvars.iter().map(|v| Pattern::Bind(*v)).collect())
+		};
+
+		// ok arm: call the handler and encode the result into a 200 response.
+		let ok_saved = self.take_stmts();
+		let call_args: Vec<Atom> = argvars.iter().map(|v| Atom::Var(*v)).collect();
+		let task = self.emit_let(Rvalue::CallClosure(handler, call_args), SYNTHETIC);
+		let enc = self.synthesize_encode_closure(&ep.result_shape)?;
+		let mapped = self.task_combinator("map", task, enc)?;
+		self.push_stmt(StmtKind::Let(result, Rvalue::Use(mapped)), SYNTHETIC);
+		let ok_block = Block(self.restore_stmts(ok_saved));
+
+		// err arm: a malformed request body → 400.
+		let err_saved = self.take_stmts();
+		let text = self.rpc_global("std.sys.http", "text", SYNTHETIC)?;
+		let resp = self.emit_let(
+			Rvalue::CallClosure(
+				text,
+				vec![
+					Atom::Const(Const::Int(400)),
+					Atom::Const(Const::Str("rpc: malformed request".to_string())),
+				],
+			),
+			SYNTHETIC,
+		);
+		let task_400 = self.task_return(resp)?;
+		self.push_stmt(StmtKind::Let(result, Rvalue::Use(task_400)), SYNTHETIC);
+		let err_block = Block(self.restore_stmts(err_saved));
+
+		self.push_stmt(
+			StmtKind::Match {
+				subject: decoded,
+				arms: vec![
+					MatchArm {
+						pattern: Pattern::Variant {
+							variant: "ok".to_string(),
+							fields: vec![argpat],
+						},
+						body: ok_block,
+					},
+					MatchArm {
+						pattern: Pattern::Variant {
+							variant: "err".to_string(),
+							fields: vec![Pattern::Wildcard],
+						},
+						body: err_block,
+					},
+				],
+			},
+			SYNTHETIC,
+		);
+		Ok(())
+	}
+
+	/// A dispatch arm's response builder: `fun res { {status: 200, headers:
+	/// dict.empty (), body: wire.encode <resultschema> res} }`. The result schema
+	/// is lowered inside this closure. Captures nothing.
+	fn synthesize_encode_closure(
+		&mut self,
+		result_shape: &compiler::ast::WireShape,
+	) -> Result<Atom, String> {
+		self.push_scope(format!("{}@rpc-encode", self.current_module), &["res"]);
+		let res = Atom::Var(self.scopes.last().unwrap().params[0]);
+		let schema = self.lower_wire_shape(result_shape, SYNTHETIC)?;
+		let enc = self.rpc_global("__prelude__", "wire-encode", SYNTHETIC)?;
+		let bytes = self.emit_let(Rvalue::CallClosure(enc, vec![schema, res]), SYNTHETIC);
+		let empty = self.rpc_global("std.dict", "empty", SYNTHETIC)?;
+		let headers = self.emit_let(
+			Rvalue::CallClosure(empty, vec![Atom::Const(Const::Unit)]),
+			SYNTHETIC,
+		);
+		// Field order is name-sorted to match the record-shape layout the backends
+		// expect from `MakeRecord` (`body` < `headers` < `status`).
+		let resp = self.emit_let(
+			Rvalue::MakeRecord(vec![
+				("body".to_string(), bytes),
+				("headers".to_string(), headers),
+				("status".to_string(), Atom::Const(Const::Int(200))),
+			]),
+			SYNTHETIC,
+		);
+		self.push_stmt(StmtKind::Return(resp), SYNTHETIC);
+		let scope = self.scopes.pop().unwrap();
+		let fid = self.add_function(finish_scope(scope));
+		Ok(self.emit_let(Rvalue::MakeClosure(fid, Vec::new()), SYNTHETIC))
+	}
+
+	/// `std.rpc.server-origin`, a baked build-time constant: a thunk returning the
+	/// `--server-url` string (empty = same-origin). Never settable at runtime.
+	fn synthesize_server_origin(&mut self) -> Result<FuncId, String> {
+		let origin = self.compiler.rpc_base_url.clone().unwrap_or_default();
+		self.push_scope(format!("{}.server-origin@thunk", self.current_module), &[]);
+		self.push_stmt(StmtKind::Return(Atom::Const(Const::Str(origin))), SYNTHETIC);
 		let scope = self.scopes.pop().unwrap();
 		Ok(self.add_function(finish_scope(scope)))
 	}
@@ -2063,7 +2502,38 @@ impl<'a> Lowerer<'a> {
 			}
 			None => return Err(format!("module `{}` has no `main` def", main_module)),
 		};
+		// On a client emit with `remote def`s, install the web transport as the
+		// ambient sender before `main` runs (the build's one bit of injected setup,
+		// so app code configures nothing). `install` just mutates `std.rpc`'s
+		// module ref; we run it for effect, then proceed to `main`.
+		let mut body: Vec<Stmt> = Vec::new();
+		let mut next: u32 = 0;
+		if self.is_client_emit() && !self.compiler.rpc_endpoints.is_empty() {
+			if let Some(install) = self.globals.lookup("std.rpc.web", "install") {
+				let g = VarId(next);
+				next += 1;
+				body.push(Stmt::synthetic(StmtKind::Let(
+					g,
+					Rvalue::GlobalRef(install),
+				)));
+				body.push(Stmt::synthetic(StmtKind::Discard(Rvalue::CallClosure(
+					Atom::Var(g),
+					vec![Atom::Const(Const::Unit)],
+				))));
+			}
+		}
 		// Load `main`, call it with the unit arg, return the result.
+		let mainref = VarId(next);
+		let result = VarId(next + 1);
+		body.push(Stmt::synthetic(StmtKind::Let(
+			mainref,
+			Rvalue::GlobalRef(main),
+		)));
+		body.push(Stmt::synthetic(StmtKind::Let(
+			result,
+			Rvalue::CallClosure(Atom::Var(mainref), vec![Atom::Const(Const::Unit)]),
+		)));
+		body.push(Stmt::synthetic(StmtKind::Return(Atom::Var(result))));
 		let func = Function {
 			name: "__entry__".to_string(),
 			module: String::new(),
@@ -2071,14 +2541,7 @@ impl<'a> Lowerer<'a> {
 			captures: Vec::new(),
 			is_async: false,
 			poll_fn: None,
-			body: Block(vec![
-				Stmt::synthetic(StmtKind::Let(VarId(0), Rvalue::GlobalRef(main))),
-				Stmt::synthetic(StmtKind::Let(
-					VarId(1),
-					Rvalue::CallClosure(Atom::Var(VarId(0)), vec![Atom::Const(Const::Unit)]),
-				)),
-				Stmt::synthetic(StmtKind::Return(Atom::Var(VarId(1)))),
-			]),
+			body: Block(body),
 			var_reprs: Vec::new(),
 			param_reprs: Vec::new(),
 			ret_repr: Repr::Boxed,
@@ -2593,6 +3056,12 @@ fn reserve_user_globals(g: &mut GlobalTable, compiler: &Compiler) {
 					// module sees it's a builtin and wraps it into a forwarding closure.
 					// (`lower_value_def` re-sets this identically when the def is lowered.)
 					if let ExprKind::Builtin(tag) = &expr.kind {
+						// The RPC builtins are synthesized as thunks at lower time, not
+						// host imports — leave their slots unset so `lower_value_def`
+						// fills them (mirrors a normal `def f = fun …`).
+						if tag == "rpc-dispatch" || tag == "rpc-server-origin" {
+							continue;
+						}
 						let ret = match &expr.ty {
 							Type::Fun(_, ret) => crate::repr::repr_of_type(ret),
 							_ => Repr::Boxed,

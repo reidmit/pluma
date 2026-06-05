@@ -1,0 +1,33 @@
+# std.rpc.web -- the browser transport for remote calls.
+#
+# Installs a sender that POSTs each encoded call to `<origin>/rpc/<route>` via the
+# host page's `fetch` (std.web.fetch), mapping the HTTP outcome to reply bytes or a
+# typed `rpc-error`. The build auto-installs this on a web client, so application
+# code configures nothing. This module imports `std.web.*`, so it only enters a web
+# build (the neutral `std.rpc` never imports a target module).
+use std.rpc
+use std.task
+use std.web.fetch
+
+# POST the encoded body and translate the reply: 200 → bytes; 409 → schema-skew;
+# any other status → server-fault; a transport-level failure → transport.
+def send :: fun string bytes (dict string string) -> task bytes = fun route body headers {
+	try outcome = fetch.post (rpc.server-origin ++ "/rpc/" ++ route) headers body
+	when outcome is ok resp {
+		if resp.status == 200 {
+			task.return resp.body
+		} else if resp.status == 409 {
+			task.fail (schema-skew route)
+		} else {
+			task.fail (server-fault resp.status)
+		}
+	} is err e {
+		task.fail (transport e)
+	}
+}
+
+# Installs this transport as the ambient sender. The build runs it before `main`
+# on a web client.
+public def install :: fun nothing -> nothing = fun {
+	rpc.configure send
+}

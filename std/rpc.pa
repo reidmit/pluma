@@ -1,0 +1,115 @@
+# std.rpc -- the runtime behind `remote def`.
+#
+# A `public remote def` is a remote-call contract: the pure logical signature
+# `fun A.. -> task R`. The compiler supplies each endpoint's body per target --
+# a transport stub on the client, the written handler on the server -- so a call
+# like `api.add 2 3` reads exactly like a local await, and end-to-end safety
+# falls out of type-checking that one signature against both ends.
+#
+# This module is the hand-written, target-neutral runtime the synthesized code
+# leans on: the typed error channel, the ambient transport, and the server-side
+# `dispatch` handler (whose body the compiler fills from the discovered
+# endpoints). The concrete transports live in `std.rpc.http-sys` /
+# `std.rpc.http-web` -- one per deploy target -- so this core never imports a
+# target-specific module.
+use std.dict
+use std.router
+use std.task
+use std.sys.http
+
+# Infrastructure failures of a remote call, carried on the (erased) task-failure
+# channel and recovered typed via `task.attempt`. Domain errors stay inside the
+# success payload (`task (result a e)`); these are the wire/transport faults that
+# aren't any single endpoint's concern.
+public enum rpc-error {
+	transport string # couldn't reach the server / connection dropped (detail)
+	timeout
+	schema-skew string # client built against a drifted endpoint (route)
+	bad-request # the server couldn't decode the arguments
+	server-fault int # the handler failed uncaught (status)
+	not-found # no such route
+}
+
+# A transport: one request/response round-trip. An implementation succeeds with
+# the encoded reply bytes, or fails the task with an `rpc-error`. One transport
+# per deploy target lives in its own module (`std.rpc.http-sys` / `std.rpc.http-web`)
+# and installs itself as the ambient sender at startup (the build injects the
+# call). Streaming is a later slice. (Cross-module `trait`/`implement` isn't
+# supported, so the contract is a plain function type rather than a typeclass --
+# the transports are still ordinary hand-written Pluma, not compiler-synthesized.)
+public alias sender fun string bytes (dict string string) -> task bytes
+
+# The ambient transport. A module ref: the active sender is configured once at
+# startup and held ambient, so call sites stay transport-free. `none` until
+# installed.
+def current :: ref (option sender) = ref.new none
+
+# Installs the ambient transport. A target's transport module calls this from its
+# `install` (which the build runs before `main`); tests can call it to swap in a
+# different transport.
+public def configure :: fun sender -> nothing = fun f {
+	ref.set current (some f)
+}
+
+# The server origin the client posts to (`<origin>/rpc/<route>`), baked at build
+# time from `pluma build/dev --server-url`. Empty = same-origin. Never settable at
+# runtime: a client always talks to exactly the origin it was built for.
+public def server-origin :: string = built-in "rpc-server-origin"
+
+# Performs one unary call over the ambient transport: attaches the route's
+# fingerprint header and round-trips the encoded body. The synthesized client
+# stub wraps this with the wire encode/decode for the endpoint's types. Fails
+# with `rpc-error` if no transport is installed.
+public def call-unary :: fun string string bytes -> task bytes = fun route fp body {
+	when ref.get current is some send {
+		send route body (dict.from-entries [("x-rpc-fingerprint", fp)])
+	} is none {
+		task.fail (transport "no rpc transport configured")
+	}
+}
+
+# Lifts a `wire.decode` outcome into the task-failure channel: a malformed reply
+# is a transport-level fault, not a value. The synthesized client stub calls this
+# on the decoded result so a bad payload surfaces as a recoverable `rpc-error`.
+public def lift :: fun (result a wire-error) -> task a = fun r {
+	when r is ok v {
+		task.return v
+	} is err _e {
+		task.fail (transport "malformed rpc reply")
+	}
+}
+
+# Whether a request carries the per-route fingerprint this build expects. The
+# synthesized dispatcher checks it before decoding: a stale client (built against
+# drifted endpoint types) fails the check and gets a schema-skew response, so a
+# positional decode never runs against mismatched types.
+public def fingerprint-ok :: fun http.request string -> bool = fun req expected {
+	when dict.lookup req.headers "x-rpc-fingerprint" is some fp {
+		fp == expected
+	} is none {
+		false
+	}
+}
+
+# The response a dispatcher returns on a fingerprint mismatch (or a missing one):
+# 409, the status the client maps back to `schema-skew`.
+public def skew-response :: fun nothing -> http.response = fun {
+	http.text 409 "rpc: schema mismatch"
+}
+
+# The server-side RPC handler: routes a `/rpc/<route>` request to the matching
+# endpoint's real handler, guarding the per-route fingerprint and decoding /
+# encoding the wire payload. The compiler synthesizes this body from the
+# discovered `remote def`s; with none, it's an always-404 router.
+public def dispatch :: fun http.request -> task http.response = built-in "rpc-dispatch"
+
+# `dispatch` as a mountable route under `/rpc` -- drop it into a `std.router`
+# route list alongside hand-written endpoints. The prefix is a build constant
+# shared with the client stubs.
+public def mounted :: router.route = router.prefix "/rpc" dispatch
+
+# The pure-RPC one-liner: serve every endpoint and nothing else. Sugar over
+# mounting `dispatch` in an otherwise-empty router.
+public def serve :: fun string -> task nothing = fun addr {
+	router.serve addr [mounted]
+}

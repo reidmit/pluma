@@ -10,7 +10,7 @@ mod parser;
 mod platform;
 mod reachability;
 mod render;
-mod rpc;
+pub mod rpc;
 mod stdlib;
 mod suggest;
 mod tokenizer;

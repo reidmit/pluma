@@ -1,17 +1,17 @@
 # The client half — a browser MVU app that calls the server. `pluma build`
 # emits this to a web bundle (app.wasm + loader.js + index.html).
 #
-# The remote call is just an async function: `rpc.add (request.new ()) 2 3`
-# returns a `task int` exactly like a local task, and the MVU runtime runs it
-# as a command, feeding the result back into `update`. `rpc` is the generated
-# client-stub module; `set-base-url` points it at the running server.
+# The remote call is just an async function: `api.add 2 3` returns a `task int`
+# exactly like a local task, and the MVU runtime runs it as a command, feeding
+# the result back into `update`. `api` is the *real* contract module — on this
+# (client) artifact the compiler swaps each `remote def`'s body for a transport
+# stub, so the call goes over the wire while reading like a local await.
 
-use std.web.html
-use std.web.events
-use std.web.app
 use std.task
-use std.request
-use rpc-client as rpc
+use std.web.app
+use std.web.events
+use std.web.html
+use api
 
 enum msg {
 	compute
@@ -21,18 +21,12 @@ enum msg {
 # (sum, in-flight) — the last result and whether a call is outstanding.
 alias model {sum :: int, pending :: bool}
 
-def init :: (model, list (task msg)) = (
-	{sum: 0, pending: false},
-	[],
-)
+def init :: (model, list (task msg)) = ({sum: 0, pending: false}, [])
 
 def update :: fun msg model -> (model, list (task msg)) = fun m state {
 	when m is compute {
 		# Fire the remote call as a command; its result returns as `got-sum`.
-		(
-			{sum: state.sum, pending: true},
-			[task.map (rpc.add (request.new ()) 2 3) (fun n { got-sum n })],
-		)
+		({sum: state.sum, pending: true}, [task.map (api.add 2 3) fun n { got-sum n }])
 	} is got-sum n {
 		({sum: n, pending: false}, [])
 	}
@@ -51,9 +45,9 @@ def view :: fun model -> html.html msg = fun state {
 }
 
 def main = fun {
-	# No base-URL plumbing in code: `pluma build/dev --server-url` bakes where the
-	# stubs point (default `http://localhost:8080` for `build`; same-origin for
-	# `dev`, which proxies `/rpc/*` to the server). `rpc.set-base-url` can still
-	# override it at runtime if you need to.
+	# No transport plumbing in code: the build installs the web transport pointed
+	# at the baked origin (`pluma build/dev --server-url`; default
+	# `http://localhost:8080` for `build`, same-origin for `dev`, which proxies
+	# `/rpc/*` to the server). The origin is build-time only — never settable here.
 	app.element init update view
 }

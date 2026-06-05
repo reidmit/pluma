@@ -1,16 +1,22 @@
-# Version-skew protection (FULLSTACK Layer 2). The generated `dispatch` checks
-# each request's `x-rpc-fingerprint` header against this build's schema
-# fingerprint, and rejects a mismatch (a stale client built from drifted
-# endpoint types) with a clean 409 — never a corrupt positional decode. Here a
-# hand-written probe sends a wrong fingerprint and a missing one; both are
-# rejected with 409. The matching case is covered by `rpc-loopback` (whose
-# generated client sends the real fingerprint).
-use std.sys.net
-use std.sys.http
-use std.task
+# Per-route version-skew protection. The synthesized `rpc.dispatch` checks each
+# request's `x-rpc-fingerprint` header against the route's own fingerprint (over
+# its argument + result wire shapes), rejecting a mismatch — a stale client built
+# from drifted endpoint types — with a clean 409, never a corrupt positional
+# decode. A hand-written probe over a real loopback socket sends a wrong
+# fingerprint, a missing one, and the correct one; the first two are rejected
+# with 409, the last round-trips to 200 with the decoded result.
+#
+# The correct value is the route fingerprint for `add :: fun int int -> task int`
+# (the build bakes the identical value into the client stub and this dispatcher);
+# if the fingerprint algorithm changes, update it here and re-accept the snapshot.
 use std.dict
+use std.rpc
+use std.task
+use std.sys.http
+use std.sys.net
 use api
-use rpc-server as srv
+
+def route-fp :: string = "3046392278730166848"
 
 # POST encoded args to the dispatcher with the given headers; report the status.
 def probe :: fun string (dict string string) -> task int = fun url headers {
@@ -26,12 +32,14 @@ def main = fun {
 	if net.listen "127.0.0.1:0" is ok server {
 		if net.local-addr server is ok addr {
 			scope as s {
-				let _ = s.spawn (http.serve-on server srv.dispatch)
+				let _ = s.spawn (http.serve-on server rpc.dispatch)
 				let url = "http://" ++ addr ++ "/rpc/api.add"
 				try wrong = probe url (dict.from-entries [("x-rpc-fingerprint", "0")])
 				print "wrong fingerprint -> $(to-string wrong)"
 				try missing = probe url (dict.empty ())
 				print "missing fingerprint -> $(to-string missing)"
+				try ok-status = probe url (dict.from-entries [("x-rpc-fingerprint", route-fp)])
+				print "correct fingerprint -> $(to-string ok-status)"
 				s.cancel ()
 				task.return 0
 			}

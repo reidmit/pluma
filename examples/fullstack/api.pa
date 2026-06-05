@@ -1,16 +1,18 @@
-# The shared contract. A `remote def`'s signature is the whole API: the
-# compiler generates a client stub and a server dispatcher from it, so the
-# client and server agree by construction (see notes/FULLSTACK.md).
+# The shared contract. A `remote def`'s signature is the whole API: the pure
+# logical signature `fun A.. -> task R`, no transport `request`. The compiler
+# supplies each endpoint's body per target — the written handler on the server,
+# a transport stub on the client — so the two agree by construction (see
+# notes/RPC.md).
 #
 # This module is compiled into BOTH artifacts. On the server the body below is
-# the real handler; on the client the body is never reached — the call goes
-# over the wire through the generated `rpc-client` stub.
+# the real handler; on the client the body is replaced by a stub that encodes
+# the arguments, calls over the wire, and decodes the reply — so `api.add` reads
+# like a local async call on both ends.
 
 use std.task
-use std.request
 
 # Adds two numbers, on the server. (A toy stand-in for real server work — a
 # database read, a downstream call — that a browser can't do directly.)
-public remote def add :: fun request int int -> task int = fun _req a b {
+public remote def add :: fun int int -> task int = fun a b {
 	task.return (a + b)
 }

@@ -7,4 +7,5 @@ ok
 == stdout ==
 wrong fingerprint -> 409
 missing fingerprint -> 409
+correct fingerprint -> 200
 == stderr ==

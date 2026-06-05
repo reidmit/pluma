@@ -1,45 +1,19 @@
-# An end-to-end RPC round-trip over loopback, all in one process — the
-# regression guard for FULLSTACK Layer 2. The `remote def`s in `api.pa` are
-# compiled into two modules the compiler generates and injects:
-#
-#   * `rpc-server` — a `dispatch :: fun http.request -> task http.response`,
-#     mounted here on a real std.sys.http server.
-#   * `rpc-client` — one stub per endpoint (`rpc.ping`/`rpc.greet`/`rpc.add`),
-#     which encode arguments with `wire`, POST them over TCP, and decode the
-#     reply.
-#
-# The server binds to an OS-assigned port; the client is pointed at it via
-# `rpc.set-base-url`. Output is the (deterministic) decoded results. The
-# server runs under a scope that's cancelled once the calls are done.
-use std.sys.net
-use std.sys.http
+# In-process endpoint test (RPC.md §7a). In a server-context build (`pluma run`/
+# `test`), a `remote def` has its *real* body — so calling `api.add 2 3` runs the
+# handler directly, in process, with no socket, transport, or fingerprint. This
+# is the regression guard for the contract surface (drop-the-`request`-param and
+# the handler bodies); the wire path (encode → dispatch → decode, fingerprint
+# guard) is exercised by `rpc-skew`, and the dual-build client/server split by
+# `examples/fullstack`.
 use std.task
-use std.request
 use api
-use rpc-client as rpc
-use rpc-server as srv
 
 def main = fun {
-	if net.listen "127.0.0.1:0" is ok server {
-		if net.local-addr server is ok addr {
-			scope as s {
-				let _ = s.spawn (http.serve-on server srv.dispatch)
-				rpc.set-base-url ("http://" ++ addr)
-				try greeting = rpc.ping (request.new ())
-				print greeting
-				try msg = rpc.greet (request.new ()) "world"
-				print msg
-				try sum = rpc.add (request.new ()) 2 3
-				print "2 + 3 = $(to-string sum)"
-				s.cancel ()
-				task.return 0
-			}
-		} else {
-			print "local-addr failed"
-			task.return 1
-		}
-	} else {
-		print "listen failed"
-		task.return 1
-	}
+	try greeting = api.ping ()
+	print greeting
+	try msg = api.greet "world"
+	print msg
+	try sum = api.add 2 3
+	print "2 + 3 = $(to-string sum)"
+	task.return 0
 }

@@ -70,10 +70,14 @@ pub struct Compiler {
 	// (`entry_modules[0]`=server→`Sys`, `[1]`=client→`Web`) via `gate_fullstack`, and
 	// the generated `rpc-client` targets the web transport (`fetch.post`).
 	pub fullstack: bool,
-	// The server origin the generated `rpc-client` stubs POST to (baked into the
-	// module as `base-url`'s default; `pluma build/dev --server-url`). `None` keeps
-	// the built-in fallback. Empty string = same-origin (`/rpc/...`).
+	// The server origin the synthesized RPC client stubs POST to, baked at build
+	// time into `std.rpc.server-origin` (`pluma build/dev --server-url`). `None`
+	// keeps the built-in fallback. Empty string = same-origin (`/rpc/...`).
 	pub rpc_base_url: Option<String>,
+	// Every `remote def` discovered during analysis, with its resolved wire
+	// shapes + per-route fingerprint. The lowerer reads this to synthesize the
+	// client stub bodies and the `rpc-dispatch` routing table directly as IR.
+	pub rpc_endpoints: Vec<crate::rpc::RpcEndpointMeta>,
 }
 
 impl Compiler {
@@ -91,6 +95,7 @@ impl Compiler {
 			hmr: false,
 			fullstack: false,
 			rpc_base_url: None,
+			rpc_endpoints: Vec::new(),
 		})
 	}
 
@@ -126,6 +131,7 @@ impl Compiler {
 			hmr: false,
 			fullstack: false,
 			rpc_base_url: None,
+			rpc_endpoints: Vec::new(),
 		}
 	}
 
@@ -216,15 +222,22 @@ impl Compiler {
 		// user module's analyzer.
 		self.load_prelude();
 
-		// FULLSTACK Layer 2: discover `remote def` endpoints (a syntactic scan
-		// over the parsed sources) and synthesize the `rpc-client`/`rpc-server`
-		// modules before analysis, so user code that imports them resolves.
-		self.generate_rpc_modules();
-
 		let mut visiting = HashSet::new();
 		for entry in self.entry_modules.clone() {
 			self.load_module(&entry, &mut visiting);
 		}
+
+		// If the build has `remote def`s and will emit a client artifact (a `--web`
+		// build, or the client half of a fullstack build), force-load the web
+		// transport so the lowerer can reference its `install` (no user code `use`s
+		// it). It's outside every root's use-graph, so tier gating never traverses
+		// it — its `std.web.*` imports don't bar the sys server. DCE drops it from
+		// any artifact that doesn't install it.
+		let emits_client = self.fullstack || self.target == Some(crate::platform::Target::Web);
+		if emits_client && !self.rpc_endpoints.is_empty() {
+			self.load_module("std.rpc.web", &mut visiting);
+		}
+
 		self.gate_by_reachability();
 
 		if !self.diagnostics.is_empty() {
@@ -315,69 +328,6 @@ impl Compiler {
 			}
 			self.diagnostics.push(diag);
 		}
-	}
-
-	// FULLSTACK Layer 2: scan the entry modules and their transitive user
-	// imports for `remote def` endpoints, and (if any) synthesize the
-	// `rpc-client`/`rpc-server` modules into the in-memory cache so the later
-	// analysis pass resolves user code that imports them. The scan is purely
-	// syntactic — an endpoint's signature is its contract — and parsing is
-	// idempotent: `load_module` reuses the modules this populates rather than
-	// re-reading them. A no-op for programs with no `remote def`.
-	fn generate_rpc_modules(&mut self) {
-		let mut to_visit: Vec<String> = self.entry_modules.clone();
-		let mut seen: HashSet<String> = HashSet::new();
-		let mut endpoints: Vec<crate::rpc::Endpoint> = Vec::new();
-
-		while let Some(name) = to_visit.pop() {
-			if !seen.insert(name.clone()) {
-				continue;
-			}
-			// Only user modules carry endpoints; the prelude and stdlib don't,
-			// and the generated modules themselves don't exist on disk yet.
-			if name == "__prelude__"
-				|| name == crate::rpc::CLIENT_MODULE
-				|| name == crate::rpc::SERVER_MODULE
-				|| lookup_stdlib_source(&name).is_some()
-			{
-				continue;
-			}
-			// Parse on demand; `load_module` reuses what we insert here.
-			if !self.modules.contains_key(&name) {
-				let path = to_module_path(&self.root_dir, &name);
-				let mut module = Module::new(name.clone(), path);
-				module.parse(&mut self.diagnostics);
-				self.modules.insert(name.clone(), module);
-			}
-			let Some(ast) = self.modules.get(&name).and_then(|m| m.ast.as_ref()) else {
-				continue;
-			};
-			endpoints.extend(crate::rpc::endpoints_in(&name, ast));
-			for u in &ast.uses {
-				to_visit.push(u.module_name());
-			}
-		}
-
-		if endpoints.is_empty() {
-			return;
-		}
-
-		// One fingerprint over the whole endpoint surface, stamped into both
-		// modules — a client and server built together agree; a drifted client
-		// is rejected with a clean transport error (version-skew protection).
-		let fingerprint = crate::rpc::surface_fingerprint(&endpoints);
-		// The client stub's transport follows the build target: the browser's
-		// `fetch` on web (a `--web` build or the client half of a fullstack
-		// build), `http.fetch` over `std.sys.net` otherwise.
-		let web = self.fullstack || self.target == Some(crate::platform::Target::Web);
-		let base_url = self
-			.rpc_base_url
-			.as_deref()
-			.unwrap_or("http://127.0.0.1:8080");
-		let client = crate::rpc::generate_client(&endpoints, &fingerprint, web, base_url);
-		let server = crate::rpc::generate_server(&endpoints, &fingerprint);
-		self.set_module_source(crate::rpc::CLIENT_MODULE.to_string(), client.into_bytes());
-		self.set_module_source(crate::rpc::SERVER_MODULE.to_string(), server.into_bytes());
 	}
 
 	// Parse + analyze the synthetic prelude module. The source is baked
@@ -604,6 +554,11 @@ impl Compiler {
 		let _t = std::time::Instant::now();
 		analyzer.analyze(module);
 		timing_log(module_name, "analyze", _t.elapsed());
+
+		// Collect any `remote def` endpoint metadata this module declared (with
+		// resolved wire shapes + per-route fingerprints), for the lowerer to
+		// synthesize client stubs / the dispatch table from.
+		self.rpc_endpoints.extend(analyzer.take_endpoint_meta());
 
 		// Cache its exports for any later importer.
 		if let Some(exports) = module.exports.clone() {

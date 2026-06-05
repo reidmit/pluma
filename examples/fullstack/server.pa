@@ -1,15 +1,16 @@
-# The server half. It mounts the generated `dispatch` (the route table built
-# from `api.pa`'s `remote def`s) on a plain `std.sys.http` server. `pluma build`
-# emits this to `server.wasm`; run it with `pluma run out/server.wasm`.
+# The server half. It mounts `rpc.dispatch` (the route table the compiler
+# synthesizes from `api.pa`'s `remote def`s) on a plain `std.sys.http` server.
+# `pluma build` emits this to `server.wasm`; run it with `pluma run out/server.wasm`.
 #
-# `dispatch` lives in the compiler-generated `rpc-server` module — it decodes
-# each request's arguments, calls the matching handler in `api.pa`, and encodes
-# the reply, rejecting a schema-mismatched (stale) client with a clean 409.
+# `rpc.dispatch` is a `fun http.request -> task http.response` whose body the
+# compiler fills in: it decodes each request's arguments, guards the per-route
+# fingerprint (rejecting a stale client with a 409), calls the matching handler
+# in `api.pa`, and encodes the reply.
 
+use std.rpc
 use std.sys.http
 use api
-use rpc-server as srv
 
 def main = fun {
-	http.serve "127.0.0.1:8080" srv.dispatch
+	http.serve "127.0.0.1:8080" rpc.dispatch
 }

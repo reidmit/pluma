@@ -1,0 +1,32 @@
+# std.rpc.sys -- the native transport for remote calls.
+#
+# Installs a sender that POSTs each encoded call to `<origin>/rpc/<route>` over
+# std.sys.http, mapping the HTTP outcome to reply bytes or a typed `rpc-error`.
+# This module imports `std.sys.*`, so it only enters a native build (the neutral
+# `std.rpc` never imports a target module). The mirror of `std.rpc.web`.
+use std.rpc
+use std.task
+use std.sys.http
+
+# POST the encoded body and translate the reply: 200 → bytes; 409 → schema-skew;
+# any other status → server-fault; a transport-level failure → transport.
+def send :: fun string bytes (dict string string) -> task bytes = fun route body headers {
+	try outcome = http.fetch (rpc.server-origin ++ "/rpc/" ++ route) post headers body
+	when outcome is ok resp {
+		if resp.status == 200 {
+			task.return resp.body
+		} else if resp.status == 409 {
+			task.fail (schema-skew route)
+		} else {
+			task.fail (server-fault resp.status)
+		}
+	} is err e {
+		task.fail (transport e)
+	}
+}
+
+# Installs this transport as the ambient sender. The build runs it before `main`
+# on a native client.
+public def install :: fun nothing -> nothing = fun {
+	rpc.configure send
+}
