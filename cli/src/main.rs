@@ -215,10 +215,7 @@ fn test_command(args: Vec<String>) {
 	let root_dir = match compiler::find_project_root(&start_dir) {
 		Some(p) => p,
 		None => {
-			print_error(
-				"no package root found (no pluma.pa in any parent directory). \
-				Create a `pluma.pa` at your project root.",
-			);
+			print_error("No package root found. Create a `pluma.pa` in your root directory.");
 			std::process::exit(1);
 		}
 	};
