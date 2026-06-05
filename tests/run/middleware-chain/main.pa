@@ -1,0 +1,80 @@
+# std.middleware's `chain`, driven in-process: build a few middlewares, stack
+# them around a base handler, and feed the result hand-made requests. Exercises
+# the ordering guarantee (first in the list is outermost: request flows in
+# top-to-bottom, response flows back out bottom-to-top), request rewriting,
+# response shaping, and short-circuiting without ever calling the base handler.
+# No socket -- a handler is just `fun request -> task response`.
+use std.bytes
+use std.dict
+use std.middleware
+use std.string
+use std.task
+use std.sys.http
+
+# A bare GET request for the given path, with the given headers.
+def req :: fun string (list (string, string)) -> http.request = fun p hs {
+	{method: get, path: p, query: "", headers: dict.from-entries hs, body: string.to-bytes ""}
+}
+
+# Run one request through the handler and print "<status> <body>".
+def hit :: fun (fun http.request -> task http.response) http.request -> task nothing = fun app r {
+	try resp = app r
+	print "$(to-string resp.status) $(bytes.to-string resp.body ?? "<bad utf8>")"
+	task.return ()
+}
+
+# The base handler: echoes the request path back in the body.
+def base :: middleware.handler = fun rq {
+	task.return (http.text 200 ("base saw " ++ rq.path))
+}
+
+# A middleware that brackets the body with markers, so the nesting order is
+# visible in the output: outer markers end up on the outside.
+def wrap :: fun string -> middleware.middleware = fun tag {
+	fun next {
+		fun rq {
+			try resp = next rq
+			let inner = bytes.to-string resp.body ?? ""
+			task.return (http.text resp.status ("[" ++ tag ++ " " ++ inner ++ " " ++ tag ++ "]"))
+		}
+	}
+}
+
+# A middleware that rewrites the request path before delegating -- work on the
+# way in, acting on `rq`.
+def rewrite :: middleware.middleware = fun next {
+	fun rq {
+		next {...rq, path: rq.path ++ "/rewritten"}
+	}
+}
+
+# A middleware that short-circuits with 401 unless an "authorization" header is
+# present -- it never calls `next` on the deny path.
+def require-auth :: middleware.middleware = fun next {
+	fun rq {
+		when dict.lookup rq.headers "authorization" is some _ {
+			next rq
+		} is none {
+			task.return (http.text 401 "unauthorized")
+		}
+	}
+}
+
+def main = fun {
+	# Ordering: first in the list is outermost. chain [outer, inner] base is
+	# outer (inner base), so the body reads "[outer [inner base saw / inner] outer]".
+	let layered = middleware.chain [wrap "outer", wrap "inner"] base
+	let bare = middleware.chain [] base # empty list: base untouched
+	let rewritten = middleware.chain [rewrite] base # path rewritten before base
+	let guarded = middleware.chain [require-auth] base # short-circuits without auth
+	let app = middleware.chain [wrap "log", require-auth, rewrite] base # all stacked
+
+	try _ = hit layered (req "/" []) # 200 [outer [inner base saw / inner] outer]
+	try _ = hit bare (req "/plain" []) # 200 base saw /plain
+	try _ = hit rewritten (req "/page" []) # 200 base saw /page/rewritten
+	try _ = hit guarded (req "/secret" []) # 401 unauthorized (base never runs)
+	try _ = hit guarded (req "/secret" [("authorization", "t")]) # 200 base saw /secret
+	try _ = hit app (req "/api" [("authorization", "t")]) # 200 [log base saw /api/rewritten log]
+	try _ = hit app (req "/api" []) # 401 [log unauthorized log] (outer wrap still shapes the 401)
+	task.return 0
+}

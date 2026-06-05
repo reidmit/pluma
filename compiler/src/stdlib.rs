@@ -17,6 +17,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std.list", include_str!("../../std/list.pa")),
 		("std.local", include_str!("../../std/local.pa")),
 		("std.math", include_str!("../../std/math.pa")),
+		("std.middleware", include_str!("../../std/middleware.pa")),
 		("std.option", include_str!("../../std/option.pa")),
 		("std.package", include_str!("../../std/package.pa")),
 		("std.random", include_str!("../../std/random.pa")),
