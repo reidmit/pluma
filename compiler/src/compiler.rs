@@ -215,10 +215,12 @@ impl Compiler {
 		// else. Its exported instances are implicitly visible to every
 		// user module's analyzer.
 		self.load_prelude();
+
 		// FULLSTACK Layer 2: discover `remote def` endpoints (a syntactic scan
 		// over the parsed sources) and synthesize the `rpc-client`/`rpc-server`
 		// modules before analysis, so user code that imports them resolves.
 		self.generate_rpc_modules();
+
 		let mut visiting = HashSet::new();
 		for entry in self.entry_modules.clone() {
 			self.load_module(&entry, &mut visiting);
@@ -359,6 +361,7 @@ impl Compiler {
 		if endpoints.is_empty() {
 			return;
 		}
+
 		// One fingerprint over the whole endpoint surface, stamped into both
 		// modules — a client and server built together agree; a drifted client
 		// is rejected with a clean transport error (version-skew protection).
@@ -386,13 +389,13 @@ impl Compiler {
 		let mut module = Module::new(NAME.to_string(), PathBuf::from("<prelude>"));
 		module.parse_from_bytes(PRELUDE_SOURCE.as_bytes().to_vec(), &mut self.diagnostics);
 		self.modules.insert(NAME.to_string(), module);
+
 		// Analyze in isolation — prelude has no imports.
 		let module = self.modules.get_mut(NAME).unwrap();
 		let mut analyzer = Analyzer::new(&mut self.diagnostics);
 		analyzer.set_imports(HashMap::new(), HashMap::new());
-		let _t = std::time::Instant::now();
 		analyzer.analyze(module);
-		timing_log(NAME, "analyze", _t.elapsed());
+
 		if let Some(exports) = module.exports.clone() {
 			self.exports_cache.insert(NAME.to_string(), exports);
 		}

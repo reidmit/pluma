@@ -93,7 +93,7 @@ fn endpoint_arity(ann: &TypeExprNode) -> Option<usize> {
 // browser's `fetch`) on a web build.
 pub fn generate_client(eps: &[Endpoint], fingerprint: &str, web: bool, base_url: &str) -> String {
 	let mut s = String::new();
-	s.push_str("# Generated RPC client stubs (FULLSTACK Layer 2). Do not edit.\n");
+	s.push_str("# Generated RPC client stubs. Do not edit.\n");
 	if web {
 		s.push_str("use std.web.fetch\n");
 	} else {
@@ -104,16 +104,13 @@ pub fn generate_client(eps: &[Endpoint], fingerprint: &str, web: bool, base_url:
 	s.push_str("use std.string\n");
 	s.push_str("use std.dict\n");
 	s.push_str("use std.request\n\n");
+
 	// The server origin stubs POST to, baked in at build time (`pluma build/dev
 	// --server-url`); empty means same-origin (`/rpc/...`, what `pluma dev` proxies).
-	// `set-base-url` can still override it at runtime (e.g. a test binding port 0).
 	s.push_str(&format!(
 		"def base-url :: ref string = ref.new \"{}\"\n\n",
 		base_url.replace('\\', "\\\\").replace('"', "\\\"")
 	));
-	s.push_str("# Points the stubs at a server origin (e.g. \"http://127.0.0.1:8080\").\n");
-	s.push_str("public def set-base-url :: fun string -> nothing = fun u {\n");
-	s.push_str("\tref.set base-url u\n}\n\n");
 
 	for ep in eps {
 		let sig = render_type_expr(&ep.annotation);
@@ -182,7 +179,7 @@ pub fn generate_client(eps: &[Endpoint], fingerprint: &str, web: bool, base_url:
 // request path to each endpoint.
 pub fn generate_server(eps: &[Endpoint], fingerprint: &str) -> String {
 	let mut s = String::new();
-	s.push_str("# Generated RPC dispatch table (FULLSTACK Layer 2). Do not edit.\n");
+	s.push_str("# Generated RPC dispatch table. Do not edit.\n");
 	s.push_str("use std.sys.http\n");
 	s.push_str("use std.task\n");
 	s.push_str("use std.dict\n");
@@ -201,7 +198,7 @@ pub fn generate_server(eps: &[Endpoint], fingerprint: &str) -> String {
 	for (i, ep) in eps.iter().enumerate() {
 		let route = ep.route();
 		let head = if i == 0 { "if" } else { "} else if" };
-		routing.push_str(&format!("{} req.path == \"/rpc/{}\" {{\n", head, route));
+		routing.push_str(&format!("{} req.path is \"/rpc/{}\" {{\n", head, route));
 
 		let args: Vec<String> = (0..ep.arity).map(|i| format!("a{}", i)).collect();
 		let call = if ep.arity == 0 {
