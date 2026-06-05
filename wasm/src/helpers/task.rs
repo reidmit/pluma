@@ -83,6 +83,23 @@ pub(crate) fn build_run_task_fn(
 	let root = w.param(0);
 	let fid = w.local(ValType::I32);
 	let entry = w.local(v);
+	let seed_env = w.local(v);
+	let root_fid = w.local(ValType::I32);
+
+	// Capture the binding env to seed the root fiber with — BEFORE the reset below
+	// discards `fibers`. At the top-level entry no scheduler is running (`fibers`
+	// null) so the seed is empty, exactly as before. But `run_task` is also driven
+	// re-entrantly to await a deferred *task* (see `__poll_defers_list`): there a
+	// scheduler IS running, so the cleanup task must inherit the cleaning fiber's
+	// task-locals — capture-at-drive, uniform with capture-at-spawn. (Null guard
+	// mirrors `local-get`'s "no fiber → default".)
+	w.global_get(g.fibers).ref_is_null();
+	w.if_result(v, push_nothing, |w| {
+		let cur = w.local(ValType::I32);
+		w.global_get(g.current_fiber).local_set(cur);
+		fld(w, g, g.fibers, cur, fiber::ENV);
+	});
+	w.local_set(seed_env);
 
 	// Reset scheduler state.
 	empty_list(&mut w);
@@ -98,6 +115,11 @@ pub(crate) fn build_run_task_fn(
 	empty_list(&mut w);
 	push_fiber(&mut w, ROOT_SCOPE, NO_SCOPE); // root fiber: not a scope body
 	w.call(list_append).global_set(g.fibers);
+	// Seed the root fiber's binding env with the captured chain (empty at top level).
+	w.i32(0).local_set(root_fid);
+	set_fld(&mut w, g.fibers, root_fid, fiber::ENV, |w| {
+		w.local_get(seed_env);
+	});
 	// ready = [ (0, Start, root) ].
 	empty_list(&mut w);
 	push_ready_entry(&mut w, 0, focus::START, |w| {
@@ -2216,15 +2238,48 @@ pub(crate) fn build_poll_step_fn(poll_defers_list: u32, arity2: u32) -> Function
 	w.finish()
 }
 
-/// `__poll_defers_list(list) -> nothing`: run a `$list` of zero-arg cleanup
-/// closures LIFO (the CPS pass appends, so back to front).
-pub(crate) fn build_poll_defers_list_fn(arity1: u32) -> Function {
+/// `__poll_defers_list(list, task_drive) -> nothing`: run a `$list` of zero-arg
+/// cleanup closures LIFO (the CPS pass appends, so back to front).
+///
+/// A `defer` whose expression evaluates to a `$task` is *awaited* cleanup (the
+/// pending half of the `defer` design): we drive that task to completion before
+/// moving to the next cleanup, rather than dropping it. The drive is a
+/// re-entrant `__run_task` (`task_drive`) over an isolated scheduler instance —
+/// correct because deferred cleanup is self-contained (it never awaits across
+/// the outer fibers/scopes; the design has it `task.shielded`), and it runs
+/// uninterruptibly by construction (a fresh scheduler ignores the outer cancel).
+/// `__run_task` resets every scheduler global, so we save and restore all of
+/// them around the call, leaving the outer run byte-for-byte untouched. A
+/// non-task result (the common `defer print …` / `defer io.close f`) is dropped
+/// exactly as before.
+pub(crate) fn build_poll_defers_list_fn(arity1: u32, task_drive: u32, g: TaskGlobals) -> Function {
 	let v = types::value_ref();
 	let mut w = Wat::new(1);
 	let list = w.param(0);
 	let arr = w.local(types::valarray_ref());
 	let i = w.local(ValType::I32);
 	let c = w.local(v);
+	let r = w.local(v);
+	// Saved copies of every scheduler global, used only when a cleanup produced a
+	// task we must drive in a nested run. Cheap (locals) and only written on the
+	// rare task-cleanup path.
+	let s_act = w.local(types::valarray_ref_null());
+	let s_actlen = w.local(ValType::I32);
+	let s_fibers = w.local(v);
+	let s_scopes = w.local(v);
+	let s_ready = w.local(v);
+	let s_rhead = w.local(ValType::I32);
+	let s_timers = w.local(v);
+	let s_pending = w.local(v);
+	let s_now = w.local(ValType::I64);
+	let s_root_kind = w.local(ValType::I32);
+	let s_root_val = w.local(v);
+	let s_out_kind = w.local(ValType::I32);
+	let s_out_okerr = w.local(ValType::I32);
+	let s_out_val = w.local(v);
+	let s_out_arg = w.local(ValType::I32);
+	let s_out_arg64 = w.local(ValType::I64);
+	let s_cf = w.local(ValType::I32);
 
 	w.local_get(list)
 		.ref_cast(types::T_LIST)
@@ -2246,7 +2301,50 @@ pub(crate) fn build_poll_defers_list_fn(arity1: u32) -> Function {
 				push_nothing,
 				arity1,
 			);
-			w.drop();
+			w.local_set(r);
+			w.local_get(r).value_tag().i32(types::TAG_TASK).i32_eq();
+			w.if_(|w| {
+				// Save the outer scheduler's whole state.
+				w.global_get(g.act).local_set(s_act);
+				w.global_get(g.actlen).local_set(s_actlen);
+				w.global_get(g.fibers).local_set(s_fibers);
+				w.global_get(g.scopes).local_set(s_scopes);
+				w.global_get(g.ready).local_set(s_ready);
+				w.global_get(g.rhead).local_set(s_rhead);
+				w.global_get(g.timers).local_set(s_timers);
+				w.global_get(g.pending).local_set(s_pending);
+				w.global_get(g.now).local_set(s_now);
+				w.global_get(g.root_kind).local_set(s_root_kind);
+				w.global_get(g.root_val).local_set(s_root_val);
+				w.global_get(g.out_kind).local_set(s_out_kind);
+				w.global_get(g.out_okerr).local_set(s_out_okerr);
+				w.global_get(g.out_val).local_set(s_out_val);
+				w.global_get(g.out_arg).local_set(s_out_arg);
+				w.global_get(g.out_arg64).local_set(s_out_arg64);
+				w.global_get(g.current_fiber).local_set(s_cf);
+				// Drive the cleanup task to completion in a fresh scheduler. Its
+				// outcome (incl. a failure, surfaced as `result.err`) is dropped —
+				// cleanup is best-effort and must not abort the remaining defers.
+				w.local_get(r).call(task_drive).drop();
+				// Restore the outer scheduler's state.
+				w.local_get(s_act).global_set(g.act);
+				w.local_get(s_actlen).global_set(g.actlen);
+				w.local_get(s_fibers).global_set(g.fibers);
+				w.local_get(s_scopes).global_set(g.scopes);
+				w.local_get(s_ready).global_set(g.ready);
+				w.local_get(s_rhead).global_set(g.rhead);
+				w.local_get(s_timers).global_set(g.timers);
+				w.local_get(s_pending).global_set(g.pending);
+				w.local_get(s_now).global_set(g.now);
+				w.local_get(s_root_kind).global_set(g.root_kind);
+				w.local_get(s_root_val).global_set(g.root_val);
+				w.local_get(s_out_kind).global_set(g.out_kind);
+				w.local_get(s_out_okerr).global_set(g.out_okerr);
+				w.local_get(s_out_val).global_set(g.out_val);
+				w.local_get(s_out_arg).global_set(g.out_arg);
+				w.local_get(s_out_arg64).global_set(g.out_arg64);
+				w.local_get(s_cf).global_set(g.current_fiber);
+			});
 			w.local_get(i).i32(1).i32_sub().local_set(i);
 			w.br("lp");
 		});

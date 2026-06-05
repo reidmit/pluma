@@ -1,0 +1,14 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+normal body
+async cleanup C (tag=T)
+sync cleanup B
+async cleanup A (tag=T)
+async cleanup fail-cleanup (tag=T)
+done
+== stderr ==

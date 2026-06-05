@@ -549,10 +549,15 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::PollDefersList,
 		fn_type: Ty::Helper(1),
-		deps: &[],
+		// `TaskDrive` (= `__run_task`) so a deferred *task* can be driven to
+		// completion (awaited cleanup). The dep edge is cyclic — `TaskDrive`
+		// reaches `PollDefersList` again through `Pump`/`PollStep` — which is fine:
+		// `close_deps` is a set closure and helper indices are pre-assigned, so the
+		// call resolves by index without an ordering constraint.
+		deps: &[H::TaskDrive],
 		build: |c| {
 			let arity1 = c.arity(1);
-			task::build_poll_defers_list_fn(arity1)
+			task::build_poll_defers_list_fn(arity1, c.dep(H::TaskDrive), c.rt.taskg)
 		},
 	},
 	HelperDef {

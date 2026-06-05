@@ -1,0 +1,9 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+async cleanup on cancel (tag=spawned)
+== stderr ==
