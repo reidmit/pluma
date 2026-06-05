@@ -1,0 +1,149 @@
+# std.router — a tiny request router for std.sys.http.
+#
+# A web server built on `std.sys.http` is one function from a `request` to a
+# `task response`. Once you have more than a couple of endpoints, writing that
+# function as a chain of `if path == … else if …` gets noisy fast. A router
+# turns it into a list: you describe each endpoint as a `route`, and the router
+# picks the first one whose method and path match the incoming request.
+#
+# A `route` pairs a *match rule* (which requests it answers) with a *handler*
+# (the same `fun request -> task response` you'd write by hand). Build routes
+# with `get` / `post` (an exact path on that method) or `prefix` (any path that
+# starts with the given text — handy for static files), collect them in a list,
+# and turn the list into a handler with `handler`, or serve it directly with
+# `serve`:
+#
+#     use std.router
+#     use std.sys.process
+#
+#     def main = fun {
+#         let port = process.env "PORT" ?? "8080"
+#         router.serve ("127.0.0.1:" ++ port) [
+#             router.get    "/"        home,
+#             router.get    "/health"  health,
+#             router.prefix "/static"  serve-files,
+#         ]
+#     }
+#
+# Routes are tried top to bottom and the first match wins, so put more specific
+# routes before broader `prefix` ones. If nothing matches, the router replies
+# with a 404. It's a dispatch list, not a framework: there are no path
+# parameters (`/users/:id`), no middleware chains, and no 405 handling yet —
+# match the path yourself inside a handler when you need more.
+use std.list
+use std.string
+use std.task
+use std.sys.http
+
+# One endpoint: a rule for which requests it answers, paired with the handler
+# that answers them. Opaque — build one with `get` / `post` / `prefix` and feed
+# a list of them to `handler` or `serve`.
+#
+# Inside, a route is just a function: given a request, it returns `some` of the
+# handler's task when the request matches, or `none` when it doesn't. `handler`
+# walks the list and runs the first `some` it finds.
+opaque enum route {
+	route (fun http.request -> option (task http.response))
+}
+
+# Builds a route from a match rule and a handler. The rule decides whether this
+# route answers a given request; if it does, the handler's task is what runs.
+def make :: fun (fun http.request -> bool) (fun http.request -> task http.response) -> route = fun matches handle {
+	route fun req {
+		if matches req {
+			some (handle req)
+		} else {
+			none
+		}
+	}
+}
+
+# A route that answers GET requests whose path is exactly `path`.
+#
+#     router.get "/health" (fun req {
+#         task.return (http.text 200 "ok")
+#     })
+public def get :: fun string (fun http.request -> task http.response) -> route = fun path handle {
+	make fun req {
+		if req.method is get {
+			req.path == path
+		} else {
+			false
+		}
+	} handle
+}
+
+# A route that answers POST requests whose path is exactly `path`.
+#
+#     router.post "/users" (fun req {
+#         try id = create-user req.body
+#         task.return (http.text 201 id)
+#     })
+public def post :: fun string (fun http.request -> task http.response) -> route = fun path handle {
+	make fun req {
+		if req.method is post {
+			req.path == path
+		} else {
+			false
+		}
+	} handle
+}
+
+# A route that answers any request whose path starts with `pfx`, regardless of
+# method. Useful for handing a whole subtree to one handler — static files
+# under `/static`, say — where the handler reads the rest of the path itself.
+#
+#     router.prefix "/static" (fun req {
+#         serve-file req.path
+#     })
+public def prefix :: fun string (fun http.request -> task http.response) -> route = fun pfx handle {
+	make fun req { string.starts-with req.path pfx } handle
+}
+
+# The first route whose rule matches `req`, as `some` of that route's task, or
+# `none` if no route in the list matches.
+def first-match :: fun (list route) http.request -> option (task http.response) = fun routes req {
+	when list.head routes is some r {
+		when r is route try-route {
+			when try-route req is some t {
+				some t
+			} is none {
+				first-match (list.drop routes 1) req
+			}
+		}
+	} is none {
+		none
+	}
+}
+
+# Turns a list of routes into a single handler you can hand to
+# `http.serve` (or mount under your own server). Routes are tried in order and
+# the first match wins; if none match, the handler replies with a 404.
+#
+#     let app = router.handler [
+#         router.get "/" home,
+#         router.get "/health" health,
+#     ]
+#     http.serve "127.0.0.1:8080" app
+public def handler :: fun (list route) -> (fun http.request -> task http.response) = fun routes {
+	fun req {
+		when first-match routes req is some t {
+			t
+		} is none {
+			task.return (http.not-found ())
+		}
+	}
+}
+
+# Binds to `address` and serves the routes forever — the one-liner for a
+# router-only server. It's exactly `http.serve address (handler routes)`, so
+# reach for `handler` instead when you want to mount the routes inside a server
+# you're assembling yourself.
+#
+#     router.serve "127.0.0.1:8080" [
+#         router.get "/" home,
+#         router.get "/health" health,
+#     ]
+public def serve :: fun string (list route) -> task nothing = fun address routes {
+	http.serve address (handler routes)
+}
