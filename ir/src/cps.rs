@@ -607,6 +607,29 @@ fn build_poll_fn(f: &Function) -> Option<Function> {
 		// the frame's own cleanup stack (that fires at every poll's `Return`, not at
 		// the machine's logical exit) — the driver runs `__defers` instead.
 		for s in &bb.stmts {
+			// De-TCO any tail call. `lower` emits `Let(v, TailCall ..); Return(v)`
+			// for a tail-position call, expecting the `Return` to reuse the frame
+			// (`return_call`). But in a poll fn that `Return` is rewritten to wrap
+			// `v` in a `ready`/`pending` variant, so the call is no longer in tail
+			// position — a `return_call` would skip the wrapping and hand the
+			// callee's raw result to the driver, which traps casting it to `__poll`.
+			// Downgrade to the ordinary frame-returning call so the wrapping runs.
+			// (Async self-recursion already rides the poll machine, so no TCO is
+			// lost.) `TailCallDirect` shouldn't exist yet — `resolve_direct_calls`
+			// runs after this pass — but handle it for safety.
+			if let StmtKind::Let(v, rv) = &s.kind {
+				let detco = match rv {
+					Rvalue::TailCall(callee, args) => Some(Rvalue::CallClosure(callee.clone(), args.clone())),
+					Rvalue::TailCallDirect(fid, args) => {
+						Some(Rvalue::Call(Callee::Function(*fid), args.clone()))
+					}
+					_ => None,
+				};
+				if let Some(rv) = detco {
+					out.push(Stmt::new(StmtKind::Let(*v, rv), s.range));
+					continue;
+				}
+			}
 			match (&s.kind, defers_var) {
 				(StmtKind::PushDefer(closure), Some(dv)) => {
 					out.push(Stmt::new(
