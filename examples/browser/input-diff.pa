@@ -28,6 +28,12 @@ def view :: fun string -> html.html msg = fun text {
 			html.span [] [html.text "model: "],
 			html.span [html.id "echo"] [html.text text],
 		],
+		html.p [] [
+			html.span [] [
+				html.text "length: ",
+				html.text (string.length text | to-string),
+			],
+		],
 	]
 }
 

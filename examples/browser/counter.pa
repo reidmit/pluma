@@ -5,7 +5,7 @@
 #     pluma build --target browser examples/browser/counter.pa -o /tmp/counter
 #     python3 -m http.server --directory /tmp/counter
 #
-# then open http://localhost:8000/ . Clicking the button increments the label.
+# then open http://localhost:2222/ . Clicking the button increments the label.
 
 use std.web.dom
 

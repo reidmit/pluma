@@ -3,7 +3,7 @@
 #     pluma build --target browser examples/browser/counter-mvu.pa -o /tmp/counter-mvu
 #     python3 -m http.server --directory /tmp/counter-mvu
 #
-# then open http://localhost:8000/ . The runtime owns the model and the DOM;
+# then open http://localhost:2222/ . The runtime owns the model and the DOM;
 # you just describe the view and how messages change the model.
 
 use std.web.html
