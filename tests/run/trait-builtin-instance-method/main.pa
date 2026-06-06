@@ -1,0 +1,23 @@
+# A trait instance whose method bodies are `built-in "tag"` — the shape the
+# prelude's primitive instances (`numeric int`, `ord int`, …) need once they
+# move out of the compiler and into prelude.pa. An all-builtin concrete
+# instance lowers to a PreEval::MethodDict, exactly like the seeded prelude
+# dicts; the wasm backend wraps each internal builtin into a dict-slot closure.
+
+trait arith a {
+	neg :: fun a -> a
+	plus :: fun a a -> a
+	times :: fun a a -> a
+}
+
+implement arith int {
+	def neg = built-in "int-negate"
+	def plus = built-in "int-add"
+	def times = built-in "int-mul"
+}
+
+def main = fun {
+	print (neg 42)
+	print (plus 3 4)
+	print (times 6 7)
+}

@@ -2057,9 +2057,19 @@ impl<'compiler> Analyzer<'compiler> {
 						let expected_substituted = sub.apply_to_type(expected);
 
 						if let DefinitionKind::Expr(expr) = &mut method.kind {
-							self.constrain_expr(expr, &mut constraints);
-							constraints
-								.push(eq_constraint(expr.ty.clone(), expected_substituted).at(method.range));
+							// `built-in "tag"` as an instance method RHS: the trait
+							// signature (instantiated for the head type) is the
+							// contract, exactly as a `::` annotation is for a
+							// top-level builtin def. Take the type from it and skip
+							// the general path, which would otherwise reject the
+							// builtin with `BuiltinMustBeTopLevelRhs`.
+							if matches!(expr.kind, ExprKind::Builtin(_)) {
+								expr.ty = expected_substituted;
+							} else {
+								self.constrain_expr(expr, &mut constraints);
+								constraints
+									.push(eq_constraint(expr.ty.clone(), expected_substituted).at(method.range));
+							}
 						}
 					}
 

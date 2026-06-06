@@ -792,6 +792,21 @@ impl<'a> Lowerer<'a> {
 			None => None,
 		};
 		let Some(gid) = gid else { return };
+		// An instance whose methods are all `built-in "tag"` bodies lowers to a
+		// `PreEval::MethodDict` of builtin members — the same representation the
+		// prelude's primitive instances (`numeric int`, `ord int`, …) use. The
+		// wasm backend wraps each internal builtin into a dict-slot closure;
+		// internal builtins (`int-add`, …) aren't host imports, so they can't go
+		// through the runtime `MakeDict` path. Only concrete instances qualify
+		// (the MethodDict wrapper requires every member be a wrappable builtin).
+		if instance.where_clause.is_empty() {
+			if let Some(members) = builtin_method_dict_members(instance) {
+				self
+					.globals
+					.set_pre_evaluated(gid, PreEval::MethodDict(members));
+				return;
+			}
+		}
 		match self.lower_instance_thunk(instance) {
 			Ok(fid) => self.globals.set_thunk(gid, fid),
 			Err(_) => self.poison_global(gid),
@@ -2755,6 +2770,34 @@ fn undrained_dispatch_cells(expr: &ExprNode) -> Option<Vec<compiler::ast::Dispat
 /// captures through nested closures).
 fn synthetic_dict_name(slot: u16) -> String {
 	format!("__dict_{}__", slot)
+}
+
+/// If every method body of a concrete instance is a `built-in "tag"`, return the
+/// dict members (in canonical/trait order) as `PreEval::Builtin`s — ready to be
+/// the instance's `PreEval::MethodDict` global, mirroring the prelude's primitive
+/// instances. `None` if any method is a normal body (the runtime `MakeDict` path
+/// handles those) or there are no methods. Member return repr is `Boxed`: a
+/// method-dict slot is called through the uniform dict ABI, so the wasm wrapper
+/// boxes the result regardless (same as `seed_prelude_globals`).
+fn builtin_method_dict_members(instance: &compiler::ast::InstanceNode) -> Option<Vec<PreEval>> {
+	let mut by_name: HashMap<&str, &ExprNode> = HashMap::new();
+	for m in &instance.methods {
+		if let DefinitionKind::Expr(e) = &m.kind {
+			by_name.insert(m.name.name.as_str(), e);
+		}
+	}
+	if instance.canonical_method_order.is_empty() {
+		return None;
+	}
+	let mut members = Vec::with_capacity(instance.canonical_method_order.len());
+	for method_name in &instance.canonical_method_order {
+		let expr = by_name.get(method_name.as_str()).copied()?;
+		match &expr.kind {
+			ExprKind::Builtin(tag) => members.push(PreEval::Builtin(tag.clone(), Repr::Boxed)),
+			_ => return None,
+		}
+	}
+	Some(members)
 }
 
 /// If both operands of a `numeric`-dispatched arithmetic operator are the *same
