@@ -42,7 +42,7 @@ public def parse :: fun string -> option uuid = fun s { … }   # the only way t
 public def to-string :: fun uuid -> string = fun u { … }      # …and to read one
 ```
 
-A caller can write `def id :: ids.uuid = ids.parse raw ?? …` but `ids.uuid.bytes [...]` is rejected. There are three rungs in all — bare (private), `opaque` (type exported, constructors hidden), and `public` (everything exported). `opaque` is enum-only; `public`/`opaque` on a `def`, `alias`, `trait`, or `implement` other than `public def`/`public alias` is a parse error.
+A caller can write `def id :: ids.uuid = ids.parse raw ?? …` but `ids.uuid.bytes [...]` is rejected. There are three rungs in all — bare (private), `opaque` (type exported, constructors hidden), and `public` (everything exported). `public` applies to a `def`, `alias`, `enum`, or `trait`; `opaque` is enum-only. Either keyword on an `implement` — or `opaque` on anything but an enum — is a parse error (an instance's visibility is never written: instances are always exported, see [Traits](@/docs/traits.md)).
 
 ## Crossing module boundaries
 
@@ -66,6 +66,7 @@ def my-favorite = colors.color.red
 | `module.value-name` (in value positions) | An imported top-level value or function. |
 | `module.enum-name.variant` | Access a variant of an imported enum. |
 | `module.alias-name` | The alias constructor for an imported record alias. |
+| `module.trait-name.method` | Call a method of an imported trait (the explicit form of bare dispatch). |
 
 ## Variants are always qualified
 

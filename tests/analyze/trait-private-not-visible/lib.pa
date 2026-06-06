@@ -1,0 +1,7 @@
+trait secret a {
+	reveal :: fun a -> string
+}
+
+implement secret int {
+	def reveal = fun n { to-string n }
+}

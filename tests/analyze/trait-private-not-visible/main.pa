@@ -1,0 +1,5 @@
+use lib
+
+# `secret` is a private trait in `lib` — not exported, so naming it
+# across the module boundary is rejected.
+def out = lib.secret.reveal 5

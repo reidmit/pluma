@@ -720,6 +720,68 @@ impl<'compiler> Analyzer<'compiler> {
 		// from the type's shape in `try_resolve_dispatch`.
 		self.register_prelude_wire_trait();
 
+		// Imported public traits. Each `use`d module's exported traits join
+		// the dispatch pool so their methods resolve by bare name here
+		// (Rust-style `use Trait`) and are reachable as `module.trait.method`.
+		// The export's canonical param tyvar `Var(0)` is freshened into our
+		// namespace. A trait already registered (prelude here, or a local
+		// trait inserted later in `constrain`) wins — bare-name dispatch then
+		// prefers the local one and `module.trait` disambiguates the rest.
+		let imported_traits: Vec<(String, String, crate::module::TraitExport)> = self
+			.imports
+			.iter()
+			.flat_map(|(local_name, exports)| {
+				let qualified_module = self
+					.import_qualified
+					.get(local_name)
+					.cloned()
+					.unwrap_or_else(|| local_name.clone());
+				exports
+					.traits
+					.iter()
+					.map(move |(name, t)| (qualified_module.clone(), name.clone(), t.clone()))
+			})
+			.collect();
+		for (qualified_module, trait_name, texport) in imported_traits {
+			if self.traits.contains_key(&trait_name) {
+				continue;
+			}
+			let param_var = self.next_type_var_id;
+			self.next_type_var_id += 1;
+			let rebind = Substitution {
+				solutions: [(0usize, Type::Var(param_var))].into_iter().collect(),
+				row_solutions: HashMap::new(),
+				tuple_row_solutions: HashMap::new(),
+			};
+			let method_types = texport
+				.method_types
+				.iter()
+				.map(|(name, ty)| (name.clone(), rebind.apply_to_type(ty)))
+				.collect();
+			self.traits.insert(
+				trait_name,
+				TraitDecl {
+					param_var,
+					method_order: texport.method_order,
+					method_types,
+					defaults: texport.defaults,
+					defining_module: qualified_module,
+				},
+			);
+		}
+
+		// Imported instances: every `use`d module's exported instances join
+		// our registry so dispatch can discharge against them (the compiler
+		// seeds the prelude's separately). Already-present keys are skipped,
+		// so prelude/local instances win; the orphan rule keeps an instance
+		// co-located with its trait or head type, so direct imports suffice.
+		let imported_instances: Vec<crate::module::InstanceExport> = self
+			.imports
+			.values()
+			.flat_map(|exports| exports.instances.iter().cloned())
+			.collect();
+		self.add_imported_instances(&imported_instances);
+
 		// PLUMA_TIMING=2 prints per-phase timing within analyze().
 		let _timing = std::env::var("PLUMA_TIMING").ok().as_deref() == Some("2");
 		let mut _t_constrain = std::time::Duration::ZERO;
@@ -955,10 +1017,42 @@ impl<'compiler> Analyzer<'compiler> {
 							}
 						}
 					}
-					// Trait/Instance: not subject to the visibility ladder.
-					// Instances are always exported (via the loop below);
-					// traits aren't carried through `ModuleExports` at all.
-					DefinitionKind::Trait(_) | DefinitionKind::Instance(_) => {}
+					// A `public trait` is exported like a `public enum`: its
+					// signature crosses the boundary so importers can dispatch
+					// its methods and name it `module.trait`. Private traits stay
+					// module-local (listed in `private` for a precise diagnostic).
+					// The param tyvar is canonicalized to `Var(0)` for a stable,
+					// var-namespace-independent signature.
+					DefinitionKind::Trait(_) => {
+						if def.visibility == Visibility::Public {
+							if let Some(decl) = self.traits.get(&def.name.name) {
+								let canonicalize = Substitution {
+									solutions: [(decl.param_var, Type::Var(0))].into_iter().collect(),
+									row_solutions: HashMap::new(),
+									tuple_row_solutions: HashMap::new(),
+								};
+								let method_types = decl
+									.method_types
+									.iter()
+									.map(|(name, ty)| (name.clone(), canonicalize.apply_to_type(ty)))
+									.collect();
+								exports.traits.insert(
+									def.name.name.clone(),
+									crate::module::TraitExport {
+										method_order: decl.method_order.clone(),
+										method_types,
+										defaults: decl.defaults.clone(),
+									},
+								);
+							}
+						} else {
+							exports.private.insert(def.name.name.clone());
+						}
+					}
+					// Instances are always exported (via the loop below),
+					// regardless of visibility: dispatch must stay globally
+					// coherent, and the orphan rule keeps that sound.
+					DefinitionKind::Instance(_) => {}
 				}
 			}
 		}
@@ -1263,6 +1357,21 @@ impl<'compiler> Analyzer<'compiler> {
 				if !defaults.is_empty() {
 					trait_defaults.insert(def.name.name.clone(), defaults);
 				}
+			}
+		}
+		// Imported traits' defaults are portable: an instance declared in this
+		// module that omits a defaulted method clones the default body from the
+		// trait's defining module (the export carries the AST). A local trait
+		// of the same name wins. The cloned body resolves its names in this
+		// module's scope — it may reference the trait's own methods (bare
+		// dispatch works cross-module now) and anything public, but not the
+		// defining module's private helpers.
+		for exports in self.imports.values() {
+			for (trait_name, texport) in &exports.traits {
+				if trait_defaults.contains_key(trait_name) || texport.defaults.is_empty() {
+					continue;
+				}
+				trait_defaults.insert(trait_name.clone(), texport.defaults.clone());
 			}
 		}
 		for def in &mut module.body {
@@ -3165,6 +3274,60 @@ impl<'compiler> Analyzer<'compiler> {
 						ExprKind::FieldAccess { receiver, field } => (receiver, field),
 						_ => unreachable!(),
 					};
+
+				// Cross-module trait method: `module.trait-name.method`. The
+				// explicit form of bare dispatch, used to disambiguate when two
+				// in-scope traits share a method name. Matched on the chained-
+				// FieldAccess shape, before the inner receiver is recursed into.
+				// Dispatch is driven by the cell + Class constraint (the module
+				// segment is dropped — the trait name is the dispatch key), so
+				// the reshaped node mirrors the local `trait.method` form.
+				if let ExprKind::FieldAccess {
+					receiver: outer_recv,
+					field: trait_field,
+				} = &receiver.kind
+				{
+					if let ExprKind::Identifier(module_ident) = &outer_recv.kind {
+						if let Some(exports) = self.imports.get(&module_ident.name).cloned() {
+							if exports.traits.contains_key(&trait_field.name) {
+								if let Some(decl) = self.traits.get(&trait_field.name) {
+									let trait_name = trait_field.name.clone();
+									let param_var = decl.param_var;
+									let method_idx = decl.method_order.iter().position(|m| m == &field.name);
+									let method_type = decl.method_types.get(&field.name).cloned();
+									let method_names = decl.method_order.clone();
+									match (method_idx, method_type) {
+										(Some(idx), Some(method_ty)) => {
+											expr.kind =
+												ExprKind::NamespaceAccess(vec![trait_field.clone(), field.clone()]);
+											self.emit_trait_method_dispatch(
+												trait_name,
+												idx,
+												&method_ty,
+												param_var,
+												expr,
+												constraints,
+											);
+											return;
+										}
+										_ => {
+											let suggestion = crate::suggest::closest(&field.name, method_names);
+											self.error(
+												field.range,
+												NameNotBound {
+													name: format!("{}.{}", trait_field.name, field.name),
+													suggestion,
+												},
+											);
+											expr.ty = Type::Unknown;
+											return;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
 
 				// Cross-module variant access: `module.enum-name.variant`.
 				// Match the chained-FieldAccess shape so we resolve before the

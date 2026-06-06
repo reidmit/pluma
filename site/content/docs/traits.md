@@ -58,15 +58,46 @@ Dispatch is by argument type — the compiler picks the instance from the call s
 print (showable.show 42)  # explicit form, always legal
 ```
 
+## Exporting a trait
+
+A trait is **private to its module** by default, like every other definition. Mark it `public` to let other modules use it, exactly as you would a `def` or an `enum`:
+
+```pluma
+# shapes.pa
+public trait drawable a {
+    draw :: a -> string
+}
+```
+
+A module that `use`s `shapes` brings the trait into scope — its methods then dispatch by bare name, the same as a local trait (Rust's `use Trait`):
+
+```pluma
+# main.pa
+use shapes
+
+implement drawable circle { def draw = fun c { "○" } }
+
+def render = fun c { draw c }   # bare dispatch — picks the circle instance
+```
+
+When you need to disambiguate (two in-scope traits sharing a method name), name the trait through its module — `module.trait.method` — mirroring how an imported variant is `module.enum.variant`:
+
+```pluma
+print (shapes.drawable.draw my-circle)
+```
+
+Default methods (below) travel with the trait: an instance in the importing module that omits one inherits the trait's default body. Instances are always visible across modules regardless of visibility — dispatch has to stay globally coherent, and the orphan rule keeps that sound — so there's no `public` on an `implement`.
+
 ## Prelude traits
 
-Three traits are visible in every module:
+Four traits are visible in every module:
 
 | Trait | Methods | Instances |
 | - | - | - |
 | `numeric` | `add`, `sub`, `mul`, `div`, `negate` | `int`, `float` |
 | `ord` | `compare` | `int`, `float`, `string`; parametric on `option a`, `result a b` |
 | `hash` | `hash` | `int`, `float`, `string`, `bool`; parametric on `option a`, `result a b` |
+| `wire` | `encode`, `decode` | structural — auto-derived from a type's shape (no concrete instances) |
 
 So `compare 1 2`, `hash "key"`, `add 1.5 2.5` all just work.
 

@@ -35,6 +35,11 @@ pub struct ModuleExports {
 	// are canonical (0..param_count-1); the importer mints fresh ids
 	// before inserting into its local registry.
 	pub instances: Vec<InstanceExport>,
+	// Public traits declared in this module. Importers register these into
+	// their own trait pool so the methods dispatch by bare name (Rust-style
+	// `use Trait`) and are reachable as `module.trait.method`. The trait's
+	// param tyvar is canonical (`Var(0)`); the importer mints a fresh id.
+	pub traits: HashMap<String, TraitExport>,
 	// Names of top-level defs that exist in this module but aren't visible
 	// to importers (no `public`/`opaque` keyword). Carried so importers can
 	// report a precise "`x` is private to module `y`" diagnostic instead of
@@ -61,6 +66,20 @@ pub struct InstanceExport {
 	// `(trait_name, canonical_var_idx)` for each `where`-clause constraint.
 	pub where_clauses: Vec<(String, usize)>,
 	pub instance_slot_name: String,
+}
+
+// A trait's signature, exported across module boundaries. The trait's
+// single param tyvar is referenced as `Type::Var(0)` in `method_types`;
+// the importing analyzer mints a fresh local var and substitutes it.
+// `defaults` carries the AST template for each method that has a default
+// body, so an instance in the importing module that omits a defaulted
+// method can clone it (exports are in-memory, so this is a plain clone).
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone)]
+pub struct TraitExport {
+	pub method_order: Vec<String>,
+	pub method_types: HashMap<String, Type>,
+	pub defaults: HashMap<String, ExprNode>,
 }
 
 // A generic enum's signature, exported across module boundaries. Variant

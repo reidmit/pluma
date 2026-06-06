@@ -2524,15 +2524,15 @@ impl<'a> Parser<'a> {
 			.map(|(s, _)| s)
 			.or_else(|| remote_span.map(|(s, _)| s));
 
-		// `public`/`opaque` only modify a `def`, `enum`, or `alias`, and
-		// `opaque` only an `enum`. Reject anything else (instances, traits,
-		// a dangling modifier) up front.
+		// `public`/`opaque` only modify a `def`, `enum`, `alias`, or `trait`,
+		// and `opaque` only an `enum`. Reject anything else (instances, a
+		// dangling modifier) up front.
 		if visibility != Visibility::Private {
 			let target_ok = match self.current_token {
 				Some(Token::KeywordEnum(..)) => true,
-				Some(Token::KeywordAlias(..)) | Some(Token::KeywordDef(..)) => {
-					visibility != Visibility::Opaque
-				}
+				Some(Token::KeywordAlias(..))
+				| Some(Token::KeywordDef(..))
+				| Some(Token::KeywordTrait(..)) => visibility != Visibility::Opaque,
 				_ => false,
 			};
 			if !target_ok {

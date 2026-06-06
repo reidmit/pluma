@@ -1,0 +1,7 @@
+public trait labeled a {
+	tag :: fun a -> string
+}
+
+implement labeled int {
+	def tag = fun n { "labeled:$(to-string n)" }
+}

@@ -1,0 +1,7 @@
+public trait marked a {
+	tag :: fun a -> string
+}
+
+implement marked int {
+	def tag = fun n { "marked:$(to-string n)" }
+}

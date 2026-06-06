@@ -1,0 +1,24 @@
+use shapes
+
+enum square {
+	square int
+}
+
+# Instance in the *importing* module for a local type. Omits `label`,
+# so it inherits the imported trait's default method.
+implement drawable square {
+	def draw = fun s {
+		when s is square.square w { "square w=$(to-string w)" }
+	}
+}
+
+def main = fun {
+	# Bare dispatch on an imported trait method, importing-module instance.
+	print (draw (square.square 4))
+	# Bare dispatch, defining-module instance + type.
+	print (draw (shapes.circle.circle 3))
+	# Imported default method `label` on the local instance (portable default).
+	print (label (square.square 4))
+	# Explicit `module.trait.method` form.
+	print (shapes.drawable.draw (square.square 9))
+}

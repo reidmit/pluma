@@ -1,0 +1,23 @@
+public trait drawable a {
+	draw :: fun a -> string
+	label :: fun a -> string
+	def label = fun x {
+		# Default method: portable across modules. An instance in another
+		# module that omits `label` clones this body, whose bare `draw`
+		# dispatches back onto that instance.
+		"shape: $(draw x)"
+	}
+}
+
+public enum circle {
+	circle int
+}
+
+# Instance in the trait's own module.
+implement drawable circle {
+	def draw = fun c {
+		when c is circle.circle r {
+			"circle r=$(to-string r)"
+		}
+	}
+}

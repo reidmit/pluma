@@ -1,0 +1,6 @@
+use labels
+use marks
+
+# Both imported traits export `tag`, so a bare call is ambiguous and must
+# be qualified as `labels.labeled.tag` / `marks.marked.tag`.
+def out = tag 7

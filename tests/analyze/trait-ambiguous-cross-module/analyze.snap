@@ -1,0 +1,11 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Method `tag` is ambiguous: qualify it as `labeled.tag` or `marked.tag`.
+> 6 | def out = tag 7
+                ^^^
+
+error: Type mismatch: expected `int -> 'a`, but found `?`.
+> 6 | def out = tag 7
+                ^^^^^
