@@ -1,0 +1,68 @@
+# The streaming RPC wire path, end to end in one process -- the §7 stream slice's
+# regression guard, mirroring rpc-skew for unary. A real `rpc.dispatch` server
+# runs over a loopback socket; a loopback streaming transport is installed, then
+# `rpc.call-stream` opens each subscription through the whole path -- the
+# synthesized dispatcher's stream arm, `respond-stream`, the SSE framing, and the
+# native `fetch-stream` reader -- and the frames are wire-decoded back to ints.
+# `ticks` drains cleanly; `boom` faults mid-stream (a `fault` frame) and the
+# consumer observes the failure after the elements that did arrive.
+#
+# `route-fp` is the fingerprint for `fun int -> stream int` (shared by both
+# endpoints -- it's per-shape, not per-name). If the fingerprint algorithm
+# changes, update it here and re-accept the snapshot.
+use std.dict
+use std.rpc
+use std.stream
+use std.task
+use std.sys.http
+use std.sys.net
+use api
+
+def route-fp :: string = "3785672902669336212"
+
+# Wire-decode a frame stream of `int`s, faulting the stream on a malformed frame.
+def decode-ints :: fun (stream bytes) -> stream int = fun frames {
+	stream.map-task frames fun b {
+		let decoded :: result int wire-error = wire.decode b
+		rpc.lift decoded
+	}
+}
+
+def main = fun {
+	if net.listen "127.0.0.1:0" is ok server {
+		if net.local-addr server is ok addr {
+			scope as s {
+				let _ = s.spawn (http.serve-on server rpc.dispatch)
+				rpc.configure-stream fun route body headers {
+					http.fetch-stream ("http://" ++ addr ++ "/rpc/" ++ route) http.method.post headers body
+				}
+
+				let ticks = decode-ints (rpc.call-stream "api.ticks" route-fp (wire.encode 4))
+				try _ = stream.for-each ticks fun n {
+					print "tick $(to-string n)"
+					task.return ()
+				}
+
+				let boom = decode-ints (rpc.call-stream "api.boom" route-fp (wire.encode 2))
+				try outcome = task.attempt (stream.for-each boom fun n {
+					print "boom $(to-string n)"
+					task.return ()
+				})
+				when outcome is ok _ {
+					print "boom: clean end (unexpected)"
+				} is err _ {
+					print "boom: faulted as expected"
+				}
+
+				s.cancel ()
+				task.return 0
+			}
+		} else {
+			print "local-addr failed"
+			task.return 1
+		}
+	} else {
+		print "listen failed"
+		task.return 1
+	}
+}

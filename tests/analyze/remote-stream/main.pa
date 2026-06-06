@@ -1,0 +1,15 @@
+use std.task
+use std.stream
+
+# A `remote def` may return a `stream R` -- a server->client subscription -- as
+# well as a `task R`. The result type and every argument must still be
+# wire-derivable. This one is accepted.
+public remote def ticks :: fun int -> stream int = fun n {
+	stream.from-seed 0 fun i {
+		if i < n {
+			task.return (some (i, i + 1))
+		} else {
+			task.return none
+		}
+	}
+}

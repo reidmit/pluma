@@ -1,0 +1,25 @@
+# Streaming endpoints for the wire-path guard. `ticks` ends cleanly after `n`
+# elements (a `done` frame); `boom` emits a couple then faults (a `fault` frame),
+# so both stream termini cross the wire.
+use std.task
+use std.stream
+
+public remote def ticks :: fun int -> stream int = fun n {
+	stream.from-seed 0 fun i {
+		if i < n {
+			task.return (some (i, i + 1))
+		} else {
+			task.return none
+		}
+	}
+}
+
+public remote def boom :: fun int -> stream int = fun n {
+	stream.from-seed 0 fun i {
+		if i < n {
+			task.return (some (i, i + 1))
+		} else {
+			task.fail "boom"
+		}
+	}
+}

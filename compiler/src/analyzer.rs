@@ -6863,25 +6863,50 @@ impl<'compiler> Analyzer<'compiler> {
 			return;
 		};
 
-		// The result is a `task` — a remote call is async, so `try` over it
-		// reads exactly like a local await.
+		// The result is a `task` (unary — `try` over it reads like a local await)
+		// or a `stream` (a server->client subscription). Either carries exactly one
+		// wire-derivable payload type.
 		let Type::Enum(ret_name, args) = ret.as_ref() else {
 			self.error(
 				range,
 				AnalysisErrorKind::RemoteDefSignature {
-					detail: "it must return a `task` (the call is async)".to_string(),
+					detail: "it must return a `task` (the call is async) or a `stream` (a subscription)"
+						.to_string(),
 				},
 			);
 			return;
 		};
-		if ret_name != "__prelude__.task" || args.len() != 1 {
+		let kind = if ret_name == "__prelude__.task" && args.len() == 1 {
+			crate::rpc::EndpointKind::Unary
+		} else if ret_name == "std.stream.stream" && args.len() == 1 {
+			crate::rpc::EndpointKind::Stream
+		} else {
 			self.error(
 				range,
 				AnalysisErrorKind::RemoteDefSignature {
-					detail: "it must return a `task` (the call is async)".to_string(),
+					detail: "it must return a `task` (the call is async) or a `stream` (a subscription)"
+						.to_string(),
 				},
 			);
 			return;
+		};
+
+		// Streaming *arguments* (a `stream A` parameter) aren't supported yet —
+		// they need a duplex transport (RPC.md §8). Reject with a clear message so
+		// the door is labelled rather than silently ajar.
+		for p in params.iter() {
+			if let Type::Enum(n, _) = p {
+				if n == "std.stream.stream" {
+					self.error(
+						range,
+						AnalysisErrorKind::RemoteDefSignature {
+							detail: "streaming arguments aren't supported yet (only `stream R` results are)"
+								.to_string(),
+						},
+					);
+					return;
+				}
+			}
 		}
 
 		// Every argument, plus the task's result, crosses the wire — so each
@@ -6924,10 +6949,11 @@ impl<'compiler> Analyzer<'compiler> {
 		} else {
 			WireShape::Tuple(arg_shapes)
 		};
-		let route_fp = crate::rpc::fingerprint_shapes(&arg_shape, &result_shape);
+		let route_fp = crate::rpc::fingerprint_shapes(kind, &arg_shape, &result_shape);
 		self.endpoint_meta.push(crate::rpc::RpcEndpointMeta {
 			module: self.module_name.clone().unwrap_or_default(),
 			name: name.to_string(),
+			kind,
 			arity: params.len(),
 			arg_shape,
 			result_shape,

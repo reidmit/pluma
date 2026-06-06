@@ -16,6 +16,7 @@ use std.dict
 use std.list
 use std.local
 use std.router
+use std.stream
 use std.string
 use std.task
 use std.rpc.context
@@ -68,16 +69,33 @@ public def status-error :: fun string int -> rpc-error = fun route status {
 # the transports are still ordinary hand-written Pluma, not compiler-synthesized.)
 public alias sender fun string bytes (dict string string) -> task bytes
 
+# A streaming transport: opens a server->client subscription, surfacing each
+# server-sent frame as one `bytes` element of a `stream`. End-of-stream and
+# faults ride the stream the same way `std.stream` defines them (drained = the
+# stream ends, a fault = a task failure on the puller). One per deploy target,
+# installed alongside the unary `sender`. The streaming half of `sender`.
+public alias stream-sender fun string bytes (dict string string) -> stream bytes
+
 # The ambient transport. A module ref: the active sender is configured once at
 # startup and held ambient, so call sites stay transport-free. `none` until
 # installed.
 def current :: ref (option sender) = ref.new none
+
+# The ambient streaming transport, the dual of `current` for `stream R`
+# endpoints. `none` until a target installs one.
+def current-stream :: ref (option stream-sender) = ref.new none
 
 # Installs the ambient transport. A target's transport module calls this from its
 # `install` (which the build runs before `main`); tests can call it to swap in a
 # different transport.
 public def configure :: fun sender -> nothing = fun f {
 	ref.set current (some f)
+}
+
+# Installs the ambient streaming transport (`stream R` endpoints). A target's
+# transport module installs this alongside `configure` from its `install`.
+public def configure-stream :: fun stream-sender -> nothing = fun f {
+	ref.set current-stream (some f)
 }
 
 # The server origin the client posts to (`<origin>/rpc/<route>`), baked at build
@@ -124,6 +142,21 @@ public def call-unary :: fun string string bytes -> task bytes = fun route fp bo
 		send route body (outbound fp)
 	} is none {
 		task.fail (rpc-error.transport "no rpc transport configured")
+	}
+}
+
+# Opens a subscription over the ambient streaming transport: the streaming dual
+# of `call-unary`. Attaches the route's fingerprint plus any `with-headers`
+# headers and hands back the frame stream; the synthesized client stub wraps this
+# with the per-frame wire decode for the endpoint's result type. If no streaming
+# transport is installed, a stream that faults on its first pull.
+public def call-stream :: fun string string bytes -> stream bytes = fun route fp body {
+	when ref.get current-stream is some send {
+		send route body (outbound fp)
+	} is none {
+		stream.from-seed 0 fun _n {
+			task.fail (rpc-error.transport "no rpc stream transport configured")
+		}
 	}
 }
 
@@ -195,7 +228,7 @@ public def respond :: fun http.request (fun nothing -> task bytes) -> task http.
 		local.with reject-status box fun {
 			try outcome = task.attempt (produce ())
 			when outcome is ok b {
-				task.return {status: 200, headers: dict.empty (), body: b}
+				task.return {status: 200, headers: dict.empty (), body: b, stream-body: none}
 			} is err _e {
 				when ref.get box is some status {
 					task.return (http.text status "")
@@ -206,6 +239,26 @@ public def respond :: fun http.request (fun nothing -> task bytes) -> task http.
 		}
 	}
 }
+
+# Runs one *streaming* endpoint invocation and shapes it into a streaming HTTP
+# response. The synthesized dispatcher hands us the request and a thunk that, when
+# run, calls the real handler and wire-encodes each element to bytes (a `stream
+# bytes`). We bind the request as ambient `context` and build the response inside
+# that binding, so the handler's *synchronous* context reads at stream
+# construction (e.g. an auth check that returns a fault stream) see it. v1 note:
+# the per-element pulls run later, when the server writes each frame, so an
+# *awaited* `context` read inside the producer is not bound -- a streaming
+# handler's rejection rides the stream's fault channel (a `fault` frame), not an
+# HTTP status, because the 200 head is already on the wire.
+public def respond-stream :: fun http.request (fun nothing -> stream bytes) -> task http.response = fun req produce {
+	context.with-request req fun {
+		let events = produce ()
+		task.return (http.stream-response 200 stream-headers events)
+	}
+}
+
+# The headers a streaming reply carries: it's an SSE event stream.
+def stream-headers :: dict string string = dict.from-entries [("content-type", "text/event-stream")]
 
 # The server-side RPC handler: routes a `/rpc/<route>` request to the matching
 # endpoint's real handler, guarding the per-route fingerprint and decoding /
@@ -316,6 +369,7 @@ def preflight :: fun http.request -> http.response = fun req {
 			("vary", "Origin"),
 		],
 		body: string.to-bytes "",
+		stream-body: none,
 	}
 }
 

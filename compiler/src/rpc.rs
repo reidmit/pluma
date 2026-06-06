@@ -14,6 +14,18 @@
 
 use crate::ast::WireShape;
 
+// What kind of remote call an endpoint is, decided by its return type:
+// `fun A.. -> task R` is a unary request/response, `fun A.. -> stream R` is a
+// server->client subscription. The kind drives both codegen (a transport stub vs
+// a stream stub on the client; `respond` vs `respond-stream` on the server) and
+// the fingerprint (so a unary client can't silently hit a stream route).
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub enum EndpointKind {
+	Unary,
+	Stream,
+}
+
 // One discovered `remote def`, with the resolved wire shapes the lowerer needs.
 #[derive(Clone)]
 #[cfg_attr(debug_assertions, derive(Debug))]
@@ -22,6 +34,8 @@ pub struct RpcEndpointMeta {
 	pub module: String,
 	// The def name (e.g. `add`).
 	pub name: String,
+	// Unary (`task R`) or stream (`stream R`).
+	pub kind: EndpointKind,
 	// Number of wire arguments (every parameter; there is no `request`).
 	pub arity: usize,
 	// The wire shape the arguments encode/decode as: the single parameter's
@@ -48,8 +62,18 @@ impl RpcEndpointMeta {
 // wire shapes. FNV-1a over a canonical rendering of each shape, masked to a
 // non-negative `int`. A client and server built from the same endpoint types
 // agree; a client built against drifted types does not.
-pub fn fingerprint_shapes(arg: &WireShape, result: &WireShape) -> String {
-	let line = format!("{}->{}", render_shape(arg), render_shape(result));
+pub fn fingerprint_shapes(kind: EndpointKind, arg: &WireShape, result: &WireShape) -> String {
+	// The kind is part of the surface: a `task R` and a `stream R` with the same
+	// shapes are different contracts, so they must fingerprint differently (a
+	// unary client must not silently bind to a stream route, or vice versa). A
+	// stream prefixes its line with `stream `; a unary keeps the bare shape line
+	// (so existing unary fingerprints are unchanged, and the two are disjoint
+	// because a rendered shape never begins with `stream `).
+	let prefix = match kind {
+		EndpointKind::Unary => "",
+		EndpointKind::Stream => "stream ",
+	};
+	let line = format!("{}{}->{}", prefix, render_shape(arg), render_shape(result));
 	let mut h: u64 = 0xcbf2_9ce4_8422_2325;
 	for b in line.bytes() {
 		h ^= b as u64;

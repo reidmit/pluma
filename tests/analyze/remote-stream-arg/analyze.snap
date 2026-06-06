@@ -1,0 +1,7 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: A `remote def` must be `fun request A.. -> task R`: streaming arguments aren't supported yet (only `stream R` results are).
+> 8 | public remote def feed :: fun (stream int) -> task int = fun _s {
+                        ^^^^

@@ -27,6 +27,8 @@ use std.string
 use std.bytes
 use std.dict
 use std.list
+use std.stream
+use std.hex
 
 # The HTTP method (verb). `other` carries any method name not listed
 # here, so unusual verbs still parse.
@@ -55,7 +57,18 @@ public alias request {
 # A reply. `status` is the numeric code (200, 404, ...); `body` is raw
 # bytes. `Content-Length` and `Connection` are added for you when the
 # response is sent, so you don't set them here.
-public alias response {status :: int, headers :: dict string string, body :: bytes}
+#
+# `stream-body` is `none` for an ordinary fixed reply. A streaming reply
+# (`stream-response`) carries `some s` instead: the server writes `s`'s
+# elements as a series of SSE-style events and closes the connection at the
+# end, so `body`/`Content-Length` are ignored. One stream per connection --
+# like the rest of this module, the socket closes when the reply is done.
+public alias response {
+	status :: int,
+	headers :: dict string string,
+	body :: bytes,
+	stream-body :: option (stream bytes),
+}
 
 # --- building responses --------------------------------------------------
 
@@ -68,6 +81,7 @@ public def text :: fun int string -> response = fun status body {
 		status,
 		headers: dict.from-entries [("content-type", "text/plain; charset=utf-8")],
 		body: string.to-bytes body,
+		stream-body: none,
 	}
 }
 
@@ -76,6 +90,17 @@ public def text :: fun int string -> response = fun status body {
 #     http.not-found ()
 public def not-found :: fun nothing -> response = fun {
 	text 404 "Not Found"
+}
+
+# A streaming response: the server writes each element of `events` as it is
+# pulled, then closes the connection. `events` is a `stream bytes` -- each
+# element is one message's payload bytes, framed as an SSE `next` event on the
+# wire (see `fetch-stream` for the reader). Use it for server->client
+# subscriptions; the RPC layer builds one of these for a `stream R` endpoint.
+#
+#     http.stream-response 200 (dict.from-entries [("content-type", "text/event-stream")]) events
+public def stream-response :: fun int (dict string string) (stream bytes) -> response = fun status headers events {
+	{status, headers, body: string.to-bytes "", stream-body: some events}
 }
 
 # --- the server ----------------------------------------------------------
@@ -183,8 +208,14 @@ def handle-one :: fun net.connection (fun request -> task response) -> task noth
 				body,
 			}
 			try resp = handler req
-			try _ = write-all conn (serialize resp)
-			finish conn
+			when resp.stream-body is some events {
+				try _ = write-all conn (serialize-stream-head resp)
+				try _ = write-events conn events
+				finish conn
+			} is none {
+				try _ = write-all conn (serialize resp)
+				finish conn
+			}
 		} is err _ {
 			finish conn
 		}
@@ -347,6 +378,49 @@ def serialize :: fun response -> bytes = fun resp {
 	bytes.concat (string.to-bytes head) resp.body
 }
 
+# --- streaming a response ----------------------------------------------------
+
+# The head of a streaming response: status line, the handler's headers, and
+# Connection: close, with NO Content-Length -- the body is a sequence of SSE
+# events and the closed connection marks the end. The events follow.
+def serialize-stream-head :: fun response -> bytes = fun resp {
+	let status-line = "HTTP/1.1 " ++ to-string resp.status ++ " " ++ status-text resp.status ++ "\r\n"
+	let header-lines = string.join (list.map (dict.entries resp.headers) render-header) ""
+	string.to-bytes (status-line ++ header-lines ++ "Connection: close\r\n\r\n")
+}
+
+# Drive `events` to its end, writing one SSE event per element, then a terminal
+# `done` event. A producer fault is reported as a `fault` event instead. A write
+# failure (the client hung up) fails the body, which cancels `for-each` and runs
+# the stream's shielded release -- so the producer's resource is freed on every
+# terminus (drain, fault, or disconnect). Never fails: the connection closes next
+# regardless.
+def write-events :: fun net.connection (stream bytes) -> task nothing = fun conn events {
+	try outcome = task.attempt (stream.for-each events fun chunk {
+		try _ = write-all conn (event-next chunk)
+		task.return ()
+	})
+	when outcome is ok _ {
+		try _ = write-all conn event-done
+		task.return ()
+	} is err _ {
+		try _ = write-all conn event-fault
+		task.return ()
+	}
+}
+
+# One `next` event: the element's bytes, hex-encoded onto the data line (binary
+# safe over the text framing). `\n\n` ends the event.
+def event-next :: fun bytes -> bytes = fun b {
+	string.to-bytes ("event: next\ndata: " ++ hex.encode b ++ "\n\n")
+}
+
+# The clean end-of-stream event.
+def event-done :: bytes = string.to-bytes "event: done\n\n"
+
+# The error end-of-stream event (the producer faulted). v1 carries no detail.
+def event-fault :: bytes = string.to-bytes "event: fault\n\n"
+
 def render-header :: fun (string, string) -> string = fun pair {
 	let (k, v) = pair
 	k ++ ": " ++ v ++ "\r\n"
@@ -449,7 +523,7 @@ def read-response :: fun net.connection -> task (result response string) = fun c
 		let parsed = parse-response-head raw
 		try body-r = read-body conn parsed.body-start parsed.content-length
 		when body-r is ok body {
-			task.return (ok {status: parsed.status, headers: parsed.headers, body})
+			task.return (ok {status: parsed.status, headers: parsed.headers, body, stream-body: none})
 		} is err e {
 			task.return (err e)
 		}
@@ -481,4 +555,121 @@ def parse-response-head :: fun bytes -> {
 		0
 	}
 	{status, headers, content-length: clen, body-start}
+}
+
+# --- the streaming client ------------------------------------------------
+
+# Opens a streaming request and reads the reply as a `stream bytes`: one element
+# per server SSE event (the dual of `stream-response`). `open` connects, sends
+# the request, and consumes the status line + headers; each `next` reads until a
+# whole `\n\n`-framed event is buffered and yields its payload (`done`/connection
+# close ends the stream, `fault` fails the task); `close` shuts the connection.
+# Because it's a `from-resource` stream, the connection is released on every
+# terminus -- drained, faulted, or cancelled (the consumer stopping early).
+#
+#     try _ = stream.for-each
+#         (http.fetch-stream "http://127.0.0.1:8080/rpc/api.ticks" post hdrs body)
+#         (fun frame { io.print (hex.encode frame); task.return () })
+public def fetch-stream :: fun string method (dict string string) bytes -> stream bytes = fun url verb headers body {
+	stream.from-resource {
+		open: fun {
+			let split = split-url url
+			try c = net.connect split.0
+			when c is ok conn {
+				try _ = write-all conn (serialize-request verb split.1 split.0 headers body)
+				try raw-r = read-until-headers conn (string.to-bytes "")
+				when raw-r is ok raw {
+					let parsed = parse-response-head raw
+					if parsed.status == 200 {
+						task.return (conn, ref.new parsed.body-start)
+					} else {
+						let _ = net.close conn
+						task.fail ("http.fetch-stream: status " ++ to-string parsed.status)
+					}
+				} is err e {
+					let _ = net.close conn
+					task.fail e
+				}
+			} is err e {
+				task.fail e
+			}
+		},
+		next: fun res {
+			let (conn, buf) = res
+			read-event conn buf
+		},
+		close: fun res {
+			let (conn, _buf) = res
+			let _ = net.close conn
+			task.return ()
+		},
+	}
+}
+
+# The SSE event separator: a blank line.
+def nlnl :: bytes = string.to-bytes "\n\n"
+
+# Pull one event out of `buf` (the leftover bytes between reads), reading more
+# from `conn` until a whole event is buffered. `none` once the stream ends (a
+# `done` event or the peer closing); a task failure on a `fault` event or a read
+# error. Decoded payload bytes on a `next` event.
+def read-event :: fun net.connection (ref bytes) -> task (option bytes) = fun conn buf {
+	when split-event (ref.get buf) is some pair {
+		ref.set buf pair.1
+		parse-event pair.0
+	} is none {
+		try r = net.read conn 4096
+		when r is ok chunk {
+			if bytes.is-empty chunk {
+				task.return none
+			} else {
+				ref.set buf (bytes.concat (ref.get buf) chunk)
+				read-event conn buf
+			}
+		} is err e {
+			task.fail e
+		}
+	}
+}
+
+# Split off the first `\n\n`-terminated event, returning `(event, rest)`, or
+# `none` if no complete event is buffered yet.
+def split-event :: fun bytes -> option (bytes, bytes) = fun buf {
+	if bytes.contains buf nlnl {
+		let parts = bytes.split buf nlnl
+		let ev = list.head parts ?? string.to-bytes ""
+		let rest = bytes.join (list.drop parts 1) nlnl
+		some (ev, rest)
+	} else {
+		none
+	}
+}
+
+# Interpret one event's text: `next` yields its hex-decoded payload, `done` (and
+# anything unrecognised) ends the stream, `fault` fails the task.
+def parse-event :: fun bytes -> task (option bytes) = fun ev {
+	let lines = string.split (bytes.to-string ev ?? "") "\n"
+	let kind = line-after lines "event: "
+	if kind == "next" {
+		when hex.decode (line-after lines "data: ") is ok b {
+			task.return (some b)
+		} is err _ {
+			task.fail "http.fetch-stream: malformed frame"
+		}
+	} else if kind == "fault" {
+		task.fail "http.fetch-stream: stream faulted"
+	} else {
+		task.return none
+	}
+}
+
+# The text after the first line starting with `prefix`, or `""` if none.
+def line-after :: fun (list string) string -> string = fun lines prefix {
+	list.fold lines "" fun acc line {
+		if string.starts-with line prefix {
+			string.drop line (string.length prefix)
+		} else {
+			acc
+		}
+	}
 }

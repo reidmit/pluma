@@ -1,0 +1,116 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/remote-stream/main.pa) {
+    comments: {
+        3: " A `remote def` may return a `stream R` -- a server->client subscription -- as",
+        4: " well as a `task R`. The result type and every argument must still be",
+        5: " wire-derivable. This one is accepted.",
+    },
+    ast: Some(
+        module(0:0-14:1) [
+            use(0:0-0:12) `std.task`,
+            use(1:0-1:14) `std.stream`,
+        ] [
+            public remote def(6:0-14:1) :: nothing {
+                name: ident(6:18-6:23) `ticks`,
+                kind: expr(6:51-14:1) :: int -> stream int {
+                    kind: fun(6:51-14:1) {
+                        params: [
+                            ident(6:55-6:56) `n` :: int,
+                        ],
+                        body: [
+                            expr(7:1-13:2) :: stream int {
+                                kind: call(7:1-13:2) {
+                                    callee: expr(7:1-7:17) :: 'a ('a -> task (option (('b, 'a)))) -> stream 'b {
+                                        kind: namespace-access `stream.from-seed`,
+                                    },
+                                    args: [
+                                        expr(7:18-7:19) :: int {
+                                            kind: literal(7:18-7:19) int 0,
+                                        },
+                                        expr(7:20-13:2) :: int -> task (option ((int, int))) {
+                                            kind: fun(7:20-13:2) {
+                                                params: [
+                                                    ident(7:24-7:25) `i` :: int,
+                                                ],
+                                                body: [
+                                                    expr(8:2-12:3) :: task (option ((int, int))) {
+                                                        kind: if(8:2-12:3) expr(8:5-8:10) :: bool {
+                                                            kind: binary op(8:7-8:8) `<` {
+                                                                left: expr(8:5-8:6) :: int {
+                                                                    kind: ident(8:5-8:6) `i`,
+                                                                },
+                                                                right: expr(8:9-8:10) :: int {
+                                                                    kind: ident(8:9-8:10) `n`,
+                                                                },
+                                                            },
+                                                        } pattern(8:5-8:10) Literal(
+                                                            literal(8:5-8:10) bool true,
+                                                        ) [
+                                                            expr(9:3-9:32) :: task (option ((int, int))) {
+                                                                kind: call(9:3-9:32) {
+                                                                    callee: expr(9:3-9:14) :: 'a -> task 'a {
+                                                                        kind: namespace-access `task.return`,
+                                                                    },
+                                                                    args: [
+                                                                        expr(9:15-9:32) :: option ((int, int)) {
+                                                                            kind: expr(9:16-9:31) :: option ((int, int)) {
+                                                                                kind: call(9:16-9:31) {
+                                                                                    callee: expr(9:16-9:20) :: 'a -> option 'a {
+                                                                                        kind: ident(9:16-9:20) `some`,
+                                                                                    },
+                                                                                    args: [
+                                                                                        expr(9:21-9:31) :: (int, int) {
+                                                                                            kind: tuple [
+                                                                                                expr(9:22-9:23) :: int {
+                                                                                                    kind: ident(9:22-9:23) `i`,
+                                                                                                },
+                                                                                                expr(9:25-9:30) :: int {
+                                                                                                    kind: binary op(9:27-9:28) `+` {
+                                                                                                        left: expr(9:25-9:26) :: int {
+                                                                                                            kind: ident(9:25-9:26) `i`,
+                                                                                                        },
+                                                                                                        right: expr(9:29-9:30) :: int {
+                                                                                                            kind: literal(9:29-9:30) int 1,
+                                                                                                        },
+                                                                                                    },
+                                                                                                },
+                                                                                            ],
+                                                                                        },
+                                                                                    ],
+                                                                                },
+                                                                            },
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            },
+                                                        ] else [
+                                                            expr(11:3-11:19) :: task (option ((int, int))) {
+                                                                kind: call(11:3-11:19) {
+                                                                    callee: expr(11:3-11:14) :: 'a -> task 'a {
+                                                                        kind: namespace-access `task.return`,
+                                                                    },
+                                                                    args: [
+                                                                        expr(11:15-11:19) :: option 'a {
+                                                                            kind: ident(11:15-11:19) `none`,
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            },
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

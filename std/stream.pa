@@ -155,6 +155,26 @@ public def map :: fun (stream a) (fun a -> b) -> stream b = fun s f {
 	}
 }
 
+# Applies the async `f` to every element as it is pulled, awaiting its task. Like
+# `map`, but `f` does real async work per element and a `task.fail` inside it
+# faults the stream (the failure rides the pull's task, surfacing on whoever is
+# consuming). Shares the source's release. The remote-stream client uses this to
+# wire-decode each frame, so a malformed frame faults the subscription.
+public def map-task :: fun (stream a) (fun a -> task b) -> stream b = fun s f {
+	when s is stream.stream pull stop {
+		let mapped = fun {
+			try out = pull ()
+			when out is some x {
+				try y = f x
+				task.return (some y)
+			} is none {
+				task.return none
+			}
+		}
+		stream.stream mapped stop
+	}
+}
+
 # Keeps only the elements satisfying `keep`, pulling past the rejected ones. Lazy.
 public def filter :: fun (stream a) (fun a -> bool) -> stream a = fun s keep {
 	when s is stream.stream pull stop {

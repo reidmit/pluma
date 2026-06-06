@@ -444,23 +444,38 @@ impl<'a> Lowerer<'a> {
 			self.emit_let(Rvalue::CallClosure(enc, vec![schema, value]), SYNTHETIC)
 		};
 
-		// rpc.call-unary "<route>" "<fp>" body  →  task bytes
-		let call_unary = self.rpc_global("std.rpc", "call-unary", SYNTHETIC)?;
-		let task_bytes = self.emit_let(
-			Rvalue::CallClosure(
-				call_unary,
-				vec![
-					Atom::Const(Const::Str(ep.route())),
-					Atom::Const(Const::Str(ep.route_fp.clone())),
-					body_bytes,
-				],
-			),
-			SYNTHETIC,
-		);
-
-		// task.then over the decode callback (which itself returns a task).
+		// The decode callback `fun b { rpc.lift (wire.decode <rs> b) }` (`fun bytes
+		// -> task R`) is shared by both kinds — unary threads it through
+		// `task.then`, a stream maps it over every frame with `stream.map-task` (a
+		// decode failure faults that arm the same way it fails a unary call).
+		let route = Atom::Const(Const::Str(ep.route()));
+		let fp = Atom::Const(Const::Str(ep.route_fp.clone()));
 		let decode_cb = self.synthesize_decode_closure(&ep.result_shape)?;
-		let result = self.task_combinator("then", task_bytes, decode_cb)?;
+		let result = match ep.kind {
+			compiler::rpc::EndpointKind::Unary => {
+				// rpc.call-unary "<route>" "<fp>" body  →  task bytes
+				let call_unary = self.rpc_global("std.rpc", "call-unary", SYNTHETIC)?;
+				let task_bytes = self.emit_let(
+					Rvalue::CallClosure(call_unary, vec![route, fp, body_bytes]),
+					SYNTHETIC,
+				);
+				self.task_combinator("then", task_bytes, decode_cb)?
+			}
+			compiler::rpc::EndpointKind::Stream => {
+				// rpc.call-stream "<route>" "<fp>" body  →  stream bytes
+				let call_stream = self.rpc_global("std.rpc", "call-stream", SYNTHETIC)?;
+				let frames = self.emit_let(
+					Rvalue::CallClosure(call_stream, vec![route, fp, body_bytes]),
+					SYNTHETIC,
+				);
+				// stream.map-task frames decode-cb  →  stream R
+				let map_task = self.rpc_global("std.stream", "map-task", SYNTHETIC)?;
+				self.emit_let(
+					Rvalue::CallClosure(map_task, vec![frames, decode_cb]),
+					SYNTHETIC,
+				)
+			}
+		};
 		self.push_stmt(StmtKind::Return(result), SYNTHETIC);
 
 		let scope = self.scopes.pop().unwrap();
@@ -737,9 +752,18 @@ impl<'a> Lowerer<'a> {
 		} else {
 			arg_atoms
 		};
-		let task = self.emit_let(Rvalue::CallClosure(handler, call_args), SYNTHETIC);
+		let produced = self.emit_let(Rvalue::CallClosure(handler, call_args), SYNTHETIC);
 		let enc = self.synthesize_encode_bytes_closure(&ep.result_shape)?;
-		let mapped = self.task_combinator("map", task, enc)?;
+		// Encode the handler's result to bytes: a unary `task R` maps through
+		// `task.map` (→ task bytes); a `stream R` maps through `stream.map`
+		// (→ stream bytes). `respond` / `respond-stream` consume the matching shape.
+		let mapped = match ep.kind {
+			compiler::rpc::EndpointKind::Unary => self.task_combinator("map", produced, enc)?,
+			compiler::rpc::EndpointKind::Stream => {
+				let smap = self.rpc_global("std.stream", "map", SYNTHETIC)?;
+				self.emit_let(Rvalue::CallClosure(smap, vec![produced, enc]), SYNTHETIC)
+			}
+		};
 		self.push_stmt(StmtKind::Return(mapped), SYNTHETIC);
 		let scope = self.scopes.pop().unwrap();
 		let capture_atoms: Vec<Atom> = scope
@@ -763,7 +787,14 @@ impl<'a> Lowerer<'a> {
 		args: &[VarId],
 	) -> Result<(), String> {
 		let thunk = self.synthesize_invoke_thunk(ep, args)?;
-		let respond = self.rpc_global("std.rpc", "respond", SYNTHETIC)?;
+		// Unary endpoints shape a `task bytes` into a 200; streams shape a `stream
+		// bytes` into a streaming (SSE) 200. Both bind the request as ambient
+		// `context` before running the thunk.
+		let respond_name = match ep.kind {
+			compiler::rpc::EndpointKind::Unary => "respond",
+			compiler::rpc::EndpointKind::Stream => "respond-stream",
+		};
+		let respond = self.rpc_global("std.rpc", respond_name, SYNTHETIC)?;
 		let resp = self.emit_let(
 			Rvalue::CallClosure(respond, vec![req.clone(), thunk]),
 			SYNTHETIC,
