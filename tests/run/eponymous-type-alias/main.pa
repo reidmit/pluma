@@ -1,0 +1,15 @@
+use shapes.circle as disk
+
+# The eponymous type rides the *alias*: `disk` is both the module namespace
+# and the bare type, even though the enum is named `circle`.
+def radius-of :: fun disk -> float = fun d {
+	when d is disk.radius r {
+		r
+	}
+}
+
+def main = fun {
+	let d = disk.radius 2.0
+	print (radius-of d)
+	print (disk.area d)
+}

@@ -1,0 +1,25 @@
+# A module whose principal export — the enum `circle` — is named like the
+# module itself. `use shapes.circle` brings `circle` into scope as a bare
+# type (the eponymous-type rule), so callers write `circle`, not `circle.circle`.
+
+public enum circle {
+	radius float
+}
+
+public def area :: fun circle -> float = fun c {
+	when c is circle.radius r {
+		3.14 * r * r
+	}
+}
+
+public def bigger :: fun circle circle -> circle = fun a b {
+	when a is circle.radius ar {
+		when b is circle.radius br {
+			if ar > br {
+				a
+			} else {
+				b
+			}
+		}
+	}
+}

@@ -1,0 +1,18 @@
+use shapes.circle
+
+# A local enum named `circle` shadows the imported eponymous type. The local
+# declaration wins (it's seeded after the import), so `circle` is the local
+# enum here and `circle.unit` resolves to it — not `shapes.circle.circle`.
+enum circle {
+	unit
+}
+
+def describe :: fun circle -> string = fun c {
+	when c is circle.unit {
+		"the local unit circle"
+	}
+}
+
+def main = fun {
+	print (describe circle.unit)
+}

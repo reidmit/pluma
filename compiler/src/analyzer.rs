@@ -581,7 +581,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// exhaustiveness checks can see them. Exported variant params reference
 		// canonical Var ids `0..param_count-1`; we mint fresh local vars and
 		// substitute so the imported enum lives in our own var namespace.
-		let imported_enums: Vec<(String, String, EnumExport)> = self
+		let imported_enums: Vec<(String, String, String, EnumExport)> = self
 			.imports
 			.iter()
 			.flat_map(|(local_name, exports)| {
@@ -590,8 +590,10 @@ impl<'compiler> Analyzer<'compiler> {
 					.get(local_name)
 					.cloned()
 					.unwrap_or_else(|| local_name.clone());
+				let local_name = local_name.clone();
 				exports.enums.iter().map(move |(enum_name, enum_export)| {
 					(
+						local_name.clone(),
 						qualified_module.clone(),
 						enum_name.clone(),
 						enum_export.clone(),
@@ -599,7 +601,7 @@ impl<'compiler> Analyzer<'compiler> {
 				})
 			})
 			.collect();
-		for (qualified_module, enum_name, enum_export) in imported_enums {
+		for (local_name, qualified_module, enum_name, enum_export) in imported_enums {
 			let qualified = format!("{}.{}", qualified_module, enum_name);
 			let fresh_param_vars: Vec<usize> = (0..enum_export.param_count)
 				.map(|_| {
@@ -632,6 +634,26 @@ impl<'compiler> Analyzer<'compiler> {
 					.entry(variant_name.clone())
 					.or_default()
 					.push((qualified.clone(), variant_name.clone()));
+			}
+			// Eponymous-type rule: when an enum is its module's principal type
+			// — named like the module's last path segment — bind it bare under
+			// the local import name, so `use geometry.point` lets you write
+			// `point` in a type position instead of `point.point`. Variant and
+			// method access (`point.cartesian`, `point.distance`) still go
+			// through the module via the existing module/enum overlap path. A
+			// prelude or local declaration of the same name overrides this (both
+			// are seeded after this loop), so it never shadows a built-in type.
+			let eponym = qualified_module
+				.rsplit('.')
+				.next()
+				.unwrap_or(qualified_module.as_str());
+			if enum_name == eponym {
+				let template_args: Vec<Type> = fresh_param_vars.iter().map(|v| Type::Var(*v)).collect();
+				self.add_type_binding(
+					local_name.clone(),
+					Type::Enum(qualified.clone(), template_args),
+					Range::collapsed(0, 0),
+				);
 			}
 			self.enum_defs.insert(
 				qualified,
@@ -3371,9 +3393,12 @@ impl<'compiler> Analyzer<'compiler> {
 				// is a bare ident that matches an imported module, look up
 				// the field in that module's exported values. If the module
 				// doesn't have the field and the same ident is also a known
-				// enum (e.g. the auto-imported `option` module overlapping
-				// with the prelude `option` enum), fall through to the local
-				// variant-access case below.
+				// enum, fall through to the local variant-access case below.
+				// This is the general module/type-name overlap: any name that's
+				// both an imported module and an in-scope enum — the eponymous
+				// type of an imported module (`use shapes.circle` → `circle`),
+				// or the auto-imported `option`/`result` modules over the prelude
+				// `option`/`result` enums.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					if let Some(exports) = self.imports.get(&ident.name).cloned() {
 						// `pluma dev` hot-reload: redirect `app.sandbox`/`app.element` to the

@@ -1,0 +1,17 @@
+use shapes.circle
+
+# `circle` used bare in type positions — no `circle.circle` stutter.
+def describe :: fun circle -> string = fun c {
+	when c is circle.radius r {
+		"circle r=$(to-string r)"
+	}
+}
+
+def main = fun {
+	let small = circle.radius 1.0
+	let big = circle.radius 5.0
+	# bare type annotation, construction, matching, and module functions
+	print (describe small)
+	print (circle.area big)
+	print (describe (circle.bigger small big))
+}

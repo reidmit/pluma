@@ -1329,22 +1329,37 @@ impl<'a> Lowerer<'a> {
 					}
 					return Err(format!("`{}.{}` not found", head.name, tail.name));
 				}
-				// `module.value`.
+				// `module.value` — an imported function/value (e.g. `point.distance`).
 				if let Some(qualified_module) = self.imports.get(&head.name).cloned() {
 					if let Some(g) = self.globals.lookup(&qualified_module, &tail.name) {
 						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
 					}
 				}
-				// `Enum.variant` for a local-module enum, or a prelude enum
-				// (`option`/`result`/`ordering`/…) which is in scope unqualified
-				// — so `ordering.gt` resolves the same way a local `color.red`
-				// does. (The analyzer reshaped both to this 2-segment form.)
+				// `Enum.variant` where `head` is an enum in scope unqualified: a
+				// local-module enum (`color.red`), a prelude enum (`ordering.gt`),
+				// or the eponymous enum of an imported module (`point.cartesian`,
+				// where `use geometry.point` binds `point` to `geometry.point.point`
+				// — named after the module's last segment, so an alias still works).
+				// Tried in the analyzer's type-scope precedence: a local or prelude
+				// declaration shadows the import. Each candidate falls through if it
+				// lacks the variant, so a shadowed name still resolves.
 				let current = self.current_module.clone();
-				for owner in [current.as_str(), "__prelude__"] {
-					let qualified_enum = format!("{}.{}", owner, head.name);
+				let mut candidates = vec![
+					format!("{}.{}", current, head.name),
+					format!("__prelude__.{}", head.name),
+				];
+				if let Some(qualified_module) = self.imports.get(&head.name) {
+					let eponym = qualified_module
+						.rsplit('.')
+						.next()
+						.unwrap_or(qualified_module);
+					candidates.push(format!("{}.{}", qualified_module, eponym));
+				}
+				for qualified_enum in candidates {
 					if self.enums.contains_key(&qualified_enum) {
-						let arity = self.variant_arity(&qualified_enum, &tail.name)?;
-						return self.make_variant_ref(&qualified_enum, &tail.name, arity, range);
+						if let Ok(arity) = self.variant_arity(&qualified_enum, &tail.name) {
+							return self.make_variant_ref(&qualified_enum, &tail.name, arity, range);
+						}
 					}
 				}
 				Err(format!(

@@ -87,6 +87,20 @@ when c is colors.color.red {
 }
 ```
 
+## A module and its principal type
+
+It's common for a module to be named after the one type it's built around — `shapes.circle` exporting a `circle`, the way `std.task` is the home of `task`. To avoid `circle.circle` stutter, the **eponymous type** — an enum named like the module's last path segment — is brought into scope *bare* when you `use` the module:
+
+```pluma
+use shapes.circle
+
+def grow :: fun circle -> circle = …   # bare `circle` in a type position
+let c = circle.radius 1.0              # `circle.variant` still constructs
+def a = circle.area c                  # `circle.fn` is still the module function
+```
+
+The one name plays both roles, disambiguated by syntax: `circle` in a type position is the type; `circle.x` is a variant or a module member. Under an alias the type rides the alias (`use shapes.circle as disk` makes `disk` the bare type). A local declaration or a prelude type of the same name wins, so this never shadows a built-in. (The prelude's `option`/`result` are the same overlap — a bare type plus an auto-imported module of helpers.)
+
 ## Cycles
 
 Imports are cycle-checked. A diagnostic is emitted if module `A`'s import graph eventually reaches itself.

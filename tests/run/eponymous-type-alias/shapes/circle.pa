@@ -1,0 +1,10 @@
+# Same eponymous module as `eponymous-type`, imported under an alias here.
+public enum circle {
+	radius float
+}
+
+public def area :: fun circle -> float = fun c {
+	when c is circle.radius r {
+		3.14 * r * r
+	}
+}
