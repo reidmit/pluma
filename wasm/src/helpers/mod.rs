@@ -847,6 +847,18 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		build: |c| task::build_spawn_command_fn(c.dep(H::ListAppend), c.rt.taskg),
 	},
 	HelperDef {
+		id: H::SpawnSub,
+		fn_type: Ty::Helper(1),
+		deps: &[H::ListAppend],
+		build: |c| task::build_spawn_sub_fn(c.dep(H::ListAppend), c.rt.taskg),
+	},
+	HelperDef {
+		id: H::CancelSub,
+		fn_type: Ty::Helper(1),
+		deps: &[H::ListAppend],
+		build: |c| task::build_cancel_sub_fn(c.dep(H::ListAppend), c.rt.taskg),
+	},
+	HelperDef {
 		id: H::LocalGet,
 		fn_type: Ty::Helper(1),
 		deps: &[],
@@ -949,6 +961,11 @@ pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 		// The MVU command spawn primitive (`std.web.app`): inject a `task msg` into the
 		// browser scheduler as a root-scoped fiber.
 		"spawn-command" => H::SpawnCommand,
+		// Keyed MVU subscriptions (`std.web.app`): spawn a stream driver in its own
+		// detached scope (`spawn-sub`) so a single sub can later be torn down
+		// (`cancel-sub`) — `spawn-command` is root-scoped and uncancellable.
+		"spawn-sub" => H::SpawnSub,
+		"cancel-sub" => H::CancelSub,
 		// Higher-order builders: synthetic wasm helpers (loop + closure call).
 		"list-build" => H::ListBuild,
 		"list-collect" => H::ListCollect,

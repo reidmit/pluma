@@ -704,6 +704,99 @@ pub(crate) fn build_spawn_command_fn(list_append: u32, g: TaskGlobals) -> Functi
 	w.finish()
 }
 
+/// `__spawn_sub(task) -> sid (boxed int)`: start `task` (a `task nothing` driving
+/// an MVU subscription's stream) as the body of a fresh detached, non-manual scope
+/// and return that scope id. Unlike `spawn-command` (root-scoped, uncancellable),
+/// each subscription gets its own scope so `cancel-sub` can reap exactly one
+/// stream. Mirrors `__start_scope` minus the parent await (the task is
+/// fire-and-forget) and the body-fn indirection (the task is already built).
+pub(crate) fn build_spawn_sub_fn(list_append: u32, g: TaskGlobals) -> Function {
+	let mut w = Wat::new(1);
+	let task = w.param(0);
+	let sid = w.local(ValType::I32);
+	let bf = w.local(ValType::I32);
+	let cur = w.local(ValType::I32);
+
+	// sid = |scopes|. scopes.append(new scope { manual=0, awaiter=NONE, body patched below }).
+	list_len(&mut w, g.scopes);
+	w.local_set(sid);
+	w.global_get(g.scopes);
+	w.i32(types::TAG_TUPLE);
+	scope_fields(
+		&mut w,
+		|w| {
+			w.i32(0);
+		},
+		|w| {
+			w.i32(0);
+		},
+		|w| {
+			w.i32(NO_AWAITER as i32);
+		},
+	);
+	w.struct_new(types::T_TUPLE);
+	w.call(list_append).global_set(g.scopes);
+
+	// bf = |fibers|. Append the body fiber (scope = runs_scope = sid), patch BODY.
+	list_len(&mut w, g.fibers);
+	w.local_set(bf);
+	w.global_get(g.fibers);
+	w.i32(types::TAG_TUPLE);
+	fiber_fields(
+		&mut w,
+		|w| {
+			w.local_get(sid);
+		},
+		|w| {
+			w.local_get(sid);
+		},
+	);
+	w.struct_new(types::T_TUPLE);
+	w.call(list_append).global_set(g.fibers);
+	set_fld_i(&mut w, g.scopes, sid, scope::BODY, |w| {
+		w.local_get(bf);
+	});
+
+	// Inherit the spawning context's binding env (empty at the root dispatch site).
+	w.global_get(g.current_fiber).local_set(cur);
+	set_fld(&mut w, g.fibers, bf, fiber::ENV, |w| {
+		fld(w, g, g.fibers, cur, fiber::ENV);
+	});
+
+	// ready.append((bf, Start, task)).
+	ready_push(&mut w, g, list_append, bf, focus::START, |w| {
+		w.local_get(task);
+	});
+
+	// Return the scope id as a *Pluma* `int` (i31-aware): it crosses the builtin
+	// boundary into user code (a dict value, a `let`), where ints ride as `i31ref`
+	// immediates — unlike the scheduler's internal type-2 `$int` ids. `cancel-sub`
+	// unboxes it back the same way.
+	w.local_get(sid).i64_extend_i32_s();
+	w.box_int();
+	w.finish()
+}
+
+/// `__cancel_sub(sid) -> nothing`: `cancel-sub` — queue subscription scope `sid`
+/// for cancellation, performed between scheduler steps (so the stream driver's
+/// `defer`s — its shielded `release` → `channel-close` — run there). The 1-arg
+/// sibling of `__sched_cancel` (which takes the unused second `nothing` arg of
+/// `scope-handle.cancel`).
+pub(crate) fn build_cancel_sub_fn(list_append: u32, g: TaskGlobals) -> Function {
+	let mut w = Wat::new(1);
+	let sid = w.param(0);
+	// `sid` is a Pluma `int` (i31-aware) handed back by `spawn-sub`; unbox it that
+	// way, then re-box as the scheduler's internal type-2 `$int` that the pending
+	// queue + cancel-drain expect (`__sched_cancel` boxes the same way).
+	w.global_get(g.pending);
+	box_i(&mut w, |w| {
+		w.local_get(sid).unbox_int().i32_wrap_i64();
+	});
+	w.call(list_append).global_set(g.pending);
+	push_nothing(&mut w);
+	w.finish()
+}
+
 // ==========================================================================
 // Task-local bindings (`std.local`).
 //

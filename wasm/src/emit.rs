@@ -1494,6 +1494,8 @@ impl<'a> FnEmitter<'a> {
 			|| tag == "bytes-build"
 			|| tag == "list-push"
 			|| tag == "spawn-command"
+			|| tag == "spawn-sub"
+			|| tag == "cancel-sub"
 			|| tag == "rpc-stream-open"
 			|| tag == "rpc-stream-close"
 		{
@@ -1502,6 +1504,8 @@ impl<'a> FnEmitter<'a> {
 				"list-collect" => self.runtime.idx(Helper::ListCollect),
 				"list-push" => self.runtime.idx(Helper::ListPush),
 				"spawn-command" => self.runtime.idx(Helper::SpawnCommand),
+				"spawn-sub" => self.runtime.idx(Helper::SpawnSub),
+				"cancel-sub" => self.runtime.idx(Helper::CancelSub),
 				// `std.web.stream`: open mints a channel + starts the host `fetch`; close
 				// aborts it. Both build a Pure `$task` (the scheduler runs it later).
 				"rpc-stream-open" => self.runtime.idx(Helper::RpcStreamOpen),

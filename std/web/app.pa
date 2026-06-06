@@ -31,7 +31,9 @@
 use std.web.html
 use std.web.dom
 use std.list
+use std.dict
 use std.task
+use std.stream
 use std.hex
 
 # The runtime's parallel tree: each node mirrors a `html.html` node but also
@@ -416,8 +418,105 @@ def run-commands :: fun (list (task msg)) (fun msg -> nothing) -> nothing = fun 
 # Returns the app's driver task (the program is async; the browser runtime drives
 # it). Commands run on the structured-concurrency scheduler.
 #
+# Exactly `application` with no subscriptions -- the thin no-subs door over the
+# same runtime, mirroring how `sandbox` is `element` with no commands. For
+# server-push feeds, timers-as-streams, or anything long-lived, reach for
+# `application`.
+#
 #     def main = app.element init update view
 public def element :: fun (model, list (task msg)) (fun msg model -> (model, list (task msg))) (fun model -> html.html msg) -> task nothing = fun init update view {
+	application init update (fun _m {
+		[]
+	}) view
+}
+
+# --- app.application: MVU with long-lived subscriptions ----------------------
+
+# A `sub msg` is a *keyed* long-lived subscription: a `stream` whose every
+# element is turned into a `msg` and fed into `update`, running until the model
+# stops asking for it. Unlike a command (a one-shot `task msg`), a subscription
+# persists across messages -- a server-push feed, a ticking clock, a websocket.
+#
+# The element type `a` is erased at construction: a `sub` stores only its key and
+# a *driver* `fun (fun msg -> nothing) -> task nothing` that closes over the
+# stream and the `a -> msg` mapper (the only place they meet), so `a` never
+# escapes and a `list (sub msg)` can mix subscriptions over different element
+# types without existentials.
+opaque enum sub msg {
+	sub string (fun (fun msg -> nothing) -> task nothing)
+}
+
+# The subscription primitive. `key` identifies the sub across re-renders: the
+# runtime keeps a sub with an unchanged key *running* (it isn't restarted every
+# message), starts one whose key newly appears, and cancels one whose key
+# vanishes. `stream` is the source; `f` maps each element to a message.
+public def subscribe :: fun string (stream a) (fun a -> msg) -> sub msg = fun key source f {
+	sub.sub key fun dispatch {
+		stream.for-each source fun x {
+			let _ignored = dispatch (f x)
+			task.return ()
+		}
+	}
+}
+
+def sub-key :: fun (sub msg) -> string = fun s {
+	when s is sub.sub k _driver {
+		k
+	}
+}
+
+def sub-driver :: fun (sub msg) -> (fun (fun msg -> nothing) -> task nothing) = fun s {
+	when s is sub.sub _k d {
+		d
+	}
+}
+
+# Spawn a subscription's driver in its own cancellable scope, returning the scope
+# id; `cancel-sub` later tears down exactly that one (running its stream's shielded
+# release). `spawn-command` is root-scoped and uncancellable, so subs can't use it.
+def spawn-sub :: fun (task nothing) -> int = built-in "spawn-sub"
+def cancel-sub :: fun int -> nothing = built-in "cancel-sub"
+
+# Reconcile the running subscriptions against the model's wanted set, keyed by
+# `sub-key`: a key already running is left alone (the whole point of keys), a new
+# key is spawned, a vanished key is cancelled. `running` maps each live key to its
+# subscription scope id; it's rewritten in place to the new wanted set.
+def reconcile-subs :: fun (ref (dict string int)) (list (sub msg)) (fun msg -> nothing) -> nothing = fun running wanted dispatch {
+	let prev = ref.get running
+	let next = ref.new (dict.empty ())
+	# Keep or spawn every wanted sub; first wins on a duplicate key (no double spawn).
+	list.each wanted fun s {
+		let key = sub-key s
+		when (dict.lookup (ref.get next) key) is some _dup {
+			()
+		} is none {
+			when (dict.lookup prev key) is some sid {
+				ref.set next (dict.insert (ref.get next) key sid)
+			} is none {
+				let sid = spawn-sub ((sub-driver s) dispatch)
+				ref.set next (dict.insert (ref.get next) key sid)
+			}
+		}
+	}
+	# Cancel every previously-running key that's no longer wanted.
+	list.each (dict.entries prev) fun e {
+		let (key, sid) = e
+		when (dict.lookup (ref.get next) key) is some _kept {
+			()
+		} is none {
+			cancel-sub sid
+		}
+	}
+	ref.set running (ref.get next)
+}
+
+# Mount a full MVU app *with subscriptions*. Like `element`, plus a
+# `subscriptions :: fun model -> list (sub msg)` consulted after every update:
+# the returned subs are reconciled by key (started/kept/cancelled) so the live
+# set always tracks the model. `element` is exactly this with no subscriptions.
+#
+#     def main = app.application init update subscriptions view
+public def application :: fun (model, list (task msg)) (fun msg model -> (model, list (task msg))) (fun model -> list (sub msg)) (fun model -> html.html msg) -> task nothing = fun init update subscriptions view {
 	let (init-model, init-cmds) = init
 	let model = ref.new init-model
 	let root = dom.body ()
@@ -425,19 +524,19 @@ public def element :: fun (model, list (task msg)) (fun msg model -> (model, lis
 		()
 	}
 	let tree = ref.new (render (view init-model) box)
+	let subs = ref.new (dict.empty ())
 	let dispatch = fun m {
 		let (next, cmds) = update m (ref.get model)
 		ref.set model next
 		let new-tree = diff root (ref.get tree) (view next) box
 		ref.set tree new-tree
-		# `dispatch` isn't in scope inside its own body (a `let`, not a `def`);
-		# the box holds it, so commands spawned now re-enter the live dispatch.
 		run-commands cmds (ref.get box)
+		reconcile-subs subs (subscriptions next) (ref.get box)
 	}
 	ref.set box dispatch
 	dom.append-child root (node-of (ref.get tree))
 	run-commands init-cmds dispatch
-	# One await makes the program async, so the scheduler + browser entry activate.
+	reconcile-subs subs (subscriptions init-model) dispatch
 	try _u = task.return ()
 	task.return ()
 }

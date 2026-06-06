@@ -420,6 +420,17 @@ pub(crate) enum Helper {
 	/// `__spawn_command(task) -> value` — spawn an MVU command (`task msg`) as a
 	/// root-scoped fiber; its dispatch tail re-enters `update`.
 	SpawnCommand,
+	/// `__spawn_sub(task) -> sid (boxed int)` — spawn a keyed MVU subscription
+	/// (`std.web.app`): start `task` (a `task nothing` driving a stream) as the
+	/// body of a fresh detached scope and return that scope id. Unlike
+	/// `spawn-command` (root-scoped, uncancellable), a subscription gets its own
+	/// scope so `cancel-sub` can tear down exactly one stream.
+	SpawnSub,
+	/// `__cancel_sub(sid) -> nothing` — `cancel-sub`: queue subscription scope `sid`
+	/// for cancellation, run between scheduler steps (so the stream driver's
+	/// shielded `release` → `channel-close` `defer` runs there). The 1-arg sibling
+	/// of `__sched_cancel`.
+	CancelSub,
 	/// `__local_get(cell) -> value` — read a task-local cell: walk the current
 	/// fiber's binding env (`fibers[current_fiber].ENV`, a cons-chain of
 	/// `[cell, val, next]`) for `cell` (matched by `ref.eq`), returning its bound
@@ -468,7 +479,7 @@ impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 96;
+	pub(crate) const COUNT: usize = 98;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
