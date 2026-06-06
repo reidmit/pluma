@@ -51,13 +51,6 @@ const writeStr = (dst, cap, s) => {
   u8().set(b.subarray(0, n), dst);
   return b.length;
 };
-// Deliver raw bytes into the caller's `(dst, cap)` buffer, stashing the overflow for
-// `io-copyout` (the marshalling-ABI probe-read shape) — returns the true length.
-const deliverBytes = (dst, cap, b) => {
-  if (b.length <= (cap < 0 ? 0 : cap)) u8().set(b, dst);
-  else readStash = b;
-  return b.length;
-};
 const hexEncode = (b) => {
   let s = "";
   for (let i = 0; i < b.length; i++) s += (b[i] & 0xff).toString(16).padStart(2, "0");
@@ -67,6 +60,15 @@ const hexDecode = (s) => {
   const b = new Uint8Array(s.length >> 1);
   for (let i = 0; i < b.length; i++) b[i] = parseInt(s.substr(i * 2, 2), 16);
   return b;
+};
+// Hand one event to a wasm channel: reserve scratch, copy the payload in, signal the
+// kind (next=0, done=1, fault=2). Shared by the streaming subscription reader and the
+// unary single-shot fetch. Each call re-readies a parked puller and pumps the scheduler.
+const pushStreamEvent = (token, kind, bytes) => {
+  const n = bytes ? bytes.length : 0;
+  const dst = exports.__rpc_stream_alloc(token, n);
+  if (n) u8().set(bytes, dst);
+  exports.__rpc_stream_event(token, kind, dst, n);
 };
 
 // `__tostring` delegates float formatting here: integers render as `N.0`, the
@@ -120,29 +122,37 @@ const pluma = {
   "io-last-error": (dst, cap) => writeStr(dst, cap, lastError),
   "io-copyout": (dst) => { u8().set(readStash, dst); readStash = new Uint8Array(0); },
   // std.web.fetch — the browser HTTP transport (the web arm of FULLSTACK Layer 2).
-  // The request is "POST\t<url>\t<headers>\t<hex-body>"; the reply written back is
-  // "<status>\t<hex-body>". Uses a *synchronous* XHR — an async fetch returns a
-  // Promise the blocking wasm call can't consume. Binary bodies ride as hex; the
-  // `x-user-defined` charset keeps each response byte intact.
-  "web-fetch": (rp, rl, dst, cap) => {
+  // The request is "POST\t<url>\t<headers>\t<hex-body>"; the reply pushed back onto the
+  // channel `token` is one `next` event of "<status>\t<hex-body>" bytes, then `done`
+  // (or `fault` on a network error). An *async* `fetch` (not the old blocking XHR):
+  // the wasm caller parks on the channel and the reply wakes it, so concurrent requests
+  // no longer freeze the main thread. The single-shot degenerate case of the
+  // rpc-stream pull channel — it shares the alloc/event push path and the abort Map.
+  "web-fetch-open": (rp, rl, token) => {
     const parts = readStr(rp, rl).split("\t");
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open(parts[0] || "POST", parts[1] || "", false);
-      xhr.overrideMimeType("text/plain; charset=x-user-defined");
-      for (const h of (parts[2] || "").split(";")) {
-        const i = h.indexOf(":");
-        if (i > 0) xhr.setRequestHeader(h.slice(0, i), h.slice(i + 1));
-      }
-      xhr.send(hexDecode(parts[3] || ""));
-      const raw = xhr.responseText;
-      let hex = "";
-      for (let i = 0; i < raw.length; i++) hex += (raw.charCodeAt(i) & 0xff).toString(16).padStart(2, "0");
-      return deliverBytes(dst, cap, enc.encode(xhr.status + "\t" + hex));
-    } catch (e) {
-      lastError = String(e);
-      return -1;
+    const method = parts[0] || "POST";
+    const url = parts[1] || "";
+    const headers = {};
+    for (const h of (parts[2] || "").split(";")) {
+      const i = h.indexOf(":");
+      if (i > 0) headers[h.slice(0, i)] = h.slice(i + 1);
     }
+    const body = hexDecode(parts[3] || "");
+    const ctrl = new AbortController();
+    rpcStreams.set(token, ctrl);
+    (async () => {
+      try {
+        const resp = await fetch(url, { method, headers, body, signal: ctrl.signal });
+        const raw = new Uint8Array(await resp.arrayBuffer());
+        pushStreamEvent(token, 0, enc.encode(resp.status + "\t" + hexEncode(raw))); // next = reply
+        pushStreamEvent(token, 1, null);                                            // done
+      } catch (e) {
+        // A network error faults the stream; an abort (close/cancel) is silent.
+        if (!ctrl.signal.aborted) pushStreamEvent(token, 2, null);
+      } finally {
+        rpcStreams.delete(token);
+      }
+    })();
   },
   // std.web.stream — the browser RPC *subscription* transport (`stream R` endpoints).
   // Unlike web-fetch (one blocking reply), a subscription is an async `fetch` whose
@@ -166,17 +176,10 @@ const pluma = {
     const body = hexDecode(parts[3] || "");
     const ctrl = new AbortController();
     rpcStreams.set(token, ctrl);
-    // Hand one event to wasm: reserve scratch, copy the payload in, signal the kind.
-    const push = (kind, bytes) => {
-      const n = bytes ? bytes.length : 0;
-      const dst = exports.__rpc_stream_alloc(token, n);
-      if (n) u8().set(bytes, dst);
-      exports.__rpc_stream_event(token, kind, dst, n);
-    };
     (async () => {
       try {
         const resp = await fetch(url, { method, headers, body, signal: ctrl.signal });
-        if (!resp.ok || !resp.body) { push(2, null); return; }
+        if (!resp.ok || !resp.body) { pushStreamEvent(token, 2, null); return; }
         const reader = resp.body.getReader();
         let buf = "";
         for (;;) {
@@ -192,16 +195,16 @@ const pluma = {
               if (line.startsWith("event: ")) kind = line.slice(7);
               else if (line.startsWith("data: ")) data = line.slice(6);
             }
-            if (kind === "next") push(0, hexDecode(data));
-            else if (kind === "fault") push(2, null);
-            else if (kind === "done") push(1, null);
+            if (kind === "next") pushStreamEvent(token, 0, hexDecode(data));
+            else if (kind === "fault") pushStreamEvent(token, 2, null);
+            else if (kind === "done") pushStreamEvent(token, 1, null);
           }
         }
         // Socket closed (no explicit done frame) — a clean end of stream.
-        push(1, null);
+        pushStreamEvent(token, 1, null);
       } catch (e) {
         // A network error faults the stream; an abort (close) is silent.
-        if (!ctrl.signal.aborted) push(2, null);
+        if (!ctrl.signal.aborted) pushStreamEvent(token, 2, null);
       } finally {
         rpcStreams.delete(token);
       }

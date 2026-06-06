@@ -901,6 +901,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.rt
 					.rpc_stream_open
 					.expect("__rpc_stream_open needs the rpc-stream-open import"),
+				crate::runtime::task_kind::PURE,
 			)
 		},
 	},
@@ -913,6 +914,27 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.rt
 					.rpc_stream_close
 					.expect("__rpc_stream_close needs the rpc-stream-close import"),
+			)
+		},
+	},
+	// The unary browser fetch reuses the streaming open verbatim — same channel mint,
+	// same request marshal — only the task kind (`WEB_FETCH`, so the pump pulls the one
+	// reply) and the host import (a full-body read, not SSE framing) differ.
+	HelperDef {
+		id: H::WebFetch,
+		fn_type: Ty::Helper(1),
+		deps: &[H::ListPush, H::MarshalSend],
+		build: |c| {
+			task::build_rpc_stream_open_fn(
+				c.rt
+					.rpc_channels
+					.expect("__web_fetch needs the rpc_channels global"),
+				c.dep(H::ListPush),
+				c.dep(H::MarshalSend),
+				c.rt
+					.web_fetch_open
+					.expect("__web_fetch needs the web-fetch-open import"),
+				crate::runtime::task_kind::WEB_FETCH,
 			)
 		},
 	},

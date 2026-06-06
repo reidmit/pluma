@@ -72,6 +72,11 @@ impl Module {
 		// the scheduler, `open`/`close` are shaped at their emit sites, and the exports
 		// (`__rpc_stream_alloc`/`_event`) are host-called, so none is an ordinary call.
 		let mut uses_rpc_stream = false;
+		// Whether the program reaches the unary browser fetch (`std.web.fetch`). It rides
+		// the same host-fed channel as the stream path (`post` pulls its one reply with
+		// `rpc-stream-next`), so it only adds the `WebFetchOpen` helper + its import on top
+		// of the shared rpc-stream machinery.
+		let mut uses_web_fetch = false;
 
 		// Go through each reachable function...
 		for &func_id in &reach.order {
@@ -86,6 +91,13 @@ impl Module {
 					"rpc-stream-open" | "rpc-stream-next" | "rpc-stream-close"
 				) {
 					uses_rpc_stream = true;
+					return;
+				}
+				// In a browser build `web-fetch` rides the async pull channel (the
+				// `WebFetch` helper, intercepted here); under the V8 sys host it falls
+				// through to the blocking classifier below (`emit_web_fetch`).
+				if browser && tag == "web-fetch" {
+					uses_web_fetch = true;
 					return;
 				}
 				if tag == "local-get" {
@@ -165,6 +177,23 @@ impl Module {
 			requested.insert(Helper::ListAppend);
 			imports.register("rpc-stream-open");
 			imports.register("rpc-stream-close");
+		}
+		// `std.web.fetch` unary transport in a browser build: the single-shot case of the
+		// channel above. The `WebFetch` helper mints a channel + starts the async `fetch`
+		// (the `web-fetch-open` import) and returns a `WEB_FETCH` task; the pump pulls the
+		// one reply. Request the shared channel machinery so it stands alone even if the
+		// streaming open is DCE'd out.
+		if uses_web_fetch {
+			requested.insert(Helper::WebFetch);
+			requested.insert(Helper::RpcStreamAlloc);
+			requested.insert(Helper::RpcStreamEvent);
+			requested.insert(Helper::MarshalAlloc);
+			requested.insert(Helper::MarshalStore);
+			requested.insert(Helper::MarshalLoad);
+			requested.insert(Helper::MarshalSend);
+			requested.insert(Helper::ListPush);
+			requested.insert(Helper::ListAppend);
+			imports.register("web-fetch-open");
 		}
 		let num_imports = imports.len();
 
@@ -248,6 +277,7 @@ impl Module {
 		runtime.dom_set_timeout = imports.get("dom-set-timeout");
 		runtime.rpc_stream_open = imports.get("rpc-stream-open");
 		runtime.rpc_stream_close = imports.get("rpc-stream-close");
+		runtime.web_fetch_open = imports.get("web-fetch-open");
 		let wrapper_base = next_synth;
 
 		let mut sorted_globals: Vec<u32> = reach.globals.iter().copied().collect();

@@ -1723,12 +1723,25 @@ impl<'a> FnEmitter<'a> {
 			self.push_nothing();
 			return;
 		}
+		// `std.web.fetch` in a browser build: the `WebFetch` helper (mint channel +
+		// start the async `fetch` + return a `WEB_FETCH` task the pump pulls). Present
+		// only in a browser build; the sys host falls through to the blocking path
+		// below, which needs the `web-fetch` import index.
+		if tag == "web-fetch" {
+			if let Some(h) = self.runtime.idx(Helper::WebFetch) {
+				for a in args {
+					self.atom(a);
+				}
+				self.ins(Instruction::Call(h));
+				return;
+			}
+		}
 		let Some(&idx) = self.host_index.get(tag) else {
 			self.diags.push(format!("unsupported host builtin `{tag}`"));
 			self.push_nothing();
 			return;
 		};
-		// `std.web.fetch` (the browser HTTP transport): a string→string host call,
+		// `std.web.fetch` under the sys host: a string->string blocking host call,
 		// marshalled and shaped like an io read but wrapped in a Pure `$task`.
 		if tag == "web-fetch" {
 			self.emit_web_fetch(idx, args);
@@ -2765,12 +2778,13 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
-	/// `web-fetch req` (the browser HTTP transport, `std.web.fetch`): marshal the
-	/// request string into scratch, call the io-read-shaped `(req_ptr, req_len, dst,
-	/// cap) -> len` host import (the host runs the exchange and writes the reply,
-	/// `len < 0` = failure, an overflow draining via `__io_copyout`), shape the reply
-	/// `$str` through `__io_result` (`ok reply` / `err (io-last-error())`), and wrap it
-	/// in a Pure `$task` to match the builtin's `task (result string string)` type.
+	/// `web-fetch req` (the browser HTTP transport under the *sys* host, `std.web.fetch`):
+	/// marshal the request string into scratch, call the io-read-shaped `(req_ptr,
+	/// req_len, dst, cap) -> len` host import (the host runs the exchange and writes the
+	/// reply, `len < 0` = failure, an overflow draining via `__io_copyout`), shape the
+	/// reply `$str` through `__io_result` (`ok reply` / `err (io-last-error())`), and wrap
+	/// it in a Pure `$task` to match the builtin's `task (result string string)` type. A
+	/// browser build routes `web-fetch` to the async `WebFetch` helper instead.
 	fn emit_web_fetch(&mut self, idx: u32, args: &[Atom]) {
 		let (Some(alloc), Some(store)) = (
 			self.runtime.idx(Helper::MarshalAlloc),
@@ -2797,7 +2811,7 @@ impl<'a> FnEmitter<'a> {
 			CAP,
 			alloc,
 		);
-		// Wrap the `result` (on the stack) in `task.return result` — a Pure `$task`.
+		// Wrap the `result` (on the stack) in `task.return result` -- a Pure `$task`.
 		let r = self.fresh_local(types::value_ref());
 		self.ins(Instruction::LocalSet(r));
 		self.ins(Instruction::I32Const(types::TAG_TASK));

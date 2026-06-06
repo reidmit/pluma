@@ -221,10 +221,11 @@ pub(super) fn classify_host_call(
 		}
 	}
 
-	// `std.web.fetch`: the browser HTTP transport. Marshalled like an io read
-	// (`(req_ptr, req_len, dst, cap) -> len`, overflow drained via `io-copyout`) and
-	// shaped through `__io_result`; its own host import is registered by the generic
-	// path below.
+	// `std.web.fetch` under the V8 sys host: the blocking transport. Marshalled like an
+	// io read (`(req_ptr, req_len, dst, cap) -> len`, overflow drained via `io-copyout`)
+	// and shaped through `__io_result`; its own host import is registered by the generic
+	// path below. (A browser build intercepts `web-fetch` in `module.rs` and routes it to
+	// the async channel instead, so it never reaches this classifier.)
 	if tag == "web-fetch" {
 		requested.insert(Helper::MarshalAlloc);
 		requested.insert(Helper::MarshalStore);
@@ -258,10 +259,12 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 	} else if tag == "io-last-error" {
 		ftypes.for_io2()
 	} else if tag == "web-fetch" {
-		// `(req_ptr, req_len, dst, cap) -> len` — the same shape as a path io read.
+		// `(req_ptr, req_len, dst, cap) -> len` — the sys host's blocking exchange, the
+		// same shape as a path io read.
 		ftypes.for_io4()
-	} else if tag == "rpc-stream-open" {
-		// `(req_ptr, req_len, token) -> ()` — start the browser subscription `fetch`.
+	} else if tag == "rpc-stream-open" || tag == "web-fetch-open" {
+		// `(req_ptr, req_len, token) -> ()` — start a browser `fetch` (the subscription
+		// reader, or the unary single-shot) keyed by the channel token.
 		ftypes.for_rpc_stream_open()
 	} else if tag == "rpc-stream-close" {
 		// `(token) -> ()` — abort the subscription reader (shares io-copyout's `(i32)->()`).

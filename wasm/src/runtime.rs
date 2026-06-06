@@ -41,6 +41,12 @@ pub(crate) mod task_kind {
 	// stream channel, or park (`wait::RPC`) until the host pushes one via
 	// `__rpc_stream_event`. The browser's push analogue of the net read's pull park.
 	pub(crate) const RPC_NEXT: i32 = 16;
+	// `web-fetch` in the browser (`std.web.fetch`): the unary single-shot case of
+	// `RPC_NEXT`. The task carries a channel token; the pump pulls the one reply the
+	// host pushes and shapes it into a `result string string` (`ok <reply>` / `err`),
+	// or parks (`wait::RPC`) until the host's async `fetch` delivers. The sys host
+	// lowers `web-fetch` to a blocking exchange instead (no task kind).
+	pub(crate) const WEB_FETCH: i32 = 17;
 }
 
 /// The host-fed RPC stream channel (`std.web.stream`): a per-subscription mailbox
@@ -447,13 +453,22 @@ pub(crate) enum Helper {
 	/// the subscription's `fetch` reader (`rpc-stream-close` import) and return
 	/// `task.return ()`.
 	RpcStreamClose,
+	/// `__web_fetch(req) -> value` — the browser lowering of `web-fetch` (`std.web.fetch`):
+	/// the single-shot degenerate case of `__rpc_stream_open`. Mint a fresh channel,
+	/// marshal the request `$str` into scratch, ask the host to start the unary async
+	/// `fetch` (`web-fetch-open` import) keyed by the new token, and return a `WEB_FETCH`
+	/// task carrying the token. The host pushes the whole reply as one `next` event then
+	/// `done`; the pump's `WEB_FETCH` arm pulls it and shapes `result string string`.
+	/// Shares `build_rpc_stream_open_fn` with the stream open — only the task kind and
+	/// the import differ. The sys host uses the blocking path instead (no helper).
+	WebFetch,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 95;
+	pub(crate) const COUNT: usize = 96;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -551,6 +566,11 @@ pub(crate) struct Runtime {
 	/// Host import index of `rpc-stream-close(token) -> ()` — abort the browser
 	/// `fetch` reader for a subscription. `Some` with `rpc_channels`.
 	pub(crate) rpc_stream_close: Option<u32>,
+	/// Host import index of `web-fetch-open(ptr, len, token) -> ()` — start the unary
+	/// browser `fetch` (`std.web.fetch`). `Some` when `web-fetch-open` is reachable;
+	/// `__web_fetch_open` calls it. Shares the channel registry (`rpc_channels`) with the
+	/// streaming path.
+	pub(crate) web_fetch_open: Option<u32>,
 }
 
 impl Runtime {
@@ -836,6 +856,11 @@ pub(crate) struct TaskLits {
 	/// `wait::RPC` pump arm fails with this `$str`). v1 carries no host detail, like
 	/// the native `http.fetch-stream` fault.
 	pub(crate) stream_fault_msg: (u32, u32),
+	/// The `err` message the browser `WEB_FETCH` pump arm produces when the host faults
+	/// the unary fetch (network error) or ends it with no reply. It's a normal
+	/// `result.err` value (not a task failure); v1 carries no host detail, like
+	/// `stream_fault_msg`.
+	pub(crate) web_fetch_fail_msg: (u32, u32),
 }
 
 /// What `__dict_lookup` needs to construct `some v` / `none` `$variant`s: each
@@ -1119,9 +1144,12 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			returns_value: true,
 		}),
 		// `std.web.fetch` (the Web target HTTP transport): one request string in, the
-		// reply marshalled back. Shaped at the emit site (`emit_web_fetch`) like an io
-		// read; this entry only drives the "is this a host builtin?" classification.
-		"web-fetch" => Some(HostSig {
+		// reply produced back. The sys host lowers it like an io read (the blocking
+		// `emit_web_fetch` path, classified below); the browser routes it to the
+		// `WebFetch` helper instead (intercepted in `module.rs`). `web-fetch-open` is the
+		// browser's async-`fetch` import. These entries only drive the "is this a host
+		// builtin?" classification.
+		"web-fetch" | "web-fetch-open" => Some(HostSig {
 			arity: 1,
 			returns_value: true,
 		}),

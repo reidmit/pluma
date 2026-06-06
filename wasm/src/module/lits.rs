@@ -228,6 +228,7 @@ pub(super) fn resolve_literals(
 					defers_name: strpool.intern("__defers"),
 					cancelled_msg: strpool.intern("scope cancelled"),
 					stream_fault_msg: strpool.intern("rpc.stream: stream faulted"),
+					web_fetch_fail_msg: strpool.intern("web-fetch: request failed"),
 				};
 			}
 			_ => diags.push("async runtime needs the `result` + `option` enums".to_string()),

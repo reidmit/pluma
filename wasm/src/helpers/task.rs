@@ -578,6 +578,7 @@ pub(crate) fn build_rpc_stream_open_fn(
 	list_push: u32,
 	send: u32,
 	host_open: u32,
+	kind: i32,
 ) -> Function {
 	let v = types::value_ref();
 	let va = types::valarray_ref();
@@ -624,9 +625,11 @@ pub(crate) fn build_rpc_stream_open_fn(
 		.struct_get(types::T_STR, 1);
 	w.call(send).local_set(len);
 	w.i32(0).local_get(len).local_get(token).call(host_open);
-	// return task.return(boxed token).
+	// return a `$task` of the requested kind carrying the boxed token. `PURE` (the
+	// stream open) settles it immediately as the resource `from-resource` owns;
+	// `WEB_FETCH` (the unary fetch) makes the scheduler pull the one reply.
 	w.i32(types::TAG_TASK);
-	w.i32(task_kind::PURE);
+	w.i32(kind);
 	box_i(&mut w, |w| {
 		w.local_get(token);
 	});
@@ -1263,6 +1266,83 @@ pub(crate) fn build_pump_fn(
 												w.br("ret");
 											},
 										);
+									},
+								);
+							},
+						);
+					});
+					// web-fetch (browser unary): the single-shot case of RPC_NEXT. Same
+					// channel dequeue/park, but shape the one reply into a `result string
+					// string` value (always settled `OK` down the chain -- a transport error
+					// is an `err` *value*, not a task failure, matching the sys lowering).
+					w.local_get(tk).i32(task_kind::WEB_FETCH).i32_eq();
+					w.if_(|w| {
+						// token = tp[0]; queue = channel.QUEUE; head = channel.HEAD.
+						elem(w, tp, 0);
+						unbox_i(w);
+						w.local_set(token);
+						fld(w, g, chans, token, rpc_chan::QUEUE);
+						w.local_set(queue);
+						fld_i(w, g, chans, token, rpc_chan::HEAD);
+						w.local_set(head);
+						// The reply arrived? head < len(queue) -> dequeue it as `ok <string>`.
+						w.local_get(head);
+						w.local_get(queue)
+							.ref_cast(types::T_LIST)
+							.struct_get(types::T_LIST, 2);
+						w.i32_lt_s();
+						w.if_else(
+							|w| {
+								// The element is a `bytes`-tagged `$str`; retag its payload to
+								// `TAG_STR` so it flows as the `string` the stub reads.
+								push_result(w, lits.ok_tag, lits.ok_name, |w| {
+									w.i32(types::TAG_STR);
+									w.local_get(queue)
+										.ref_cast(types::T_LIST)
+										.struct_get(types::T_LIST, 1)
+										.local_get(head)
+										.array_get(types::T_VALARRAY)
+										.ref_cast(types::T_STR)
+										.struct_get(types::T_STR, 1);
+									w.struct_new(types::T_STR);
+								});
+								w.local_set(fval);
+								set_fld_i(w, chans, token, rpc_chan::HEAD, |w| {
+									w.local_get(head).i32(1).i32_add();
+								});
+								w.i32(focus::OK).local_set(fkind);
+								w.br("main");
+							},
+							|w| {
+								// No reply buffered. A fault *or* a clean end with no element
+								// (the host closed without a reply) -> `err`; else park.
+								fld_i(w, g, chans, token, rpc_chan::FAULTED);
+								fld_i(w, g, chans, token, rpc_chan::DONE);
+								w.i32_or();
+								w.if_else(
+									|w| {
+										push_result(w, lits.err_tag, lits.err_name, |w| {
+											str_lit(w, lits.web_fetch_fail_msg);
+										});
+										w.local_set(fval);
+										w.i32(focus::OK).local_set(fkind);
+										w.br("main");
+									},
+									|w| {
+										// Park: stash this `$task`, record ourselves as the
+										// channel's waiter, park `wait::RPC` (the host's async
+										// `fetch` re-readies us via `__rpc_stream_event`).
+										set_fld(w, g.fibers, fid, fiber::RETRY, |w| {
+											w.local_get(fval);
+										});
+										set_fld_i(w, chans, token, rpc_chan::WAITER, |w| {
+											w.local_get(fid);
+										});
+										save_act(w, g, fid);
+										park_out(w, g, wait::RPC, |w| {
+											w.local_get(token);
+										});
+										w.br("ret");
 									},
 								);
 							},
