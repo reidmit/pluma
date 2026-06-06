@@ -19,21 +19,18 @@ enum VariantResolution {
 	Reported,
 }
 
-// Prelude enums are the one set whose variants stay usable bare (`some`,
-// `none`, `ok`, ...). They're keyed in `enum_defs` under the synthetic
-// `__prelude__` module, so a qualified-name prefix check identifies them.
-fn is_prelude_enum(qualified_enum: &str) -> bool {
-	qualified_enum.starts_with("__prelude__.")
-}
-
-// The prelude variants that stay reachable *bare* in every module — the one
-// deliberate exception to qualified `enum.variant` access. Kept to the four
-// constructors that are pervasive in everyday code; everything else (user
-// enums, and the prelude's own `ordering`/`wire-error`/`wire-schema`/
-// `regex-pattern`/`request` variants) is written qualified. A bare variant is
-// resolvable only when it's a prelude variant *and* on this list.
-fn is_bare_export(variant: &str) -> bool {
-	matches!(variant, "some" | "none" | "ok" | "err")
+// The complete set of variants that stay reachable *bare* in every module —
+// the one deliberate exception to qualified `enum.variant` access. Limited to
+// the four constructors pervasive in everyday code, each pinned to its prelude
+// enum: a user enum that reuses one of these names (e.g. its own `result` with
+// `ok`/`err`) is *not* matched, so it stays qualified like any other. Everything
+// else (the prelude's own `ordering`/`wire-error`/`wire-schema`/`regex-pattern`/
+// `request` variants included) is written `enum.variant`.
+fn is_bare_prelude_variant(qualified_enum: &str, variant: &str) -> bool {
+	matches!(
+		(qualified_enum, variant),
+		("__prelude__.option", "some" | "none") | ("__prelude__.result", "ok" | "err")
+	)
 }
 
 // Strip a qualified enum name (`module.color`) down to its user-facing bare
@@ -2656,7 +2653,7 @@ impl<'compiler> Analyzer<'compiler> {
 					let (prelude, user): (Vec<_>, Vec<_>) = matches
 						.iter()
 						.cloned()
-						.partition(|(q, _)| is_prelude_enum(q) && is_bare_export(&ident.name));
+						.partition(|(q, _)| is_bare_prelude_variant(q, &ident.name));
 					if !prelude.is_empty() {
 						match self.disambiguate_variant_matches(&prelude) {
 							Some((qualified_enum, variant_name)) => {
@@ -4011,8 +4008,7 @@ impl<'compiler> Analyzer<'compiler> {
 					// any other subject it's a binding (catch-all).
 					let is_nullary_variant = match subject_ty {
 						Type::Enum(enum_name, _) => {
-							is_prelude_enum(enum_name)
-								&& is_bare_export(&ident.name)
+							is_bare_prelude_variant(enum_name, &ident.name)
 								&& self
 									.find_variant_in_enum(enum_name, &ident.name)
 									.map_or(false, |p| p.is_empty())
@@ -4196,7 +4192,7 @@ impl<'compiler> Analyzer<'compiler> {
 			PatternKind::Identifier(ident) => self
 				.find_variant_globally(&ident.name)
 				.iter()
-				.filter(|(q, _)| is_prelude_enum(q) && is_bare_export(&ident.name))
+				.filter(|(q, _)| is_bare_prelude_variant(q, &ident.name))
 				.all(|(_, p)| !p.is_empty()),
 			PatternKind::Tuple(entries) => entries.iter().all(|e| self.pattern_is_catch_all(e)),
 			PatternKind::Record { fields, .. } => {
@@ -4227,7 +4223,7 @@ impl<'compiler> Analyzer<'compiler> {
 					if nullary_only && !params.is_empty() {
 						return VariantResolution::NotFound;
 					}
-					if is_prelude_enum(enum_name) && is_bare_export(&name.name) {
+					if is_bare_prelude_variant(enum_name, &name.name) {
 						VariantResolution::Found(enum_name.clone(), params)
 					} else {
 						let enum_name = enum_name.clone();
@@ -4251,7 +4247,7 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 		let (prelude, user): (Vec<_>, Vec<_>) = candidates
 			.into_iter()
-			.partition(|(q, _)| is_prelude_enum(q) && is_bare_export(&name.name));
+			.partition(|(q, _)| is_bare_prelude_variant(q, &name.name));
 		if !prelude.is_empty() {
 			return match prelude.len() {
 				1 => {
