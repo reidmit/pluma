@@ -260,6 +260,12 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 	} else if tag == "web-fetch" {
 		// `(req_ptr, req_len, dst, cap) -> len` — the same shape as a path io read.
 		ftypes.for_io4()
+	} else if tag == "rpc-stream-open" {
+		// `(req_ptr, req_len, token) -> ()` — start the browser subscription `fetch`.
+		ftypes.for_rpc_stream_open()
+	} else if tag == "rpc-stream-close" {
+		// `(token) -> ()` — abort the subscription reader (shares io-copyout's `(i32)->()`).
+		ftypes.for_io_copyout()
 	} else if is_io_host(tag) {
 		if io_uses_io4(tag) {
 			ftypes.for_io4()

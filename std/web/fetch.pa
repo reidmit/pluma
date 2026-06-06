@@ -14,6 +14,7 @@
 # `.body` the same way on both targets.
 
 use std.task
+use std.stream
 use std.string
 use std.list
 use std.dict
@@ -42,6 +43,45 @@ public def post :: fun string (dict string string) bytes -> task (result respons
 		task.return (parse-response s)
 	} is err e {
 		task.return (err e)
+	}
+}
+
+# --- streaming (the `stream R` subscription transport) -----------------------
+#
+# A server->client stream can't ride raw sockets in the browser, so it goes through
+# the host page's `fetch` read *incrementally*: the host starts the request and
+# pushes each parsed SSE event into a wasm channel, and a parked puller drains them.
+# Unlike `post` (one blocking reply), this integrates with the cooperative scheduler
+# -- `next` suspends the puller and each host event wakes it, so the UI never blocks.
+# The web counterpart of `http.fetch-stream`; all three are web-gated built-ins.
+
+# Start a subscription: hand the host the marshalled request, get a channel token.
+def stream-open :: fun string -> task int = built-in "rpc-stream-open"
+# Pull the next event off the channel: `some bytes` (an element), `none` (clean end),
+# or a task failure (the stream faulted). Parks until the host pushes one.
+def stream-next :: fun int -> task (option bytes) = built-in "rpc-stream-next"
+# Abort the subscription's reader (the stream's `close`, run on any terminus).
+def stream-close :: fun int -> task nothing = built-in "rpc-stream-close"
+
+# Subscribe to `url` with `headers`, POSTing `body`; each server SSE frame surfaces
+# as one `bytes` element. The release (`close`) runs on every terminus -- drained,
+# faulted, or cancelled. The web counterpart of `http.fetch-stream ... post ...`.
+#
+#     stream.for-each
+#         (fetch.fetch-stream "http://host/rpc/x" headers body)
+#         (fun frame { ... })
+public def fetch-stream :: fun string (dict string string) bytes -> stream bytes = fun url headers body {
+	let req = string.join ["POST", url, render-headers headers, hex.encode body] "\t"
+	stream.from-resource {
+		open: fun {
+			stream-open req
+		},
+		next: fun token {
+			stream-next token
+		},
+		close: fun token {
+			stream-close token
+		},
 	}
 }
 

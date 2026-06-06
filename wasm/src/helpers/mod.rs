@@ -617,6 +617,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				arity1,
 				c.rt.net,
 				net_m,
+				c.rt.rpc_channels,
 				c.rt.taskg,
 				c.rt.tasklits,
 			)
@@ -862,6 +863,58 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::Helper(1),
 		deps: &[],
 		build: |c| task::build_local_exit_fn(c.rt.taskg),
+	},
+	HelperDef {
+		id: H::RpcStreamAlloc,
+		fn_type: Ty::RpcStreamAlloc,
+		deps: &[H::MarshalAlloc],
+		build: |c| task::build_rpc_stream_alloc_fn(c.dep(H::MarshalAlloc), c.rt.bump),
+	},
+	HelperDef {
+		id: H::RpcStreamEvent,
+		fn_type: Ty::RpcStreamEvent,
+		deps: &[H::MarshalLoad, H::ListPush, H::ListAppend, H::BrowserRun],
+		build: |c| {
+			task::build_rpc_stream_event_fn(
+				c.rt
+					.rpc_channels
+					.expect("__rpc_stream_event needs the rpc_channels global"),
+				c.dep(H::MarshalLoad),
+				c.dep(H::ListPush),
+				c.dep(H::ListAppend),
+				c.dep(H::BrowserRun),
+				c.rt.taskg,
+			)
+		},
+	},
+	HelperDef {
+		id: H::RpcStreamOpen,
+		fn_type: Ty::Helper(1),
+		deps: &[H::ListPush, H::MarshalSend],
+		build: |c| {
+			task::build_rpc_stream_open_fn(
+				c.rt
+					.rpc_channels
+					.expect("__rpc_stream_open needs the rpc_channels global"),
+				c.dep(H::ListPush),
+				c.dep(H::MarshalSend),
+				c.rt
+					.rpc_stream_open
+					.expect("__rpc_stream_open needs the rpc-stream-open import"),
+			)
+		},
+	},
+	HelperDef {
+		id: H::RpcStreamClose,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| {
+			task::build_rpc_stream_close_fn(
+				c.rt
+					.rpc_stream_close
+					.expect("__rpc_stream_close needs the rpc-stream-close import"),
+			)
+		},
 	},
 ];
 

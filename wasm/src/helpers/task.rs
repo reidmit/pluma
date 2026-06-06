@@ -26,7 +26,9 @@
 
 use crate::helpers::wat::{Local, Wat};
 use crate::runtime::sched::{NO_AWAITER, NO_SCOPE, ROOT_SCOPE, fiber, focus, outcome, scope, wait};
-use crate::runtime::{NetImports, NetMarshal, TaskGlobals, TaskLits, act_kind, task_kind};
+use crate::runtime::{
+	NetImports, NetMarshal, TaskGlobals, TaskLits, act_kind, rpc_chan, task_kind,
+};
 use crate::types;
 use wasm_encoder::{Function, ValType};
 
@@ -479,6 +481,177 @@ pub(crate) fn build_browser_entry_fn(
 	w.finish()
 }
 
+/// `__rpc_stream_alloc(i32 token, i32 n) -> i32 ptr` (exported): reserve `n` scratch
+/// bytes for the host to write the next stream event's payload into. The scratch
+/// region is shared and reused per event (the host writes + we copy out within one
+/// synchronous turn), so reset the bump cursor first; `token` is unused. Mirrors the
+/// io-read scratch handoff, host-driven.
+pub(crate) fn build_rpc_stream_alloc_fn(alloc: u32, bump: u32) -> Function {
+	let mut w = Wat::new(2);
+	let _token = w.param(0);
+	let n = w.param(1);
+	w.i32(0).global_set(bump);
+	w.local_get(n).call(alloc);
+	w.finish()
+}
+
+/// `__rpc_stream_event(i32 token, i32 kind, i32 ptr, i32 len) -> ()` (exported): the
+/// browser loader pushes one parsed SSE event into channel `token`. `next` (kind 0)
+/// copies the `len` payload bytes at `ptr` out of scratch into a `bytes` value and
+/// enqueues it; `done` (1) / `fault` (2) set the terminal flags. Then re-ready the
+/// channel's parked `rpc-stream-next` fiber (if any), running its stashed
+/// `fiber::RETRY` task from Start, and pump the scheduler. The push analogue of the
+/// net reactor's `net_block_step` wake.
+pub(crate) fn build_rpc_stream_event_fn(
+	chans: u32,
+	load: u32,
+	list_push: u32,
+	list_append: u32,
+	browser_run: u32,
+	g: TaskGlobals,
+) -> Function {
+	let v = types::value_ref();
+	let mut w = Wat::new(4);
+	let (token, kind, ptr, len) = (w.param(0), w.param(1), w.param(2), w.param(3));
+	let queue = w.local(v);
+	let waiter = w.local(ValType::I32);
+
+	// next: copy the payload out of scratch into a `bytes` value and enqueue it.
+	w.local_get(kind).i32(rpc_chan::EV_NEXT).i32_eq();
+	w.if_(|w| {
+		fld(w, g, chans, token, rpc_chan::QUEUE);
+		w.local_set(queue);
+		w.local_get(queue);
+		w.i32(types::TAG_BYTES);
+		w.local_get(ptr).local_get(len).call(load);
+		w.struct_new(types::T_STR);
+		w.call(list_push).drop();
+	});
+	// done: mark the clean terminus.
+	w.local_get(kind).i32(rpc_chan::EV_DONE).i32_eq();
+	w.if_(|w| {
+		set_fld_i(w, chans, token, rpc_chan::DONE, |w| {
+			w.i32(1);
+		});
+	});
+	// fault: mark the error terminus.
+	w.local_get(kind).i32(rpc_chan::EV_FAULT).i32_eq();
+	w.if_(|w| {
+		set_fld_i(w, chans, token, rpc_chan::FAULTED, |w| {
+			w.i32(1);
+		});
+	});
+
+	// Wake the parked puller, if any: clear the channel's waiter, then (if it's still
+	// alive) clear its wait and re-ready its stashed `rpc-stream-next` task from Start.
+	fld_i(&mut w, g, chans, token, rpc_chan::WAITER);
+	w.local_tee(waiter).i32(0).i32_ge_s();
+	w.if_(|w| {
+		set_fld_i(w, chans, token, rpc_chan::WAITER, |w| {
+			w.i32(-1);
+		});
+		fld_i(w, g, g.fibers, waiter, fiber::ALIVE);
+		w.if_(|w| {
+			set_fld_i(w, g.fibers, waiter, fiber::WAIT_KIND, |w| {
+				w.i32(wait::NONE);
+			});
+			ready_push(w, g, list_append, waiter, focus::START, |w| {
+				fld(w, g, g.fibers, waiter, fiber::RETRY);
+			});
+		});
+	});
+
+	// Pump: run the re-readied fiber (and anything it cascades) now. The function
+	// returns `()` (like `__dom_dispatch`), so leave nothing on the stack.
+	w.call(browser_run);
+	w.finish()
+}
+
+/// `__rpc_stream_open(req) -> value`: `rpc-stream-open` (`std.web.stream`). Mint a
+/// fresh channel record in the `rpc_channels` registry (lazily creating it), marshal
+/// the request `$str` into scratch via `__send_bytes` (offset 0), ask the host to
+/// start the `fetch` for that token, and return `task.return token` — the resource a
+/// `from-resource` stream owns. `send` is `__send_bytes`; `host_open` the
+/// `rpc-stream-open` import.
+pub(crate) fn build_rpc_stream_open_fn(
+	chans: u32,
+	list_push: u32,
+	send: u32,
+	host_open: u32,
+) -> Function {
+	let v = types::value_ref();
+	let va = types::valarray_ref();
+	let mut w = Wat::new(1);
+	let req = w.param(0);
+	let arr = w.local(va);
+	let token = w.local(ValType::I32);
+	let len = w.local(ValType::I32);
+	let _ = v;
+
+	// Lazy-init the registry to an empty `$list`.
+	w.global_get(chans).ref_is_null();
+	w.if_(|w| {
+		w.i32(0).array_new_default(types::T_VALARRAY).local_set(arr);
+		crate::helpers::list::mk_list(w, arr);
+		w.global_set(chans);
+	});
+	// token = registry length (the new channel's index).
+	list_len(&mut w, chans);
+	w.local_set(token);
+	// Append a fresh channel record: $tuple(TAG_TUPLE, [QUEUE=[], HEAD=0, WAITER=-1,
+	// DONE=0, FAULTED=0]).
+	w.global_get(chans);
+	w.i32(types::TAG_TUPLE);
+	empty_list(&mut w); // QUEUE
+	box_i(&mut w, |w| {
+		w.i32(0);
+	}); // HEAD
+	box_i(&mut w, |w| {
+		w.i32(-1);
+	}); // WAITER
+	box_i(&mut w, |w| {
+		w.i32(0);
+	}); // DONE
+	box_i(&mut w, |w| {
+		w.i32(0);
+	}); // FAULTED
+	w.array_new_fixed(types::T_VALARRAY, rpc_chan::COUNT);
+	w.struct_new(types::T_TUPLE);
+	w.call(list_push).drop();
+	// Marshal the request `$str`'s bytes into scratch (offset 0) and start the fetch.
+	w.local_get(req)
+		.ref_cast(types::T_STR)
+		.struct_get(types::T_STR, 1);
+	w.call(send).local_set(len);
+	w.i32(0).local_get(len).local_get(token).call(host_open);
+	// return task.return(boxed token).
+	w.i32(types::TAG_TASK);
+	w.i32(task_kind::PURE);
+	box_i(&mut w, |w| {
+		w.local_get(token);
+	});
+	w.array_new_fixed(types::T_VALARRAY, 1);
+	w.struct_new(types::T_TASK);
+	w.finish()
+}
+
+/// `__rpc_stream_close(token) -> value`: `rpc-stream-close`. Ask the host to abort
+/// the subscription's `fetch` reader and return `task.return ()`. `host_close` is the
+/// `rpc-stream-close` import.
+pub(crate) fn build_rpc_stream_close_fn(host_close: u32) -> Function {
+	let mut w = Wat::new(1);
+	let token = w.param(0);
+	w.local_get(token);
+	unbox_i(&mut w);
+	w.call(host_close);
+	w.i32(types::TAG_TASK);
+	w.i32(task_kind::PURE);
+	push_nothing(&mut w);
+	w.array_new_fixed(types::T_VALARRAY, 1);
+	w.struct_new(types::T_TASK);
+	w.finish()
+}
+
 /// `__spawn_command(task) -> value`: spawn `task` as a root-scoped fiber (an MVU
 /// command). Returns `nothing`; the command's result is delivered by its own
 /// `task.map` dispatch tail, not awaited. Mirrors `__sched_spawn` minus the
@@ -653,6 +826,7 @@ pub(crate) fn build_pump_fn(
 	arity1: u32,
 	net: Option<NetImports>,
 	net_m: Option<NetMarshal>,
+	rpc_channels: Option<u32>,
 	g: TaskGlobals,
 	lits: TaskLits,
 ) -> Function {
@@ -1007,6 +1181,92 @@ pub(crate) fn build_pump_fn(
 								w.local_get(n);
 							});
 						});
+					});
+				}
+
+				// rpc-stream-next: drain a host-fed RPC stream channel (`std.web.stream`),
+				// or park on `wait::RPC` until the host pushes the next event. The browser's
+				// push analogue of the net read's pull park: instead of the reactor polling
+				// a socket, the loader's `fetch` reader calls `__rpc_stream_event`, which
+				// re-readies the fiber stashed in `fiber::RETRY`.
+				if let Some(chans) = rpc_channels {
+					let token = w.local(ValType::I32);
+					let queue = w.local(v);
+					let head = w.local(ValType::I32);
+					w.local_get(tk).i32(task_kind::RPC_NEXT).i32_eq();
+					w.if_(|w| {
+						// token = tp[0]; queue = channel.QUEUE; head = channel.HEAD.
+						elem(w, tp, 0);
+						unbox_i(w);
+						w.local_set(token);
+						fld(w, g, chans, token, rpc_chan::QUEUE);
+						w.local_set(queue);
+						fld_i(w, g, chans, token, rpc_chan::HEAD);
+						w.local_set(head);
+						// A buffered element? head < len(queue) -> dequeue, produce `some bytes`.
+						// (`queue` is a `$list` value, not a global, so read field 2 inline.)
+						w.local_get(head);
+						w.local_get(queue)
+							.ref_cast(types::T_LIST)
+							.struct_get(types::T_LIST, 2);
+						w.i32_lt_s();
+						w.if_else(
+							|w| {
+								push_some(w, lits, |w| {
+									w.local_get(queue)
+										.ref_cast(types::T_LIST)
+										.struct_get(types::T_LIST, 1)
+										.local_get(head)
+										.array_get(types::T_VALARRAY);
+								});
+								w.local_set(fval);
+								set_fld_i(w, chans, token, rpc_chan::HEAD, |w| {
+									w.local_get(head).i32(1).i32_add();
+								});
+								w.i32(focus::OK).local_set(fkind);
+								w.br("main");
+							},
+							|w| {
+								// Drained: a fault outranks a clean done (so a fault mid-buffer
+								// still surfaces once the buffer empties); else done -> `none`;
+								// else park until the host pushes more.
+								fld_i(w, g, chans, token, rpc_chan::FAULTED);
+								w.if_else(
+									|w| {
+										str_lit(w, lits.stream_fault_msg);
+										w.local_set(fval);
+										w.i32(focus::ERR).local_set(fkind);
+										w.br("main");
+									},
+									|w| {
+										fld_i(w, g, chans, token, rpc_chan::DONE);
+										w.if_else(
+											|w| {
+												push_none(w, lits);
+												w.local_set(fval);
+												w.i32(focus::OK).local_set(fkind);
+												w.br("main");
+											},
+											|w| {
+												// Park: stash this `$task` to re-run on wake, record
+												// ourselves as the channel's waiter, park `wait::RPC`.
+												set_fld(w, g.fibers, fid, fiber::RETRY, |w| {
+													w.local_get(fval);
+												});
+												set_fld_i(w, chans, token, rpc_chan::WAITER, |w| {
+													w.local_get(fid);
+												});
+												save_act(w, g, fid);
+												park_out(w, g, wait::RPC, |w| {
+													w.local_get(token);
+												});
+												w.br("ret");
+											},
+										);
+									},
+								);
+							},
+						);
 					});
 				}
 

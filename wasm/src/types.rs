@@ -384,6 +384,10 @@ enum FuncKind {
 	/// A nullary thunk `() -> ()` — the browser command pump (`__browser_run`) and the
 	/// timer-resume entry (`__browser_resume`).
 	Thunk,
+	/// `rpc-stream-open(i32 ptr, i32 len, i32 token) -> ()` — ask the host to start the
+	/// `fetch` for a browser RPC subscription, given the marshalled request string and
+	/// the channel token (`std.web.stream`).
+	RpcStreamOpen,
 }
 
 /// A registered record *shape*: the WasmGC struct type interned for a distinct
@@ -705,6 +709,11 @@ impl FuncTypes {
 	/// A nullary thunk `() -> ()`.
 	pub fn for_thunk(&mut self) -> u32 {
 		self.intern(FuncKind::Thunk)
+	}
+
+	/// `rpc-stream-open`: `(i32, i32, i32) -> ()`.
+	pub fn for_rpc_stream_open(&mut self) -> u32 {
+		self.intern(FuncKind::RpcStreamOpen)
 	}
 
 	/// Encode the full type section: the fixed `$value` prefix, then every
@@ -1201,6 +1210,12 @@ impl FuncTypes {
 				}
 				FuncKind::Thunk => {
 					types.ty().function([], []);
+					continue;
+				}
+				FuncKind::RpcStreamOpen => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I32, ValType::I32], []);
 					continue;
 				}
 			};

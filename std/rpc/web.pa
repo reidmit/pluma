@@ -6,6 +6,7 @@
 # code configures nothing. This module imports `std.web.*`, so it only enters a web
 # build (the neutral `std.rpc` never imports a target module).
 use std.rpc
+use std.stream
 use std.task
 use std.web.fetch
 
@@ -25,8 +26,18 @@ def send :: fun string bytes (dict string string) -> task bytes = fun route body
 	}
 }
 
-# Installs this transport as the ambient sender. The build runs it before `main`
-# on a web client.
+# Opens a streaming call: subscribe to `<origin>/rpc/<route>` and surface each
+# server SSE frame as one stream element. The dual of `send` for `stream R`
+# endpoints. Transport/non-200 faults ride the stream as task failures (v1: not
+# yet remapped to a typed `rpc-error`, unlike the unary path). Mirrors
+# `std.rpc.sys`'s `send-stream`.
+def send-stream :: fun string bytes (dict string string) -> stream bytes = fun route body headers {
+	fetch.fetch-stream (rpc.server-origin ++ "/rpc/" ++ route) headers body
+}
+
+# Installs this transport (unary + streaming) as the ambient sender. The build runs
+# it before `main` on a web client.
 public def install :: fun nothing -> nothing = fun {
 	rpc.configure send
+	rpc.configure-stream send-stream
 }

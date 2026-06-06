@@ -1494,12 +1494,18 @@ impl<'a> FnEmitter<'a> {
 			|| tag == "bytes-build"
 			|| tag == "list-push"
 			|| tag == "spawn-command"
+			|| tag == "rpc-stream-open"
+			|| tag == "rpc-stream-close"
 		{
 			let helper = match tag {
 				"list-build" => self.runtime.idx(Helper::ListBuild),
 				"list-collect" => self.runtime.idx(Helper::ListCollect),
 				"list-push" => self.runtime.idx(Helper::ListPush),
 				"spawn-command" => self.runtime.idx(Helper::SpawnCommand),
+				// `std.web.stream`: open mints a channel + starts the host `fetch`; close
+				// aborts it. Both build a Pure `$task` (the scheduler runs it later).
+				"rpc-stream-open" => self.runtime.idx(Helper::RpcStreamOpen),
+				"rpc-stream-close" => self.runtime.idx(Helper::RpcStreamClose),
 				_ => self.runtime.idx(Helper::BytesBuild),
 			};
 			match helper {

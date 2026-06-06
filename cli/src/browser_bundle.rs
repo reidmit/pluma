@@ -39,6 +39,7 @@ let memory;   // the module's exported WebAssembly.Memory
 let exports;  // the instance's exports (for the event-dispatch callback)
 let lastError = "";              // errno-style channel for io-last-error
 let readStash = new Uint8Array(0); // overflow buffer drained by io-copyout
+const rpcStreams = new Map();     // token -> AbortController for live RPC subscriptions
 
 // Re-read the backing buffer on every access — a memory.grow swaps it out.
 const u8 = () => new Uint8Array(memory.buffer);
@@ -142,6 +143,74 @@ const pluma = {
       lastError = String(e);
       return -1;
     }
+  },
+  // std.web.stream — the browser RPC *subscription* transport (`stream R` endpoints).
+  // Unlike web-fetch (one blocking reply), a subscription is an async `fetch` whose
+  // body is read incrementally and parsed as SSE-style events, each pushed into the
+  // wasm channel `token`. This integrates with the cooperative scheduler (the puller
+  // parks; each event re-readies it) instead of blocking the main thread.
+  //
+  // Request marshalling matches web-fetch: "POST\t<url>\t<headers>\t<hex-body>".
+  // Events (the same framing the native client reads): `event: next\ndata: <hex>\n\n`,
+  // `event: done\n\n`, `event: fault\n\n`. Event kinds pushed to wasm: next=0, done=1,
+  // fault=2.
+  "rpc-stream-open": (rp, rl, token) => {
+    const parts = readStr(rp, rl).split("\t");
+    const method = parts[0] || "POST";
+    const url = parts[1] || "";
+    const headers = {};
+    for (const h of (parts[2] || "").split(";")) {
+      const i = h.indexOf(":");
+      if (i > 0) headers[h.slice(0, i)] = h.slice(i + 1);
+    }
+    const body = hexDecode(parts[3] || "");
+    const ctrl = new AbortController();
+    rpcStreams.set(token, ctrl);
+    // Hand one event to wasm: reserve scratch, copy the payload in, signal the kind.
+    const push = (kind, bytes) => {
+      const n = bytes ? bytes.length : 0;
+      const dst = exports.__rpc_stream_alloc(token, n);
+      if (n) u8().set(bytes, dst);
+      exports.__rpc_stream_event(token, kind, dst, n);
+    };
+    (async () => {
+      try {
+        const resp = await fetch(url, { method, headers, body, signal: ctrl.signal });
+        if (!resp.ok || !resp.body) { push(2, null); return; }
+        const reader = resp.body.getReader();
+        let buf = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf("\n\n")) >= 0) {
+            const ev = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            let kind = "", data = "";
+            for (const line of ev.split("\n")) {
+              if (line.startsWith("event: ")) kind = line.slice(7);
+              else if (line.startsWith("data: ")) data = line.slice(6);
+            }
+            if (kind === "next") push(0, hexDecode(data));
+            else if (kind === "fault") push(2, null);
+            else if (kind === "done") push(1, null);
+          }
+        }
+        // Socket closed (no explicit done frame) — a clean end of stream.
+        push(1, null);
+      } catch (e) {
+        // A network error faults the stream; an abort (close) is silent.
+        if (!ctrl.signal.aborted) push(2, null);
+      } finally {
+        rpcStreams.delete(token);
+      }
+    })();
+  },
+  // Abort a live subscription's reader (the stream's `close`, run on any terminus).
+  "rpc-stream-close": (token) => {
+    const ctrl = rpcStreams.get(token);
+    if (ctrl) { rpcStreams.delete(token); ctrl.abort(); }
   },
 };
 

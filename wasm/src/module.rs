@@ -66,6 +66,12 @@ impl Module {
 		// on actual use.
 		let mut uses_local_get = false;
 		let mut uses_local_kernel = false;
+		// Whether the program reaches a browser RPC stream builtin (`std.web.stream`).
+		// The three `rpc-stream-*` builtins + their host channel are registered together
+		// once, after the scan (like net): `rpc-stream-next` is a `$task` kind driven by
+		// the scheduler, `open`/`close` are shaped at their emit sites, and the exports
+		// (`__rpc_stream_alloc`/`_event`) are host-called, so none is an ordinary call.
+		let mut uses_rpc_stream = false;
 
 		// Go through each reachable function...
 		for &func_id in &reach.order {
@@ -73,6 +79,13 @@ impl Module {
 			collect_host_calls(&p.functions[func_id as usize].body, &builtin_g, |tag| {
 				if is_net_builtin(tag) {
 					uses_net = true;
+					return;
+				}
+				if matches!(
+					tag,
+					"rpc-stream-open" | "rpc-stream-next" | "rpc-stream-close"
+				) {
+					uses_rpc_stream = true;
 					return;
 				}
 				if tag == "local-get" {
@@ -133,6 +146,25 @@ impl Module {
 			requested.insert(Helper::BrowserEntry);
 			requested.insert(Helper::BrowserResume);
 			imports.register("dom-set-timeout");
+		}
+		// `std.web.stream`: a browser RPC subscription. The exported channel pump
+		// (`__rpc_stream_alloc`/`_event`), the scratch-marshalling helpers the
+		// open/event paths use, the list ops the channel registry/queue use, and the
+		// two host imports (`fetch` start + abort). `RpcStreamEvent` pulls the wake
+		// machinery (`__browser_run`, `__list_append`) via deps.
+		if uses_rpc_stream {
+			requested.insert(Helper::RpcStreamAlloc);
+			requested.insert(Helper::RpcStreamEvent);
+			requested.insert(Helper::RpcStreamOpen);
+			requested.insert(Helper::RpcStreamClose);
+			requested.insert(Helper::MarshalAlloc);
+			requested.insert(Helper::MarshalStore);
+			requested.insert(Helper::MarshalLoad);
+			requested.insert(Helper::MarshalSend);
+			requested.insert(Helper::ListPush);
+			requested.insert(Helper::ListAppend);
+			imports.register("rpc-stream-open");
+			imports.register("rpc-stream-close");
 		}
 		let num_imports = imports.len();
 
@@ -214,6 +246,8 @@ impl Module {
 		runtime.io_last_error = imports.get("io-last-error");
 		runtime.net = net_imports;
 		runtime.dom_set_timeout = imports.get("dom-set-timeout");
+		runtime.rpc_stream_open = imports.get("rpc-stream-open");
+		runtime.rpc_stream_close = imports.get("rpc-stream-close");
 		let wrapper_base = next_synth;
 
 		let mut sorted_globals: Vec<u32> = reach.globals.iter().copied().collect();
@@ -421,6 +455,15 @@ impl Module {
 		// DOM event fires, to run the handler closure stowed at `token`.
 		if let Some(w) = runtime.idx(Helper::DomDispatch) {
 			exports.export("__dom_dispatch", ExportKind::Func, w);
+		}
+		// `__rpc_stream_alloc(token, n) -> ptr` / `__rpc_stream_event(token, kind, ptr,
+		// len)`: the browser loader reserves scratch + pushes parsed SSE events into a
+		// subscription's channel (`std.web.stream`).
+		if let Some(w) = runtime.idx(Helper::RpcStreamAlloc) {
+			exports.export("__rpc_stream_alloc", ExportKind::Func, w);
+		}
+		if let Some(w) = runtime.idx(Helper::RpcStreamEvent) {
+			exports.export("__rpc_stream_event", ExportKind::Func, w);
 		}
 
 		let mut data = DataSection::new();

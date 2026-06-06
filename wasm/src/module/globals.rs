@@ -151,6 +151,26 @@ pub(super) fn build_globals(
 		gidx += 1;
 		runtime.dom_handlers = Some(idx);
 	}
+	// The host-fed RPC stream channel registry (`rpc_channels`): a mutable `(ref null
+	// $list)` of channel records (see `rpc_chan`), indexed by the token
+	// `rpc-stream-open` hands the host. Allocated only when a browser RPC subscription
+	// is reachable; `emit_rpc_stream_open` lazily fills it on the first `open`.
+	if requested.contains(&Helper::RpcStreamEvent) {
+		let idx = gidx;
+		globals_sec.global(
+			GlobalType {
+				val_type: ValType::Ref(RefType {
+					nullable: true,
+					heap_type: HeapType::Concrete(types::T_LIST),
+				}),
+				mutable: true,
+				shared: false,
+			},
+			&ConstExpr::ref_null(HeapType::Concrete(types::T_LIST)),
+		);
+		gidx += 1;
+		runtime.rpc_channels = Some(idx);
+	}
 	// The async scheduler's module-level state: the current fiber's activation stack
 	// plus the fiber/scope tables, ready deque, timers, and the pump's output
 	// channel. Allocated for every program (the scheduler always drives `main`).

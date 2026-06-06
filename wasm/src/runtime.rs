@@ -37,6 +37,38 @@ pub(crate) mod task_kind {
 	pub(crate) const NET_ACCEPT: i32 = 13;
 	pub(crate) const NET_READ: i32 = 14;
 	pub(crate) const NET_WRITE: i32 = 15;
+	// `rpc-stream-next` (`std.web.stream`): pull the next event off a host-fed RPC
+	// stream channel, or park (`wait::RPC`) until the host pushes one via
+	// `__rpc_stream_event`. The browser's push analogue of the net read's pull park.
+	pub(crate) const RPC_NEXT: i32 = 16;
+}
+
+/// The host-fed RPC stream channel (`std.web.stream`): a per-subscription mailbox
+/// the browser loader pushes SSE events into (`__rpc_stream_event`) and a parked
+/// `rpc-stream-next` fiber drains. A channel is a `$tuple(TAG_TUPLE, $valarray)`
+/// stored in the `rpc_channels` registry `$list` (same record shape as the
+/// fiber/scope tables), keyed by the token `rpc-stream-open` hands the host.
+pub(crate) mod rpc_chan {
+	/// `$list` of `$bytes` — pending `next` payloads (the wire-encoded elements),
+	/// FIFO. Appended by `__rpc_stream_event`, drained by `rpc-stream-next` via HEAD.
+	pub(crate) const QUEUE: u32 = 0;
+	/// boxed int — index of the next unread QUEUE element (a head cursor, so a
+	/// dequeue is O(1) and never rebuilds the list).
+	pub(crate) const HEAD: u32 = 1;
+	/// boxed int — fid of the fiber parked in `rpc-stream-next` on this channel, or
+	/// -1 if none is waiting. The host wake reads it to re-ready that one fiber.
+	pub(crate) const WAITER: u32 = 2;
+	/// boxed int — 0/1: the host sent the terminal `done` event (clean end).
+	pub(crate) const DONE: u32 = 3;
+	/// boxed int — 0/1: the host sent a `fault` event (the stream errored).
+	pub(crate) const FAULTED: u32 = 4;
+	pub(crate) const COUNT: u32 = 5;
+
+	/// The event kind the host passes to `__rpc_stream_event` — the SSE event name,
+	/// pre-classified host-side (the loader parses the text framing).
+	pub(crate) const EV_NEXT: i32 = 0;
+	pub(crate) const EV_DONE: i32 = 1;
+	pub(crate) const EV_FAULT: i32 = 2;
 }
 
 /// Activation kinds — an entry in a fiber's await chain (the driver's activation
@@ -96,6 +128,7 @@ pub(crate) mod sched {
 		pub(crate) const NEXT: i32 = 4; // arg = scope id
 		pub(crate) const SCOPE: i32 = 5; // arg = scope id
 		pub(crate) const IO: i32 = 6; // parked on socket readiness; the reactor re-runs `fiber::RETRY`
+		pub(crate) const RPC: i32 = 7; // arg = channel token; the host re-runs `fiber::RETRY` on `__rpc_stream_event`
 	}
 	/// A fiber's focus on its next turn (`Focus`).
 	pub(crate) mod focus {
@@ -394,13 +427,33 @@ pub(crate) enum Helper {
 	/// `__local_exit(old-env) -> nothing` — restore the current fiber's binding env
 	/// to `old-env`. The `defer`'d teardown of `local.with`.
 	LocalExit,
+	/// `__rpc_stream_alloc(i32 token, i32 n) -> i32 ptr` (exported) — reserve `n`
+	/// scratch bytes for the host to write the next stream event's payload into,
+	/// before it calls `__rpc_stream_event`. `token` is ignored (the scratch region
+	/// is shared); it's in the signature so the host's call shape is uniform.
+	RpcStreamAlloc,
+	/// `__rpc_stream_event(i32 token, i32 kind, i32 ptr, i32 len) -> ()` (exported) —
+	/// the browser loader pushes one parsed SSE event into channel `token`: `next`
+	/// (kind 0) enqueues the `len` payload bytes at `ptr`, `done` (1) / `fault` (2)
+	/// set the terminal flags. Then it re-readies the channel's parked puller (if
+	/// any) and pumps the scheduler (`__browser_run`).
+	RpcStreamEvent,
+	/// `__rpc_stream_open(req) -> value` — `rpc-stream-open` (`std.web.stream`): mint a
+	/// fresh channel in the `rpc_channels` registry, marshal the request `$str` into
+	/// scratch, ask the host to start the `fetch` (`rpc-stream-open` import) keyed by
+	/// the new token, and return `task.return token` (the resource the stream owns).
+	RpcStreamOpen,
+	/// `__rpc_stream_close(token) -> value` — `rpc-stream-close`: ask the host to abort
+	/// the subscription's `fetch` reader (`rpc-stream-close` import) and return
+	/// `task.return ()`.
+	RpcStreamClose,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 91;
+	pub(crate) const COUNT: usize = 95;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -486,6 +539,18 @@ pub(crate) struct Runtime {
 	/// calls it to arm a real timer. `Some` on a Browser MVU build (when `BrowserRun` is
 	/// reachable).
 	pub(crate) dom_set_timeout: Option<u32>,
+	/// Wasm index of the mutable `(ref null $list)` global holding the host-fed RPC
+	/// stream channel registry — a `$list` of channel records (see `rpc_chan`),
+	/// indexed by the token `rpc-stream-open` hands the host. `Some` exactly when the
+	/// program reaches an `rpc-stream-*` builtin (a browser RPC subscription); the
+	/// pump's `RPC_NEXT` arm and the exported `__rpc_stream_event` both read it.
+	pub(crate) rpc_channels: Option<u32>,
+	/// Host import index of `rpc-stream-open(ptr, len, token) -> ()` — start the
+	/// browser `fetch` for a subscription. `Some` with `rpc_channels`.
+	pub(crate) rpc_stream_open: Option<u32>,
+	/// Host import index of `rpc-stream-close(token) -> ()` — abort the browser
+	/// `fetch` reader for a subscription. `Some` with `rpc_channels`.
+	pub(crate) rpc_stream_close: Option<u32>,
 }
 
 impl Runtime {
@@ -568,6 +633,12 @@ pub(crate) enum Ty {
 	DomDispatch,
 	/// A nullary thunk `() -> ()` (`__browser_run` / `__browser_resume`).
 	Thunk,
+	/// The exported `__rpc_stream_alloc(i32, i32) -> i32` type (shares the io-read
+	/// `(i32, i32) -> i32` shape).
+	RpcStreamAlloc,
+	/// The exported `__rpc_stream_event(i32, i32, i32, i32) -> ()` type (shares the
+	/// `dom-dev-store-set` four-i32-to-void shape).
+	RpcStreamEvent,
 }
 
 impl Ty {
@@ -592,6 +663,8 @@ impl Ty {
 			Ty::EntryError => ft.for_entry_error(),
 			Ty::DomDispatch => ft.for_dom_dispatch(),
 			Ty::Thunk => ft.for_thunk(),
+			Ty::RpcStreamAlloc => ft.for_io2(),
+			Ty::RpcStreamEvent => ft.for_dom_dev_store_set(),
 		}
 	}
 }
@@ -759,6 +832,10 @@ pub(crate) struct TaskLits {
 	pub(crate) none_name: (u32, u32),
 	pub(crate) defers_name: (u32, u32),
 	pub(crate) cancelled_msg: (u32, u32),
+	/// The failure message a browser RPC stream's `fault` event surfaces as (the
+	/// `wait::RPC` pump arm fails with this `$str`). v1 carries no host detail, like
+	/// the native `http.fetch-stream` fault.
+	pub(crate) stream_fault_msg: (u32, u32),
 }
 
 /// What `__dict_lookup` needs to construct `some v` / `none` `$variant`s: each
@@ -1045,6 +1122,19 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		// reply marshalled back. Shaped at the emit site (`emit_web_fetch`) like an io
 		// read; this entry only drives the "is this a host builtin?" classification.
 		"web-fetch" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
+		// `std.web.stream` browser RPC subscription transport. `rpc-stream-open` starts
+		// the `fetch` (request string in, a channel token back, wrapped in a task);
+		// `rpc-stream-close` aborts it. Both are shaped at their emit sites
+		// (`emit_rpc_stream_open`/`_close`); these entries only drive the "is this a host
+		// builtin?" classification.
+		"rpc-stream-open" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
+		"rpc-stream-close" => Some(HostSig {
 			arity: 1,
 			returns_value: true,
 		}),
@@ -1360,6 +1450,9 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		"net-accept" => task_kind::NET_ACCEPT,
 		"net-read" => task_kind::NET_READ,
 		"net-write" => task_kind::NET_WRITE,
+		// `std.web.stream`: pull the next host-fed RPC stream event (a `$task` the
+		// scheduler drives — dequeue or park on `wait::RPC`).
+		"rpc-stream-next" => task_kind::RPC_NEXT,
 		_ => return None,
 	})
 }

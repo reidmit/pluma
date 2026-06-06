@@ -227,6 +227,7 @@ pub(super) fn resolve_literals(
 					none_name: strpool.intern(&variant_display(opt, none_tag, &p.enums)),
 					defers_name: strpool.intern("__defers"),
 					cancelled_msg: strpool.intern("scope cancelled"),
+					stream_fault_msg: strpool.intern("rpc.stream: stream faulted"),
 				};
 			}
 			_ => diags.push("async runtime needs the `result` + `option` enums".to_string()),
