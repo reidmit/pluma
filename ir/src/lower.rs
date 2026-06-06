@@ -3086,7 +3086,6 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 	// that benefit from an unboxed result (`bytes-get`, `bytes-length`, …) are
 	// `.pa` defs, seeded with their real declared repr in `lower_value_def`.
 	let builtin = |tag: &str| PreEval::Builtin(tag.to_string(), Repr::Boxed);
-	let dict = |tags: &[&str]| PreEval::MethodDict(tags.iter().map(|t| builtin(t)).collect());
 
 	g.add_pre_evaluated("__prelude__", "print", builtin("print"));
 	g.add_pre_evaluated("__prelude__", "debug", builtin("debug"));
@@ -3101,36 +3100,10 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 		builtin("wire-fingerprint"),
 	);
 
-	// `numeric`: add, sub, mul, div, negate.
-	g.add_pre_evaluated(
-		"__prelude__",
-		"numeric@int",
-		dict(&["int-add", "int-sub", "int-mul", "int-div", "int-negate"]),
-	);
-	g.add_pre_evaluated(
-		"__prelude__",
-		"numeric@float",
-		dict(&[
-			"float-add",
-			"float-sub",
-			"float-mul",
-			"float-div",
-			"float-negate",
-		]),
-	);
-
-	// `ord`: compare.
-	g.add_pre_evaluated("__prelude__", "ord@int", dict(&["int-compare"]));
-	g.add_pre_evaluated("__prelude__", "ord@float", dict(&["float-compare"]));
-	g.add_pre_evaluated("__prelude__", "ord@string", dict(&["string-compare"]));
-	g.add_pre_evaluated("__prelude__", "ord@bytes", dict(&["bytes-compare"]));
-
-	// `hash`: hash.
-	g.add_pre_evaluated("__prelude__", "hash@int", dict(&["int-hash"]));
-	g.add_pre_evaluated("__prelude__", "hash@float", dict(&["float-hash"]));
-	g.add_pre_evaluated("__prelude__", "hash@string", dict(&["string-hash"]));
-	g.add_pre_evaluated("__prelude__", "hash@bytes", dict(&["bytes-hash"]));
-	g.add_pre_evaluated("__prelude__", "hash@bool", dict(&["bool-hash"]));
+	// The `numeric`/`ord`/`hash` instance dicts on the primitives are no longer
+	// seeded here: they're written in `prelude.pa` as `implement … { def add =
+	// built-in "int-add" }` and lower to the identical `PreEval::MethodDict`
+	// through the ordinary all-builtin-instance path (`lower_instance`).
 }
 
 /// Reserve a slot for each user-module top-level value def, alias (its

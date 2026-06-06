@@ -8,9 +8,11 @@
 # options and results be compared, sorted, and used as dict keys.
 #
 # (Note for contributors: this file is baked into the compiler and
-# analyzed before any user code. The `numeric` / `ord` / `hash` traits
-# and the `print` / `to-string` builtins are seeded separately in the
-# compiler, since their bodies call straight into backend builtins.)
+# analyzed before any user code. The `numeric` / `ord` / `hash` traits and
+# their primitive instances live here, with `built-in "…"` method bodies.
+# Still seeded separately in the compiler: the `print` / `debug` /
+# `to-string` builtins, and the `wire` trait — `wire` is auto-derived
+# structurally rather than dispatched through a method dict.)
 
 # A value that might be there, or might not. `some x` holds a value;
 # `none` holds nothing. It's how Pluma says "this could be missing"
@@ -172,6 +174,83 @@ public enum regex-pattern {
 # detail of that module.
 public enum request {
 	request-with (dict string string)
+}
+
+# Arithmetic over numbers. `+ - * /` and unary negate all dispatch
+# through `numeric`; instances exist for the two number types only, so
+# there's no implicit int/float mixing. The method bodies call straight
+# into the backend's primitive operations.
+public trait numeric a {
+	add :: fun a a -> a
+	sub :: fun a a -> a
+	mul :: fun a a -> a
+	div :: fun a a -> a
+	negate :: fun a -> a
+}
+
+implement numeric int {
+	def add = built-in "int-add"
+	def sub = built-in "int-sub"
+	def mul = built-in "int-mul"
+	def div = built-in "int-div"
+	def negate = built-in "int-negate"
+}
+
+implement numeric float {
+	def add = built-in "float-add"
+	def sub = built-in "float-sub"
+	def mul = built-in "float-mul"
+	def div = built-in "float-div"
+	def negate = built-in "float-negate"
+}
+
+# How two values of the same type order. `compare` returns an `ordering`;
+# `list.sort` and the comparison operators build on it. Concrete instances
+# for the primitives; `option`/`result` get parametric ones below.
+public trait ord a {
+	compare :: fun a a -> ordering
+}
+
+implement ord int {
+	def compare = built-in "int-compare"
+}
+
+implement ord float {
+	def compare = built-in "float-compare"
+}
+
+implement ord string {
+	def compare = built-in "string-compare"
+}
+
+implement ord bytes {
+	def compare = built-in "bytes-compare"
+}
+
+# Turn a value into an int bucket so it can be a dict key. Concrete
+# instances for the primitives; `option`/`result` get parametric ones below.
+public trait hash a {
+	hash :: fun a -> int
+}
+
+implement hash int {
+	def hash = built-in "int-hash"
+}
+
+implement hash float {
+	def hash = built-in "float-hash"
+}
+
+implement hash string {
+	def hash = built-in "string-hash"
+}
+
+implement hash bytes {
+	def hash = built-in "bytes-hash"
+}
+
+implement hash bool {
+	def hash = built-in "bool-hash"
 }
 
 # The rules below teach `option` and `result` how to compare and hash,

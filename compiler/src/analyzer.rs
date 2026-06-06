@@ -701,47 +701,40 @@ impl<'compiler> Analyzer<'compiler> {
 			self.seed_imported_enums("__prelude__", &prelude.enums, true);
 		}
 
-		// Prelude trait + instances: `numeric` on `int` and `float`. Seeded
-		// directly (skipping the user-facing trait/instance defs) so every
-		// module sees the trait + can dispatch on int/float arithmetic
-		// from the start.
-		self.register_prelude_numeric_trait();
-		// `ord` trait: `compare fun (a, a) -> ordering`. Concrete instances
-		// on int, float, string. Parametric `ord` on `option a` / `list a`
-		// added below once the prelude enum types are registered.
-		self.register_prelude_ord_trait();
-		// `hash` trait: `hash fun a -> int`. Concrete instances on int,
-		// float, string, bool. Unblocks generic `std.dict` over those
-		// primitive key types.
-		self.register_prelude_hash_trait();
 		// `wire` trait: `encode fun a -> bytes` / `decode fun bytes ->
-		// result a wire-error`. Auto-derived structurally: no
-		// concrete instances — dispatch is resolved by synthesizing a schema
-		// from the type's shape in `try_resolve_dispatch`.
+		// result a wire-error`. Auto-derived structurally: no concrete
+		// instances — dispatch is resolved by synthesizing a schema from the
+		// type's shape in `try_resolve_dispatch`. Still seeded in Rust (its
+		// dispatch isn't an ordinary method-dict lookup); `numeric`/`ord`/`hash`
+		// now live in `prelude.pa` and flow through the import path below.
 		self.register_prelude_wire_trait();
 
-		// Imported public traits. Each `use`d module's exported traits join
-		// the dispatch pool so their methods resolve by bare name here
-		// (Rust-style `use Trait`) and are reachable as `module.trait.method`.
-		// The export's canonical param tyvar `Var(0)` is freshened into our
-		// namespace. A trait already registered (prelude here, or a local
-		// trait inserted later in `constrain`) wins — bare-name dispatch then
-		// prefers the local one and `module.trait` disambiguates the rest.
-		let imported_traits: Vec<(String, String, crate::module::TraitExport)> = self
-			.imports
-			.iter()
-			.flat_map(|(local_name, exports)| {
-				let qualified_module = self
-					.import_qualified
-					.get(local_name)
-					.cloned()
-					.unwrap_or_else(|| local_name.clone());
-				exports
-					.traits
-					.iter()
-					.map(move |(name, t)| (qualified_module.clone(), name.clone(), t.clone()))
-			})
-			.collect();
+		// Imported public traits. The prelude's `numeric`/`ord`/`hash` (declared
+		// in `prelude.pa`) and each `use`d module's exported traits join the
+		// dispatch pool so their methods resolve by bare name here (Rust-style
+		// `use Trait`) and are reachable as `module.trait.method`. The export's
+		// canonical param tyvar `Var(0)` is freshened into our namespace. A trait
+		// already registered (`wire` here, or a local trait inserted later in
+		// `constrain`) wins — bare-name dispatch then prefers the local one and
+		// `module.trait` disambiguates the rest. Prelude traits come first so
+		// they win over a same-named import.
+		let mut imported_traits: Vec<(String, String, crate::module::TraitExport)> = Vec::new();
+		if let Some(prelude) = &self.prelude_exports {
+			for (name, t) in &prelude.traits {
+				imported_traits.push(("__prelude__".to_string(), name.clone(), t.clone()));
+			}
+		}
+		imported_traits.extend(self.imports.iter().flat_map(|(local_name, exports)| {
+			let qualified_module = self
+				.import_qualified
+				.get(local_name)
+				.cloned()
+				.unwrap_or_else(|| local_name.clone());
+			exports
+				.traits
+				.iter()
+				.map(move |(name, t)| (qualified_module.clone(), name.clone(), t.clone()))
+		}));
 		for (qualified_module, trait_name, texport) in imported_traits {
 			if self.traits.contains_key(&trait_name) {
 				continue;
@@ -6836,156 +6829,6 @@ impl<'compiler> Analyzer<'compiler> {
 			reason: ConstraintReason { range: expr.range },
 			dispatch_cell: cell,
 		}));
-	}
-
-	// Register the prelude `numeric` trait + `for numeric on int` and
-	// `for numeric on float` instances. Method types reference the trait's
-	// fresh `param_var` so each call-site instantiation can substitute the
-	// dispatch type uniformly.
-	fn register_prelude_numeric_trait(&mut self) {
-		let param_var = self.next_type_var_id;
-		self.next_type_var_id += 1;
-		let a = Type::Var(param_var);
-
-		let binary = Type::Fun(vec![a.clone(), a.clone()], Box::new(a.clone()));
-		let unary = Type::Fun(vec![a.clone()], Box::new(a.clone()));
-
-		let method_order = vec![
-			"add".to_string(),
-			"sub".to_string(),
-			"mul".to_string(),
-			"div".to_string(),
-			"negate".to_string(),
-		];
-		let mut method_types: HashMap<String, Type> = HashMap::new();
-		method_types.insert("add".into(), binary.clone());
-		method_types.insert("sub".into(), binary.clone());
-		method_types.insert("mul".into(), binary.clone());
-		method_types.insert("div".into(), binary.clone());
-		method_types.insert("negate".into(), unary);
-
-		self.traits.insert(
-			"numeric".into(),
-			TraitDecl {
-				param_var,
-				method_order,
-				method_types,
-				defaults: HashMap::new(),
-				defining_module: "__prelude__".into(),
-			},
-		);
-
-		self.instances.insert(
-			("numeric".into(), "int".into()),
-			InstanceDecl {
-				trait_name: "numeric".into(),
-				head_type: Type::Int,
-				param_vars: vec![],
-				where_clauses: vec![],
-				instance_slot_name: "__prelude__.numeric@int".into(),
-			},
-		);
-		self.instances.insert(
-			("numeric".into(), "float".into()),
-			InstanceDecl {
-				trait_name: "numeric".into(),
-				head_type: Type::Float,
-				param_vars: vec![],
-				where_clauses: vec![],
-				instance_slot_name: "__prelude__.numeric@float".into(),
-			},
-		);
-	}
-
-	// Register the prelude `ord` trait + concrete instances on int, float,
-	// and string. `compare`'s return type references the `ordering` prelude
-	// enum we registered just above this call.
-	fn register_prelude_ord_trait(&mut self) {
-		let param_var = self.next_type_var_id;
-		self.next_type_var_id += 1;
-		let a = Type::Var(param_var);
-
-		let ordering_ty = Type::Enum("__prelude__.ordering".into(), vec![]);
-		let compare_ty = Type::Fun(vec![a.clone(), a.clone()], Box::new(ordering_ty));
-
-		let method_order = vec!["compare".to_string()];
-		let mut method_types: HashMap<String, Type> = HashMap::new();
-		method_types.insert("compare".into(), compare_ty);
-
-		self.traits.insert(
-			"ord".into(),
-			TraitDecl {
-				param_var,
-				method_order,
-				method_types,
-				defaults: HashMap::new(),
-				defining_module: "__prelude__".into(),
-			},
-		);
-
-		for (head_key, head_type) in [
-			("int", Type::Int),
-			("float", Type::Float),
-			("string", Type::String),
-			("bytes", Type::Bytes),
-		] {
-			self.instances.insert(
-				("ord".into(), head_key.into()),
-				InstanceDecl {
-					trait_name: "ord".into(),
-					head_type,
-					param_vars: vec![],
-					where_clauses: vec![],
-					instance_slot_name: format!("__prelude__.ord@{}", head_key),
-				},
-			);
-		}
-	}
-
-	// Register the prelude `hash` trait + concrete instances on int,
-	// float, string, bool. Output type is `int` — the analyzer doesn't
-	// know about the hash algorithm; runtime semantics are in the
-	// corresponding hash builtins.
-	fn register_prelude_hash_trait(&mut self) {
-		let param_var = self.next_type_var_id;
-		self.next_type_var_id += 1;
-		let a = Type::Var(param_var);
-
-		let hash_ty = Type::Fun(vec![a], Box::new(Type::Int));
-
-		let method_order = vec!["hash".to_string()];
-		let mut method_types: HashMap<String, Type> = HashMap::new();
-		method_types.insert("hash".into(), hash_ty);
-
-		self.traits.insert(
-			"hash".into(),
-			TraitDecl {
-				param_var,
-				method_order,
-				method_types,
-				defaults: HashMap::new(),
-				defining_module: "__prelude__".into(),
-			},
-		);
-
-		for (head_key, head_type) in [
-			("int", Type::Int),
-			("float", Type::Float),
-			("string", Type::String),
-			("bytes", Type::Bytes),
-			("bool", Type::Bool),
-		] {
-			self.instances.insert(
-				("hash".into(), head_key.into()),
-				InstanceDecl {
-					trait_name: "hash".into(),
-					head_type,
-					param_vars: vec![],
-					where_clauses: vec![],
-					instance_slot_name: format!("__prelude__.hash@{}", head_key),
-				},
-			);
-		}
 	}
 
 	// Register the prelude `wire` trait: `encode fun a -> bytes` and
