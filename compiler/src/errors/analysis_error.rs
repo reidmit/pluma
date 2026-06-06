@@ -50,10 +50,6 @@ pub enum AnalysisErrorKind {
 	WhenNotExhaustive {
 		missing: Vec<String>,
 	},
-	AmbiguousVariant {
-		name: String,
-		enums: Vec<String>,
-	},
 	// A bare variant name was used where a qualified form is now required.
 	// `suggestions` holds the ready-to-write qualified path(s) for this variant
 	// — `enum.variant` for a local enum, `module.enum.variant` for an imported
@@ -215,19 +211,6 @@ impl fmt::Display for AnalysisError {
 				)
 			}
 
-			AmbiguousVariant { name, enums } => {
-				let formatted = enums
-					.iter()
-					.map(|n| format!("`{}`", n))
-					.collect::<Vec<_>>()
-					.join(" or ");
-				write!(
-					f,
-					"Variant `{}` is ambiguous: it could refer to {}.",
-					name, formatted
-				)
-			}
-
 			BareVariantNeedsQualifier { name, .. } => {
 				write!(f, "Variant `{}` must be qualified by its enum.", name)
 			}
@@ -382,7 +365,6 @@ impl Reportable for AnalysisError {
 			RecordFieldNotPresent { .. } => "E0107",
 			EnumVariantNotPresent { .. } => "E0108",
 			WhenNotExhaustive { .. } => "E0109",
-			AmbiguousVariant { .. } => "E0110",
 			BareVariantNeedsQualifier { .. } => "E0135",
 			AmbiguousBareMethod { .. } => "E0111",
 			DuplicateDefinition { .. } => "E0112",

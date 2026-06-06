@@ -104,7 +104,6 @@ information.
 | E0107 | Record field does not exist |
 | E0108 | Enum variant does not exist |
 | E0109 | Non-exhaustive `when` |
-| E0110 | Ambiguous variant |
 | E0111 | Ambiguous bare trait method |
 | E0112 | Duplicate top-level definition |
 | E0113 | No trait instance for a type |

@@ -33,15 +33,6 @@ fn is_bare_prelude_variant(qualified_enum: &str, variant: &str) -> bool {
 	)
 }
 
-// Strip a qualified enum name (`module.color`) down to its user-facing bare
-// name (`color`) for diagnostics.
-fn bare_enum_name(qualified_enum: &str) -> String {
-	qualified_enum
-		.rsplit_once('.')
-		.map(|(_, b)| b.to_string())
-		.unwrap_or_else(|| qualified_enum.to_string())
-}
-
 // Resolved enum definition. `param_vars` are the type-var ids minted when
 // the enum was declared (one per declared param); variant params may reference
 // them by `Type::Var(id)`. To use the enum at a call site, mint fresh vars
@@ -65,9 +56,9 @@ pub struct Analyzer<'compiler> {
 	// that `Type::Enum(qualified-name, _)` lookups work uniformly.
 	enum_defs: HashMap<String, EnumDef>,
 	// Reverse map: bare variant name -> list of (qualified-enum, variant-name)
-	// pairs. Lets `some 5` (no enum prefix) resolve to its enum's variant
-	// constructor, with an `AmbiguousVariant` error if the name appears in
-	// more than one enum.
+	// pairs. Lets the four bare-legal prelude constructors (`some`/`none`/`ok`/
+	// `err`) resolve without an enum prefix; a bare *user* variant is matched
+	// here only to produce a precise "qualify it" diagnostic (E0135).
 	variant_constructors: HashMap<String, Vec<(String, String)>>,
 	// Imports: local namespace name (e.g. `math` from `use math` or `utils`
 	// from `use sub.utils`) -> that module's full exports.
@@ -2654,34 +2645,18 @@ impl<'compiler> Analyzer<'compiler> {
 						.iter()
 						.cloned()
 						.partition(|(q, _)| is_bare_prelude_variant(q, &ident.name));
-					if !prelude.is_empty() {
-						match self.disambiguate_variant_matches(&prelude) {
-							Some((qualified_enum, variant_name)) => {
-								if let Some(enum_def) = self.enum_defs.get(&qualified_enum).cloned() {
-									let (enum_ty, variant_params, found) =
-										self.instantiate_variant(&qualified_enum, &variant_name, &enum_def);
-									if found.is_some() {
-										if variant_params.is_empty() {
-											expr.ty = enum_ty;
-										} else {
-											expr.ty = Type::Fun(variant_params, enum_ty.into());
-										}
-										return;
-									}
+					// Each bare-legal name belongs to exactly one prelude enum, so the
+					// prelude bucket holds at most one match.
+					if let Some((qualified_enum, variant_name)) = prelude.into_iter().next() {
+						if let Some(enum_def) = self.enum_defs.get(&qualified_enum).cloned() {
+							let (enum_ty, variant_params, found) =
+								self.instantiate_variant(&qualified_enum, &variant_name, &enum_def);
+							if found.is_some() {
+								if variant_params.is_empty() {
+									expr.ty = enum_ty;
+								} else {
+									expr.ty = Type::Fun(variant_params, enum_ty.into());
 								}
-							}
-							None => {
-								let mut enums: Vec<String> =
-									prelude.iter().map(|(q, _)| bare_enum_name(q)).collect();
-								enums.sort();
-								self.error(
-									ident.range,
-									AmbiguousVariant {
-										name: ident.name.clone(),
-										enums,
-									},
-								);
-								expr.ty = Type::Unknown;
 								return;
 							}
 						}
@@ -4248,28 +4223,10 @@ impl<'compiler> Analyzer<'compiler> {
 		let (prelude, user): (Vec<_>, Vec<_>) = candidates
 			.into_iter()
 			.partition(|(q, _)| is_bare_prelude_variant(q, &name.name));
-		if !prelude.is_empty() {
-			return match prelude.len() {
-				1 => {
-					let (enum_name, params) = prelude.into_iter().next().unwrap();
-					VariantResolution::Found(enum_name, params)
-				}
-				_ => {
-					let mut enums: Vec<String> = prelude
-						.into_iter()
-						.map(|(n, _)| bare_enum_name(&n))
-						.collect();
-					enums.sort();
-					self.error(
-						name.range,
-						AmbiguousVariant {
-							name: name.name.clone(),
-							enums,
-						},
-					);
-					VariantResolution::Reported
-				}
-			};
+		// Each bare-legal name belongs to exactly one prelude enum, so the
+		// prelude bucket holds at most one match.
+		if let Some((enum_name, params)) = prelude.into_iter().next() {
+			return VariantResolution::Found(enum_name, params);
 		}
 		// Only user enums declare this variant — require qualification.
 		let enums: Vec<String> = user.into_iter().map(|(n, _)| n).collect();
@@ -6565,29 +6522,6 @@ impl<'compiler> Analyzer<'compiler> {
 						.map(|d| &d.defining_module == module_name)
 						.unwrap_or(false)
 				})
-				.collect();
-			if local.len() == 1 {
-				return Some(local[0].clone());
-			}
-			if local.len() > 1 {
-				return None;
-			}
-		}
-		None
-	}
-
-	// Pick a single (enum, variant) from a list of matches by precedence:
-	// local-module enums shadow everything; if no local match, a single
-	// non-local match wins; otherwise return None (caller reports ambiguity).
-	fn disambiguate_variant_matches(&self, matches: &[(String, String)]) -> Option<(String, String)> {
-		if matches.len() == 1 {
-			return Some(matches[0].clone());
-		}
-		if let Some(module_name) = &self.module_name {
-			let prefix = format!("{}.", module_name);
-			let local: Vec<&(String, String)> = matches
-				.iter()
-				.filter(|(q, _)| q.starts_with(&prefix))
 				.collect();
 			if local.len() == 1 {
 				return Some(local[0].clone());
