@@ -1,18 +1,33 @@
 # The shared contract. A `remote def`'s signature is the whole API: the pure
-# logical signature `fun A.. -> task R`, no transport `request`. The compiler
-# supplies each endpoint's body per target — the written handler on the server,
-# a transport stub on the client — so the two agree by construction (see
-# notes/RPC.md).
+# logical signature `fun A.. -> task R` (or `fun A.. -> stream R` for a
+# subscription), no transport `request`. The compiler supplies each endpoint's
+# body per target — the written handler on the server, a transport stub on the
+# client — so the two agree by construction (see notes/RPC.md).
 #
 # This module is compiled into BOTH artifacts. On the server the body below is
 # the real handler; on the client the body is replaced by a stub that encodes
 # the arguments, calls over the wire, and decodes the reply — so `api.add` reads
-# like a local async call on both ends.
+# like a local async call (and `api.ticks` like a local stream) on both ends.
 
 use std.task
+use std.stream
+use std.time
 
 # Adds two numbers, on the server. (A toy stand-in for real server work — a
 # database read, a downstream call — that a browser can't do directly.)
 public remote def add :: fun int int -> task int = fun a b {
 	task.return (a + b)
+}
+
+# A *subscription*: a server→client stream that emits an incrementing counter
+# once every `period` seconds, forever. The browser subscribes to it; closing the
+# subscription (the client stops asking for it) cancels the stream and the server
+# sees the connection drop. The whole point of the streaming slice — many values
+# over time from one call.
+public remote def ticks :: fun int -> stream int = fun period {
+	stream.from-seed 0 fun i {
+		task.map (task.sleep (time.seconds period)) fun _elapsed {
+			some (i, i + 1)
+		}
+	}
 }

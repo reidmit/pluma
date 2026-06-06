@@ -1,11 +1,19 @@
 # The client half — a browser MVU app that calls the server. `pluma build`
 # emits this to a web bundle (app.wasm + loader.js + index.html).
 #
-# The remote call is just an async function: `api.add 2 3` returns a `task int`
-# exactly like a local task, and the MVU runtime runs it as a command, feeding
-# the result back into `update`. `api` is the *real* contract module — on this
-# (client) artifact the compiler swaps each `remote def`'s body for a transport
-# stub, so the call goes over the wire while reading like a local await.
+# Two kinds of remote call, both reading like local async code:
+#   - `api.add 2 3` is a *unary* call returning a `task int`; the MVU runtime
+#     runs it as a command and feeds the result back into `update`. The "add"
+#     button fires two at once to show they're genuinely concurrent (no
+#     main-thread freeze, both in flight in the network panel).
+#   - `api.ticks 1` is a *subscription* returning a `stream int`; `subscribe`
+#     keeps it running across messages and `app.application` reconciles it by key
+#     (start when it appears, cancel when it vanishes). Toggling it off cancels
+#     the stream — the server sees the connection close.
+#
+# `api` is the *real* contract module — on this (client) artifact the compiler
+# swaps each `remote def`'s body for a transport stub, so the calls go over the
+# wire while reading like local awaits.
 
 use std.task
 use std.web.app
@@ -16,31 +24,68 @@ use api
 enum msg {
 	compute
 	got-sum int
+	tick int
+	toggle-ticks
 }
 
-# (sum, in-flight) — the last result and whether a call is outstanding.
-alias model {sum :: int, pending :: bool}
+# sum/pending track the unary calls; tick is the latest streamed value;
+# ticking says whether the subscription is currently active.
+alias model {sum :: int, pending :: int, tick :: int, ticking :: bool}
 
-def init :: (model, list (task msg)) = ({sum: 0, pending: false}, [])
+def init :: (model, list (task msg)) = ({sum: 0, pending: 0, tick: 0, ticking: true}, [])
 
 def update :: fun msg model -> (model, list (task msg)) = fun m state {
-	when m is compute {
-		# Fire the remote call as a command; its result returns as `got-sum`.
-		({sum: state.sum, pending: true}, [task.map (api.add 2 3) fun n { got-sum n }])
-	} is got-sum n {
-		({sum: n, pending: false}, [])
+	when m is msg.compute {
+		# Fire TWO remote calls at once. With the async transport both are in
+		# flight together (the cooperative scheduler suspends each fiber on its
+		# fetch) — no main-thread freeze, unlike the old sync XHR.
+		({sum: state.sum, pending: 2, tick: state.tick, ticking: state.ticking}, [
+			task.map (api.add 2 3) fun n {
+				msg.got-sum n
+			},
+			task.map (api.add 20 30) fun n {
+				msg.got-sum n
+			},
+		])
+	} is msg.got-sum n {
+		({sum: n, pending: state.pending - 1, tick: state.tick, ticking: state.ticking}, [])
+	} is msg.tick n {
+		({sum: state.sum, pending: state.pending, tick: n, ticking: state.ticking}, [])
+	} is msg.toggle-ticks {
+		({sum: state.sum, pending: state.pending, tick: state.tick, ticking: !state.ticking}, [])
+	}
+}
+
+# The subscriptions the model wants right now. When `ticking` is on, subscribe to
+# the server's tick stream keyed "ticks"; when off, return none — the runtime
+# cancels the running stream (closing the connection). The key keeps the *same*
+# subscription alive across every other message instead of restarting it.
+def subscriptions :: fun model -> list (app.sub msg) = fun state {
+	if state.ticking {
+		[app.subscribe "ticks" (api.ticks 1) fun n {
+			msg.tick n
+		}]
+	} else {
+		[]
 	}
 }
 
 def view :: fun model -> html.html msg = fun state {
-	let label = if state.pending {
-		"computing 2 + 3 on the server…"
+	let sum-label = if state.pending > 0 {
+		"computing on the server… ($(to-string state.pending) in flight)"
 	} else {
-		"2 + 3 = " ++ to-string state.sum
+		"last server sum = $(to-string state.sum)"
+	}
+	let ticks-label = if state.ticking {
+		"server tick: $(to-string state.tick)"
+	} else {
+		"ticks stopped (last: $(to-string state.tick))"
 	}
 	html.div [] [
-		html.span [] [html.text label],
-		html.button [events.on-click compute] [html.text "add on server"],
+		html.div [] [html.span [] [html.text sum-label]],
+		html.button [events.on-click msg.compute] [html.text "add on server (×2)"],
+		html.div [] [html.span [] [html.text ticks-label]],
+		html.button [events.on-click msg.toggle-ticks] [html.text "toggle ticks"],
 	]
 }
 
@@ -49,5 +94,5 @@ def main = fun {
 	# at the baked origin (`pluma build/dev --server-url`; default
 	# `http://localhost:8080` for `build`, same-origin for `dev`, which proxies
 	# `/rpc/*` to the server). The origin is build-time only — never settable here.
-	app.element init update view
+	app.application init update subscriptions view
 }

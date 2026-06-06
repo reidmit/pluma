@@ -448,9 +448,12 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients) {
 }
 
 /// Forward one RPC request verbatim to the server subprocess and relay its response
-/// back. The server speaks `Connection: close`, so reading to EOF gets the whole
-/// reply. A down server surfaces as a 502 (the client stub turns it into a clean
-/// transport failure).
+/// back. The relay is *streamed* (`io::copy` in chunks, not read-to-EOF-then-write):
+/// a streaming endpoint's response (`Connection: close` SSE that stays open for
+/// minutes) must reach the browser frame-by-frame, not all at once — buffering it
+/// would hang every subscription forever. A unary reply still works (copy ends at
+/// the server's close). A down server surfaces as a 502 (the client stub turns it
+/// into a clean transport failure).
 fn proxy_rpc(downstream: &mut TcpStream, request_line: &str, headers: &[String], body: &[u8]) {
 	let mut up = match TcpStream::connect(("127.0.0.1", FULLSTACK_SERVER_PORT)) {
 		Ok(u) => u,
@@ -480,10 +483,13 @@ fn proxy_rpc(downstream: &mut TcpStream, request_line: &str, headers: &[String],
 		);
 		return;
 	}
-	let mut resp = Vec::new();
-	let _ = up.read_to_end(&mut resp);
-	let _ = downstream.write_all(&resp);
-	let _ = downstream.flush();
+	// Stream upstream→downstream as bytes arrive so SSE frames are relayed live.
+	let mut down = match downstream.try_clone() {
+		Ok(d) => d,
+		Err(_) => return,
+	};
+	let _ = std::io::copy(&mut up, &mut down);
+	let _ = down.flush();
 }
 
 // --------------------------------------------------------------------------
