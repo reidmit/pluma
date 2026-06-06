@@ -133,13 +133,13 @@ def dec-budget = fun hi {
 # ---- the core matcher ----
 
 def re-match = fun pat input pos caps k {
-	when pat is p-literal lit {
+	when pat is regex-pattern.p-literal lit {
 		if match-literal input pos lit {
 			k (pos + bytes.length lit) caps
 		} else {
 			none
 		}
-	} is p-class name {
+	} is regex-pattern.p-class name {
 		if pos < bytes.length input {
 			if class-matches name (bytes.get input pos) {
 				k (pos + 1) caps
@@ -149,19 +149,19 @@ def re-match = fun pat input pos caps k {
 		} else {
 			none
 		}
-	} is p-anchor name {
+	} is regex-pattern.p-anchor name {
 		if anchor-ok name input pos {
 			k pos caps
 		} else {
 			none
 		}
-	} is p-sequence parts {
+	} is regex-pattern.p-sequence parts {
 		re-seq parts input pos caps k
-	} is p-alternation parts {
+	} is regex-pattern.p-alternation parts {
 		re-alt parts input pos caps k
-	} is p-repeat inner lo hi {
+	} is regex-pattern.p-repeat inner lo hi {
 		re-repeat inner lo hi input pos caps k
-	} is p-capture name inner {
+	} is regex-pattern.p-capture name inner {
 		re-match inner input pos caps fun endp c2 {
 			k endp [(name, pos, endp), ...c2]
 		}

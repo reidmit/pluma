@@ -1,9 +1,9 @@
 def describe = fun result {
-	when result is lt {
+	when result is ordering.lt {
 		"less"
-	} is eq {
+	} is ordering.eq {
 		"equal"
-	} is gt {
+	} is ordering.gt {
 		"greater"
 	}
 }

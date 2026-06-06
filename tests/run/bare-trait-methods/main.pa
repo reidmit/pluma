@@ -2,11 +2,11 @@
 # `hash.hash 42`. The qualified form is still legal as an escape hatch.
 
 def describe = fun ord-result {
-	when ord-result is lt {
+	when ord-result is ordering.lt {
 		"less"
-	} is eq {
+	} is ordering.eq {
 		"equal"
-	} is gt {
+	} is ordering.gt {
 		"greater"
 	}
 }

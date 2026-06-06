@@ -110,11 +110,11 @@ implement ord (option a) where (ord a) {
     def compare = fun x y {
         when x is some xv {
             when y is some yv { compare xv yv }  # bare — dispatches on `a`
-            is none { gt }
+            is none { ordering.gt }
         }
         is none {
-            when y is some _v { lt }
-            is none { eq }
+            when y is some _v { ordering.lt }
+            is none { ordering.eq }
         }
     }
 }

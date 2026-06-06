@@ -47,11 +47,11 @@ def main = fun {
 		io.print "eq:     $(to-string (earlier == earlier))"
 		show-instant "min" (time.min earlier t)
 		show-instant "max" (time.max earlier t)
-		when time.compare earlier t is lt {
+		when time.compare earlier t is ordering.lt {
 			io.print "compare: lt"
-		} is eq {
+		} is ordering.eq {
 			io.print "compare: eq"
-		} is gt {
+		} is ordering.gt {
 			io.print "compare: gt"
 		}
 

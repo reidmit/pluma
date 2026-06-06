@@ -1335,11 +1335,17 @@ impl<'a> Lowerer<'a> {
 						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
 					}
 				}
-				// `Enum.variant` for a local-module enum.
-				let qualified_enum = format!("{}.{}", self.current_module, head.name);
-				if self.enums.contains_key(&qualified_enum) {
-					let arity = self.variant_arity(&qualified_enum, &tail.name)?;
-					return self.make_variant_ref(&qualified_enum, &tail.name, arity, range);
+				// `Enum.variant` for a local-module enum, or a prelude enum
+				// (`option`/`result`/`ordering`/…) which is in scope unqualified
+				// — so `ordering.gt` resolves the same way a local `color.red`
+				// does. (The analyzer reshaped both to this 2-segment form.)
+				let current = self.current_module.clone();
+				for owner in [current.as_str(), "__prelude__"] {
+					let qualified_enum = format!("{}.{}", owner, head.name);
+					if self.enums.contains_key(&qualified_enum) {
+						let arity = self.variant_arity(&qualified_enum, &tail.name)?;
+						return self.make_variant_ref(&qualified_enum, &tail.name, arity, range);
+					}
 				}
 				Err(format!(
 					"`{}.{}` is neither an imported value nor a local variant",

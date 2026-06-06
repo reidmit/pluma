@@ -18,7 +18,7 @@ use std.dict
 #
 #     request.new ()
 public def new :: fun nothing -> request = fun {
-	request-with (dict.empty ())
+	request.request-with (dict.empty ())
 }
 
 # Attaches (or overwrites) one header on a request, returning the updated
@@ -27,15 +27,15 @@ public def new :: fun nothing -> request = fun {
 #
 #     request.header (request.new ()) "x-trace-id" trace
 public def header :: fun request string string -> request = fun req key value {
-	when req is request-with headers {
-		request-with (dict.insert headers key value)
+	when req is request.request-with headers {
+		request.request-with (dict.insert headers key value)
 	}
 }
 
 # The headers attached to a request, as a plain dict. The transport reads
 # this to turn metadata into outbound HTTP headers.
 public def headers :: fun request -> dict string string = fun req {
-	when req is request-with h {
+	when req is request.request-with h {
 		h
 	}
 }

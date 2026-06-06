@@ -389,11 +389,11 @@ public def compare :: fun instant instant -> ordering = fun a b {
 	let x = to-unix-nanos a
 	let y = to-unix-nanos b
 	if x < y {
-		lt
+		ordering.lt
 	} else if x > y {
-		gt
+		ordering.gt
 	} else {
-		eq
+		ordering.eq
 	}
 }
 

@@ -4,11 +4,11 @@ use std.list
 # method as a first-class value, which the wasm backend can't wrap yet).
 def cmp :: fun int int -> ordering = fun a b {
 	if a < b {
-		lt
+		ordering.lt
 	} else if a > b {
-		gt
+		ordering.gt
 	} else {
-		eq
+		ordering.eq
 	}
 }
 
