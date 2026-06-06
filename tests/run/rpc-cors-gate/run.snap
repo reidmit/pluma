@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+same-origin -> 200 acao=-
+cross-site (default) -> 403 acao=-
+preflight (allowed) -> 204 acao=https://app.example.com
+cross-origin (allowed) -> 200 acao=https://app.example.com
+no-origin (curl) -> 200 acao=-
+== stderr ==

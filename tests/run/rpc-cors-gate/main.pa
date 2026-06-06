@@ -1,0 +1,61 @@
+# Framework-level cross-origin (CSRF) gate on the RPC mount. `rpc.guard` wraps a
+# dispatcher and decides, per request, whether a browser will vouch for it as
+# coming from our own page: it trusts `Sec-Fetch-Site` (a forbidden header page
+# JS can't forge), falls back to Origin-vs-Host, and admits non-browser clients
+# (no Origin, no Sec-Fetch-Site) since CSRF is a browser-only threat. Here we
+# drive `guard` directly over hand-built requests with a trivial inner handler,
+# so the gate logic is exercised without a socket or the wire codec:
+#
+#   - same-origin POST              -> 200 (admitted, no CORS header needed)
+#   - cross-site POST, default policy -> 403 (rejected before the handler)
+#   - OPTIONS preflight from an allowed origin -> 204 with Allow-Origin
+#   - cross-origin POST from an allowed origin  -> 200, reply carries Allow-Origin
+#   - no-Origin / curl-shaped request -> 200 (non-browser, out of CSRF scope)
+use std.dict
+use std.router
+use std.rpc
+use std.string
+use std.task
+use std.sys.http
+
+# Stands in for the synthesized dispatcher: always 200.
+def inner :: fun http.request -> task http.response = fun _req {
+	task.return (http.text 200 "ok")
+}
+
+# A request with the given method and headers; path/query/body are fixed.
+def req :: fun http.method (list (string, string)) -> http.request = fun m hs {
+	{
+		method: m,
+		path: "/rpc/api.add",
+		query: "",
+		headers: dict.from-entries hs,
+		body: string.to-bytes "",
+	}
+}
+
+# Status code plus the echoed Allow-Origin (or `-` when none), one line.
+def report :: fun string http.response -> nothing = fun label resp {
+	let acao = (dict.lookup resp.headers "access-control-allow-origin") ?? "-"
+	print "$(label) -> $(to-string resp.status) acao=$(acao)"
+}
+
+def main = fun {
+	let same = rpc.guard rpc.policy.same-origin inner
+	let cross = rpc.guard (rpc.policy.allow ["https://app.example.com"]) inner
+
+	# `mounted-with` is the cross-origin opt-in; bind it to pin its type.
+	let _route :: router.route = rpc.mounted-with (rpc.policy.allow ["https://app.example.com"])
+
+	try a = same (req http.method.post [("sec-fetch-site", "same-origin")])
+	report "same-origin" a
+	try b = same (req http.method.post [("sec-fetch-site", "cross-site"), ("origin", "https://evil.example")])
+	report "cross-site (default)" b
+	try c = cross (req http.method.options [("origin", "https://app.example.com"), ("sec-fetch-site", "cross-site")])
+	report "preflight (allowed)" c
+	try d = cross (req http.method.post [("origin", "https://app.example.com"), ("sec-fetch-site", "cross-site")])
+	report "cross-origin (allowed)" d
+	try e = same (req http.method.post [])
+	report "no-origin (curl)" e
+	task.return 0
+}
