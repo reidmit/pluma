@@ -543,11 +543,11 @@ public def application :: fun (model, list (task msg)) (fun msg model -> (model,
 
 # --- HMR variants: model-preserving hot reload for `pluma dev` ---------------
 
-# `pluma dev --web` redirects `app.sandbox` / `app.element` to these when
-# the model is wire-able, so the live model survives a reload. They are otherwise
-# identical to their plain counterparts; the only additions are restoring the
-# saved model on mount and persisting it on every message. The redirect (not the
-# user) chooses these, so a non-wire-able model silently keeps the plain
+# `pluma dev --web` redirects `app.sandbox` / `app.element` / `app.application` to
+# these when the model is wire-able, so the live model survives a reload. They are
+# otherwise identical to their plain counterparts; the only additions are restoring
+# the saved model on mount and persisting it on every message. The redirect (not
+# the user) chooses these, so a non-wire-able model silently keeps the plain
 # (full-reload) variant -- hence the separate defs carrying `where (wire model)`.
 #
 # The model crosses a reload as `hex.encode (wire.encode model)` in a fixed
@@ -579,10 +579,20 @@ public def sandbox-dev :: fun model (fun msg model -> model) (fun model -> html.
 	}) view
 }
 
-# `element`, plus model persistence across a `pluma dev` reload. The initial
-# commands re-run on restore (so an effect-driven app -- a ticking clock, say --
-# keeps going after a reload); only the model is carried over.
+# `element`, plus model persistence across a `pluma dev` reload. The thin
+# no-subscriptions wrapper over `application-dev`, mirroring `element` over
+# `application`.
 public def element-dev :: fun (model, list (task msg)) (fun msg model -> (model, list (task msg))) (fun model -> html.html msg) -> task nothing where (wire model) = fun init update view {
+	application-dev init update (fun _m {
+		[]
+	}) view
+}
+
+# `application`, plus model persistence across a `pluma dev` reload. The initial
+# commands re-run on restore (so an effect-driven app -- a ticking clock, say --
+# keeps going after a reload), and the subscriptions are reconciled against the
+# restored model on mount; only the model itself is carried over.
+public def application-dev :: fun (model, list (task msg)) (fun msg model -> (model, list (task msg))) (fun model -> list (sub msg)) (fun model -> html.html msg) -> task nothing where (wire model) = fun init update subscriptions view {
 	let (init-model, init-cmds) = init
 	let start = hmr-restore init-model
 	let model = ref.new start
@@ -591,6 +601,7 @@ public def element-dev :: fun (model, list (task msg)) (fun msg model -> (model,
 		()
 	}
 	let tree = ref.new (render (view start) box)
+	let subs = ref.new (dict.empty ())
 	let dispatch = fun m {
 		let (next, cmds) = update m (ref.get model)
 		ref.set model next
@@ -598,10 +609,12 @@ public def element-dev :: fun (model, list (task msg)) (fun msg model -> (model,
 		let new-tree = diff root (ref.get tree) (view next) box
 		ref.set tree new-tree
 		run-commands cmds (ref.get box)
+		reconcile-subs subs (subscriptions next) (ref.get box)
 	}
 	ref.set box dispatch
 	dom.append-child root (node-of (ref.get tree))
 	run-commands init-cmds dispatch
+	reconcile-subs subs (subscriptions start) dispatch
 	try _u = task.return ()
 	task.return ()
 }

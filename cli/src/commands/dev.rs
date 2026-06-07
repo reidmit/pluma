@@ -368,8 +368,23 @@ fn build_fullstack_artifacts(
 	entry_path: &str,
 	server_url: &str,
 ) -> Result<(Vec<u8>, Vec<u8>), Vec<Diagnostic>> {
-	let mut compiler =
-		Compiler::from_fullstack_dir(entry_path.to_string())?.with_rpc_base_url(server_url.to_string());
+	// Try the model-preserving HMR redirect for the client (`app.element`/
+	// `app.application` → their `-dev` variants), so the live model survives a dev
+	// reload. If the client's model isn't `wire`-able the analyzer rejects the
+	// redirect, so fall back to a plain (full-reload) client. The server build is
+	// identical either way; mirrors the single-file `dev_web` hmr-then-plain probe.
+	build_fullstack_with_hmr(entry_path, server_url, true)
+		.or_else(|_| build_fullstack_with_hmr(entry_path, server_url, false))
+}
+
+fn build_fullstack_with_hmr(
+	entry_path: &str,
+	server_url: &str,
+	hmr: bool,
+) -> Result<(Vec<u8>, Vec<u8>), Vec<Diagnostic>> {
+	let mut compiler = Compiler::from_fullstack_dir(entry_path.to_string())?
+		.with_rpc_base_url(server_url.to_string())
+		.with_hmr(hmr);
 	compiler.check()?;
 	compiler.gate_fullstack()?;
 	let server = compiler.entry_modules[0].clone();

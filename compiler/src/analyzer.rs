@@ -3401,13 +3401,13 @@ impl<'compiler> Analyzer<'compiler> {
 				// `option`/`result` enums.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					if let Some(exports) = self.imports.get(&ident.name).cloned() {
-						// `pluma dev` hot-reload: redirect `app.sandbox`/`app.element` to the
-						// model-persisting `app.sandbox-dev`/`app.element-dev`. Keyed on the
+						// `pluma dev` hot-reload: redirect `app.sandbox`/`app.element`/
+						// `app.application` to the model-persisting `-dev` variants. Keyed on the
 						// `-dev` variant existing in the module (only `std.web.app` defines
 						// them), so it's alias-agnostic and a no-op everywhere else. Renaming
 						// `field` here -- before the constraint freshening below -- discharges
 						// the variant's `where (wire model)` at this call site.
-						if self.hmr && (field.name == "sandbox" || field.name == "element") {
+						if self.hmr && matches!(field.name.as_str(), "sandbox" | "element" | "application") {
 							let dev_name = format!("{}-dev", field.name);
 							if exports.values.contains_key(&dev_name) {
 								field.name = dev_name;
