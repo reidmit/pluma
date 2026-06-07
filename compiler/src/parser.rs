@@ -512,21 +512,35 @@ impl<'a> Parser<'a> {
 		Some(body)
 	}
 
-	// Parse `try Pattern = Expr` and collect everything after it (through
-	// the end of the current block) into `rest`. Nested `try`s in `rest`
-	// are handled by recursing through `parse_body_expressions`.
+	// Parse `try Pattern = Expr` — or the bindingless `try Expr` — and collect
+	// everything after it (through the end of the current block) into `rest`.
+	// Nested `try`s in `rest` are handled by recursing through
+	// `parse_body_expressions`.
 	fn parse_try_with_rest(&mut self) -> Option<ExprNode> {
 		let (start, _) = expect_token_and_advance!(self, Token::KeywordTry);
 
-		let pattern = match self.parse_pattern() {
-			Some(p) => p,
-			None => {
-				self.expect_identifier()?;
-				return None;
-			}
+		// Disambiguate the two surface forms before committing the cursor.
+		// `try Pattern = Expr` binds; `try Expr` discards. The bindingless
+		// form is exact sugar for `try _ = Expr`.
+		let (pattern, binding) = if self.try_head_is_binding() {
+			let pattern = match self.parse_pattern() {
+				Some(p) => p,
+				None => {
+					self.expect_identifier()?;
+					return None;
+				}
+			};
+			expect_token_and_advance!(self, Token::Equal);
+			(pattern, true)
+		} else {
+			// Synthetic `_` at the keyword's tail; the real range comes from
+			// `value` once parsed.
+			let pat = PatternNode {
+				range: Range::collapsed(start.line, start.col),
+				kind: PatternKind::Underscore,
+			};
+			(pat, false)
 		};
-
-		expect_token_and_advance!(self, Token::Equal);
 
 		let value = self.parse_expression()?;
 
@@ -545,11 +559,55 @@ impl<'a> Parser<'a> {
 				rest,
 				pattern_ty: Type::Unknown,
 				task_carrier: false,
+				binding,
 			}),
 			ty: Type::Unknown,
 			trait_dispatch: None,
 			dispatch_sink: None,
 		})
+	}
+
+	// Peek past `try` to decide whether the head is a binding (`Pattern =`)
+	// or a bindingless discard (`Expr`). The binding `=` is `Token::Equal`
+	// (distinct from `==`/`DoubleEqual`), and the grammar only ever emits a
+	// bare `=` in a binding position — never as an expression operator — so it
+	// always sits at bracket depth 0 on the same logical line as `try`. We
+	// scan `current_token` plus the buffered/streamed lookahead (without
+	// consuming any of it) and report a binding iff a depth-0 `Equal` appears
+	// before the head's first depth-0 line break.
+	fn try_head_is_binding(&mut self) -> bool {
+		let mut depth: i32 = 0;
+		let mut i = 0; // 0 = current_token; 1.. = lookahead[i - 1]
+		loop {
+			let tok = if i == 0 {
+				self.current_token
+			} else {
+				while self.lookahead.len() < i {
+					match self.next_significant_token() {
+						Some(t) => self.lookahead.push_back(t),
+						None => return false,
+					}
+				}
+				self.lookahead.get(i - 1).copied()
+			};
+			let Some(tok) = tok else { return false };
+			match tok {
+				Token::LeftParen(..) | Token::LeftBracket(..) | Token::LeftBrace(..) => depth += 1,
+				Token::RightParen(..) | Token::RightBracket(..) | Token::RightBrace(..) => depth -= 1,
+				Token::Equal(..) if depth == 0 => return true,
+				Token::LineBreak(..)
+				| Token::LineBreakWithIndentIncrease(..)
+				| Token::LineBreakWithIndentDecrease(..)
+				| Token::Indent(..)
+				| Token::Outdent(..)
+					if depth == 0 =>
+				{
+					return false;
+				}
+				_ => {}
+			}
+			i += 1;
+		}
 	}
 
 	fn parse_fun(&mut self) -> Option<FunNode> {

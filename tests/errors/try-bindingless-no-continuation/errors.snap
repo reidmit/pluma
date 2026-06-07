@@ -1,0 +1,11 @@
+---
+source: tests/errors.rs
+expression: output
+---
+error[E0124]: `try` needs a continuation.
+  │
+  ├─𜱶 help: at least one expression must follow it in the surrounding block.
+  │
+5 │  try o
+  │  ^^^^^
+  ╰─𜱶 tests/errors/try-bindingless-no-continuation/main.pa:5:2

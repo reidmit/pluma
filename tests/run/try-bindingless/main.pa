@@ -1,0 +1,37 @@
+# Bindingless `try Expr` is exact sugar for `try _ = Expr`: it sequences the
+# carrier (awaiting a task, propagating an option/result failure) but discards
+# the payload. Exercised here against both the task carrier (in `main`) and the
+# result carrier (in `steps`), interleaved with binding `try`s to confirm the
+# two surfaces compose in one block.
+use std.task
+
+def beat :: fun string -> (task int) = fun label {
+	print label
+	task.return 0
+}
+
+def steps :: fun int -> (result int string) = fun n {
+	if n > 0 {
+		ok (n * 2)
+	} else {
+		err "nonpositive"
+	}
+}
+
+def compute :: fun int -> (result int string) = fun n {
+	try steps n
+	try doubled = steps n
+	ok doubled
+}
+
+def main = fun {
+	try beat "one"
+	try x = task.return 21
+	try beat "two"
+	if compute 21 is ok v {
+		print (to-string (x + v))
+	} else {
+		print "failed"
+	}
+	task.return 0
+}

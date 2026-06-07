@@ -1,0 +1,205 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/try-bindingless/main.pa) {
+    comments: {
+        0: " Bindingless `try Expr` parses to the same node as `try _ = Expr`: a `try`",
+        1: " whose pattern is a synthetic `Underscore`. The analyzer treats it identically",
+        2: " to the explicit-wildcard form across all three carriers (task here, result in",
+        3: " `compute`), so it stays exhaustiveness/type-checked and the task-carrier `try`",
+        4: " is still left intact for CPS lowering.",
+    },
+    ast: Some(
+        module(5:0-24:1) [
+            use(5:0-5:12) `std.task`,
+        ] [
+            def(7:0-10:1) :: nothing {
+                name: ident(7:4-7:8) `beat`,
+                kind: expr(7:11-10:1) :: nothing -> task int {
+                    kind: fun(7:11-10:1) {
+                        params: [],
+                        body: [
+                            expr(8:1-9:14) :: task int {
+                                kind: try(8:1-9:14) {
+                                    pattern: pattern(8:1-8:1) Underscore,
+                                    value: expr(8:5-8:18) :: task int {
+                                        kind: call(8:5-8:18) {
+                                            callee: expr(8:5-8:16) :: 'a -> task 'a {
+                                                kind: namespace-access `task.return`,
+                                            },
+                                            args: [
+                                                expr(8:17-8:18) :: int {
+                                                    kind: literal(8:17-8:18) int 0,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    rest: [
+                                        expr(9:1-9:14) :: task int {
+                                            kind: call(9:1-9:14) {
+                                                callee: expr(9:1-9:12) :: 'a -> task 'a {
+                                                    kind: namespace-access `task.return`,
+                                                },
+                                                args: [
+                                                    expr(9:13-9:14) :: int {
+                                                        kind: literal(9:13-9:14) int 1,
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(12:0-16:1) :: nothing {
+                name: ident(12:4-12:11) `compute`,
+                kind: expr(12:14-16:1) :: int -> result int string {
+                    kind: fun(12:14-16:1) {
+                        params: [
+                            ident(12:18-12:19) `n` :: int,
+                        ],
+                        body: [
+                            expr(13:1-15:11) :: result int string {
+                                kind: call(13:1-15:11) {
+                                    callee: expr(13:1-15:11) :: 'a {
+                                        kind: namespace-access `result.then`,
+                                    },
+                                    args: [
+                                        expr(13:5-13:12) :: result int string {
+                                            kind: call(13:5-13:12) {
+                                                callee: expr(13:5-13:10) :: int -> result int string {
+                                                    kind: ident(13:5-13:10) `steps`,
+                                                },
+                                                args: [
+                                                    expr(13:11-13:12) :: int {
+                                                        kind: ident(13:11-13:12) `n`,
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                        expr(13:1-15:11) :: int -> result int string {
+                                            kind: fun(13:1-15:11) {
+                                                params: [
+                                                    ident(13:1-13:1) `_` :: int,
+                                                ],
+                                                body: [
+                                                    expr(14:1-15:11) :: result int string {
+                                                        kind: call(14:1-15:11) {
+                                                            callee: expr(14:1-15:11) :: 'a {
+                                                                kind: namespace-access `result.then`,
+                                                            },
+                                                            args: [
+                                                                expr(14:15-14:28) :: result int string {
+                                                                    kind: call(14:15-14:28) {
+                                                                        callee: expr(14:15-14:20) :: int -> result int string {
+                                                                            kind: ident(14:15-14:20) `steps`,
+                                                                        },
+                                                                        args: [
+                                                                            expr(14:21-14:28) :: int {
+                                                                                kind: expr(14:22-14:27) :: int {
+                                                                                    kind: binary op(14:24-14:25) `*` {
+                                                                                        left: expr(14:22-14:23) :: int {
+                                                                                            kind: ident(14:22-14:23) `n`,
+                                                                                        },
+                                                                                        right: expr(14:26-14:27) :: int {
+                                                                                            kind: literal(14:26-14:27) int 2,
+                                                                                        },
+                                                                                    },
+                                                                                },
+                                                                            },
+                                                                        ],
+                                                                    },
+                                                                },
+                                                                expr(14:5-15:11) :: int -> result int string {
+                                                                    kind: fun(14:5-15:11) {
+                                                                        params: [
+                                                                            ident(14:5-14:12) `doubled` :: int,
+                                                                        ],
+                                                                        body: [
+                                                                            expr(15:1-15:11) :: result int string {
+                                                                                kind: call(15:1-15:11) {
+                                                                                    callee: expr(15:1-15:3) :: 'a -> result 'a 'b {
+                                                                                        kind: ident(15:1-15:3) `ok`,
+                                                                                    },
+                                                                                    args: [
+                                                                                        expr(15:4-15:11) :: int {
+                                                                                            kind: ident(15:4-15:11) `doubled`,
+                                                                                        },
+                                                                                    ],
+                                                                                },
+                                                                            },
+                                                                        ],
+                                                                    },
+                                                                },
+                                                            ],
+                                                        },
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(18:0-24:1) :: nothing {
+                name: ident(18:4-18:9) `steps`,
+                kind: expr(18:46-24:1) :: int -> result int string {
+                    kind: fun(18:46-24:1) {
+                        params: [
+                            ident(18:50-18:51) `n` :: int,
+                        ],
+                        body: [
+                            expr(19:1-23:2) :: result int string {
+                                kind: if(19:1-23:2) expr(19:4-19:9) :: bool {
+                                    kind: binary op(19:6-19:7) `>` {
+                                        left: expr(19:4-19:5) :: int {
+                                            kind: ident(19:4-19:5) `n`,
+                                        },
+                                        right: expr(19:8-19:9) :: int {
+                                            kind: literal(19:8-19:9) int 0,
+                                        },
+                                    },
+                                } pattern(19:4-19:9) Literal(
+                                    literal(19:4-19:9) bool true,
+                                ) [
+                                    expr(20:2-20:6) :: result int string {
+                                        kind: call(20:2-20:6) {
+                                            callee: expr(20:2-20:4) :: 'a -> result 'a 'b {
+                                                kind: ident(20:2-20:4) `ok`,
+                                            },
+                                            args: [
+                                                expr(20:5-20:6) :: int {
+                                                    kind: ident(20:5-20:6) `n`,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ] else [
+                                    expr(22:2-22:19) :: result int string {
+                                        kind: call(22:2-22:19) {
+                                            callee: expr(22:2-22:5) :: 'a -> result 'b 'a {
+                                                kind: ident(22:2-22:5) `err`,
+                                            },
+                                            args: [
+                                                expr(22:7-22:19) :: string {
+                                                    kind: literal(22:7-22:19) string "nonpositive",
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

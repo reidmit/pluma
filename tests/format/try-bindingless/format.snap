@@ -1,0 +1,30 @@
+---
+source: tests/format.rs
+expression: once
+---
+# The formatter preserves the surface the user wrote: bindingless `try Expr`
+# stays bindingless, and an explicit `try _ = Expr` keeps its wildcard binding —
+# the two equivalent forms are not canonicalized into one another.
+use std.task
+
+def steps :: fun int -> (result int string) = fun n {
+	if n > 0 {
+		ok n
+	} else {
+		err "nonpositive"
+	}
+}
+
+def run :: fun int -> (result int string) = fun n {
+	try steps n
+	try _ = steps n
+	try doubled = steps (n * 2)
+	ok doubled
+}
+
+def main = fun {
+	try task.return 1
+	try x = task.return 2
+	print (to-string x)
+	task.return 0
+}

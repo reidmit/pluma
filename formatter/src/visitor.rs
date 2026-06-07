@@ -667,10 +667,19 @@ impl<'a> Formatter<'a> {
 	// has no braces around what follows, just subsequent expressions in
 	// the enclosing block.
 	fn format_try(&self, t: &TryNode, tail: bool) -> Doc {
+		// The bindingless `try Expr` form (sugar for `try _ = Expr`) drops the
+		// `Pattern = ` prefix; `t.binding` preserves which surface was written.
+		let head = if t.binding {
+			concat(vec![
+				text("try "),
+				self.format_pattern(&t.pattern),
+				text(" = "),
+			])
+		} else {
+			text("try ")
+		};
 		let mut parts: Vec<Doc> = vec![
-			text("try "),
-			self.format_pattern(&t.pattern),
-			text(" = "),
+			head,
 			self.fmt_prec(&t.value, 0, tail),
 			// The binding's value ends this line, so a comment on it is trailing.
 			// Unlike a plain `let`, a `try`'s binding line isn't its own statement

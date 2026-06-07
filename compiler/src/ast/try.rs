@@ -2,13 +2,20 @@ use super::*;
 use crate::location::Range;
 use crate::types::Type;
 
-// `try Pattern = Expr` followed by the rest of the enclosing block.
+// `try Pattern = Expr` (or, bindingless, `try Expr`) followed by the rest
+// of the enclosing block.
 //
 // At parse time `rest` carries everything after the `=` line through to
 // the end of the surrounding body (`parse_body_expressions` collects it
 // when it sees the `try` keyword). At analyze time the analyzer peeks
 // the RHS's inferred head constructor and rewrites this node into a
 // `<carrier>.then value fun pattern { rest }` call.
+//
+// `binding` records whether the source wrote an explicit `Pattern =`. The
+// bindingless form `try Expr` is exact sugar for `try _ = Expr` — it parses
+// to the same node with `pattern` set to a synthetic `Underscore`, and only
+// `binding = false` distinguishes it, so the formatter can round-trip the
+// surface the user wrote rather than canonicalizing one form into the other.
 //
 // `pattern_ty` is the fresh tyvar the analyzer binds `pattern` to during
 // the first constraint-gen pass. Stored on the node so the post-unify
@@ -30,6 +37,7 @@ pub struct TryNode {
 	pub rest: Vec<ExprNode>,
 	pub pattern_ty: Type,
 	pub task_carrier: bool,
+	pub binding: bool,
 }
 
 #[cfg(debug_assertions)]

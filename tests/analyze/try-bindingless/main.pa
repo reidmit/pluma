@@ -1,0 +1,25 @@
+# Bindingless `try Expr` parses to the same node as `try _ = Expr`: a `try`
+# whose pattern is a synthetic `Underscore`. The analyzer treats it identically
+# to the explicit-wildcard form across all three carriers (task here, result in
+# `compute`), so it stays exhaustiveness/type-checked and the task-carrier `try`
+# is still left intact for CPS lowering.
+use std.task
+
+def beat = fun {
+	try task.return 0
+	task.return 1
+}
+
+def compute = fun n {
+	try steps n
+	try doubled = steps (n * 2)
+	ok doubled
+}
+
+def steps :: fun int -> (result int string) = fun n {
+	if n > 0 {
+		ok n
+	} else {
+		err "nonpositive"
+	}
+}

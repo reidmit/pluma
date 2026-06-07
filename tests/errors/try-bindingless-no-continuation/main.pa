@@ -1,0 +1,8 @@
+# The bindingless `try Expr` form needs a continuation just like `try _ = Expr`:
+# with nothing following it in the block, E0124 fires (and there is no spurious
+# unused-binding warning, since no name was bound).
+def f :: fun (option int) -> (option int) = fun o {
+	try o
+}
+
+def main = print "x"
