@@ -39,6 +39,8 @@ public enum attribute {
 	prop-str string string
 	prop-bool string bool
 	dynamic string (fun nothing -> string)
+	prop-str-of string (fun nothing -> string)
+	prop-bool-of string (fun nothing -> bool)
 	handler string (fun event -> nothing)
 	style-var string (fun nothing -> string)
 }
@@ -56,6 +58,7 @@ public enum view {
 	dynamic-text (fun nothing -> string)
 	show-node (fun nothing -> bool) (fun nothing -> view)
 	for-node (fun nothing -> list (string, (fun nothing -> view)))
+	on-mount-node (fun nothing -> nothing)
 }
 
 # --- core builders ----------------------------------------------------------
@@ -75,6 +78,21 @@ public def text-of :: fun (fun nothing -> string) -> view = fun f {
 # A generic element -- the escape hatch for any tag without its own builder.
 public def element :: fun string (list attribute) (list view) -> view = fun tag attrs kids {
 	view.el tag attrs kids
+}
+
+# Run `action` once, on the client, when this point in the tree is mounted -- the
+# analog of SolidJS's `onMount`. It is *server-skipped*: `to-string` renders an empty
+# host and never runs the action, while `build`/`hydrate` run it (untracked, so it
+# fires exactly once). That makes it the home for client-only setup the SSR'd HTML
+# doesn't need -- most usefully an initial data fetch, which would otherwise run
+# during SSR if placed in the view body. Renders nothing visible, so drop it anywhere
+# a `view` goes; call `signal.on-cleanup` inside `action` to tear down on unmount.
+#
+#     view.on-mount (fun {
+#         task.spawn (task.map (api.list-todos ()) fun board { signal.set todos board })
+#     })
+public def on-mount :: fun (fun nothing -> nothing) -> view = fun action {
+	view.on-mount-node action
 }
 
 # --- reactive control flow --------------------------------------------------
@@ -125,6 +143,33 @@ public def bool-property :: fun string bool -> attribute = fun k v {
 # signals change. `view.bind "class" (fun { if signal.get active { "on" } else { "off" } })`
 public def bind :: fun string (fun nothing -> string) -> attribute = fun k f {
 	attribute.dynamic k f
+}
+
+# A reactive live DOM *string property* -- the property dual of `bind`. Use this for
+# what a controlled input needs (`value`, `value` of a `select`/`textarea`): the
+# property, not the attribute, is what the browser reflects after the user has
+# edited the field, so `view.bind "value"` (an attribute write) is silently ignored
+# once typing starts. `view.value-of (fun { signal.get draft })` keeps the field's
+# text in sync with -- and resettable from -- a signal.
+public def bind-property :: fun string (fun nothing -> string) -> attribute = fun k f {
+	attribute.prop-str-of k f
+}
+
+# A reactive live DOM *boolean property* (`checked`, `disabled`, ...). The reactive
+# dual of `bool-property`; `view.checked-of (fun { signal.get on })` for a controlled
+# checkbox.
+public def bind-bool-property :: fun string (fun nothing -> bool) -> attribute = fun k f {
+	attribute.prop-bool-of k f
+}
+
+# Reactive `value` property of a controlled input: `view.value-of (fun { signal.get draft })`.
+public def value-of :: fun (fun nothing -> string) -> attribute = fun f {
+	attribute.prop-str-of "value" f
+}
+
+# Reactive `checked` property of a controlled checkbox/radio: `view.checked-of (fun { signal.get on })`.
+public def checked-of :: fun (fun nothing -> bool) -> attribute = fun f {
+	attribute.prop-bool-of "checked" f
 }
 
 # --- event handlers (effectful) ---------------------------------------------
@@ -229,6 +274,14 @@ def render-attr :: fun attribute -> string = fun a {
 		} else {
 			" $(k)=\"$(escape-attr (f ()))\""
 		}
+	} is attribute.prop-str-of k f {
+		" $(k)=\"$(escape-attr (f ()))\""
+	} is attribute.prop-bool-of k f {
+		if f () {
+			" $(k)"
+		} else {
+			""
+		}
 	} is attribute.handler _name _h {
 		""
 	} is attribute.style-var _name _f {
@@ -258,6 +311,10 @@ def style-fragment :: fun attribute -> option string = fun a {
 	} is attribute.prop-str _k _v {
 		none
 	} is attribute.prop-bool _k _flag {
+		none
+	} is attribute.prop-str-of _k _f {
+		none
+	} is attribute.prop-bool-of _k _f {
 		none
 	} is attribute.handler _name _h {
 		none
@@ -309,6 +366,10 @@ public def to-string :: fun view -> string = fun v {
 			to-string (mk ())
 		}) ""
 		"<span style=\"display: contents\">$(inner)</span>"
+	} is view.on-mount-node _action {
+		# Server-skipped: emit the empty host (so the client tree lines up by index) but
+		# never run the action -- it is a client-only mount effect.
+		"<span style=\"display: contents\"></span>"
 	}
 }
 

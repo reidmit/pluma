@@ -1,0 +1,61 @@
+# The shared contract for a small task board. Each `remote def` is the whole API:
+# a pure logical signature `fun A.. -> task R`, no transport `request`. The compiler
+# supplies each endpoint's body per target — the written handler on the server, a
+# transport stub on the client — so the two agree by construction.
+#
+# This module compiles into BOTH artifacts. The module-level `store`/`next-id` refs
+# are the server's in-memory database (they persist across requests within the one
+# server process). On the client these refs still exist but are dead: the handler
+# bodies are replaced by transport stubs, so nothing reads them.
+
+use std.list
+use std.ref
+use std.task
+
+# A task record. Records cross the RPC wire by value — exercises the wire codec for
+# compound types (record-of-{int,string,bool} and list-of-record).
+public alias todo {
+	id :: int,
+	text :: string,
+	done :: bool,
+}
+
+# The server's "database": a mutable list of todos plus a monotonic id counter.
+def store :: ref (list todo) = ref.new []
+
+def next-id :: ref int = ref.new 1
+
+# Read the whole board.
+public remote def list-todos :: fun nothing -> task (list todo) = fun {
+	task.return (ref.get store)
+}
+
+# Append a todo and return the created record (so the client learns its id).
+public remote def add-todo :: fun string -> task todo = fun text {
+	let id = ref.get next-id
+	ref.set next-id (id + 1)
+	let item = { id: id, text: text, done: false }
+	# `list.push` mutates the stored list in place; no `ref.set` needed.
+	list.push (ref.get store) item
+	task.return item
+}
+
+# Flip a todo's done flag and return the updated board.
+public remote def toggle-todo :: fun int -> task (list todo) = fun id {
+	ref.set store (list.map (ref.get store) fun t {
+		if t.id == id {
+			{ ...t, done: (if t.done { false } else { true }) }
+		} else {
+			t
+		}
+	})
+	task.return (ref.get store)
+}
+
+# Drop every completed todo and return the remaining board.
+public remote def clear-done :: fun nothing -> task (list todo) = fun {
+	ref.set store (list.filter (ref.get store) fun t {
+		if t.done { false } else { true }
+	})
+	task.return (ref.get store)
+}

@@ -22,6 +22,7 @@
 # so an ancestor unmount tears the dynamic content down too). v1 uses a wrapper
 # host rather than Solid-style comment anchors -- a later refinement.
 
+use std.css
 use std.dict
 use std.hex
 use std.list
@@ -53,6 +54,12 @@ def build :: fun view -> dom.node = fun v {
 		build-show cond child
 	} is view.for-node thunk {
 		build-for thunk
+	} is view.on-mount-node action {
+		# A `view.on-mount`: an invisible host plus the client-only mount action, run
+		# once and untracked (so a signal it reads doesn't make it re-run).
+		let host = fragment-host ()
+		signal.untrack action
+		host
 	}
 }
 
@@ -68,6 +75,16 @@ def apply-attr :: fun dom.node view.attribute -> nothing = fun node a {
 	} is view.attribute.dynamic k f {
 		let _d = signal.effect fun {
 			dom.set-attribute node k (f ())
+		}
+		()
+	} is view.attribute.prop-str-of k f {
+		let _d = signal.effect fun {
+			dom.set-string-property node k (f ())
+		}
+		()
+	} is view.attribute.prop-bool-of k f {
+		let _d = signal.effect fun {
+			dom.set-bool-property node k (f ())
 		}
 		()
 	} is view.attribute.handler name h {
@@ -191,12 +208,51 @@ def reconcile :: fun dom.node (ref (dict string (dom.node, (fun nothing -> nothi
 	ref.set state (ref.get next)
 }
 
+# --- runtime stylesheet: deliver collected CSS to the browser ----------------
+#
+# On the server `css.style-tag` inlines every *used* rule into the document `<head>`,
+# but a rule first used by client-built content -- a `view.each` row, a `view.show`
+# branch -- registers in the collector only when that content is built, *after* the
+# server render, so it would be missing from the page (the class lands on the node
+# with no matching CSS). So the browser keeps its own `<style>` node synced to
+# `css.collect ()`: seeded after the initial build and refreshed at the end of every
+# effect flush, when newly-mounted dynamic content may have registered new rules. A
+# `last-css` guard skips the DOM write on the common flush that added no rule.
+
+def runtime-style :: ref (option dom.node) = ref.new none
+
+def last-css :: ref string = ref.new ""
+
+# Sync the runtime `<style>` to the collector, creating it (appended to `<body>`,
+# which is valid and needs no `<head>` handle) on first use. A no-op when the
+# collected CSS is unchanged since the last sync.
+def sync-styles :: fun nothing -> nothing = fun {
+	let css-text = css.collect ()
+	if css-text == ref.get last-css {
+		()
+	} else {
+		ref.set last-css css-text
+		let node = when ref.get runtime-style is some n {
+			n
+		} is none {
+			let n = dom.create-element "style"
+			dom.set-attribute n "data-pluma" "runtime"
+			dom.append-child (dom.body ()) n
+			ref.set runtime-style (some n)
+			n
+		}
+		dom.set-text node css-text
+	}
+}
+
 # Mount the app under `parent`. The root view is a **thunk** (as in SolidJS's
 # `render(() => App(), root)`) -- so the dev variant can restore saved state
 # before any signal is constructed. Returns `task nothing` so the browser entry
 # can seed and pump it; the wasm instance then stays alive to dispatch DOM events.
 public def mount :: fun dom.node (fun nothing -> view) -> task nothing = fun parent v {
 	dom.append-child parent (build (v ()))
+	sync-styles ()
+	signal.set-on-flush sync-styles
 	task.return ()
 }
 
@@ -236,7 +292,11 @@ def restore :: fun nothing -> nothing = fun {
 public def mount-dev :: fun dom.node (fun nothing -> view) -> task nothing = fun parent v {
 	restore ()
 	dom.append-child parent (build (v ()))
-	signal.set-on-flush persist
+	sync-styles ()
+	signal.set-on-flush fun {
+		sync-styles ()
+		persist ()
+	}
 	persist ()
 	task.return ()
 }
@@ -259,6 +319,8 @@ public def mount-dev :: fun dom.node (fun nothing -> view) -> task nothing = fun
 # text in an element (`view.span [] [view.text-of ...]`), as the examples do.
 public def hydrate :: fun dom.node (fun nothing -> view) -> task nothing = fun parent v {
 	adopt (v ()) (dom.child-at parent 0)
+	sync-styles ()
+	signal.set-on-flush sync-styles
 	task.return ()
 }
 
@@ -286,6 +348,10 @@ def adopt :: fun view dom.node -> nothing = fun v node {
 		adopt-show node cond child
 	} is view.for-node thunk {
 		adopt-for node thunk
+	} is view.on-mount-node action {
+		# The server emitted an empty host; we keep it and run the client-only mount
+		# action once (untracked), exactly as `build` does.
+		signal.untrack action
 	}
 }
 
@@ -303,6 +369,18 @@ def adopt-attr :: fun dom.node view.attribute -> nothing = fun node a {
 	} is view.attribute.dynamic k f {
 		let _d = signal.effect fun {
 			dom.set-attribute node k (f ())
+		}
+		()
+	} is view.attribute.prop-str-of k f {
+		# The server rendered the initial value as an attribute; this effect sets the
+		# live *property* (what the browser reflects after edits) and tracks the signal.
+		let _d = signal.effect fun {
+			dom.set-string-property node k (f ())
+		}
+		()
+	} is view.attribute.prop-bool-of k f {
+		let _d = signal.effect fun {
+			dom.set-bool-property node k (f ())
 		}
 		()
 	} is view.attribute.handler name h {

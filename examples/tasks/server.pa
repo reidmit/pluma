@@ -1,0 +1,21 @@
+# The server half. One `std.sys.http` server serves two things:
+#   - GET `/`        → the server-side-rendered page (`ui.document`).
+#   - everything else → `rpc.dispatch`, the route table the compiler synthesizes
+#                       from `api.pa`'s `remote def`s (handles the `/rpc/*` calls).
+
+use std.rpc
+use std.task
+use std.sys.http
+use ui
+
+def handler :: fun http.request -> task http.response = fun req {
+	if req.path == "/" {
+		task.return (http.html 200 (ui.document ()))
+	} else {
+		rpc.dispatch req
+	}
+}
+
+def main = fun {
+	http.serve "127.0.0.1:8080" handler
+}

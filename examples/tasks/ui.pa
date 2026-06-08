@@ -1,0 +1,246 @@
+# The shared UI, compiled into BOTH artifacts. `page` is a pure `view` builder (no
+# side effects at construction) so it renders the same on the server
+# (`view.to-string`, in `document`) and the client (`render.hydrate`). All effectful
+# work — the remote calls — lives inside event handlers, which only run in the
+# browser after hydration; `view.to-string` drops them.
+#
+# Reactivity model worth noting: `view.each` builds each row ONCE per key, so a
+# row's done-state can't come from re-running its builder. Instead the reactive
+# parts inside a row (`view.bind "style"`, `view.text-of`) re-read the `todos`
+# signal and re-derive — fine-grained, no row rebuild on toggle.
+
+use std.css
+use std.list
+use std.signal
+use std.string
+use std.task
+use std.view
+use api
+
+# --- styling (extracted, content-hashed rules; emitted into <head> by SSR) ----
+
+def card :: css.ruleset = css.rule [
+	css.base [
+		css.max-width (css.px 560.0),
+		css.margin (css.rem 2.0),
+		css.padding (css.rem 1.5),
+		css.border-radius (css.px 14.0),
+		css.background (css.hex "#0b1020"),
+		css.color (css.hex "#e2e8f0"),
+		css.property "border" "1px solid #1e293b",
+		css.property "font-family" "system-ui, sans-serif",
+	],
+]
+
+def row :: css.ruleset = css.rule [
+	css.base [
+		css.property "display" "flex",
+		css.property "align-items" "center",
+		css.property "gap" "0.6rem",
+		css.padding (css.rem 0.5),
+		css.border-radius (css.px 8.0),
+		css.property "list-style" "none",
+	],
+	css.on "hover" [css.background (css.hex "#11182e")],
+]
+
+def check :: css.ruleset = css.rule [
+	css.base [
+		css.background (css.hex "#0b1020"),
+		css.color (css.var "accent"),
+		css.property "border" "none",
+		css.property "font-size" "1.1rem",
+		css.cursor "pointer",
+	],
+]
+
+def field :: css.ruleset = css.rule [
+	css.base [
+		css.property "flex" "1",
+		css.padding (css.rem 0.5),
+		css.border-radius (css.px 8.0),
+		css.background (css.hex "#0b1020"),
+		css.color (css.hex "#e2e8f0"),
+		css.property "border" "1px solid #1e293b",
+	],
+]
+
+def btn :: css.ruleset = css.rule [
+	css.base [
+		css.background (css.var "accent"),
+		css.color (css.hex "#ffffff"),
+		css.property "border" "none",
+		css.padding (css.rem 0.5),
+		css.margin (css.px 3.0),
+		css.border-radius (css.px 8.0),
+		css.cursor "pointer",
+	],
+	css.on "hover" [css.opacity 0.85],
+]
+
+# --- helpers ----------------------------------------------------------------
+
+def done-of :: fun (list api.todo) int -> bool = fun all id {
+	let matches = list.filter all fun t {
+		t.id == id
+	}
+	if list.is-empty matches {
+		false
+	} else {
+		(list.get matches 0).done
+	}
+}
+
+def count-active :: fun (list api.todo) -> int = fun all {
+	list.length (list.filter all fun t {
+		if t.done {
+			false
+		} else {
+			true
+		}
+	})
+}
+
+# --- the page ---------------------------------------------------------------
+
+public def page :: fun nothing -> view = fun {
+	let todos :: signal (list api.todo) = signal.new []
+	let draft = signal.new ""
+	let filter = signal.new "all"
+
+	# Visible rows depend on both the board and the active filter.
+	let visible = fun {
+		let all = signal.get todos
+		let f = signal.get filter
+		if f == "active" {
+			list.filter all fun t {
+				if t.done {
+					false
+				} else {
+					true
+				}
+			}
+		} else if f == "done" {
+			list.filter all fun t {
+				t.done
+			}
+		} else {
+			all
+		}
+	}
+
+	# Add the draft as a new todo via the server, then append the returned record.
+	# Spread builds a NEW list so the signal's deep-`==` check notifies.
+	let submit = fun {
+		let text = string.trim (signal.get draft)
+		if string.is-empty text {
+			()
+		} else {
+			signal.set draft ""
+			task.spawn (task.map (api.add-todo text) fun created {
+				signal.update todos fun ts {
+					[...ts, created]
+				}
+			})
+		}
+	}
+
+	let toggle = fun id {
+		task.spawn (task.map (api.toggle-todo id) fun board {
+			signal.set todos board
+		})
+	}
+
+	let clear = fun {
+		task.spawn (task.map (api.clear-done ()) fun board {
+			signal.set todos board
+		})
+	}
+
+	# A filter pill: reactive style highlights the active one.
+	let pill = fun label value {
+		view.button [
+			view.styled btn,
+			view.bind "style" fun {
+				if signal.get filter == value {
+					"opacity: 1"
+				} else {
+					"opacity: 0.45"
+				}
+			},
+			view.on-click fun { signal.set filter value },
+		] [view.text label]
+	}
+
+	view.div [
+		view.id "app",
+		view.styled card,
+		view.css-var "accent" fun {
+			# The whole subtree reads `var(--accent)`; the live value is one signal.
+			"#2563eb"
+		},
+	] [
+		view.on-mount fun {
+			# Client-only: after hydration, load the board the server already persisted.
+			# Server-skipped, so it never runs during SSR (which renders the empty shell).
+
+			task.spawn (task.map (api.list-todos ()) fun board {
+				signal.set todos board
+			})
+		},
+		view.h1 [] [view.text "Pluma Tasks"],
+		view.p [] [
+			view.text-of fun {
+				"$(to-string (count-active (signal.get todos))) of $(to-string (list.length (signal.get todos))) remaining"
+			},
+		],
+		view.form [view.on-submit submit] [
+			view.input [
+				view.styled field,
+				view.placeholder "Add a task…",
+				view.value-of fun { signal.get draft },
+				view.on-input fun s { signal.set draft s },
+			] [],
+			view.button [view.styled btn, view.input-type "submit"] [view.text "Add"],
+		],
+		view.div [] [
+			pill "All" "all",
+			pill "Active" "active",
+			pill "Done" "done",
+			view.button [view.styled btn, view.on-click clear] [view.text "Clear done"],
+		],
+		view.ul [view.id "list", view.style "padding: 0"] [
+			view.each fun { visible () } fun t { to-string t.id } fun t {
+				view.li [view.styled row] [
+					view.button [view.styled check, view.on-click fun { toggle t.id }] [
+						view.text-of fun {
+							if done-of (signal.get todos) t.id {
+								"☑"
+							} else {
+								"☐"
+							}
+						},
+					],
+					view.span [
+						view.bind "style" fun {
+							if done-of (signal.get todos) t.id {
+								"text-decoration: line-through; opacity: 0.5"
+							} else {
+								""
+							}
+						},
+					] [view.text t.text],
+				]
+			},
+		],
+		view.show fun { list.is-empty (signal.get todos) } fun {
+			view.p [view.style "opacity: 0.5"] [view.text "No tasks yet — add one above."]
+		},
+	]
+}
+
+# The full HTML document for a server-rendered first paint.
+public def document :: fun nothing -> string = fun {
+	let body = view.to-string (page ())
+	"<!doctype html><html><head><meta charset=\"utf-8\"><title>Pluma Tasks</title>$(css.style-tag ())</head><body>$(body)<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+}
