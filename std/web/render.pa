@@ -95,7 +95,7 @@ def build-show :: fun (fun nothing -> bool) (fun nothing -> view) -> dom.node = 
 		signal.untrack fun {
 			teardown-show cur host
 			if visible {
-				let built = signal.owned fun {
+				let built = signal.owned "" fun {
 					dom.append-child host (build (child ()))
 				}
 				let (_unit, dispose) = built
@@ -124,7 +124,7 @@ def teardown-show :: fun (ref (option (fun nothing -> nothing))) dom.node -> not
 # `view.for`: keyed list reconciliation. Rows whose key survives are reused (DOM
 # and local state kept); new keys are built under their own owner, vanished keys
 # are disposed + removed, and the final order is set by re-appending in sequence.
-def build-for :: fun (fun nothing -> list (string, view)) -> dom.node = fun thunk {
+def build-for :: fun (fun nothing -> list (string, (fun nothing -> view))) -> dom.node = fun thunk {
 	let host = fragment-host ()
 	let state :: ref (dict string (dom.node, (fun nothing -> nothing))) = ref.new (dict.empty ())
 	let _eff = signal.effect fun {
@@ -142,17 +142,21 @@ def build-for :: fun (fun nothing -> list (string, view)) -> dom.node = fun thun
 	host
 }
 
-def reconcile :: fun dom.node (ref (dict string (dom.node, (fun nothing -> nothing)))) (list (string, view)) -> nothing = fun host state pairs {
+def reconcile :: fun dom.node (ref (dict string (dom.node, (fun nothing -> nothing)))) (list (string, (fun nothing -> view))) -> nothing = fun host state pairs {
 	let old = ref.get state
 	let next :: ref (dict string (dom.node, (fun nothing -> nothing))) = ref.new (dict.empty ())
-	# Reuse a surviving key's node/owner; build a new key under its own owner.
+	# Reuse a surviving key's node/owner; build a new key under its own owner. The
+	# row builder `mk` is run ONLY for a new key (surviving rows keep their DOM and
+	# signals untouched) and inside `owned k`, so a `signal.new` in the row is
+	# created under the row's identity -- its state survives a reorder/insert, and a
+	# reload restores it by the same key.
 	list.each pairs fun pair {
-		let (k, v) = pair
+		let (k, mk) = pair
 		if dict.lookup old k is some entry {
 			ref.set next (dict.insert (ref.get next) k entry)
 		} else {
-			let built = signal.owned fun {
-				build v
+			let built = signal.owned k fun {
+				build (mk ())
 			}
 			ref.set next (dict.insert (ref.get next) k built)
 		}
@@ -171,7 +175,7 @@ def reconcile :: fun dom.node (ref (dict string (dom.node, (fun nothing -> nothi
 	}
 	# Set order: append each row in sequence (moves survivors, attaches new ones).
 	list.each pairs fun pair {
-		let (k, _v) = pair
+		let (k, _mk) = pair
 		if dict.lookup (ref.get next) k is some entry {
 			let (node, _dispose) = entry
 			dom.append-child host node

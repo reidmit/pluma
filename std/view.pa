@@ -43,14 +43,17 @@ public enum attribute {
 
 # A node in the view tree: an element, static text, a reactive text node, or
 # reactive control flow. `show-node` mounts/unmounts a subtree as its condition
-# flips; `for-node` carries a thunk producing the current keyed children (the
-# generic element type is erased into the thunk so `view` stays monomorphic).
+# flips; `for-node` carries a thunk producing the current keyed children. Each
+# child is a `(key, fun nothing -> view)` pair -- a *deferred* builder, not a built
+# view, so the renderer can run it once per new key (inside that row's owner) and
+# skip it entirely for a surviving key. (The generic element type is erased into
+# the thunks so `view` stays monomorphic.)
 public enum view {
 	el string (list attribute) (list view)
 	txt string
 	dynamic-text (fun nothing -> string)
 	show-node (fun nothing -> bool) (fun nothing -> view)
-	for-node (fun nothing -> list (string, view))
+	for-node (fun nothing -> list (string, (fun nothing -> view)))
 }
 
 # --- core builders ----------------------------------------------------------
@@ -87,10 +90,14 @@ public def show :: fun (fun nothing -> bool) (fun nothing -> view) -> view = fun
 # `for`, since `for` is the `<label for=...>` attribute builder.)
 #
 #     view.each (fun { signal.get todos }) (fun t { t.id }) (fun t { row t })
+#
+# `render item` is wrapped in a thunk, NOT called here: the renderer runs it once
+# per new key inside that row's owner, so a `signal.new` in the row is created
+# under the row's identity (its key) and reused -- not rebuilt -- on a list change.
 public def each :: fun (fun nothing -> list a) (fun a -> string) (fun a -> view) -> view = fun items key render {
 	view.for-node fun {
 		list.map (items ()) fun item {
-			(key item, render item)
+			(key item, fun { render item })
 		}
 	}
 }
@@ -238,8 +245,8 @@ public def to-string :: fun view -> string = fun v {
 		}
 	} is view.for-node thunk {
 		string.join (list.map (thunk ()) fun pair {
-			let (_key, child) = pair
-			to-string child
+			let (_key, mk) = pair
+			to-string (mk ())
 		}) ""
 	}
 }

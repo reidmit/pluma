@@ -106,7 +106,7 @@ def tests :: test.suite = [
 	test.case "owned disposes the effects created under it" fun {
 		let s = signal.new 0
 		let log :: list int = []
-		let owned-result = signal.owned fun {
+		let owned-result = signal.owned "" fun {
 			signal.effect fun {
 				list.push log (signal.get s)
 			}
@@ -120,7 +120,7 @@ def tests :: test.suite = [
 	},
 	test.case "on-cleanup runs when the owner is disposed" fun {
 		let log :: list int = []
-		let owned-result = signal.owned fun {
+		let owned-result = signal.owned "" fun {
 			signal.on-cleanup fun {
 				list.push log 99
 			}
@@ -174,12 +174,27 @@ def tests :: test.suite = [
 	},
 	test.case "new-keyed folds an occurrence index per call-site" fun {
 		# two instances built from the same call-site stay distinct via #0/#1, so
-		# a reload can match each to its counterpart (the two-counters case).
+		# a reload can match each to its counterpart (the two-counters case). At the
+		# root the owner-path is empty, so keys are `|<callsite>#<occ>`.
 		signal.reset-keys ()
 		let _a = signal.new-keyed "site-a" 0
 		let _b = signal.new-keyed "site-a" 0
 		let _c = signal.new-keyed "site-b" 0
-		assert.equals (signal.keys ()) ["site-a#0", "site-a#1", "site-b#0"]
+		assert.equals (signal.keys ()) ["|site-a#0", "|site-a#1", "|site-b#0"]
+	},
+	test.case "owner-path prefixes the key, scoping the occurrence index" fun {
+		# A signal built inside a labelled owner is keyed by the owner-path, not by
+		# global creation order -- and the occurrence counter resets per path, so two
+		# rows at the same call-site under different owners both get #0 (identity, not
+		# position). This is what makes a row's state survive a sibling insert/reorder.
+		signal.reset-keys ()
+		let _r1 = signal.owned "row-1" fun {
+			signal.new-keyed "site-a" 0
+		}
+		let _r2 = signal.owned "row-2" fun {
+			signal.new-keyed "site-a" 0
+		}
+		assert.equals (signal.keys ()) ["/row-1|site-a#0", "/row-2|site-a#0"]
 	},
 	test.case "reset-keys clears the occurrence log" fun {
 		signal.reset-keys ()

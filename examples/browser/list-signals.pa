@@ -27,39 +27,46 @@ def row :: fun int -> view = fun id {
 	]
 }
 
+# All app state lives INSIDE the root thunk passed to `render.mount` -- as in
+# SolidJS's `render(() => App(), root)`. That's what lets `pluma dev`'s hot reload
+# restore it: `mount-dev` loads the saved state before the thunk runs, so each
+# `signal.new` here is seeded from it. State created in `main` *before* the mount
+# call would be built too early to be restored.
 def main = fun {
-	let items = signal.new [1, 2, 3]
-	let visible = signal.new true
-	let next-id = ref.new 4
-	render.mount (dom.body ()) fun { view.div [] [
-		view.button [
-			view.on-click fun {
-				let id = ref.get next-id
-				ref.set next-id (id + 1)
-				signal.update items fun xs {
-					[...xs, id]
-				}
-			},
-		] [view.text "add"],
-		view.button [
-			view.on-click fun {
-				signal.update items fun xs {
-					list.drop xs 1
-				}
-			},
-		] [view.text "remove first"],
-		view.button [
-			view.on-click fun {
-				signal.update visible fun b {
-					if b {
-						false
-					} else {
-						true
+	render.mount (dom.body ()) fun {
+		let items = signal.new [1, 2, 3]
+		let visible = signal.new true
+		let next-id = ref.new 4
+		view.div [] [
+			view.button [
+				view.on-click fun {
+					let id = ref.get next-id
+					ref.set next-id (id + 1)
+					signal.update items fun xs {
+						[...xs, id]
 					}
-				}
-			},
-		] [view.text "toggle"],
-		view.show fun { signal.get visible } fun { view.p [] [view.text "now you see me"] },
-		view.ul [] [view.each fun { signal.get items } fun id { to-string id } row],
-	] }
+				},
+			] [view.text "add"],
+			view.button [
+				view.on-click fun {
+					signal.update items fun xs {
+						list.drop xs 1
+					}
+				},
+			] [view.text "remove first"],
+			view.button [
+				view.on-click fun {
+					signal.update visible fun b {
+						if b {
+							false
+						} else {
+							true
+						}
+					}
+				},
+			] [view.text "toggle"],
+			view.show fun { signal.get visible } fun { view.p [] [view.text "now you see me"] },
+			view.ul [] [view.each fun { signal.get items } fun id { to-string id } row],
+		]
+	}
 }

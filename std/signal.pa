@@ -244,9 +244,7 @@ def registry :: ref (dict string (fun nothing -> bytes)) = ref.new (dict.empty (
 # Run at the end of every top-level effect flush, so persisted state stays current
 # after each change. The web dev entry installs its persist hook here; off dev it
 # stays a no-op (production pays nothing).
-def on-flush :: ref (fun nothing -> nothing) = ref.new fun {
-	()
-}
+def on-flush :: ref (fun nothing -> nothing) = ref.new fun { () }
 
 # Install the post-flush hook (the web dev entry points this at its persist step).
 public def set-on-flush :: fun (fun nothing -> nothing) -> nothing = fun f {
@@ -288,9 +286,14 @@ public def load-stash :: fun (dict string bytes) -> nothing = fun s {
 # its source call-site so a reload can match it to its previous-instance
 # counterpart, seed it from the carried-over state, and register it for persist.
 public def new-keyed :: fun string a -> signal a where (wire a) = fun callsite initial {
-	let n = (dict.lookup (ref.get occ) callsite) ?? 0
-	ref.set occ (dict.insert (ref.get occ) callsite (n + 1))
-	let key = "$(callsite)#$(to-string n)"
+	# The owner-path makes the key identify the signal by its position in the
+	# component tree (keyed by `each` row identity), not its global creation order;
+	# the occurrence index, scoped to `path|callsite`, disambiguates repeated
+	# signals at one call-site within one owner (e.g. two `counter`s side by side).
+	let prefix = "$(ref.get current-path)|$(callsite)"
+	let n = dict.lookup (ref.get occ) prefix ?? 0
+	ref.set occ (dict.insert (ref.get occ) prefix (n + 1))
+	let key = "$(prefix)#$(to-string n)"
 	list.push (ref.get keys-seen) key
 	let s = new initial
 	# Seed from the carried-over state on a key hit. Write the cell directly (no
@@ -386,6 +389,18 @@ opaque enum owner {
 
 def current-owner :: ref (option owner) = ref.new none
 
+# The label-path of the current owner chain, e.g. `/3/items` -- a fresh owner
+# pushes its label (an `each` row pushes its list key; a `show` pushes ""). It
+# prefixes every `new-keyed` key (above), so a signal inside a keyed-list row is
+# identified by the row's *identity*, not its position -- the key survives the
+# row being reordered or having siblings inserted before it.
+def current-path :: ref string = ref.new ""
+
+# The owner-path prefix `new-keyed` stamps onto its keys.
+public def owner-path :: fun nothing -> string = fun {
+	ref.get current-path
+}
+
 def register-cleanup :: fun (fun nothing -> nothing) -> nothing = fun d {
 	if ref.get current-owner is some o {
 		when o is owner.own cleanups {
@@ -401,14 +416,19 @@ public def on-cleanup :: fun (fun nothing -> nothing) -> nothing = fun d {
 	register-cleanup d
 }
 
-# Run `body` under a fresh owner; return its result paired with a thunk that
-# disposes every effect/computed/cleanup created under that owner.
-public def owned :: fun (fun nothing -> a) -> (a, (fun nothing -> nothing)) = fun body {
+# Run `body` under a fresh owner labelled `label`; return its result paired with a
+# thunk that disposes every effect/computed/cleanup created under that owner.
+# `label` extends the owner-path (a keyed-list row passes its key; a `show` passes
+# "") so signals built inside `body` get path-prefixed, reorder-stable keys.
+public def owned :: fun string (fun nothing -> a) -> (a, (fun nothing -> nothing)) = fun label body {
 	let cleanups :: list (fun nothing -> nothing) = []
 	let prev = ref.get current-owner
+	let prev-path = ref.get current-path
 	ref.set current-owner (some (owner.own cleanups))
+	ref.set current-path "$(prev-path)/$(label)"
 	let result = body ()
 	ref.set current-owner prev
+	ref.set current-path prev-path
 	(
 		result,
 		fun {
