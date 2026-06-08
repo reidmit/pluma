@@ -1,0 +1,22 @@
+---
+source: tests/format.rs
+assertion_line: 53
+expression: once
+---
+use std.ref
+
+# The callee of a call is uncurried application's head, which the parser
+# requires to be a primary. When the callee is itself a call — e.g. invoking
+# the thunk returned by `ref.get` — its wrapping parens MUST be kept:
+# `(ref.get run) ()` bare would reparse as `ref.get run ()`, a single call
+# with two args rather than a call of the returned thunk.
+def invoke = fun run {
+	(ref.get run) ()
+}
+
+# An operator-expression callee likewise keeps its parens, while a plain
+# field-access callee (binding tighter than application) drops them.
+def apply-pair = fun pick a b {
+	let f = (pick a b) ()
+	dict.empty ()
+}

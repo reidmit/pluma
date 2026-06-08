@@ -626,14 +626,18 @@ impl<'a> Formatter<'a> {
 		// args are always joined by a single space. An argument may still be
 		// internally multi-line (a `fun` block, a multi-line list/record),
 		// but those line breaks live inside the argument's own brackets.
-		// The callee binds at function-call precedence (90); each argument is
-		// parsed at 91 (call's right binding power), so an argument keeps its
-		// parens iff its top operator binds looser than 91 — i.e. anything but
-		// a field/element access or a self-delimiting primary. A `fun`/`if`/
-		// `when`/`while` literal is such a primary, so its wrapping parens drop
-		// (`list.map xs (fun x { ... })` → `list.map xs fun x { ... }`); a
-		// nested call or operator expression keeps them (`f (g x)`, `f (a + b)`).
-		let mut parts: Vec<Doc> = vec![self.fmt(&call.callee, 90)];
+		// Both the callee and each argument are parsed at 91 (call's right
+		// binding power), so either keeps its parens iff its top operator binds
+		// looser than 91 — i.e. anything but a field/element access or a
+		// self-delimiting primary. The callee is uncurried application's head,
+		// which the parser requires to be a primary: a nested call as callee
+		// MUST stay parenthesized, since `(ref.get run) ()` bare becomes
+		// `ref.get run ()` — one call with two args, not a call of the thunk.
+		// A `fun`/`if`/`when`/`while` literal is a primary, so its wrapping
+		// parens drop (`list.map xs (fun x { ... })` → `list.map xs fun x
+		// { ... }`); a nested call or operator expression keeps them
+		// (`f (g x)`, `f (a + b)`).
+		let mut parts: Vec<Doc> = vec![self.fmt(&call.callee, 91)];
 		let last = call.args.len().wrapping_sub(1);
 		for (i, arg) in call.args.iter().enumerate() {
 			parts.push(text(" "));
