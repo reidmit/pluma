@@ -1,0 +1,374 @@
+# std.signal -- fine-grained reactivity: the core of the post-MVU frontend.
+#
+# A `signal a` is a mutable cell that remembers who read it. A `computed` is a
+# derived signal recomputed on demand. An `effect` is a side-effecting reader
+# that re-runs whenever any signal it read changes. Together they form a
+# dependency graph that updates exactly the parts that depend on what changed --
+# no central model, no message type, no whole-view re-render.
+#
+#     let n = signal.new 0
+#     let doubled = signal.computed fun { (signal.get n) * 2 }
+#     let dispose = signal.effect fun {
+#         io.print "n doubled is $(to-string (signal.get doubled))"
+#     }
+#     signal.set n 5      # the effect re-runs, printing 10
+#
+# This module is platform-neutral -- it's just a graph over `ref`s, so it works
+# server-side too. The view layer (`std.view`) binds a UI to signals on top of
+# it, and `std.web.render` mounts that to the real DOM.
+#
+# DESIGN. Tracking is *automatic*: `signal.get`, while an effect/computed is
+# running, registers that reader as a subscriber (the "current observer" is held
+# in a module `ref`, saved/restored around each run -- reactive runs never
+# suspend, so a plain stack discipline is enough). Updates are *glitch-free* via
+# a pull model: a `set` eagerly marks dependent computeds STALE and queues
+# dependent effects, but computeds don't recompute until read -- so by the time
+# an effect pulls a computed, every upstream is already fresh and each effect
+# runs at most once per batch (see the diamond test).
+#
+# Scoped teardown is via the owner tree (`owned`/`on-cleanup`): a dynamic subtree
+# runs under a fresh owner so unmounting it disposes exactly its effects. Each
+# `effect` also returns its own dispose thunk for standalone use.
+#
+# v1 limits: `set` propagates unconditionally (no value-equality short-circuit),
+# so a write that doesn't change the value still notifies; a cycle (an effect
+# that sets a signal it reads) loops.
+
+use std.dict
+use std.list
+
+# An observer is something that runs and tracks what it reads: an effect or a
+# computed. Monomorphic (it never carries the observed value's type) so it can
+# live in a source's subscriber dict regardless of that source's element type.
+#   id            -- unique, for dict keying and dedup
+#   sources       -- source-id -> a thunk that unsubscribes this observer there
+#   run           -- recompute/re-execute the body under tracking (a ref so the
+#                    closure can refer back to the observer it lives in)
+#   notify        -- react to an upstream change: an effect queues itself; a
+#                    computed marks itself stale and propagates to its readers
+enum observer {
+	obs int (ref (dict int (fun nothing -> nothing))) (ref (fun nothing -> nothing)) (ref (fun nothing -> nothing))
+}
+
+# A reactive source. A plain cell has `owner` = none; a computed carries its
+# recompute observer in `owner` so a reader can pull a fresh value first.
+#   id     -- source id, the key this source uses in an observer's `sources`
+#   value  -- current value (a cell's contents, or a computed's cache)
+#   subs   -- observer-id -> the observers currently reading this source
+#   stale  -- a computed whose inputs changed but hasn't recomputed (cells: false)
+#   owner  -- the recompute observer (computeds only; none for cells)
+opaque enum signal a {
+	sig int (ref a) (ref (dict int observer)) (ref bool) (option observer)
+}
+
+# --- module-global reactive state ------------------------------------------
+
+# Next unique id. Reactive runs are synchronous and single-threaded under V8,
+# so a plain counter is race-free.
+def counter :: ref int = ref.new 0
+
+def fresh :: fun nothing -> int = fun {
+	let n = ref.get counter
+	ref.set counter (n + 1)
+	n
+}
+
+# The observer currently running, if any. `signal.get` reads this to know who to
+# subscribe. `none` outside any effect/computed (a bare read doesn't subscribe).
+def current :: ref (option observer) = ref.new none
+
+# Effects queued by a `set`, deduped by observer id, drained after the batch.
+def pending :: ref (dict int observer) = ref.new (dict.empty ())
+
+# Batch nesting depth; the outermost `batch` (depth back to 0) drains.
+def depth :: ref int = ref.new 0
+
+# Guards against re-entrant drains: a `set` inside an effect run just enqueues;
+# the in-progress drain picks it up rather than starting a nested one.
+def flushing :: ref bool = ref.new false
+
+# --- observer plumbing ------------------------------------------------------
+
+def obs-id :: fun observer -> int = fun o {
+	when o is observer.obs id _src _run _notify {
+		id
+	}
+}
+
+def fire-run :: fun observer -> nothing = fun o {
+	when o is observer.obs _id _src run _notify {
+		(ref.get run) ()
+	}
+}
+
+def fire-notify :: fun observer -> nothing = fun o {
+	when o is observer.obs _id _src _run notify {
+		(ref.get notify) ()
+	}
+}
+
+# Drop every dependency this observer currently holds (calling each source's
+# unsubscribe thunk), so a re-run can re-register exactly what it reads this
+# time -- this is what makes conditional dependencies correct.
+def cleanup :: fun observer -> nothing = fun o {
+	when o is observer.obs _id src _run _notify {
+		list.each (dict.values (ref.get src)) fun unsub {
+			unsub ()
+		}
+		ref.set src (dict.empty ())
+	}
+}
+
+# Run `body` with `o` installed as the current observer, restoring the previous
+# one after. Every `signal.get` inside `body` subscribes `o`.
+def track :: fun observer (fun nothing -> a) -> a = fun o body {
+	let prev = ref.get current
+	ref.set current (some o)
+	let v = body ()
+	ref.set current prev
+	v
+}
+
+def make-observer :: fun nothing -> observer = fun {
+	observer.obs (fresh ()) (ref.new (dict.empty ())) (ref.new fun { () }) (ref.new fun {
+		()
+	})
+}
+
+# Subscribe observer `co` to a source: record `co` in the source's `subs`, and
+# record (in `co`'s sources) the thunk that removes it again.
+def link :: fun observer int (ref (dict int observer)) -> nothing = fun co sid subs {
+	ref.set subs (dict.insert (ref.get subs) (obs-id co) co)
+	when co is observer.obs _id csrc _run _notify {
+		ref.set csrc (dict.insert (ref.get csrc) sid fun {
+			ref.set subs (dict.remove (ref.get subs) (obs-id co))
+		})
+	}
+}
+
+# --- scheduling -------------------------------------------------------------
+
+def enqueue :: fun observer -> nothing = fun o {
+	ref.set pending (dict.insert (ref.get pending) (obs-id o) o)
+}
+
+# Run queued effects until the queue is empty (an effect may enqueue more).
+def drain :: fun nothing -> nothing = fun {
+	if dict.size (ref.get pending) == 0 {
+		()
+	} else {
+		let ready = dict.values (ref.get pending)
+		ref.set pending (dict.empty ())
+		list.each ready fun o {
+			fire-run o
+		}
+		drain ()
+	}
+}
+
+def maybe-flush :: fun nothing -> nothing = fun {
+	if ref.get flushing {
+		()
+	} else {
+		ref.set flushing true
+		drain ()
+		ref.set flushing false
+	}
+}
+
+# Coalesce many `set`s into a single round of effect runs. Re-entrant-safe: only
+# the outermost `batch` triggers the drain.
+public def batch :: fun (fun nothing -> a) -> a = fun body {
+	ref.update depth fun d {
+		d + 1
+	}
+	let v = body ()
+	ref.update depth fun d {
+		d - 1
+	}
+	if ref.get depth == 0 {
+		maybe-flush ()
+	} else {
+		()
+	}
+	v
+}
+
+# --- public surface ---------------------------------------------------------
+
+# A fresh read/write cell holding `initial`.
+public def new :: fun a -> signal a = fun initial {
+	signal.sig (fresh ()) (ref.new initial) (ref.new (dict.empty ())) (ref.new false) none
+}
+
+# Read a signal. Inside an effect/computed this subscribes the reader, so it
+# re-runs when the value changes. A stale computed is recomputed first (pull).
+public def get :: fun (signal a) -> a = fun s {
+	when s is signal.sig sid val subs stale owner {
+		if owner is some o {
+			if ref.get stale {
+				fire-run o
+			} else {
+				()
+			}
+		} else {
+			()
+		}
+		if ref.get current is some co {
+			link co sid subs
+		} else {
+			()
+		}
+		ref.get val
+	}
+}
+
+# Read a signal *without* subscribing -- an escape hatch for reading current
+# state inside an effect without depending on it. Still pulls a stale computed.
+public def peek :: fun (signal a) -> a = fun s {
+	when s is signal.sig _sid val _subs stale owner {
+		if owner is some o {
+			if ref.get stale {
+				fire-run o
+			} else {
+				()
+			}
+		} else {
+			()
+		}
+		ref.get val
+	}
+}
+
+# Write a cell and notify everything that depends on it.
+public def set :: fun (signal a) a -> nothing = fun s v {
+	when s is signal.sig _sid val subs _stale _owner {
+		ref.set val v
+		let observers = dict.values (ref.get subs)
+		batch fun {
+			list.each observers fun o {
+				fire-notify o
+			}
+		}
+	}
+}
+
+# Read-modify-write. Reads with `peek`, so calling `update` inside an effect
+# doesn't make that effect depend on the signal.
+public def update :: fun (signal a) (fun a -> a) -> nothing = fun s f {
+	set s (f (peek s))
+}
+
+# --- ownership: scoped teardown for dynamic subtrees ------------------------
+#
+# An owner collects the disposers of every effect/computed created while it is
+# current, so a whole reactive subtree (a `show` branch, a `for` row) can be torn
+# down at once when it unmounts. `owned` runs a body under a fresh owner and
+# hands back its result plus a dispose thunk; `on-cleanup` registers extra
+# teardown (e.g. detaching DOM) with the current owner.
+
+opaque enum owner {
+	own (list (fun nothing -> nothing))
+}
+
+def current-owner :: ref (option owner) = ref.new none
+
+def register-cleanup :: fun (fun nothing -> nothing) -> nothing = fun d {
+	if ref.get current-owner is some o {
+		when o is owner.own cleanups {
+			list.push cleanups d
+		}
+	} else {
+		()
+	}
+}
+
+# Register a teardown thunk with the current owner (no-op outside an owner).
+public def on-cleanup :: fun (fun nothing -> nothing) -> nothing = fun d {
+	register-cleanup d
+}
+
+# Run `body` under a fresh owner; return its result paired with a thunk that
+# disposes every effect/computed/cleanup created under that owner.
+public def owned :: fun (fun nothing -> a) -> (a, (fun nothing -> nothing)) = fun body {
+	let cleanups :: list (fun nothing -> nothing) = []
+	let prev = ref.get current-owner
+	ref.set current-owner (some (owner.own cleanups))
+	let result = body ()
+	ref.set current-owner prev
+	(
+		result,
+		fun {
+			list.each cleanups fun c {
+				c ()
+			}
+		},
+	)
+}
+
+# Run `body` without subscribing the current observer to anything it reads -- so
+# building a dynamic subtree inside an effect doesn't make the outer effect
+# depend on that subtree's signals.
+public def untrack :: fun (fun nothing -> a) -> a = fun body {
+	let prev = ref.get current
+	ref.set current none
+	let v = body ()
+	ref.set current prev
+	v
+}
+
+# A derived, read-only signal. `body` is run once now to seed the cache and
+# discover its dependencies; thereafter it's marked stale on any upstream change
+# and recomputed lazily the next time it's read.
+public def computed :: fun (fun nothing -> a) -> signal a = fun body {
+	let o = make-observer ()
+	let v0 = track o body
+	let cache = ref.new v0
+	let subs = ref.new (dict.empty ())
+	let stale = ref.new false
+	when o is observer.obs _id _src run notify {
+		ref.set run fun {
+			cleanup o
+			let v = track o body
+			ref.set cache v
+			ref.set stale false
+		}
+		ref.set notify fun {
+			if ref.get stale {
+				()
+			} else {
+				ref.set stale true
+				list.each (dict.values (ref.get subs)) fun sub {
+					fire-notify sub
+				}
+			}
+		}
+	}
+	register-cleanup fun {
+		cleanup o
+	}
+	signal.sig (fresh ()) cache subs stale (some o)
+}
+
+# Run `body` now, and again whenever any signal it read changes. Returns a
+# dispose thunk that unsubscribes the effect so it stops reacting.
+public def effect :: fun (fun nothing -> nothing) -> (fun nothing -> nothing) = fun body {
+	let o = make-observer ()
+	when o is observer.obs _id _src run notify {
+		ref.set run fun {
+			cleanup o
+			track o fun {
+				body ()
+			}
+		}
+		ref.set notify fun {
+			enqueue o
+		}
+	}
+	fire-run o
+	let dispose = fun {
+		cleanup o
+	}
+	register-cleanup dispose
+	dispose
+}

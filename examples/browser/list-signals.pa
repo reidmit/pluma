@@ -1,0 +1,65 @@
+# Reactive control flow: `view.show` (toggle a subtree) and `view.each` (a keyed
+# list). Each row owns a local counter -- the point of *keyed* reconciliation is
+# that editing the list (add / remove) reuses surviving rows, so their local
+# state survives. Build + serve like the other browser examples:
+#
+#     pluma build --web examples/browser/list-signals.pa -o /tmp/list-signals
+#     python3 -m http.server --directory /tmp/list-signals
+
+use std.list
+use std.signal
+use std.view
+use std.web.dom
+use std.web.render
+
+# A row with its own local counter, keyed by `id`.
+def row :: fun int -> view = fun id {
+	let count = signal.new 0
+	view.li [] [
+		view.text-of fun { "item $(to-string id) -- count $(to-string (signal.get count))" },
+		view.button [
+			view.on-click fun {
+				signal.update count fun n {
+					n + 1
+				}
+			},
+		] [view.text "bump"],
+	]
+}
+
+def main = fun {
+	let items = signal.new [1, 2, 3]
+	let visible = signal.new true
+	let next-id = ref.new 4
+	render.mount (dom.body ()) (view.div [] [
+		view.button [
+			view.on-click fun {
+				let id = ref.get next-id
+				ref.set next-id (id + 1)
+				signal.update items fun xs {
+					[...xs, id]
+				}
+			},
+		] [view.text "add"],
+		view.button [
+			view.on-click fun {
+				signal.update items fun xs {
+					list.drop xs 1
+				}
+			},
+		] [view.text "remove first"],
+		view.button [
+			view.on-click fun {
+				signal.update visible fun b {
+					if b {
+						false
+					} else {
+						true
+					}
+				}
+			},
+		] [view.text "toggle"],
+		view.show fun { signal.get visible } fun { view.p [] [view.text "now you see me"] },
+		view.ul [] [view.each fun { signal.get items } fun id { to-string id } row],
+	])
+}

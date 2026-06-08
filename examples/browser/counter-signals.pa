@@ -1,0 +1,38 @@
+# A click counter, the signals way -- a component is a function, local state is a
+# `signal.new` inside it. No model, no msg, no update. Two independent instances
+# drop side by side with zero plumbing.
+#
+#     pluma build --web examples/browser/counter-signals.pa -o /tmp/counter-signals
+#     python3 -m http.server --directory /tmp/counter-signals
+#
+# then open http://localhost:8000/ .
+
+use std.signal
+use std.view
+use std.web.dom
+use std.web.render
+
+def counter :: fun int -> view = fun start {
+	let n = signal.new start
+	view.div [] [
+		view.button [
+			view.on-click fun {
+				signal.update n fun x {
+					x - 1
+				}
+			},
+		] [view.text "-"],
+		view.span [view.style "padding: 0 1rem"] [view.text-of fun { to-string (signal.get n) }],
+		view.button [
+			view.on-click fun {
+				signal.update n fun x {
+					x + 1
+				}
+			},
+		] [view.text "+"],
+	]
+}
+
+def main = fun {
+	render.mount (dom.body ()) (view.div [] [counter 0, counter 100])
+}

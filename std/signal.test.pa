@@ -1,0 +1,167 @@
+use std.assert
+use std.list
+use std.signal
+use std.test
+
+# `ref` and `option` are auto-imported. These run headless under V8 -- the
+# reactive core is pure (refs + dict), no DOM needed. Effects log into a mutable
+# `list int` (pushed in place), so the list's contents both witness every run
+# and let us assert run count by length.
+
+def tests :: test.suite = [
+	test.case "cell get returns the initial value" fun {
+		let s = signal.new 10
+		assert.equals (signal.get s) 10
+	},
+	test.case "set overwrites a cell" fun {
+		let s = signal.new 0
+		signal.set s 42
+		assert.equals (signal.get s) 42
+	},
+	test.case "update reads, applies, writes" fun {
+		let s = signal.new 5
+		signal.update s fun n {
+			n + 1
+		}
+		assert.equals (signal.get s) 6
+	},
+	test.case "effect runs once on creation" fun {
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			list.push log 1
+		}
+		assert.equals log [1]
+	},
+	test.case "effect re-runs when a read dependency changes" fun {
+		let s = signal.new 0
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			list.push log (signal.get s)
+		}
+		signal.set s 1
+		signal.set s 2
+		assert.equals log [0, 1, 2]
+	},
+	test.case "computed derives and recomputes on demand" fun {
+		let s = signal.new 2
+		let double = signal.computed fun {
+			signal.get s * 2
+		}
+		let first = signal.get double
+		signal.set s 5
+		let second = signal.get double
+		assert.all [assert.equals first 4, assert.equals second 10]
+	},
+	test.case "diamond: effect runs once per change, glitch-free" fun {
+		# a -> b, a -> c, (b,c) -> effect. A naive scheme runs the effect twice
+		# and can show it an inconsistent (b,c); the pull model runs it exactly
+		# once per change with both sides fresh -- so `seen` has one entry each.
+		let a = signal.new 1
+		let b = signal.computed fun {
+			signal.get a + 1
+		}
+		let c = signal.computed fun {
+			signal.get a * 2
+		}
+		let seen :: list int = []
+		let _stop = signal.effect fun {
+			list.push seen (signal.get b + signal.get c)
+		}
+		signal.set a 5
+		assert.equals seen [4, 16]
+	},
+	test.case "batch coalesces multiple sets into one run" fun {
+		let x = signal.new 0
+		let y = signal.new 0
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			list.push log (signal.get x + signal.get y)
+		}
+		signal.batch fun {
+			signal.set x 1
+			signal.set y 1
+		}
+		assert.equals log [0, 2]
+	},
+	test.case "dispose stops an effect from reacting" fun {
+		let s = signal.new 0
+		let log :: list int = []
+		let dispose = signal.effect fun {
+			list.push log (signal.get s)
+		}
+		signal.set s 1
+		dispose ()
+		signal.set s 2
+		assert.equals log [0, 1]
+	},
+	test.case "peek reads without subscribing" fun {
+		let s = signal.new 0
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			list.push log (signal.peek s)
+		}
+		signal.set s 1
+		assert.equals log [0]
+	},
+	test.case "owned disposes the effects created under it" fun {
+		let s = signal.new 0
+		let log :: list int = []
+		let owned-result = signal.owned fun {
+			signal.effect fun {
+				list.push log (signal.get s)
+			}
+		}
+		let (_inner-dispose, dispose-owner) = owned-result
+		signal.set s 1
+		dispose-owner ()
+		signal.set s 2
+		# create-run (0) + first set (1); after owner disposal, no more
+		assert.equals log [0, 1]
+	},
+	test.case "on-cleanup runs when the owner is disposed" fun {
+		let log :: list int = []
+		let owned-result = signal.owned fun {
+			signal.on-cleanup fun {
+				list.push log 99
+			}
+		}
+		let (_unit, dispose-owner) = owned-result
+		let before = list.length log
+		dispose-owner ()
+		let after = list.length log
+		assert.all [assert.equals before 0, assert.equals after 1]
+	},
+	test.case "untrack reads without subscribing the current effect" fun {
+		let a = signal.new 0
+		let b = signal.new 0
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			# depend on `a`, but read `b` untracked
+			let av = signal.get a
+			let bv = signal.untrack fun {
+				signal.get b
+			}
+			list.push log (av + bv)
+		}
+		signal.set b 5
+		signal.set a 1
+		# create-run: 0+0=0; set b (untracked) -> no run; set a -> 1+5=6
+		assert.equals log [0, 6]
+	},
+	test.case "effect drops dependencies it no longer reads" fun {
+		let toggle = signal.new true
+		let a = signal.new 1
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			if signal.get toggle {
+				list.push log (signal.get a)
+			} else {
+				list.push log 0
+			}
+		}
+		signal.set a 100
+		signal.set toggle false
+		signal.set a 200
+		assert.equals log [1, 100, 0]
+	},
+]

@@ -30,7 +30,9 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std.rpc.sys", include_str!("../../std/rpc/sys.pa")),
 		("std.rpc.web", include_str!("../../std/rpc/web.pa")),
 		("std.router", include_str!("../../std/router.pa")),
+		("std.signal", include_str!("../../std/signal.pa")),
 		("std.stream", include_str!("../../std/stream.pa")),
+		("std.view", include_str!("../../std/view.pa")),
 		("std.string", include_str!("../../std/string.pa")),
 		("std.task", include_str!("../../std/task.pa")),
 		("std.test", include_str!("../../std/test.pa")),
@@ -50,6 +52,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std.web.events", include_str!("../../std/web/events.pa")),
 		("std.web.fetch", include_str!("../../std/web/fetch.pa")),
 		("std.web.html", include_str!("../../std/web/html.pa")),
+		("std.web.render", include_str!("../../std/web/render.pa")),
 	]
 }
 

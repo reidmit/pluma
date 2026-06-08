@@ -1,0 +1,189 @@
+# std.web.render -- mount a `std.view` tree into the live browser DOM.
+#
+# The browser-side consumer of a `view` (its server-side dual is
+# `view.to-string`). `mount` walks the view once, builds the real DOM via
+# `std.web.dom`, and wires every reactive part to a `signal.effect` so the DOM
+# stays in sync surgically -- there is no diff and no retained virtual tree.
+# After mount, updates flow signal -> effect -> DOM directly.
+#
+# A signals app's `main` *is* the mount:
+#
+#     def main = fun {
+#         render.mount (dom.body ()) (counter 0)
+#     }
+#
+# `mount` returns `task nothing` -- the browser entry seeds and pumps it, then
+# the instance stays alive to service DOM events.
+#
+# Reactive control flow (`view.show` / `view.for`) is realised here: each gets a
+# `display: contents` host element it manages, an effect that re-runs when its
+# condition / list changes, and a `signal.owned` scope per mounted subtree so
+# unmounting disposes exactly that subtree's effects (and a `signal.on-cleanup`
+# so an ancestor unmount tears the dynamic content down too). v1 uses a wrapper
+# host rather than Solid-style comment anchors -- a later refinement.
+
+use std.dict
+use std.list
+use std.signal
+use std.task
+use std.view
+use std.web.dom
+
+# Build the real DOM node for a view, wiring each reactive part to an effect.
+def build :: fun view -> dom.node = fun v {
+	when v is view.txt s {
+		dom.create-text s
+	} is view.dynamic-text f {
+		let node = dom.create-text ""
+		let _d = signal.effect fun {
+			dom.set-text node (f ())
+		}
+		node
+	} is view.el tag attrs kids {
+		let node = dom.create-element tag
+		list.each attrs fun a {
+			apply-attr node a
+		}
+		list.each kids fun k {
+			dom.append-child node (build k)
+		}
+		node
+	} is view.show-node cond child {
+		build-show cond child
+	} is view.for-node thunk {
+		build-for thunk
+	}
+}
+
+# Apply one attribute to a freshly built node. Reactive attributes get an effect;
+# handlers get a real DOM listener.
+def apply-attr :: fun dom.node view.attribute -> nothing = fun node a {
+	when a is view.attribute.static k v {
+		dom.set-attribute node k v
+	} is view.attribute.prop-str k v {
+		dom.set-string-property node k v
+	} is view.attribute.prop-bool k flag {
+		dom.set-bool-property node k flag
+	} is view.attribute.dynamic k f {
+		let _d = signal.effect fun {
+			dom.set-attribute node k (f ())
+		}
+		()
+	} is view.attribute.handler name h {
+		let _id = dom.add-listener node name h
+		()
+	}
+}
+
+# A `display: contents` wrapper -- a host the dynamic builders own without
+# perturbing layout.
+def fragment-host :: fun nothing -> dom.node = fun {
+	let host = dom.create-element "span"
+	dom.set-attribute host "style" "display: contents"
+	host
+}
+
+# `view.show`: mount the child while `cond` is true, tearing it down (disposing
+# its effects) when it goes false. The effect tracks only `cond`; the rebuild is
+# untracked so the child's own signals don't re-trigger it.
+def build-show :: fun (fun nothing -> bool) (fun nothing -> view) -> dom.node = fun cond child {
+	let host = fragment-host ()
+	let cur :: ref (option (fun nothing -> nothing)) = ref.new none
+	let _eff = signal.effect fun {
+		let visible = cond ()
+		signal.untrack fun {
+			teardown-show cur host
+			if visible {
+				let built = signal.owned fun {
+					dom.append-child host (build (child ()))
+				}
+				let (_unit, dispose) = built
+				ref.set cur (some dispose)
+			} else {
+				()
+			}
+		}
+	}
+	signal.on-cleanup fun {
+		teardown-show cur host
+	}
+	host
+}
+
+def teardown-show :: fun (ref (option (fun nothing -> nothing))) dom.node -> nothing = fun cur host {
+	if ref.get cur is some dispose {
+		dispose ()
+	} else {
+		()
+	}
+	ref.set cur none
+	dom.set-text host ""
+}
+
+# `view.for`: keyed list reconciliation. Rows whose key survives are reused (DOM
+# and local state kept); new keys are built under their own owner, vanished keys
+# are disposed + removed, and the final order is set by re-appending in sequence.
+def build-for :: fun (fun nothing -> list (string, view)) -> dom.node = fun thunk {
+	let host = fragment-host ()
+	let state :: ref (dict string (dom.node, (fun nothing -> nothing))) = ref.new (dict.empty ())
+	let _eff = signal.effect fun {
+		let pairs = thunk ()
+		signal.untrack fun {
+			reconcile host state pairs
+		}
+	}
+	signal.on-cleanup fun {
+		list.each (dict.values (ref.get state)) fun entry {
+			let (_node, dispose) = entry
+			dispose ()
+		}
+	}
+	host
+}
+
+def reconcile :: fun dom.node (ref (dict string (dom.node, (fun nothing -> nothing)))) (list (string, view)) -> nothing = fun host state pairs {
+	let old = ref.get state
+	let next :: ref (dict string (dom.node, (fun nothing -> nothing))) = ref.new (dict.empty ())
+	# Reuse a surviving key's node/owner; build a new key under its own owner.
+	list.each pairs fun pair {
+		let (k, v) = pair
+		if dict.lookup old k is some entry {
+			ref.set next (dict.insert (ref.get next) k entry)
+		} else {
+			let built = signal.owned fun {
+				build v
+			}
+			ref.set next (dict.insert (ref.get next) k built)
+		}
+	}
+	# Dispose + detach keys that vanished.
+	list.each (dict.keys old) fun k {
+		if dict.contains-key (ref.get next) k {
+			()
+		} else if dict.lookup old k is some entry {
+			let (node, dispose) = entry
+			dispose ()
+			dom.remove-child host node
+		} else {
+			()
+		}
+	}
+	# Set order: append each row in sequence (moves survivors, attaches new ones).
+	list.each pairs fun pair {
+		let (k, _v) = pair
+		if dict.lookup (ref.get next) k is some entry {
+			let (node, _dispose) = entry
+			dom.append-child host node
+		} else {
+			()
+		}
+	}
+	ref.set state (ref.get next)
+}
+
+# Mount `v` under `parent`. Returns `task nothing` so the browser entry can seed
+# and pump it; the wasm instance then stays alive to dispatch DOM events.
+public def mount :: fun dom.node view -> task nothing = fun parent v {
+	dom.append-child parent (build v)
+	task.return ()
+}

@@ -1,0 +1,107 @@
+use std.assert
+use std.signal
+use std.test
+use std.view
+
+# `view.to-string` is pure (no DOM), so it runs headless under V8. These pin the
+# server-side / SSR rendering: escaping, void elements, attrs vs properties,
+# reactive thunks evaluated once, handlers dropped.
+
+def tests :: test.suite = [
+	test.case "renders a simple element with text" fun {
+		let v = view.div [] [view.text "hi"]
+		assert.equals (view.to-string v) "<div>hi</div>"
+	},
+	test.case "renders static attributes in order" fun {
+		let v = view.span [view.class "x", view.id "y"] [view.text "z"]
+		assert.equals (view.to-string v) "<span class=\"x\" id=\"y\">z</span>"
+	},
+	test.case "escapes text content" fun {
+		let v = view.p [] [view.text "<b> & </b>"]
+		assert.equals (view.to-string v) "<p>&lt;b&gt; &amp; &lt;/b&gt;</p>"
+	},
+	test.case "escapes attribute values incl quotes" fun {
+		let v = view.div [view.title "a\"b<c"] []
+		assert.equals (view.to-string v) "<div title=\"a&quot;b&lt;c\"></div>"
+	},
+	test.case "void elements self-close with no children" fun {
+		let v = view.br [] []
+		assert.equals (view.to-string v) "<br>"
+	},
+	test.case "string properties render as attributes" fun {
+		let v = view.input [view.value "hi"] []
+		assert.equals (view.to-string v) "<input value=\"hi\">"
+	},
+	test.case "boolean properties render bare when true" fun {
+		let v = view.input [view.disabled true] []
+		assert.equals (view.to-string v) "<input disabled>"
+	},
+	test.case "boolean properties are omitted when false" fun {
+		let v = view.input [view.disabled false] []
+		assert.equals (view.to-string v) "<input>"
+	},
+	test.case "reactive text is evaluated once" fun {
+		let s = signal.new 5
+		let v = view.text-of fun {
+			to-string (signal.get s)
+		}
+		assert.equals (view.to-string v) "5"
+	},
+	test.case "reactive attribute is evaluated once" fun {
+		let active = signal.new true
+		let v = view.div [
+			view.bind "class" fun {
+				if signal.get active {
+					"on"
+				} else {
+					"off"
+				}
+			},
+		] []
+		assert.equals (view.to-string v) "<div class=\"on\"></div>"
+	},
+	test.case "event handlers are dropped" fun {
+		let v = view.button [view.on-click fun { () }] [view.text "ok"]
+		assert.equals (view.to-string v) "<button>ok</button>"
+	},
+	test.case "nested children render in document order" fun {
+		let v = view.ul [] [view.li [] [view.text "a"], view.li [] [view.text "b"]]
+		assert.equals (view.to-string v) "<ul><li>a</li><li>b</li></ul>"
+	},
+	test.case "show renders its child when the condition is true" fun {
+		let v = view.show fun { true } fun {
+			view.span [] [view.text "yes"]
+		}
+		assert.equals (view.to-string v) "<span>yes</span>"
+	},
+	test.case "show renders nothing when the condition is false" fun {
+		let v = view.show fun { false } fun {
+			view.span [] [view.text "yes"]
+		}
+		assert.equals (view.to-string v) ""
+	},
+	test.case "each renders one keyed child per item, in order" fun {
+		let items = ["a", "b", "c"]
+		let v = view.each fun { items } fun s { s } fun s {
+			view.li [] [view.text s]
+		}
+		assert.equals (view.to-string v) "<li>a</li><li>b</li><li>c</li>"
+	},
+	test.case "each over an empty list renders nothing" fun {
+		let items :: list string = []
+		let v = view.each fun { items } fun s { s } fun s {
+			view.li [] [view.text s]
+		}
+		assert.equals (view.to-string v) ""
+	},
+	test.case "a component composes by plain function call" fun {
+		# the headline win: drop two independent instances side by side, no msg
+		# wiring. (Local state lives in mount; to-string shows initial render.)
+		let v = view.div [] [labeled "x", labeled "y"]
+		assert.equals (view.to-string v) "<div><span>x</span><span>y</span></div>"
+	},
+]
+
+def labeled :: fun string -> view = fun s {
+	view.span [] [view.text s]
+}
