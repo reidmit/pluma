@@ -412,6 +412,88 @@ public def reset :: fun nothing -> nothing = fun {
 	ref.set registry (dict.empty ())
 }
 
+# --- @keyframes + animation -------------------------------------------------
+#
+# A `keyframe-set` is a pure value (a list of stops). It is registered as an
+# `@keyframes` block only when an `animation` declaration referencing it is built --
+# use-driven, like `class-of`. The animation name is a content hash of the stops, so
+# identical animations dedup and the `@keyframes` name matches the `animation:` value
+# with no coordination.
+#
+#     def spin :: css.keyframe-set = css.keyframes [
+#         css.frame "from" [css.property "transform" "rotate(0deg)"],
+#         css.frame "to"   [css.property "transform" "rotate(360deg)"],
+#     ]
+#     def spinner :: css.ruleset = css.rule [css.base [css.animation spin "1s linear infinite"]]
+
+# One stop in an animation: an offset (`"from"`/`"to"`/`"50%"`) and its declarations.
+public enum keyframe {
+	frame string (list decl)
+}
+
+# An animation's stops, a pure value. (Type `keyframe-set`, not `keyframes`, since
+# the `css.keyframes` builder takes that name.)
+public enum keyframe-set {
+	stops (list keyframe)
+}
+
+# One animation stop: `css.frame "from" [...]`, `css.frame "50%" [...]`.
+public def frame :: fun string (list decl) -> keyframe = fun offset ds {
+	keyframe.frame offset ds
+}
+
+# Bundle stops into an animation value.
+public def keyframes :: fun (list keyframe) -> keyframe-set = fun ks {
+	keyframe-set.stops ks
+}
+
+# An `animation` declaration that plays `kf` with the given timing
+# (`"1s linear infinite"`), AND registers `kf` as an `@keyframes` block in the
+# collector. `css.animation spin "1s linear infinite"` => `animation: <name> 1s linear infinite`.
+public def animation :: fun keyframe-set string -> decl = fun kf timing {
+	let name = "k$(to-hex (hash-css (canonical-frames kf)))"
+	let _ = register name (render-keyframes name kf)
+	decl.decl "animation" "$(name) $(timing)"
+}
+
+# --- global rules -----------------------------------------------------------
+#
+# Ungated rules for things that aren't scoped to one element's class: `:root` custom
+# properties, resets (`*`, `body`), `@font-face`. There is no global cascade by
+# design -- every normal rule is hash-scoped -- so reach for this sparingly. Unlike
+# `class-of` (registered when an element uses the rule), a global rule has no element
+# to hang off, so `global` registers on the call: invoke it where it's reachable
+# *before* `collect`/`style-tag` runs (e.g. at the top of your SSR `document`, or in
+# `main` before mount).
+#
+#     css.global [
+#         css.at ":root" [css.property "--brand" "#2563eb"],
+#         css.at "body"  [css.margin (css.px 0.0)],
+#     ]
+
+# One global rule: a raw selector (`":root"`, `"*"`, `"@font-face"`) and its
+# declarations. The selector is emitted verbatim, so any at-rule with a declaration
+# body works.
+public enum global-rule {
+	at string (list decl)
+}
+
+# A global rule: `css.at ":root" [...]`, `css.at "@font-face" [...]`.
+public def at :: fun string (list decl) -> global-rule = fun selector ds {
+	global-rule.at selector ds
+}
+
+# Register global rules into the collector (`selector { decls }`, unscoped). Returns
+# nothing -- it's a setup call; run it before `collect`/`style-tag`.
+public def global :: fun (list global-rule) -> nothing = fun rules {
+	list.each rules fun r {
+		when r is global-rule.at selector ds {
+			let css = "$(selector){$(inline ds)}"
+			register "g$(to-hex (hash-css css))" css
+		}
+	}
+}
+
 # --- rule rendering + the collector (internal) ------------------------------
 
 # The collector: class name -> its rendered CSS. A module-level `ref` (the same
@@ -457,6 +539,28 @@ def render-block :: fun string block -> string = fun cls b {
 	} is block.media q ds {
 		"@media $(q){.$(cls){$(inline ds)}}"
 	}
+}
+
+# The stops serialized to `offset{decls}` runs -- shared by the hash (content key)
+# and the rendered `@keyframes` body, so the name and the block always agree.
+def frames-body :: fun keyframe-set -> string = fun kf {
+	when kf is keyframe-set.stops ks {
+		string.join (list.map ks fun k {
+			when k is keyframe.frame offset ds {
+				"$(offset){$(inline ds)}"
+			}
+		}) ""
+	}
+}
+
+# A keyframe-set's content, the input to its name hash (distinct frame sets get
+# distinct names).
+def canonical-frames :: fun keyframe-set -> string = fun kf {
+	frames-body kf
+}
+
+def render-keyframes :: fun string keyframe-set -> string = fun name kf {
+	"@keyframes $(name){$(frames-body kf)}"
 }
 
 # --- content hash (FNV-1a, 32-bit) ------------------------------------------
