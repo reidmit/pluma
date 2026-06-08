@@ -98,6 +98,9 @@ const pluma = {
   // rides as an i32 so `!!flag` is a real boolean (`node.disabled = "false"` is truthy).
   "dom-set-string-property": (n, np, nl, vp, vl) => { n[readStr(np, nl)] = readStr(vp, vl); },
   "dom-set-bool-property": (n, np, nl, v) => { n[readStr(np, nl)] = !!v; },
+  // std.css reactive custom properties: one inline-style property at a time, so a
+  // node can carry several without clobbering its whole `style`.
+  "dom-set-style-property": (n, np, nl, vp, vl) => { n.style.setProperty(readStr(np, nl), readStr(vp, vl)); },
   "dom-set-text": (n, p, l) => { n.textContent = readStr(p, l); },
   "dom-get-value": (n, dst, cap) => writeStr(dst, cap, (n && n.value) || ""),
   // event accessors (the event externref flows in as the handler's arg).

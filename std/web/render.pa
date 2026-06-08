@@ -73,6 +73,11 @@ def apply-attr :: fun dom.node view.attribute -> nothing = fun node a {
 	} is view.attribute.handler name h {
 		let _id = dom.add-listener node name h
 		()
+	} is view.attribute.style-var name f {
+		let _d = signal.effect fun {
+			dom.set-style-property node "--$(name)" (f ())
+		}
+		()
 	}
 }
 
@@ -302,6 +307,13 @@ def adopt-attr :: fun dom.node view.attribute -> nothing = fun node a {
 		()
 	} is view.attribute.handler name h {
 		let _id = dom.add-listener node name h
+		()
+	} is view.attribute.style-var name f {
+		# The server already rendered the initial value into the inline style; this
+		# effect re-applies it (idempotent) and then tracks the signal like `mount`.
+		let _d = signal.effect fun {
+			dom.set-style-property node "--$(name)" (f ())
+		}
 		()
 	}
 }

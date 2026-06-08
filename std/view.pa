@@ -40,6 +40,7 @@ public enum attribute {
 	prop-bool string bool
 	dynamic string (fun nothing -> string)
 	handler string (fun event -> nothing)
+	style-var string (fun nothing -> string)
 }
 
 # A node in the view tree: an element, static text, a reactive text node, or
@@ -203,9 +204,17 @@ def escape-attr :: fun string -> string = fun s {
 	string.replace c "\"" "&quot;"
 }
 
+# Render one attribute, EXCEPT style-contributing ones (a `style` attribute or a
+# custom property) -- those are gathered separately by `style-fragment` and merged
+# into a single `style="..."` by `render-attrs`, so they don't emit a duplicate
+# `style` attribute here.
 def render-attr :: fun attribute -> string = fun a {
 	when a is attribute.static k v {
-		" $(k)=\"$(escape-attr v)\""
+		if k == "style" {
+			""
+		} else {
+			" $(k)=\"$(escape-attr v)\""
+		}
 	} is attribute.prop-str k v {
 		" $(k)=\"$(escape-attr v)\""
 	} is attribute.prop-bool k flag {
@@ -215,14 +224,60 @@ def render-attr :: fun attribute -> string = fun a {
 			""
 		}
 	} is attribute.dynamic k f {
-		" $(k)=\"$(escape-attr (f ()))\""
+		if k == "style" {
+			""
+		} else {
+			" $(k)=\"$(escape-attr (f ()))\""
+		}
 	} is attribute.handler _name _h {
+		""
+	} is attribute.style-var _name _f {
 		""
 	}
 }
 
+# The `style` text an attribute contributes, if any: a `style` attribute's value
+# (static or reactive, the thunk run once), or a `--name: value` custom property.
+# Everything else contributes nothing. These merge into one `style` attribute so a
+# node can carry both an inline style and custom properties without a duplicate attr.
+def style-fragment :: fun attribute -> option string = fun a {
+	when a is attribute.static k v {
+		if k == "style" {
+			some v
+		} else {
+			none
+		}
+	} is attribute.dynamic k f {
+		if k == "style" {
+			some (f ())
+		} else {
+			none
+		}
+	} is attribute.style-var name f {
+		some "--$(name): $(f ())"
+	} is attribute.prop-str _k _v {
+		none
+	} is attribute.prop-bool _k _flag {
+		none
+	} is attribute.handler _name _h {
+		none
+	}
+}
+
 def render-attrs :: fun (list attribute) -> string = fun attrs {
-	string.join (list.map attrs fun a { render-attr a }) ""
+	let non-style = string.join (list.map attrs fun a { render-attr a }) ""
+	let frags = list.fold attrs [] fun acc a {
+		when style-fragment a is some s {
+			list.concat acc [s]
+		} else {
+			acc
+		}
+	}
+	if list.is-empty frags {
+		non-style
+	} else {
+		"$(non-style) style=\"$(escape-attr (string.join frags "; "))\""
+	}
 }
 
 public def to-string :: fun view -> string = fun v {
@@ -696,6 +751,18 @@ public def style-of :: fun (list css.decl) -> attribute = fun decls {
 # inline `style` can't express.
 public def styled :: fun css.ruleset -> attribute = fun r {
 	attribute.static "class" (css.class-of r)
+}
+
+# A reactive CSS custom property on this element: `view.css-var "accent" (fun {
+# theme.color (signal.get theme) })` sets `--accent`, re-applying when its signals
+# change. This is the dynamic boundary: a static extracted `css.rule` reads the value
+# with `css.var "accent"`, and this supplies the live value -- so the rule stays
+# cacheable while the value tracks a signal. (Named `css-var`, not `var`, since `var`
+# is the `<var>` element builder.) Multiple custom properties on one node merge into
+# its `style`; on the server `to-string` renders the initial value into the inline
+# style, and the client re-applies it via `node.style.setProperty`.
+public def css-var :: fun string (fun nothing -> string) -> attribute = fun name f {
+	attribute.style-var name f
 }
 
 public def title :: fun string -> attribute = fun v {

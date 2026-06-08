@@ -1142,8 +1142,9 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		}
 		"dom-set-attribute" | "dom-replace-child" | "dom-insert-before" | "dom-add-listener"
 		// the property setters: node + name + (string | bool). Same arity/shape as
-		// `dom-set-attribute` (the bool rides as the i32 third arg).
-		| "dom-set-string-property" | "dom-set-bool-property" => {
+		// `dom-set-attribute` (the bool rides as the i32 third arg). `dom-set-style-property`
+		// is node + property name + value, the same `SetAttr` shape.
+		| "dom-set-string-property" | "dom-set-style-property" | "dom-set-bool-property" => {
 			Some(HostSig {
 				arity: 3,
 				returns_value: false,
@@ -1322,6 +1323,9 @@ pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 		"event-prevent-default" => DomKind::Extern1,
 		"dom-child-at" => DomKind::ChildAt,
 		"dom-set-string-property" => DomKind::SetProp,
+		// `node.style.setProperty(name, value)` -- same wasm shape as `SetProp`, its own
+		// import (the host body differs).
+		"dom-set-style-property" => DomKind::SetProp,
 		"dom-set-bool-property" => DomKind::SetBoolProp,
 		"dom-dev-store-set" => DomKind::DevStoreSet,
 		"dom-dev-store-get" => DomKind::DevStoreGet,

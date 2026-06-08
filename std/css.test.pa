@@ -134,4 +134,23 @@ def tests :: test.suite = [
 		let cls = css.class-of r
 		assert.equals (css.style-tag ()) "<style>.$(cls){color: #fff}</style>"
 	},
+	test.case "css-var renders its initial value into the inline style" fun {
+		let v = view.div [view.css-var "accent" fun { "#e11" }] []
+		assert.equals (view.to-string v) "<div style=\"--accent: #e11\"></div>"
+	},
+	test.case "several custom properties merge into one style attribute" fun {
+		let v = view.div [view.css-var "a" fun { "1" }, view.css-var "b" fun { "2" }] []
+		assert.equals (view.to-string v) "<div style=\"--a: 1; --b: 2\"></div>"
+	},
+	test.case "an inline style and custom properties merge, not collide" fun {
+		let v = view.div [
+			view.style-of [css.color (css.hex "#fff")],
+			view.css-var "accent" fun { "#e11" },
+		] []
+		assert.equals (view.to-string v) "<div style=\"color: #fff; --accent: #e11\"></div>"
+	},
+	test.case "css-var coexists with non-style attributes" fun {
+		let v = view.div [view.id "box", view.css-var "accent" fun { "#e11" }] []
+		assert.equals (view.to-string v) "<div id=\"box\" style=\"--accent: #e11\"></div>"
+	},
 ]

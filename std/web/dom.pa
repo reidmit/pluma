@@ -61,6 +61,13 @@ public def set-attribute :: fun node string string -> nothing = built-in "dom-se
 # Remove an attribute from a node.
 public def remove-attribute :: fun node string -> nothing = built-in "dom-remove-attribute"
 
+# Set a CSS custom property on a node's inline style -- `node.style.setProperty`.
+# The name carries its leading `--` (`set-style-property node "--accent" "#e11"`).
+# Distinct from `set-attribute "style"`, which would clobber the whole declaration
+# block; this writes one property, so several can coexist. The renderer uses it to
+# apply a reactive `view.css-var`.
+public def set-style-property :: fun node string string -> nothing = built-in "dom-set-style-property"
+
 # Set a DOM *property* on a node -- `node[name] = value` -- as distinct from an
 # attribute (`set-attribute`). The difference matters for *live* state: an
 # `<input>`'s `value` attribute is only its initial text, while the `value`
