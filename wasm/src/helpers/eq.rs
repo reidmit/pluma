@@ -205,7 +205,16 @@ pub(crate) fn build_eq_fn(self_idx: u32, dict_eq_idx: u32) -> Function {
 	w.if_(|w| {
 		w.local_get(a).local_get(b).ref_eq().ret();
 	});
-	// Unhandled (closure/ctor): not structurally compared.
+	// CLOSURE: reference identity (`ref.eq`, like `$ref`/extern). A function value is
+	// equal only to itself — extensional equality of functions is undecidable, so
+	// identity is the only sound choice. This also keeps `==` *total* (it never traps),
+	// so `signal.set`'s value-equality short-circuit is safe for a signal of any type,
+	// including one that happens to hold a closure.
+	w.local_get(ta).i32(types::TAG_CLOSURE).i32_eq();
+	w.if_(|w| {
+		w.local_get(a).local_get(b).ref_eq().ret();
+	});
+	// Unhandled: not structurally compared.
 	w.unreachable();
 	w.finish()
 }

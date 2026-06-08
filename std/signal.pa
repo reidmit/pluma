@@ -30,9 +30,10 @@
 # runs under a fresh owner so unmounting it disposes exactly its effects. Each
 # `effect` also returns its own dispose thunk for standalone use.
 #
-# v1 limits: `set` propagates unconditionally (no value-equality short-circuit),
-# so a write that doesn't change the value still notifies; a cycle (an effect
-# that sets a signal it reads) loops.
+# `set` short-circuits on value equality (deep `==`): a write equal to the current
+# value neither stores nor notifies, so a redundant `set` is free and an effect that
+# writes back an unchanged value settles rather than looping. (A cycle that writes a
+# genuinely *changing* value each pass still loops -- that's a real cycle.)
 
 use std.dict
 use std.list
@@ -356,14 +357,21 @@ public def peek :: fun (signal a) -> a = fun s {
 	}
 }
 
-# Write a cell and notify everything that depends on it.
+# Write a cell and notify everything that depends on it. A write equal (by deep
+# value `==`) to the current value is a no-op: it doesn't touch the cell or notify,
+# so a redundant `set` costs nothing downstream and a self-referential effect (one
+# that sets a signal it reads to an unchanged value) settles instead of looping.
 public def set :: fun (signal a) a -> nothing = fun s v {
 	when s is signal.sig _sid val subs _stale _owner {
-		ref.set val v
-		let observers = dict.values (ref.get subs)
-		batch fun {
-			list.each observers fun o {
-				fire-notify o
+		if ref.get val == v {
+			()
+		} else {
+			ref.set val v
+			let observers = dict.values (ref.get subs)
+			batch fun {
+				list.each observers fun o {
+					fire-notify o
+				}
 			}
 		}
 	}

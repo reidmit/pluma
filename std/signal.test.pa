@@ -42,6 +42,49 @@ def tests :: test.suite = [
 		signal.set s 2
 		assert.equals log [0, 1, 2]
 	},
+	test.case "set to an equal value is a no-op (no re-run)" fun {
+		let s = signal.new 0
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			list.push log (signal.get s)
+		}
+		signal.set s 0
+		signal.set s 0
+		signal.set s 1
+		signal.set s 1
+		# Only the genuine change (0 -> 1) re-runs; the equal writes are dropped.
+		assert.equals log [0, 1]
+	},
+	test.case "value-equality short-circuit works on deep values" fun {
+		let s = signal.new ["a", "b"]
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			list.push log (list.length (signal.get s))
+		}
+		# A fresh list with the same elements is `==`, so it's a no-op...
+		signal.set s ["a", "b"]
+		# ...but a different list notifies.
+		signal.set s ["a", "b", "c"]
+		assert.equals log [2, 3]
+	},
+	test.case "set on a signal of a function compares by identity (no trap)" fun {
+		let f = fun {
+			1
+		}
+		let s = signal.new f
+		let log :: list int = []
+		let _stop = signal.effect fun {
+			list.push log ((signal.get s) ())
+		}
+		# Same closure value -> `==` is reference identity -> no-op (and crucially
+		# doesn't trap, which an unhandled closure `==` used to).
+		signal.set s f
+		let g = fun {
+			2
+		}
+		signal.set s g
+		assert.equals log [1, 2]
+	},
 	test.case "computed derives and recomputes on demand" fun {
 		let s = signal.new 2
 		let double = signal.computed fun {
