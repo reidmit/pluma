@@ -72,27 +72,27 @@ def tests :: test.suite = [
 		let v = view.show fun { true } fun {
 			view.span [] [view.text "yes"]
 		}
-		assert.equals (view.to-string v) "<span>yes</span>"
+		assert.equals (view.to-string v) "<span style=\"display: contents\"><span>yes</span></span>"
 	},
 	test.case "show renders nothing when the condition is false" fun {
 		let v = view.show fun { false } fun {
 			view.span [] [view.text "yes"]
 		}
-		assert.equals (view.to-string v) ""
+		assert.equals (view.to-string v) "<span style=\"display: contents\"></span>"
 	},
 	test.case "each renders one keyed child per item, in order" fun {
 		let items = ["a", "b", "c"]
 		let v = view.each fun { items } fun s { s } fun s {
 			view.li [] [view.text s]
 		}
-		assert.equals (view.to-string v) "<li>a</li><li>b</li><li>c</li>"
+		assert.equals (view.to-string v) "<span style=\"display: contents\"><li>a</li><li>b</li><li>c</li></span>"
 	},
 	test.case "each over an empty list renders nothing" fun {
 		let items :: list string = []
 		let v = view.each fun { items } fun s { s } fun s {
 			view.li [] [view.text s]
 		}
-		assert.equals (view.to-string v) ""
+		assert.equals (view.to-string v) "<span style=\"display: contents\"></span>"
 	},
 	test.case "a component composes by plain function call" fun {
 		# the headline win: drop two independent instances side by side, no msg

@@ -1129,6 +1129,11 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: false,
 		}),
+		// `dom-child-at`: `(externref, i32) -> externref` — index a node's children.
+		"dom-child-at" => Some(HostSig {
+			arity: 2,
+			returns_value: true,
+		}),
 		"dom-append-child" | "dom-set-text" | "dom-remove-child" | "dom-remove-attribute" => {
 			Some(HostSig {
 				arity: 2,
@@ -1282,6 +1287,9 @@ pub(crate) enum DomKind {
 	NodeStr,
 	/// `event-prevent-default`: `(externref) -> ()`; unbox one node/event arg.
 	Extern1,
+	/// `dom-child-at`: `(externref, i32) -> externref`; unbox the node + index, box the
+	/// returned child node. Used by `render.hydrate` to walk a server-rendered tree.
+	ChildAt,
 	/// `dom-set-string-property`: `(externref, np, nl, vp, vl) -> ()`; node + name + value
 	/// string -- assigns a DOM *property* (`node[name] = value`), not an attribute. Same
 	/// wasm shape and emit as `SetAttr`; the host does a property write, not `setAttribute`.
@@ -1312,6 +1320,7 @@ pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 		"dom-replace-child" | "dom-insert-before" => DomKind::Extern3,
 		"dom-remove-attribute" => DomKind::NodeStr,
 		"event-prevent-default" => DomKind::Extern1,
+		"dom-child-at" => DomKind::ChildAt,
 		"dom-set-string-property" => DomKind::SetProp,
 		"dom-set-bool-property" => DomKind::SetBoolProp,
 		"dom-dev-store-set" => DomKind::DevStoreSet,

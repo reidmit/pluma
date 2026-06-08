@@ -238,16 +238,21 @@ public def to-string :: fun view -> string = fun v {
 			"<$(tag)$(attr-str)>$(kids-str)</$(tag)>"
 		}
 	} is view.show-node cond child {
-		if cond () {
+		# Wrap in the same `display: contents` host the browser renderer uses, so the
+		# server DOM and the client's build/hydrate agree structurally (one node per
+		# control-flow point). `display: contents` is layout-neutral.
+		let inner = if cond () {
 			to-string (child ())
 		} else {
 			""
 		}
+		"<span style=\"display: contents\">$(inner)</span>"
 	} is view.for-node thunk {
-		string.join (list.map (thunk ()) fun pair {
+		let inner = string.join (list.map (thunk ()) fun pair {
 			let (_key, mk) = pair
 			to-string (mk ())
 		}) ""
+		"<span style=\"display: contents\">$(inner)</span>"
 	}
 }
 

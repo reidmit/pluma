@@ -1,0 +1,32 @@
+# Hydration demo: the same `view` the server rendered to HTML is *adopted* by the
+# client rather than rebuilt. `render.hydrate` walks `page ()` alongside the DOM
+# already in the document, attaching the click listener and the reactive-text
+# effect to the existing nodes -- no flash, no duplicate tree.
+#
+# To see it: render `page` to HTML on the server (`view.to-string (page ())`),
+# put that HTML in the page body, then load this client. The single pre-rendered
+# button becomes live (clicking it updates the count) without a second tree being
+# created. The app state lives inside `page` (the root thunk), as with `mount`.
+
+use std.signal
+use std.view
+use std.web.dom
+use std.web.render
+
+public def page :: fun nothing -> view = fun {
+	let n = signal.new 0
+	view.div [view.id "app"] [
+		view.button [
+			view.on-click fun {
+				signal.update n fun x {
+					x + 1
+				}
+			},
+		] [view.text "+"],
+		view.span [view.id "count"] [view.text-of fun { to-string (signal.get n) }],
+	]
+}
+
+def main = fun {
+	render.hydrate (dom.body ()) page
+}

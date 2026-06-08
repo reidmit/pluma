@@ -87,6 +87,9 @@ const pluma = {
   "dom-append-child": (parent, child) => { parent.appendChild(child); },
   "dom-insert-before": (parent, node, before) => { parent.insertBefore(node, before); },
   "dom-remove-child": (parent, child) => { parent.removeChild(child); },
+  // Index a node's children — `render.hydrate` walks the server-rendered tree by
+  // position (the view tree and the SSR'd DOM are 1:1 in document order).
+  "dom-child-at": (n, i) => n.childNodes[i],
   "dom-replace-child": (parent, node, old) => { parent.replaceChild(node, old); },
   "dom-set-attribute": (n, np, nl, vp, vl) => n.setAttribute(readStr(np, nl), readStr(vp, vl)),
   "dom-remove-attribute": (n, p, l) => n.removeAttribute(readStr(p, l)),

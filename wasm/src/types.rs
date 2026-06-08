@@ -369,6 +369,9 @@ enum FuncKind {
 	DomExtern3,
 	/// A one-node op `(externref) -> ()` — `event-prevent-default`.
 	DomExtern1,
+	/// `dom-child-at(externref node, i32 i) -> externref` — the node's i-th child
+	/// (used by `render.hydrate` to walk a server-rendered tree by index).
+	DomChildAt,
 	/// `dom-set-timeout(i32 delay_ms, i32 token) -> ()` — ask the host to `setTimeout`
 	/// a call to the exported `__browser_resume(token)` (the browser command runtime's
 	/// real-timer source).
@@ -689,6 +692,11 @@ impl FuncTypes {
 	/// A one-node op `(externref) -> ()`.
 	pub fn for_dom_extern1(&mut self) -> u32 {
 		self.intern(FuncKind::DomExtern1)
+	}
+
+	/// `dom-child-at`: `(externref, i32) -> externref`.
+	pub fn for_dom_child_at(&mut self) -> u32 {
+		self.intern(FuncKind::DomChildAt)
 	}
 
 	/// `dom-set-timeout`: `(i32, i32) -> ()`.
@@ -1189,6 +1197,12 @@ impl FuncTypes {
 				}
 				FuncKind::DomExtern1 => {
 					types.ty().function([extern_ref()], []);
+					continue;
+				}
+				FuncKind::DomChildAt => {
+					types
+						.ty()
+						.function([extern_ref(), ValType::I32], [extern_ref()]);
 					continue;
 				}
 				FuncKind::DomSetTimeout => {

@@ -235,3 +235,150 @@ public def mount-dev :: fun dom.node (fun nothing -> view) -> task nothing = fun
 	persist ()
 	task.return ()
 }
+
+# --- hydrate: adopt a server-rendered DOM tree instead of building it ---------
+#
+# The third `view` consumer (after `mount` = build DOM, `view.to-string` = render
+# HTML). `hydrate` walks the `view` alongside the DOM the *server* already
+# produced and **adopts** each existing node -- attaching effects to reactive
+# text/attributes and listeners to handlers -- instead of creating new ones. The
+# static structure is reused untouched: no flash, no re-render. The view tree and
+# the SSR'd DOM are 1:1 in document order, so children line up by index.
+#
+# `mount` appends the root view as `parent`'s single child, so the server's first
+# child of `parent` is the root view's node. (Slice C threads the server's initial
+# signal state in so client and server agree before `v ()` runs.)
+#
+# v1 limit: two adjacent `view.text`/`text-of` siblings collapse into one DOM text
+# node when the HTML is parsed, breaking the 1:1 index alignment -- wrap reactive
+# text in an element (`view.span [] [view.text-of ...]`), as the examples do.
+public def hydrate :: fun dom.node (fun nothing -> view) -> task nothing = fun parent v {
+	adopt (v ()) (dom.child-at parent 0)
+	task.return ()
+}
+
+# Adopt the existing DOM `node` as the realisation of `v`: wire reactivity onto it
+# without creating nodes. Static text and the static/property attributes the
+# server already rendered are left untouched; only reactive parts get effects and
+# handlers get listeners.
+def adopt :: fun view dom.node -> nothing = fun v node {
+	when v is view.txt _s {
+		()
+	} is view.dynamic-text f {
+		let _d = signal.effect fun {
+			dom.set-text node (f ())
+		}
+		()
+	} is view.el _tag attrs kids {
+		list.each attrs fun a {
+			adopt-attr node a
+		}
+		list.each (list.enumerate kids) fun pair {
+			let (i, k) = pair
+			adopt k (dom.child-at node i)
+		}
+	} is view.show-node cond child {
+		adopt-show node cond child
+	} is view.for-node thunk {
+		adopt-for node thunk
+	}
+}
+
+# Adopt one attribute onto an existing node. Static attributes and DOM properties
+# are already in the server HTML, so they're skipped; reactive attributes get an
+# effect and handlers get a real listener (re-attaching the behaviour the server
+# dropped).
+def adopt-attr :: fun dom.node view.attribute -> nothing = fun node a {
+	when a is view.attribute.static _k _v {
+		()
+	} is view.attribute.prop-str _k _v {
+		()
+	} is view.attribute.prop-bool _k _flag {
+		()
+	} is view.attribute.dynamic k f {
+		let _d = signal.effect fun {
+			dom.set-attribute node k (f ())
+		}
+		()
+	} is view.attribute.handler name h {
+		let _id = dom.add-listener node name h
+		()
+	}
+}
+
+# `view.show` over a server-rendered subtree: the existing `host` is the
+# `display: contents` wrapper the server emitted. Adopt its current child (if the
+# condition holds now), then install the same condition-tracking effect as
+# `build-show` -- but its first run only *subscribes* (the child is already
+# adopted), so subsequent toggles drive teardown + rebuild via the build path.
+def adopt-show :: fun dom.node (fun nothing -> bool) (fun nothing -> view) -> nothing = fun host cond child {
+	let cur :: ref (option (fun nothing -> nothing)) = ref.new none
+	if cond () {
+		let built = signal.owned "" fun {
+			adopt (child ()) (dom.child-at host 0)
+		}
+		let (_unit, dispose) = built
+		ref.set cur (some dispose)
+	} else {
+		()
+	}
+	let first :: ref bool = ref.new true
+	let _eff = signal.effect fun {
+		let visible = cond ()
+		if ref.get first {
+			ref.set first false
+		} else {
+			signal.untrack fun {
+				teardown-show cur host
+				if visible {
+					let built = signal.owned "" fun {
+						dom.append-child host (build (child ()))
+					}
+					let (_unit, dispose) = built
+					ref.set cur (some dispose)
+				} else {
+					()
+				}
+			}
+		}
+	}
+	signal.on-cleanup fun {
+		teardown-show cur host
+	}
+}
+
+# `view.each` over a server-rendered list: the existing `host` is the wrapper the
+# server emitted, with one child per row in order. Adopt each row by index under
+# its key's owner (seeding the reconcile state), then track the list -- the first
+# effect run only subscribes; later changes reconcile (adopted rows are reused by
+# key, new rows built, vanished rows disposed, order updated).
+def adopt-for :: fun dom.node (fun nothing -> list (string, (fun nothing -> view))) -> nothing = fun host thunk {
+	let state :: ref (dict string (dom.node, (fun nothing -> nothing))) = ref.new (dict.empty ())
+	list.each (list.enumerate (thunk ())) fun pair {
+		let (i, row) = pair
+		let (k, mk) = row
+		let node = dom.child-at host i
+		let built = signal.owned k fun {
+			adopt (mk ()) node
+		}
+		let (_unit, dispose) = built
+		ref.set state (dict.insert (ref.get state) k (node, dispose))
+	}
+	let first :: ref bool = ref.new true
+	let _eff = signal.effect fun {
+		let pairs = thunk ()
+		if ref.get first {
+			ref.set first false
+		} else {
+			signal.untrack fun {
+				reconcile host state pairs
+			}
+		}
+	}
+	signal.on-cleanup fun {
+		list.each (dict.values (ref.get state)) fun entry {
+			let (_node, dispose) = entry
+			dispose ()
+		}
+	}
+}

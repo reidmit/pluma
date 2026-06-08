@@ -85,6 +85,13 @@ public def set-text :: fun node string -> nothing = built-in "dom-set-text"
 # Read an input node's current `.value` (the empty string if it has none).
 public def get-value :: fun node -> string = built-in "dom-get-value"
 
+# The `i`-th child node of `parent` (0-based, in document order). Used by
+# `render.hydrate` to walk a server-rendered tree alongside the `view`: the view
+# tree and the SSR'd DOM are 1:1 in document order, so child `i` of an element's
+# view children is `child-at node i`. (Out of range yields a null handle -- the
+# hydrator only indexes positions it knows the server emitted.)
+public def child-at :: fun node int -> node = built-in "dom-child-at"
+
 # The `event` a handler receives is `std.event`'s shared type (re-used so a
 # `std.view` handler and the listener wired here agree on one type).
 

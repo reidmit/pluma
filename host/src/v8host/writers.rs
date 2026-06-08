@@ -116,3 +116,13 @@ pub(super) fn cb_event_prevent_default(
 	_rv: v8::ReturnValue,
 ) {
 }
+
+/// `dom-child-at(externref, i32) -> externref` — SSR/hydration is browser-only, so
+/// under the sys host this is never reached; registered only so an ungated
+/// `pluma run`/`test` of `std.web.render` links. Returns undefined (a null node).
+pub(super) fn cb_dom_child_at(
+	_scope: &mut v8::HandleScope,
+	_args: v8::FunctionCallbackArguments,
+	_rv: v8::ReturnValue,
+) {
+}

@@ -305,6 +305,7 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 			Some(DomKind::GetValue) => ftypes.for_dom_get_value(),
 			Some(DomKind::Extern3) => ftypes.for_dom_extern3(),
 			Some(DomKind::Extern1) => ftypes.for_dom_extern1(),
+			Some(DomKind::ChildAt) => ftypes.for_dom_child_at(),
 			Some(DomKind::DevStoreSet) => ftypes.for_dom_dev_store_set(),
 			Some(DomKind::DevStoreGet) => ftypes.for_dom_dev_store_get(),
 			Some(DomKind::Listen | DomKind::SetBoolProp) | None => ftypes.for_dom_listen(),

@@ -2181,6 +2181,18 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Call(idx));
 				self.push_nothing();
 			}
+			// `(externref, i32) -> externref` — `dom-child-at`: node + index in, box the
+			// returned child node. TAG first (bottom of stack), so after the call the stack
+			// is `[TAG_EXTERN, childref]` for the `StructNew`.
+			DomKind::ChildAt => {
+				self.ins(Instruction::I32Const(types::TAG_EXTERN));
+				self.unbox_extern(&args[0]);
+				self.atom(&args[1]);
+				self.unbox_int(); // int box -> i64
+				self.ins(Instruction::I32WrapI64); // -> i32 index
+				self.ins(Instruction::Call(idx));
+				self.ins(Instruction::StructNew(types::T_EXTERN));
+			}
 			// `(kp, kl, vp, vl) -> ()` — the dev store write: two scratch strings, no node.
 			DomKind::DevStoreSet => {
 				let (Some(alloc), Some(store)) = (alloc, store) else {

@@ -246,6 +246,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 		"event-prevent-default",
 		cb_event_prevent_default,
 	);
+	register(scope, pluma, data, "dom-child-at", cb_dom_child_at);
 	let imports = v8::Object::new(scope);
 	let pluma_key = v8::String::new(scope, "pluma").unwrap();
 	imports.set(scope, pluma_key.into(), pluma.into());
