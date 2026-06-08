@@ -1,0 +1,46 @@
+use std.assert
+use std.bit
+use std.test
+
+def tests :: test.suite = [
+	test.case "and keeps shared bits" fun {
+		assert.all [
+			assert.equals (bit.and 12 10) 8,
+			assert.equals (bit.and 255 5) 5,
+			assert.equals (bit.and 0 12345) 0,
+		]
+	},
+	test.case "or sets either bit" fun {
+		assert.all [assert.equals (bit.or 12 10) 14, assert.equals (bit.or 0 42) 42]
+	},
+	test.case "xor flips differing bits" fun {
+		assert.all [assert.equals (bit.xor 12 10) 6, assert.equals (bit.xor 42 42) 0]
+	},
+	test.case "not flips every bit" fun {
+		assert.all [
+			assert.equals (bit.not 0) (-1),
+			assert.equals (bit.not 5) (-6),
+			assert.equals (bit.not (-1)) 0,
+		]
+	},
+	test.case "shift-left multiplies by powers of two" fun {
+		assert.all [
+			assert.equals (bit.shift-left 1 4) 16,
+			assert.equals (bit.shift-left 3 2) 12,
+			assert.equals (bit.shift-left 5 0) 5,
+		]
+	},
+	test.case "shift-right preserves sign" fun {
+		assert.all [
+			assert.equals (bit.shift-right 256 2) 64,
+			assert.equals (bit.shift-right (-8) 1) (-4),
+			assert.equals (bit.shift-right (-1) 1) (-1),
+		]
+	},
+	test.case "shift-right-unsigned fills zeros" fun {
+		assert.all [
+			assert.equals (bit.shift-right-unsigned 256 2) 64,
+			assert.equals (bit.shift-right-unsigned (-1) 60) 15,
+		]
+	},
+]

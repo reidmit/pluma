@@ -1464,6 +1464,15 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "math-sqrt"
 			| "math-to-int"
 			| "math-to-float"
+			// bitwise ops over the i64 payload: one WasmGC integer opcode each
+			// (`not` is `xor -1`).
+			| "bit-and"
+			| "bit-or"
+			| "bit-xor"
+			| "bit-not"
+			| "bit-shift-left"
+			| "bit-shift-right"
+			| "bit-shift-right-unsigned"
 			// duration's nanosecond count: a retag of the `$int`-shaped box.
 			| "time-duration-as-nanos"
 			// duration / instant box+unbox. Both reuse the `$int` shape

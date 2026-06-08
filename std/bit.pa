@@ -1,0 +1,57 @@
+# Bitwise operations on whole numbers. A Pluma `int` is a 64-bit signed
+# integer (two's complement), and these functions treat it as a flat row
+# of 64 bits -- handy for flags, masks, packing several small values into
+# one number, and low-level byte twiddling.
+#
+# There's no operator syntax for these; they're plain functions, so
+# `bit.or (bit.and x mask) flag` reads left to right like any other call.
+
+# Bitwise AND: a 1 in the result wherever *both* inputs have a 1. The
+# usual tool for masking -- keeping only the bits a mask selects.
+#
+#     bit.and 12 10   # => 8     (1100 & 1010 = 1000)
+#     bit.and 0xFF 5  # => 5
+public def and :: fun int int -> int = built-in "bit-and"
+
+# Bitwise OR: a 1 in the result wherever *either* input has a 1. The
+# usual tool for setting flags.
+#
+#     bit.or 12 10   # => 14    (1100 | 1010 = 1110)
+public def or :: fun int int -> int = built-in "bit-or"
+
+# Bitwise XOR ("exclusive or"): a 1 wherever the inputs *differ*. Toggles
+# the bits that the second operand has set.
+#
+#     bit.xor 12 10   # => 6    (1100 ^ 1010 = 0110)
+public def xor :: fun int int -> int = built-in "bit-xor"
+
+# Bitwise NOT: flips every bit. Because ints are two's complement, this
+# is the same as `0 - n - 1`, so `not 0` is -1 and `not 5` is -6.
+#
+#     bit.not 0   # => -1
+#     bit.not 5   # => -6
+public def not :: fun int -> int = built-in "bit-not"
+
+# Shift the bits left by `n` places, filling the low end with zeros. Each
+# step doubles the value, so a left shift by `n` multiplies by 2^n.
+#
+#     bit.shift-left 1 4   # => 16
+#     bit.shift-left 3 2   # => 12
+public def shift-left :: fun int int -> int = built-in "bit-shift-left"
+
+# Shift the bits right by `n` places, *preserving the sign* (the high bit
+# is copied in). This is an arithmetic shift: for non-negative numbers it
+# divides by 2^n rounding toward negative infinity, and negatives stay
+# negative.
+#
+#     bit.shift-right 256 2   # => 64
+#     bit.shift-right -8 1    # => -4
+public def shift-right :: fun int int -> int = built-in "bit-shift-right"
+
+# Shift the bits right by `n` places, filling the high end with zeros
+# (a logical shift). Treats the number as an unsigned 64-bit pattern, so
+# a negative input becomes a large positive result.
+#
+#     bit.shift-right-unsigned 256 2   # => 64
+#     bit.shift-right-unsigned -1 60    # => 15
+public def shift-right-unsigned :: fun int int -> int = built-in "bit-shift-right-unsigned"

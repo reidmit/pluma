@@ -3108,6 +3108,24 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::F64ConvertI64S);
 				self.ins(Instruction::StructNew(types::T_FLOAT));
 			}
+			// bit.and/or/xor a b : one i64 logical opcode over the unboxed payloads.
+			"bit-and" => self.int_binop(args, Instruction::I64And),
+			"bit-or" => self.int_binop(args, Instruction::I64Or),
+			"bit-xor" => self.int_binop(args, Instruction::I64Xor),
+			// bit.shift-* a n : `n` is the shift count (wasm takes it mod 64). `shr_s`
+			// preserves the sign bit (arithmetic), `shr_u` fills zeros (logical).
+			"bit-shift-left" => self.int_binop(args, Instruction::I64Shl),
+			"bit-shift-right" => self.int_binop(args, Instruction::I64ShrS),
+			"bit-shift-right-unsigned" => self.int_binop(args, Instruction::I64ShrU),
+			// bit.not a : flip every bit. WasmGC has no i64 `not`, so it's `a xor -1`.
+			"bit-not" => {
+				self.ins(Instruction::I32Const(types::TAG_INT));
+				self.atom(&args[0]);
+				self.unbox_int();
+				self.ins(Instruction::I64Const(-1));
+				self.ins(Instruction::I64Xor);
+				self.ins(Instruction::StructNew(types::T_INT));
+			}
 			// time.as-nanos d : a `duration`'s nanosecond count as an `int`. A
 			// `duration` reuses the `$int` shape (`{tag, i64}`), tagged `TAG_DURATION`,
 			// so this just reads the i64 and reboxes it `TAG_INT` (the other `as-*`
@@ -3138,6 +3156,19 @@ impl<'a> FnEmitter<'a> {
 				self.push_nothing();
 			}
 		}
+	}
+
+	/// A `bit.*` binary integer op: push `TAG_INT`, unbox both `$int` payloads to
+	/// i64, apply the single integer opcode, and rebox as `$int`. The shift ops
+	/// reuse this — wasm shifts take the count (second operand) mod 64.
+	fn int_binop(&mut self, args: &[Atom], op: Instruction<'static>) {
+		self.ins(Instruction::I32Const(types::TAG_INT));
+		self.atom(&args[0]);
+		self.unbox_int();
+		self.atom(&args[1]);
+		self.unbox_int();
+		self.ins(op);
+		self.ins(Instruction::StructNew(types::T_INT));
 	}
 
 	/// Retag an `$int`-shaped box (`{tag, i64}`) under `new_tag`: read the i64
