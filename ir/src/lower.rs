@@ -3310,7 +3310,10 @@ mod tests {
 		seed_prelude_globals(&mut g);
 		let prelude_count = g.slots.len();
 		assert!(g.lookup("__prelude__", "print").is_some());
-		assert!(g.lookup("__prelude__", "numeric@int").is_some());
+		// `numeric`/`ord`/`hash` instance dicts are no longer seeded here — they
+		// live in `prelude.pa` and lower through the ordinary instance path (see
+		// `seed_prelude_globals`), so they're not in this seed-only table.
+		assert!(g.lookup("__prelude__", "numeric@int").is_none());
 
 		reserve_user_globals(&mut g, &compiler);
 		// The user `def n` got a slot; the `color` enum did not (enums are
