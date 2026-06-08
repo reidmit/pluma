@@ -5,6 +5,8 @@
 
 use std.assert
 use std.css
+use std.list
+use std.string
 use std.test
 use std.view
 
@@ -73,5 +75,63 @@ def tests :: test.suite = [
 	},
 	test.case "class-list is the bare joined string" fun {
 		assert.equals (view.class-list [("a", true), ("b", false), ("c", true)]) "a c"
+	},
+	test.case "var references a custom property" fun {
+		assert.equals (css.inline [css.background (css.var "accent")]) "background: var(--accent)"
+	},
+	test.case "class-of is stable and content-addressed" fun {
+		let a = css.rule [css.base [css.color (css.hex "#fff")]]
+		let b = css.rule [css.base [css.color (css.hex "#fff")]]
+		let c = css.rule [css.base [css.color (css.hex "#000")]]
+		assert.all [
+			assert.equals (css.class-of a) (css.class-of b),
+			assert.is-true (string.starts-with (css.class-of a) "c"),
+			assert.not-equals (css.class-of a) (css.class-of c),
+		]
+	},
+	test.case "render emits base, pseudo, and media blocks under the hashed class" fun {
+		let _ = css.reset ()
+		let r = css.rule [
+			css.base [css.color (css.hex "#fff"), css.padding (css.rem 1.0)],
+			css.on "hover" [css.background (css.hex "#1e51c8")],
+			css.media "(max-width: 600px)" [css.padding (css.rem 0.5)],
+		]
+		let cls = css.class-of r
+		assert.equals (css.collect ()) ".$(cls){color: #fff; padding: 1rem}.$(cls):hover{background: #1e51c8}@media (max-width: 600px){.$(cls){padding: 0.5rem}}"
+	},
+	test.case "the collector dedups identical rules and keeps distinct ones" fun {
+		let _ = css.reset ()
+		let r = css.rule [css.base [css.color (css.hex "#fff")]]
+		let s = css.rule [css.base [css.color (css.hex "#000")]]
+		let _a = css.class-of r
+		let _b = css.class-of r
+		let _c = css.class-of s
+		# r registered twice but collapses to one entry; s is the second.
+		assert.equals (list.length (string.split (css.collect ()) "\n")) 2
+	},
+	test.case "compose concatenates declarations into one new class" fun {
+		let _ = css.reset ()
+		let bg = css.rule [css.base [css.background (css.hex "#2563eb")]]
+		let fg = css.rule [css.base [css.color (css.hex "#fff")]]
+		let merged = css.compose [bg, fg]
+		let cls = css.class-of merged
+		# both base blocks under the one composed class, in source order
+		assert.equals (css.collect ()) ".$(cls){background: #2563eb}.$(cls){color: #fff}"
+	},
+	test.case "view.styled registers the rule and yields its class" fun {
+		let _ = css.reset ()
+		let primary = css.rule [css.base [css.color (css.hex "#fff")]]
+		let v = view.button [view.styled primary] [view.text "Save"]
+		let cls = css.class-of primary
+		assert.all [
+			assert.equals (view.to-string v) "<button class=\"$(cls)\">Save</button>",
+			assert.equals (css.collect ()) ".$(cls){color: #fff}",
+		]
+	},
+	test.case "style-tag wraps the collected CSS" fun {
+		let _ = css.reset ()
+		let r = css.rule [css.base [css.color (css.hex "#fff")]]
+		let cls = css.class-of r
+		assert.equals (css.style-tag ()) "<style>.$(cls){color: #fff}</style>"
 	},
 ]

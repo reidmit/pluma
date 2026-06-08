@@ -689,6 +689,15 @@ public def style-of :: fun (list css.decl) -> attribute = fun decls {
 	attribute.static "style" (css.inline decls)
 }
 
+# Apply an extracted `css.ruleset` as a `class` attribute: yields the rule's hashed
+# class name and registers its CSS in `std.css`'s collector, so server-side
+# `css.style-tag`/`collect` (or a build-time extraction) emits exactly the rules a
+# render actually used. The full power of CSS -- `:hover`, `@media`, etc. -- that an
+# inline `style` can't express.
+public def styled :: fun css.ruleset -> attribute = fun r {
+	attribute.static "class" (css.class-of r)
+}
+
 public def title :: fun string -> attribute = fun v {
 	attribute.static "title" v
 }

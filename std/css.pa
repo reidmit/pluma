@@ -18,6 +18,9 @@
 # Pair it with `std.view`'s `style-of` (a declaration list as a `style` attribute)
 # and `classes` (a conditional class list); both lower to plain string attributes.
 
+use std.bit
+use std.bytes
+use std.dict
 use std.list
 use std.math
 use std.string
@@ -31,6 +34,7 @@ public enum paint {
 	rgba int int int float
 	hex string
 	named string
+	var string
 }
 
 # A CSS length/size value: a number paired with its unit (`16px`, `1.5rem`, `50%`).
@@ -67,6 +71,14 @@ public def rgba :: fun int int int float -> paint = fun r g b a {
 # A named CSS color, passed through verbatim: `named "rebeccapurple"`.
 public def named :: fun string -> paint = fun s {
 	paint.named s
+}
+
+# A reference to a CSS custom property (`var(--accent)`) -- the bridge for
+# model-driven values into an otherwise-static extracted rule. The live value is
+# supplied separately (a later phase's `view.vars`); here a rule just names it:
+# `css.background (css.var "accent")` => `background: var(--accent)`.
+public def var :: fun string -> paint = fun name {
+	paint.var name
 }
 
 # --- lengths ----------------------------------------------------------------
@@ -288,11 +300,197 @@ def color-to-string :: fun paint -> string = fun c {
 		}
 	} is paint.named s {
 		s
+	} is paint.var name {
+		"var(--$(name))"
 	}
 }
 
 def decl-to-string :: fun decl -> string = fun d {
 	when d is decl.decl k v {
 		"$(k): $(v)"
+	}
+}
+
+# --- tier 3: extracted, content-hashed stylesheet rules ----------------------
+#
+# A `ruleset` is the full power of CSS as a value: a base block plus any number of
+# pseudo-class (`:hover`) and `@media` blocks, all scoped to one generated class.
+# It is meant to be a top-level `def` (a *named*, statically-evaluable thing, like a
+# CSS class) -- model-driven values cross in via `css.var`, not by rebuilding the
+# rule.
+#
+#     def primary :: css.ruleset = css.rule [
+#         css.base  [css.color (css.hex "#fff"), css.background (css.hex "#2563eb")],
+#         css.on    "hover"              [css.background (css.hex "#1e51c8")],
+#         css.media "(max-width: 600px)" [css.padding (css.rem 0.5)],
+#     ]
+#
+# `std.view`'s `styled` turns a ruleset into a `class` attribute: it asks for the
+# class name (`class-of`), which also *registers* the rendered CSS in this module's
+# collector. After the view is built, `collect` (or `style-tag`) yields exactly the
+# CSS for the rules that were actually used -- used-CSS-only, by construction. The
+# class name is a content hash, so identical rules collapse to one class and the
+# server and client agree with no coordination.
+#
+# (The type is `ruleset`, not `rule`, because the `css.rule` builder takes the name
+# -- types and defs share one namespace.)
+
+# One block within a ruleset: the base declarations, a pseudo-class variant, or a
+# media-query variant. Build with `base`/`on`/`media`.
+public enum block {
+	base (list decl)
+	on string (list decl)
+	media string (list decl)
+}
+
+# A complete style rule -- a bundle of blocks scoped to one hashed class.
+public enum ruleset {
+	blocks (list block)
+}
+
+# Assemble a ruleset from its blocks.
+public def rule :: fun (list block) -> ruleset = fun bs {
+	ruleset.blocks bs
+}
+
+# The base declarations, applied to the element unconditionally.
+public def base :: fun (list decl) -> block = fun ds {
+	block.base ds
+}
+
+# A pseudo-class (or pseudo-element) variant: `on "hover" [...]` =>
+# `.<class>:hover { ... }`. Pass the suffix after the colon (`"hover"`, `"focus"`,
+# `"disabled"`); a pseudo-element needs the leading colon yourself (`":before"`).
+public def on :: fun string (list decl) -> block = fun sel ds {
+	block.on sel ds
+}
+
+# A media-query variant: `media "(max-width: 600px)" [...]` =>
+# `@media (max-width: 600px) { .<class> { ... } }`.
+public def media :: fun string (list decl) -> block = fun q ds {
+	block.media q ds
+}
+
+# Merge several rulesets into one: all their blocks are concatenated, so a later
+# rule's declarations win over an earlier one's (single source order, one hash, one
+# class). The order-explicit way to combine styles -- preferred over stacking two
+# `view.styled` attributes on a node, whose conflicts resolve by stylesheet order.
+public def compose :: fun (list ruleset) -> ruleset = fun rs {
+	ruleset.blocks (list.flat-map rs fun r {
+		when r is ruleset.blocks bs {
+			bs
+		}
+	})
+}
+
+# The class name for a ruleset, AND register its rendered CSS in the collector so a
+# later `collect`/`style-tag` includes it (idempotent -- two identical rules share a
+# class and one entry). This is what `view.styled` calls; call it directly only if
+# you are assembling a `class` string by hand.
+public def class-of :: fun ruleset -> string = fun r {
+	let cls = "c$(to-hex (hash-css (canonical r)))"
+	let _ = register cls (render-rule cls r)
+	cls
+}
+
+# All collected CSS as one stylesheet string -- every rule registered (via
+# `class-of`/`view.styled`) since the last `reset`. Server-side rendering inlines
+# this into a `<style>` tag (see `style-tag`); a build step can instead write it to
+# an `app.css` file. Order is collector-determined and stable for a given rule set.
+public def collect :: fun nothing -> string = fun {
+	string.join (dict.values (ref.get registry)) "\n"
+}
+
+# `collect` wrapped in a `<style>` element, for inlining into a server-rendered
+# document `<head>`. The CSS is ours (a trusted producer), so it is not escaped.
+public def style-tag :: fun nothing -> string = fun {
+	"<style>$(collect ())</style>"
+}
+
+# Clear the collector -- for tests and for resetting between independent renders.
+public def reset :: fun nothing -> nothing = fun {
+	ref.set registry (dict.empty ())
+}
+
+# --- rule rendering + the collector (internal) ------------------------------
+
+# The collector: class name -> its rendered CSS. A module-level `ref` (the same
+# shape `std.signal` uses for HMR state); idempotent by class, so it converges to a
+# fixed set for an app's finite, statically-evaluable rules.
+def registry :: ref (dict string string) = ref.new (dict.empty ())
+
+def register :: fun string string -> nothing = fun cls css {
+	ref.set registry (dict.insert (ref.get registry) cls css)
+}
+
+# A deterministic serialization of a ruleset's *content* (no class name), the input
+# to the content hash. Two rulesets with the same blocks and declarations in the
+# same order serialize identically -> same hash -> same class.
+def canonical :: fun ruleset -> string = fun r {
+	when r is ruleset.blocks bs {
+		string.join (list.map bs fun b { canon-block b }) "|"
+	}
+}
+
+def canon-block :: fun block -> string = fun b {
+	when b is block.base ds {
+		"base{$(inline ds)}"
+	} is block.on sel ds {
+		"on:$(sel){$(inline ds)}"
+	} is block.media q ds {
+		"media:$(q){$(inline ds)}"
+	}
+}
+
+# Render a ruleset to real CSS, scoped to `cls`.
+def render-rule :: fun string ruleset -> string = fun cls r {
+	when r is ruleset.blocks bs {
+		string.join (list.map bs fun b { render-block cls b }) ""
+	}
+}
+
+def render-block :: fun string block -> string = fun cls b {
+	when b is block.base ds {
+		".$(cls){$(inline ds)}"
+	} is block.on sel ds {
+		".$(cls):$(sel){$(inline ds)}"
+	} is block.media q ds {
+		"@media $(q){.$(cls){$(inline ds)}}"
+	}
+}
+
+# --- content hash (FNV-1a, 32-bit) ------------------------------------------
+
+def fnv-offset :: int = 2166136261
+
+def fnv-prime :: int = 16777619
+
+def mask32 :: int = 4294967295
+
+# FNV-1a over the UTF-8 bytes, masked to 32 bits each step. Deterministic and
+# low-collision for an app's finite rule set -- enough to name a class uniquely.
+def hash-css :: fun string -> int = fun s {
+	list.fold (bytes.to-list (string.to-bytes s)) fnv-offset fun acc b {
+		bit.and (bit.xor acc b * fnv-prime) mask32
+	}
+}
+
+def hex-digits :: string = "0123456789abcdef"
+
+# Render a non-negative int as lowercase hex (no `0x`), low nibble last.
+def to-hex :: fun int -> string = fun n {
+	if n == 0 {
+		"0"
+	} else {
+		to-hex-loop n ""
+	}
+}
+
+def to-hex-loop :: fun int string -> string = fun n acc {
+	if n == 0 {
+		acc
+	} else {
+		let digit = string.char-at hex-digits (bit.and n 15) ?? "0"
+		to-hex-loop (bit.shift-right-unsigned n 4) "$(digit)$(acc)"
 	}
 }
