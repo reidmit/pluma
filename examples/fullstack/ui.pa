@@ -1,0 +1,92 @@
+# The shared UI, compiled into BOTH artifacts. `page` is a pure `view` builder
+# (no side effects at construction) so it renders the same on the server
+# (`view.to-string`, in `document`) and the client (`render.hydrate`). All effects
+# — the remote calls — live inside event handlers, which only ever run in the
+# browser after hydration; `view.to-string` drops them. This is what makes the
+# page isomorphic: the server emits the initial shell for instant first paint /
+# SEO, then the client adopts those exact nodes and the buttons come alive.
+#
+# `api` is the contract: on the server its `remote def`s are the real handlers, on
+# the client they are transport stubs — same call sites, the artifact decides.
+
+use std.signal
+use std.stream
+use std.task
+use std.view
+use api
+
+public def page :: fun nothing -> view = fun {
+	# sum/pending track the unary calls; tick is the latest streamed value; the
+	# subscription's cancel thunk is none while stopped.
+	let sum = signal.new 0
+	let pending = signal.new 0
+	let tick = signal.new 0
+	let cancel :: ref (option (fun nothing -> nothing)) = ref.new none
+
+	view.div [view.id "app"] [
+		view.h1 [] [view.text "Pluma SSR + signals"],
+		view.p [] [
+			view.text "This shell was server-rendered; the buttons came alive after hydration.",
+		],
+		view.div [] [
+			view.span [view.id "sum"] [
+				view.text-of fun {
+					if signal.get pending > 0 {
+						"computing on the server… ($(to-string (signal.get pending)) in flight)"
+					} else {
+						"last server sum = $(to-string (signal.get sum))"
+					}
+				},
+			],
+		],
+		view.button [
+			view.id "add",
+			view.on-click fun {
+				# Fire two remote calls at once — both in flight together over the async
+				# transport, no main-thread freeze.
+				signal.set pending 2
+				task.spawn (task.map (api.add 2 3) fun n {
+					signal.set sum n
+					signal.update pending fun p {
+						p - 1
+					}
+				})
+				task.spawn (task.map (api.add 20 30) fun n {
+					signal.set sum n
+					signal.update pending fun p {
+						p - 1
+					}
+				})
+			},
+		] [view.text "add on server (×2)"],
+		view.div [] [
+			view.span [view.id "tick"] [
+				view.text-of fun { "server tick: $(to-string (signal.get tick))" },
+			],
+		],
+		view.button [
+			view.id "toggle",
+			view.on-click fun {
+				# Toggle the tick subscription: cancel if running, else start one whose
+				# values drive the `tick` signal.
+				when ref.get cancel is some stop {
+					stop ()
+					ref.set cancel none
+				} is none {
+					let stop = task.spawn-cancelable (stream.for-each (api.ticks 1) fun n {
+						signal.set tick n
+						task.return ()
+					})
+					ref.set cancel (some stop)
+				}
+			},
+		] [view.text "toggle ticks"],
+	]
+}
+
+# The full HTML document for a server-rendered first paint: the page's HTML in the
+# body (as `dom.body ()`'s first child, where `render.hydrate` expects it) plus the
+# client loader. Only the server calls this; on the client it's dead code.
+public def document :: fun nothing -> string = fun {
+	"<!doctype html><html><head><meta charset=\"utf-8\"><title>Pluma SSR</title></head><body>$(view.to-string (page ()))<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+}

@@ -21,14 +21,14 @@
 # (`Connection: close`); keep-alive, chunked transfer, HTTP/2, and
 # WebSockets are not handled yet.
 
-use std.sys.net
-use std.task
-use std.string
 use std.bytes
 use std.dict
+use std.hex
 use std.list
 use std.stream
-use std.hex
+use std.string
+use std.task
+use std.sys.net
 
 # The HTTP method (verb). `other` carries any method name not listed
 # here, so unusual verbs still parse.
@@ -80,6 +80,19 @@ public def text :: fun int string -> response = fun status body {
 	{
 		status,
 		headers: dict.from-entries [("content-type", "text/plain; charset=utf-8")],
+		body: string.to-bytes body,
+		stream-body: none,
+	}
+}
+
+# An HTML response with the given status code and body -- e.g. a server-side
+# rendered page (`view.to-string (page ())` wrapped in a document shell).
+#
+#     http.html 200 (ui.document ())
+public def html :: fun int string -> response = fun status body {
+	{
+		status,
+		headers: dict.from-entries [("content-type", "text/html; charset=utf-8")],
 		body: string.to-bytes body,
 		stream-body: none,
 	}
@@ -523,7 +536,12 @@ def read-response :: fun net.connection -> task (result response string) = fun c
 		let parsed = parse-response-head raw
 		try body-r = read-body conn parsed.body-start parsed.content-length
 		when body-r is ok body {
-			task.return (ok {status: parsed.status, headers: parsed.headers, body, stream-body: none})
+			task.return (ok {
+				status: parsed.status,
+				headers: parsed.headers,
+				body,
+				stream-body: none,
+			})
 		} is err e {
 			task.return (err e)
 		}

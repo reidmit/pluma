@@ -269,6 +269,14 @@ es.onerror = () => {};\n\
 </body>\n\
 </html>\n";
 
+// The live-reload EventSource client, injected before `</body>` of a server-rendered
+// page (the same snippet baked into `INDEX_HTML_DEV` for the non-SSR shell).
+const LIVERELOAD_SNIPPET: &str = "<script>\n\
+const es = new EventSource('/__livereload');\n\
+es.onmessage = (e) => { if (e.data === 'reload') location.reload(); };\n\
+es.onerror = () => {};\n\
+</script>\n";
+
 // --------------------------------------------------------------------------
 // Fullstack mode: run the server subprocess + serve the client, proxying RPC.
 // --------------------------------------------------------------------------
@@ -459,7 +467,51 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients) {
 		proxy_rpc(&mut stream, &request_line, &headers, &body);
 		return;
 	}
+	// Document requests are server-side rendered: fetch the page HTML from the
+	// server subprocess (its GET `/` route) and inject the live-reload client. The
+	// browser hydrates that markup. If the server has no SSR route (a bare RPC
+	// server) or is down, fall back to the plain CSR dev shell.
+	if path == "/" || path == "/index.html" {
+		if let Some(doc) = fetch_ssr_document() {
+			let injected = doc.replacen("</body>", &format!("{LIVERELOAD_SNIPPET}</body>"), 1);
+			respond(
+				&mut stream,
+				"200 OK",
+				"text/html; charset=utf-8",
+				injected.as_bytes(),
+			);
+			return;
+		}
+	}
 	serve_static(&path, stream, &served, &clients);
+}
+
+/// Fetch the server subprocess's server-rendered document (GET `/`). Returns the
+/// full HTML on a 200, or `None` if the server is down or `/` isn't a 200 HTML
+/// page (e.g. a fullstack app whose server only mounts `rpc.dispatch`) — the
+/// caller then falls back to the plain CSR dev shell.
+fn fetch_ssr_document() -> Option<String> {
+	let mut up = TcpStream::connect(("127.0.0.1", FULLSTACK_SERVER_PORT)).ok()?;
+	let req = format!(
+		"GET / HTTP/1.1\r\nHost: 127.0.0.1:{FULLSTACK_SERVER_PORT}\r\nConnection: close\r\n\r\n"
+	);
+	up.write_all(req.as_bytes()).ok()?;
+	up.flush().ok()?;
+	let mut raw = Vec::new();
+	up.read_to_end(&mut raw).ok()?;
+	let text = String::from_utf8_lossy(&raw);
+	// Require a 200 and an HTML body (a bare RPC server answers `/` with a 404).
+	let status_ok = text
+		.lines()
+		.next()
+		.map(|l| l.contains(" 200 "))
+		.unwrap_or(false);
+	if !status_ok {
+		return None;
+	}
+	text
+		.split_once("\r\n\r\n")
+		.map(|(_, body)| body.to_string())
 }
 
 /// Forward one RPC request verbatim to the server subprocess and relay its response

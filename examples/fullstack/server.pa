@@ -1,16 +1,32 @@
-# The server half. It mounts `rpc.dispatch` (the route table the compiler
-# synthesizes from `api.pa`'s `remote def`s) on a plain `std.sys.http` server.
+# The server half. It serves two things on one `std.sys.http` server:
+#   - GET `/`        → the server-side-rendered page (`ui.document`), for an
+#                      instant first paint the client then hydrates.
+#   - everything else → `rpc.dispatch`, the route table the compiler synthesizes
+#                      from `api.pa`'s `remote def`s (it handles the `/rpc/*` calls).
+#
 # `pluma build` emits this to `server.wasm`; run it with `pluma run out/server.wasm`.
+# Because `ui.page`'s remote calls are the *real* handlers in this (server)
+# artifact, `view.to-string (page ())` could even fetch data in-process — here the
+# page is a pure shell, so SSR just renders the initial markup.
 #
 # `rpc.dispatch` is a `fun http.request -> task http.response` whose body the
 # compiler fills in: it decodes each request's arguments, guards the per-route
-# fingerprint (rejecting a stale client with a 409), calls the matching handler
-# in `api.pa`, and encodes the reply.
+# fingerprint (rejecting a stale client with a 409), calls the matching handler in
+# `api.pa`, and encodes the reply.
 
 use std.rpc
+use std.task
 use std.sys.http
-use api
+use ui
+
+def handler :: fun http.request -> task http.response = fun req {
+	if req.path == "/" {
+		task.return (http.html 200 (ui.document ()))
+	} else {
+		rpc.dispatch req
+	}
+}
 
 def main = fun {
-	http.serve "127.0.0.1:8080" rpc.dispatch
+	http.serve "127.0.0.1:8080" handler
 }
