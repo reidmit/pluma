@@ -23,6 +23,7 @@
 # host rather than Solid-style comment anchors -- a later refinement.
 
 use std.dict
+use std.hex
 use std.list
 use std.signal
 use std.task
@@ -181,9 +182,52 @@ def reconcile :: fun dom.node (ref (dict string (dom.node, (fun nothing -> nothi
 	ref.set state (ref.get next)
 }
 
-# Mount `v` under `parent`. Returns `task nothing` so the browser entry can seed
-# and pump it; the wasm instance then stays alive to dispatch DOM events.
-public def mount :: fun dom.node view -> task nothing = fun parent v {
-	dom.append-child parent (build v)
+# Mount the app under `parent`. The root view is a **thunk** (as in SolidJS's
+# `render(() => App(), root)`) -- so the dev variant can restore saved state
+# before any signal is constructed. Returns `task nothing` so the browser entry
+# can seed and pump it; the wasm instance then stays alive to dispatch DOM events.
+public def mount :: fun dom.node (fun nothing -> view) -> task nothing = fun parent v {
+	dom.append-child parent (build (v ()))
+	task.return ()
+}
+
+# --- dev HMR: keyed-signal state across a `pluma dev` reload -----------------
+#
+# The compiler redirects `render.mount` to `mount-dev` in an hmr build. It bridges
+# `std.signal`'s (platform-neutral) stash to the browser's dev store: restore the
+# previous instance's signal values BEFORE the view is built (so `new-keyed` seeds
+# each cell), then re-persist after every change. The whole app's keyed state
+# crosses the reload as one `hex.encode (wire.encode (dict string bytes))` blob in
+# a fixed `localStorage` slot. A clean decode restores; anything else (nothing
+# saved, or the shape changed) leaves the stash empty, so signals fall back to
+# their `init` values -- state-compatible edits keep state, shape changes reset it.
+
+def dev-slot :: string = "pluma-dev-signals"
+
+# Write every keyed signal's current value into the dev store.
+def persist :: fun nothing -> nothing = fun {
+	dom.dev-store-set dev-slot (hex.encode (wire.encode (signal.snapshot ())))
+}
+
+# Load the previous instance's keyed state into the signal stash (no-op on a
+# missing/incompatible blob).
+def restore :: fun nothing -> nothing = fun {
+	let saved = hex.decode (dom.dev-store-get dev-slot) ?? ''
+	when wire.decode saved is ok s {
+		signal.load-stash s
+	} is err _e {
+		()
+	}
+}
+
+# `mount`, plus keyed-signal persistence across a `pluma dev` reload. Restore runs
+# before `v ()` so `new-keyed` seeds from the carried-over state; the post-flush
+# hook re-persists after each change, and we persist once now to capture the
+# initial state.
+public def mount-dev :: fun dom.node (fun nothing -> view) -> task nothing = fun parent v {
+	restore ()
+	dom.append-child parent (build (v ()))
+	signal.set-on-flush persist
+	persist ()
 	task.return ()
 }

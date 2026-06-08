@@ -3070,6 +3070,47 @@ impl<'compiler> Analyzer<'compiler> {
 			}) => {
 				expr.ty = self.new_type_var();
 
+				// `pluma dev` hot-reload (Path A): rewrite a `signal.new EXPR`
+				// call into `signal.new-keyed "<callsite>" EXPR`, threading this
+				// call's source location so the runtime can derive a stable
+				// per-instance key and restore state across a reload. Detected on
+				// the *qualified* module (alias-agnostic) before the callee is
+				// resolved, so the injected leading arg + renamed field flow
+				// through the normal constrain below. A no-op off `hmr`.
+				if self.hmr {
+					let callsite = match &callee.kind {
+						ExprKind::FieldAccess { receiver, field }
+							if field.name == "new"
+								&& matches!(&receiver.kind, ExprKind::Identifier(recv)
+									if self.import_qualified.get(&recv.name).map(String::as_str)
+										== Some("std.signal")) =>
+						{
+							let p = field.range.start;
+							let module = self.module_name.clone().unwrap_or_default();
+							Some(format!("{}:{}:{}", module, p.line, p.col))
+						}
+						_ => None,
+					};
+					if let Some(callsite) = callsite {
+						if let ExprKind::FieldAccess { field, .. } = &mut callee.kind {
+							field.name = "new-keyed".to_string();
+						}
+						args.insert(
+							0,
+							ExprNode {
+								ty: Type::Unknown,
+								kind: ExprKind::Literal(LiteralNode {
+									kind: LiteralKind::String(callsite),
+									range: callee.range,
+								}),
+								range: callee.range,
+								trait_dispatch: None,
+								dispatch_sink: None,
+							},
+						);
+					}
+				}
+
 				self.constrain_expr(callee, constraints);
 
 				// If the callee is a polymorphic constrained value reference,
@@ -3401,13 +3442,19 @@ impl<'compiler> Analyzer<'compiler> {
 				// `option`/`result` enums.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					if let Some(exports) = self.imports.get(&ident.name).cloned() {
-						// `pluma dev` hot-reload: redirect `app.sandbox`/`app.element`/
-						// `app.application` to the model-persisting `-dev` variants. Keyed on the
-						// `-dev` variant existing in the module (only `std.web.app` defines
-						// them), so it's alias-agnostic and a no-op everywhere else. Renaming
-						// `field` here -- before the constraint freshening below -- discharges
-						// the variant's `where (wire model)` at this call site.
-						if self.hmr && matches!(field.name.as_str(), "sandbox" | "element" | "application") {
+						// `pluma dev` hot-reload: redirect to a module's state-persisting
+						// `-dev` variant. MVU's `app.sandbox`/`app.element`/`app.application`
+						// carry the model across a reload; the signals frontend's `render.mount`
+						// carries the keyed-signal stash. Keyed on the `-dev` variant existing
+						// in the module (only `std.web.app`/`std.web.render` define them), so
+						// it's alias-agnostic and a no-op everywhere else. Renaming `field`
+						// here -- before the constraint freshening below -- discharges any
+						// `where (wire …)` on the variant at this call site.
+						if self.hmr
+							&& matches!(
+								field.name.as_str(),
+								"sandbox" | "element" | "application" | "mount"
+							) {
 							let dev_name = format!("{}-dev", field.name);
 							if exports.values.contains_key(&dev_name) {
 								field.name = dev_name;

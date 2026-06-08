@@ -4,7 +4,7 @@ use compiler::*;
 /// `pluma run <path> [args…]`. A source file is compiled to WasmGC and run on V8
 /// (the deploy engine — run what you ship); a prebuilt `.wasm` runs directly.
 /// Everything after the path is the program's own argv (`io.args`).
-pub(crate) fn run_command(entry_path: String, program_args: Vec<String>) {
+pub(crate) fn run_command(hmr: bool, entry_path: String, program_args: Vec<String>) {
 	// A prebuilt WasmGC artifact (`pluma build`) runs directly under V8.
 	if entry_path.ends_with(".wasm") {
 		let bytes = match std::fs::read(&entry_path) {
@@ -26,7 +26,7 @@ pub(crate) fn run_command(entry_path: String, program_args: Vec<String>) {
 	}
 
 	let mut compiler = match Compiler::from_entry_path(entry_path) {
-		Ok(c) => c,
+		Ok(c) => c.with_hmr(hmr),
 		Err(diagnostics) => {
 			print_diagnostics(diagnostics);
 			std::process::exit(1);

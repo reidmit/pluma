@@ -34,5 +34,5 @@ def counter :: fun int -> view = fun start {
 }
 
 def main = fun {
-	render.mount (dom.body ()) (view.div [] [counter 0, counter 100])
+	render.mount (dom.body ()) fun { view.div [] [counter 0, counter 100] }
 }

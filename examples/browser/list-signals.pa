@@ -31,7 +31,7 @@ def main = fun {
 	let items = signal.new [1, 2, 3]
 	let visible = signal.new true
 	let next-id = ref.new 4
-	render.mount (dom.body ()) (view.div [] [
+	render.mount (dom.body ()) fun { view.div [] [
 		view.button [
 			view.on-click fun {
 				let id = ref.get next-id
@@ -61,5 +61,5 @@ def main = fun {
 		] [view.text "toggle"],
 		view.show fun { signal.get visible } fun { view.p [] [view.text "now you see me"] },
 		view.ul [] [view.each fun { signal.get items } fun id { to-string id } row],
-	])
+	] }
 }

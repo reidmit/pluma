@@ -164,4 +164,27 @@ def tests :: test.suite = [
 		signal.set a 200
 		assert.equals log [1, 100, 0]
 	},
+	test.case "new-keyed yields an ordinary working cell" fun {
+		# the call-site key governs cross-instance matching only; the signal
+		# itself behaves exactly like `signal.new`.
+		signal.reset-keys ()
+		let s = signal.new-keyed "site-a" 7
+		signal.set s 9
+		assert.equals (signal.get s) 9
+	},
+	test.case "new-keyed folds an occurrence index per call-site" fun {
+		# two instances built from the same call-site stay distinct via #0/#1, so
+		# a reload can match each to its counterpart (the two-counters case).
+		signal.reset-keys ()
+		let _a = signal.new-keyed "site-a" 0
+		let _b = signal.new-keyed "site-a" 0
+		let _c = signal.new-keyed "site-b" 0
+		assert.equals (signal.keys ()) ["site-a#0", "site-a#1", "site-b#0"]
+	},
+	test.case "reset-keys clears the occurrence log" fun {
+		signal.reset-keys ()
+		let _a = signal.new-keyed "site-a" 0
+		signal.reset-keys ()
+		assert.equals (signal.keys ()) []
+	},
 ]

@@ -173,6 +173,8 @@ def maybe-flush :: fun nothing -> nothing = fun {
 		ref.set flushing true
 		drain ()
 		ref.set flushing false
+		# Re-persist after the batch settles (no-op off dev).
+		(ref.get on-flush) ()
 	}
 }
 
@@ -199,6 +201,117 @@ public def batch :: fun (fun nothing -> a) -> a = fun body {
 # A fresh read/write cell holding `initial`.
 public def new :: fun a -> signal a = fun initial {
 	signal.sig (fresh ()) (ref.new initial) (ref.new (dict.empty ())) (ref.new false) none
+}
+
+# --- dev HMR (Path A): structural keying + state stash ----------------------
+#
+# In a `pluma dev` (hmr) build the compiler rewrites every `signal.new EXPR` into
+# `signal.new-keyed "<callsite>" EXPR`, threading the source location of the call,
+# and redirects `render.mount` to `render.mount-dev`. Together they let a signal's
+# value survive a hot reload (a fresh wasm instance with a fresh heap):
+#
+#   * `new-keyed` derives a STABLE per-instance key -- the **call-site** (source
+#     location, robust to adding/removing other signals, unlike a flat ordinal)
+#     folded with an **occurrence index** (so two instances of one component --
+#     same call-site -- stay distinct) -- registers a serializer, and seeds the
+#     fresh cell from the carried-over `stash` on a key match.
+#   * `mount-dev` restores the stash (from the dev store, via `std.web.render`)
+#     BEFORE the view is built, and re-persists after every change.
+#
+# Only `wire`-able values cross a reload (`new-keyed`'s `where (wire a)`): the
+# compiler discharges it per call site, and a non-wire-able signal makes the hmr
+# build fail to type-check -- `pluma dev` then falls back to a full reload, same
+# as MVU's whole-model HMR. Production builds keep plain `new`: none of this runs.
+#
+# v1 key = call-site + occurrence; the owner-path prefix (which would make the key
+# robust to reordering sibling components) is a planned refinement.
+
+# Per-render occurrence counter: call-site -> next index.
+def occ :: ref (dict string int) = ref.new (dict.empty ())
+
+# The full keys derived so far, in creation order (observability + tests).
+def keys-seen :: ref (list string) = ref.new []
+
+# Values carried over from the previous instance: `key -> wire-encoded bytes`.
+# Filled at boot by `load-stash` (the web dev entry reads it from the dev store);
+# `new-keyed` seeds a fresh cell from it whenever the key matches.
+def stash :: ref (dict string bytes) = ref.new (dict.empty ())
+
+# Live serializers: `key -> a thunk that wire-encodes that signal's CURRENT
+# value`. `snapshot` walks this to capture the whole app's state for persisting.
+def registry :: ref (dict string (fun nothing -> bytes)) = ref.new (dict.empty ())
+
+# Run at the end of every top-level effect flush, so persisted state stays current
+# after each change. The web dev entry installs its persist hook here; off dev it
+# stays a no-op (production pays nothing).
+def on-flush :: ref (fun nothing -> nothing) = ref.new fun {
+	()
+}
+
+# Install the post-flush hook (the web dev entry points this at its persist step).
+public def set-on-flush :: fun (fun nothing -> nothing) -> nothing = fun f {
+	ref.set on-flush f
+}
+
+# Reset the per-render occurrence counters + observed-key log.
+public def reset-keys :: fun nothing -> nothing = fun {
+	ref.set occ (dict.empty ())
+	ref.set keys-seen []
+}
+
+# The structural keys derived since the last `reset-keys`, in creation order.
+public def keys :: fun nothing -> list string = fun {
+	ref.get keys-seen
+}
+
+# Capture every keyed signal's current value as `key -> bytes`, for persisting.
+public def snapshot :: fun nothing -> dict string bytes = fun {
+	let out = ref.new (dict.empty ())
+	list.each (dict.keys (ref.get registry)) fun k {
+		if dict.lookup (ref.get registry) k is some enc {
+			ref.set out (dict.insert (ref.get out) k (enc ()))
+		} else {
+			()
+		}
+	}
+	ref.get out
+}
+
+# Install the previous instance's state, to seed signals as they're recreated.
+# The web dev entry calls this (with the decoded dev-store blob) before the view
+# is built.
+public def load-stash :: fun (dict string bytes) -> nothing = fun s {
+	ref.set stash s
+}
+
+# Compiler-targeted constructor (hmr builds only). Like `new`, but stamped with
+# its source call-site so a reload can match it to its previous-instance
+# counterpart, seed it from the carried-over state, and register it for persist.
+public def new-keyed :: fun string a -> signal a where (wire a) = fun callsite initial {
+	let n = (dict.lookup (ref.get occ) callsite) ?? 0
+	ref.set occ (dict.insert (ref.get occ) callsite (n + 1))
+	let key = "$(callsite)#$(to-string n)"
+	list.push (ref.get keys-seen) key
+	let s = new initial
+	# Seed from the carried-over state on a key hit. Write the cell directly (no
+	# notify): nothing subscribes to a signal at its creation, so there's nothing
+	# to wake -- and it keeps the seeding out of the flush path.
+	if dict.lookup (ref.get stash) key is some saved {
+		when s is signal.sig _id val _subs _stale _owner {
+			when wire.decode saved is ok v {
+				ref.set val v
+			} is err _e {
+				()
+			}
+		}
+	} else {
+		()
+	}
+	# Register a serializer over this signal's current value.
+	ref.set registry (dict.insert (ref.get registry) key fun {
+		wire.encode (peek s)
+	})
+	s
 }
 
 # Read a signal. Inside an effect/computed this subscribes the reader, so it

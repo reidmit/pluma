@@ -12,7 +12,11 @@ fn main() {
 	match Cli::parse().command {
 		Command::Version => println!("v{}", compiler::VERSION),
 
-		Command::Run { path, program_args } => commands::run::run_command(path, program_args),
+		Command::Run {
+			hmr,
+			path,
+			program_args,
+		} => commands::run::run_command(hmr, path, program_args),
 
 		Command::Build {
 			web,
@@ -47,7 +51,7 @@ fn main() {
 		Command::External(args) => {
 			let mut args = args.into_iter();
 			let path = args.next().expect("external subcommand always has a token");
-			commands::run::run_command(path, args.collect());
+			commands::run::run_command(false, path, args.collect());
 		}
 	}
 }

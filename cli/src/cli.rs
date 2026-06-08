@@ -38,6 +38,11 @@ pub(crate) enum Command {
 	///
 	/// Everything after the path is passed to the program as its own argv.
 	Run {
+		/// Enable `pluma dev` hot-reload rewrites (`signal.new` call-site keying).
+		/// Hidden — a dev/diagnostic switch for exercising the hmr path headlessly.
+		#[arg(long, hide = true)]
+		hmr: bool,
+
 		/// Module to run: a `.pa` source file or a prebuilt `.wasm` artifact.
 		path: String,
 
