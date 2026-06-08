@@ -9,11 +9,57 @@
 # `api` is the contract: on the server its `remote def`s are the real handlers, on
 # the client they are transport stubs — same call sites, the artifact decides.
 
+use std.css
+use std.list
 use std.signal
 use std.stream
 use std.task
 use std.view
 use api
+
+# --- styling (notes/CSS.md tiers 2/3) ---------------------------------------
+#
+# Top-level `css.rule`s are extracted, content-hashed classes. They are emitted
+# once into the server document's `<head>` by `css.style-tag` (in `document`), so
+# the page arrives fully styled before hydration. The accent color is the dynamic
+# boundary: the rules below read it as `var(--accent)` (a static reference), and the
+# live value is supplied per-render by `view.css-var` from a signal -- so the rules
+# stay cacheable while the color reacts to a click.
+
+def accent-colors :: list string = ["#2563eb", "#16a34a", "#db2777", "#d97706"]
+
+def accent-color :: fun int -> string = fun i {
+	list.get accent-colors (i % list.length accent-colors)
+}
+
+# The page shell: a dark card whose border tracks the live `--accent`.
+def card :: css.ruleset = css.rule [
+	css.base [
+		css.max-width (css.px 520.0),
+		css.margin (css.rem 2.0),
+		css.padding (css.rem 1.5),
+		css.border-radius (css.px 12.0),
+		css.background (css.hex "#0b1020"),
+		css.color (css.hex "#e2e8f0"),
+		css.property "border" "2px solid var(--accent)",
+		css.property "font-family" "system-ui, sans-serif",
+	],
+]
+
+# Buttons: background reads the inherited `--accent`; `:hover` is real extracted CSS
+# an inline style could never express.
+def button :: css.ruleset = css.rule [
+	css.base [
+		css.background (css.var "accent"),
+		css.color (css.hex "#ffffff"),
+		css.property "border" "none",
+		css.padding (css.rem 0.6),
+		css.margin (css.px 4.0),
+		css.border-radius (css.px 8.0),
+		css.cursor "pointer",
+	],
+	css.on "hover" [css.opacity 0.85],
+]
 
 public def page :: fun nothing -> view = fun {
 	# sum/pending track the unary calls; tick is the latest streamed value; the
@@ -21,13 +67,29 @@ public def page :: fun nothing -> view = fun {
 	let sum = signal.new 0
 	let pending = signal.new 0
 	let tick = signal.new 0
+	let accent = signal.new 0
 	let cancel :: ref (option (fun nothing -> nothing)) = ref.new none
 
-	view.div [view.id "app"] [
-		view.h1 [] [view.text "Pluma SSR + signals"],
+	# `styled card` gives the hashed class; `css-var "accent"` supplies the live
+	# value that the card's border and the buttons' background read as `var(--accent)`
+	# (custom properties inherit, so one var styles the whole subtree).
+	view.div [
+		view.id "app",
+		view.styled card,
+		view.css-var "accent" fun { accent-color (signal.get accent) },
+	] [
+		view.h1 [] [view.text "Pluma SSR + signals + CSS"],
 		view.p [] [
 			view.text "This shell was server-rendered; the buttons came alive after hydration.",
 		],
+		view.button [
+			view.styled button,
+			view.on-click fun {
+				signal.update accent fun i {
+					i + 1
+				}
+			},
+		] [view.text "cycle accent"],
 		view.div [] [
 			view.span [view.id "sum"] [
 				view.text-of fun {
@@ -41,6 +103,7 @@ public def page :: fun nothing -> view = fun {
 		],
 		view.button [
 			view.id "add",
+			view.styled button,
 			view.on-click fun {
 				# Fire two remote calls at once — both in flight together over the async
 				# transport, no main-thread freeze.
@@ -66,6 +129,7 @@ public def page :: fun nothing -> view = fun {
 		],
 		view.button [
 			view.id "toggle",
+			view.styled button,
 			view.on-click fun {
 				# Toggle the tick subscription: cancel if running, else start one whose
 				# values drive the `tick` signal.
@@ -88,5 +152,9 @@ public def page :: fun nothing -> view = fun {
 # body (as `dom.body ()`'s first child, where `render.hydrate` expects it) plus the
 # client loader. Only the server calls this; on the client it's dead code.
 public def document :: fun nothing -> string = fun {
-	"<!doctype html><html><head><meta charset=\"utf-8\"><title>Pluma SSR</title></head><body>$(view.to-string (page ()))<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+	# Render the body FIRST: building the view runs each `view.styled`, registering
+	# its rule in `std.css`'s collector. Then `css.style-tag ()` emits exactly those
+	# rules into `<head>`, so the page is styled on first paint with no asset request.
+	let body = view.to-string (page ())
+	"<!doctype html><html><head><meta charset=\"utf-8\"><title>Pluma SSR</title>$(css.style-tag ())</head><body>$(body)<script type=\"module\" src=\"/loader.js\"></script></body></html>"
 }
