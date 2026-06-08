@@ -93,3 +93,26 @@ pub(super) fn cb_float_to_str(
 	}
 	rv.set_int32(bytes.len() as i32);
 }
+
+/// SSR stubs for the two browser-only event accessors. `std.view` names them in
+/// every handler closure, so a server build that *constructs* a view (to render
+/// it with `view.to-string`) declares these imports even though `to-string` drops
+/// the handlers and never calls them. Registered so the server module links; if
+/// one were ever actually invoked under the sys host it returns the empty answer.
+///
+/// `event-target-value(externref, dst, cap) -> i32 len` — no value, length 0.
+pub(super) fn cb_event_target_value(
+	_scope: &mut v8::HandleScope,
+	_args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	rv.set_int32(0);
+}
+
+/// `event-prevent-default(externref) -> ()` — no-op.
+pub(super) fn cb_event_prevent_default(
+	_scope: &mut v8::HandleScope,
+	_args: v8::FunctionCallbackArguments,
+	_rv: v8::ReturnValue,
+) {
+}

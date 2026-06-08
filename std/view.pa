@@ -19,14 +19,14 @@
 # A `view` is *pure data* -- it never touches the DOM. Two consumers turn it into
 # output: `std.web.render`'s `mount` builds real DOM and wires effects (browser),
 # and `to-string` here renders HTML (server-side rendering, and headless tests).
-# That split is what lets the same view render on both server and client. (The
-# `dom.event` a handler receives is the only browser type named here; it's a
-# type-level reference only -- `to-string` never touches the DOM. Phase 5 will
-# move `event` to a neutral module so `std.view` builds on the server profile.)
+# That split is what lets the same view render on both server and client. The
+# `event` a handler receives comes from the tier-neutral `std.event` (not
+# `std.web.dom`), so `std.view` builds on the server profile too -- the only DOM
+# the server ever needs is the handler *type*, never the DOM itself.
 
+use std.event
 use std.list
 use std.string
-use std.web.dom
 
 # An attribute, property, reactive attribute, or event handler on an element.
 # `static`/`dynamic` set HTML attributes; `prop-str`/`prop-bool` set live DOM
@@ -38,7 +38,7 @@ public enum attribute {
 	prop-str string string
 	prop-bool string bool
 	dynamic string (fun nothing -> string)
-	handler string (fun dom.event -> nothing)
+	handler string (fun event -> nothing)
 }
 
 # A node in the view tree: an element, static text, a reactive text node, or
@@ -128,7 +128,7 @@ public def bind :: fun string (fun nothing -> string) -> attribute = fun k f {
 # --- event handlers (effectful) ---------------------------------------------
 
 # Run `handler` (which receives the raw event) when the named event fires.
-public def on :: fun string (fun dom.event -> nothing) -> attribute = fun name handler {
+public def on :: fun string (fun event -> nothing) -> attribute = fun name handler {
 	attribute.handler name handler
 }
 
@@ -142,21 +142,21 @@ public def on-click :: fun (fun nothing -> nothing) -> attribute = fun handler {
 # Run `handler` with the input's current text on every keystroke.
 public def on-input :: fun (fun string -> nothing) -> attribute = fun handler {
 	attribute.handler "input" fun e {
-		handler (dom.target-value e)
+		handler (event.target-value e)
 	}
 }
 
 # Like `on-input`, but on the `change` event (commit: blur / Enter / select).
 public def on-change :: fun (fun string -> nothing) -> attribute = fun handler {
 	attribute.handler "change" fun e {
-		handler (dom.target-value e)
+		handler (event.target-value e)
 	}
 }
 
 # Run `handler` on submit, suppressing the browser's full-page reload.
 public def on-submit :: fun (fun nothing -> nothing) -> attribute = fun handler {
 	attribute.handler "submit" fun e {
-		dom.prevent-default e
+		event.prevent-default e
 		handler ()
 	}
 }

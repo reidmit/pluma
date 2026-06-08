@@ -230,6 +230,22 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "net-unwatch", cb_net_unwatch);
 	// std.web.fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
 	register(scope, pluma, data, "web-fetch", cb_web_fetch);
+	// std.event — SSR stubs (a server build constructs view handlers but never runs
+	// them; these link the import and are never actually called).
+	register(
+		scope,
+		pluma,
+		data,
+		"event-target-value",
+		cb_event_target_value,
+	);
+	register(
+		scope,
+		pluma,
+		data,
+		"event-prevent-default",
+		cb_event_prevent_default,
+	);
 	let imports = v8::Object::new(scope);
 	let pluma_key = v8::String::new(scope, "pluma").unwrap();
 	imports.set(scope, pluma_key.into(), pluma.into());

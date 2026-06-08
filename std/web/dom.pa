@@ -12,8 +12,10 @@
 # back the page's root, the node everything else hangs under. A node is
 # opaque -- you hold the handle and pass it along, but can't look inside.
 #
-# This is the imperative foundation the Elm-style MVU framework is built
-# on (see notes/FRONTEND.md); most apps will reach for that instead.
+# Most apps build their UI with `std.view` + `std.web.render` (the signals
+# frontend, see notes/FRONTEND.md) and never touch this module directly.
+
+use std.event
 
 # A live handle to one DOM node. Opaque: the browser owns it, you hold the
 # handle. (The runtime carrier is an engine `externref`, not the `int`
@@ -83,19 +85,8 @@ public def set-text :: fun node string -> nothing = built-in "dom-set-text"
 # Read an input node's current `.value` (the empty string if it has none).
 public def get-value :: fun node -> string = built-in "dom-get-value"
 
-# An event delivered to a handler -- a click, an input change, a form
-# submit. Opaque, like `node`; read details with the accessors below.
-opaque enum event {
-	handle int
-}
-
-# The `.value` of the element the event fired on (e.g. the text an
-# `input` now holds). Empty string when there's none.
-public def target-value :: fun event -> string = built-in "event-target-value"
-
-# Suppress the browser's default action for this event -- e.g. stop a
-# form `submit` from reloading the page.
-public def prevent-default :: fun event -> nothing = built-in "event-prevent-default"
+# The `event` a handler receives is `std.event`'s shared type (re-used so a
+# `std.view` handler and the listener wired here agree on one type).
 
 # Run `handler` whenever the named DOM event (`"click"`, `"input"`,
 # `"submit"`, ...) fires on the node. The handler receives the `event`.
@@ -112,10 +103,11 @@ public def add-listener :: fun node string (fun event -> nothing) -> int = built
 public def set-handler :: fun int (fun event -> nothing) -> nothing = built-in "dom-set-handler"
 
 # Dev-only key/value store, backed by the page's `localStorage`. `pluma dev`'s
-# hot-reload uses these to carry the live MVU model across a full reload (see
-# `app.sandbox-dev`); they are not part of the app-authoring API. `dev-store-get`
+# hot-reload uses these to carry keyed signal state across a full reload (see
+# `render.mount-dev`); they are not part of the app-authoring API. `dev-store-get`
 # returns `""` when the key is absent.
 public def dev-store-set :: fun string string -> nothing = built-in "dom-dev-store-set"
+
 public def dev-store-get :: fun string -> string = built-in "dom-dev-store-get"
 
 # Sugar for the common case: run `handler` on every click.
