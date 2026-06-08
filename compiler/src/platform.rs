@@ -106,7 +106,7 @@ mod tests {
 	#[test]
 	fn web_target_allows_web_and_shared_rejects_sys() {
 		assert!(gate(Some(Target::Web), "std.web.dom").is_none());
-		assert!(gate(Some(Target::Web), "std.web.app").is_none());
+		assert!(gate(Some(Target::Web), "std.web.render").is_none());
 		assert!(gate(Some(Target::Web), "std.list").is_none());
 		let rej = gate(Some(Target::Web), "std.sys.io").expect("sys module should be rejected on web");
 		assert!(rej.contains("std.sys.io") && rej.contains("web"));

@@ -3442,19 +3442,14 @@ impl<'compiler> Analyzer<'compiler> {
 				// `option`/`result` enums.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
 					if let Some(exports) = self.imports.get(&ident.name).cloned() {
-						// `pluma dev` hot-reload: redirect to a module's state-persisting
-						// `-dev` variant. MVU's `app.sandbox`/`app.element`/`app.application`
-						// carry the model across a reload; the signals frontend's `render.mount`
-						// carries the keyed-signal stash. Keyed on the `-dev` variant existing
-						// in the module (only `std.web.app`/`std.web.render` define them), so
-						// it's alias-agnostic and a no-op everywhere else. Renaming `field`
-						// here -- before the constraint freshening below -- discharges any
-						// `where (wire …)` on the variant at this call site.
-						if self.hmr
-							&& matches!(
-								field.name.as_str(),
-								"sandbox" | "element" | "application" | "mount"
-							) {
+						// `pluma dev` hot-reload: redirect `render.mount` to its state-
+						// persisting `mount-dev` variant, which carries the keyed-signal stash
+						// across a reload. Keyed on the `-dev` variant existing in the module
+						// (only `std.web.render` defines it), so it's alias-agnostic and a
+						// no-op everywhere else. Renaming `field` here -- before the constraint
+						// freshening below -- discharges the variant's `where (wire …)` at this
+						// call site.
+						if self.hmr && field.name == "mount" {
 							let dev_name = format!("{}-dev", field.name);
 							if exports.values.contains_key(&dev_name) {
 								field.name = dev_name;

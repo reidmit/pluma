@@ -82,6 +82,40 @@ public def map :: fun (task a) (fun a -> b) -> task b = built-in "task-map"
 # `scope`); shield self-contained work.
 public def shielded :: fun (task a) -> task a = built-in "task-shielded"
 
+# --- detached spawning: fire async work onto the scheduler ------------------
+#
+# `scope` blocks give *structured* concurrency (children awaited at block exit).
+# A reactive UI needs the opposite: an event handler kicks off async work (a
+# remote call, a subscription) and returns immediately, letting the result flow
+# back into a `signal` later. `spawn` is that detached fire-and-forget; it's the
+# signals-era restatement of MVU's "a command is a task". `spawn-cancelable`
+# additionally hands back a thunk that tears the work down -- pair it with
+# `signal.on-cleanup` to bind a subscription's lifetime to a dynamic subtree.
+
+def spawn-command :: fun (task nothing) -> nothing = built-in "spawn-command"
+
+def spawn-sub :: fun (task nothing) -> int = built-in "spawn-sub"
+
+def cancel-sub :: fun int -> nothing = built-in "cancel-sub"
+
+# Run `t` detached on the scheduler as a root-scoped fiber, returning at once.
+# The canonical "RPC result flows into a signal" move:
+# `task.spawn (task.map (api.add 2 3) (fun n { signal.set sum n }))`.
+public def spawn :: fun (task nothing) -> nothing = fun t {
+	spawn-command t
+}
+
+# Like `spawn`, but in its own cancellable scope; returns a thunk that cancels it
+# (running the task's `defer`s / a stream's shielded release). Use it to drive a
+# `stream` into a signal and stop it on demand:
+# `let stop = task.spawn-cancelable (stream.for-each s (fun v { ... }))`.
+public def spawn-cancelable :: fun (task nothing) -> (fun nothing -> nothing) = fun t {
+	let sid = spawn-sub t
+	fun {
+		cancel-sub sid
+	}
+}
+
 # --- structured-concurrency kernel ---------------------------------------
 #
 # The primitives the `scope` keyword (and the concurrent combinators) lower

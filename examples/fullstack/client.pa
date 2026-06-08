@@ -1,98 +1,128 @@
-# The client half — a browser MVU app that calls the server. `pluma build`
+# The client half — a browser signals app that calls the server. `pluma build`
 # emits this to a web bundle (app.wasm + loader.js + index.html).
 #
 # Two kinds of remote call, both reading like local async code:
-#   - `api.add 2 3` is a *unary* call returning a `task int`; the MVU runtime
-#     runs it as a command and feeds the result back into `update`. The "add"
-#     button fires two at once to show they're genuinely concurrent (no
-#     main-thread freeze, both in flight in the network panel).
-#   - `api.ticks 1` is a *subscription* returning a `stream int`; `subscribe`
-#     keeps it running across messages and `app.application` reconciles it by key
-#     (start when it appears, cancel when it vanishes). Toggling it off cancels
-#     the stream — the server sees the connection close.
+#   - `api.add 2 3` is a *unary* call returning a `task int`. A click handler
+#     `task.spawn`s it and feeds the result into a signal — the signals-era
+#     restatement of MVU's "a command is a task". The button fires two at once to
+#     show they're genuinely concurrent (both in flight in the network panel, no
+#     main-thread freeze).
+#   - `api.ticks 1` is a *subscription* returning a `stream int`.
+#     `task.spawn-cancelable (stream.for-each …)` drives each value into a signal
+#     and hands back a thunk that cancels it (closing the connection — the server
+#     sees the drop). Toggling ticks off calls that thunk.
 #
 # `api` is the *real* contract module — on this (client) artifact the compiler
 # swaps each `remote def`'s body for a transport stub, so the calls go over the
 # wire while reading like local awaits.
+#
+# All app state lives inside the root thunk passed to `render.mount` (Solid's
+# `render(() => App(), root)`), so `pluma dev`'s hot reload can restore it.
 
+use std.signal
+use std.stream
 use std.task
-use std.web.app
-use std.web.events
-use std.web.html
+use std.view
+use std.web.dom
+use std.web.render
 use api
-
-enum msg {
-	compute
-	got-sum int
-	tick int
-	toggle-ticks
-}
-
-# sum/pending track the unary calls; tick is the latest streamed value;
-# ticking says whether the subscription is currently active.
-alias model {sum :: int, pending :: int, tick :: int, ticking :: bool}
-
-def init :: (model, list (task msg)) = ({sum: 0, pending: 0, tick: 0, ticking: true}, [])
-
-def update :: fun msg model -> (model, list (task msg)) = fun m state {
-	when m is msg.compute {
-		# Fire TWO remote calls at once. With the async transport both are in
-		# flight together (the cooperative scheduler suspends each fiber on its
-		# fetch) — no main-thread freeze, unlike the old sync XHR.
-		({sum: state.sum, pending: 2, tick: state.tick, ticking: state.ticking}, [
-			task.map (api.add 2 3) fun n {
-				msg.got-sum n
-			},
-			task.map (api.add 20 30) fun n {
-				msg.got-sum n
-			},
-		])
-	} is msg.got-sum n {
-		({sum: n, pending: state.pending - 1, tick: state.tick, ticking: state.ticking}, [])
-	} is msg.tick n {
-		({sum: state.sum, pending: state.pending, tick: n, ticking: state.ticking}, [])
-	} is msg.toggle-ticks {
-		({sum: state.sum, pending: state.pending, tick: state.tick, ticking: !state.ticking}, [])
-	}
-}
-
-# The subscriptions the model wants right now. When `ticking` is on, subscribe to
-# the server's tick stream keyed "ticks"; when off, return none — the runtime
-# cancels the running stream (closing the connection). The key keeps the *same*
-# subscription alive across every other message instead of restarting it.
-def subscriptions :: fun model -> list (app.sub msg) = fun state {
-	if state.ticking {
-		[app.subscribe "ticks" (api.ticks 1) fun n {
-			msg.tick n
-		}]
-	} else {
-		[]
-	}
-}
-
-def view :: fun model -> html.html msg = fun state {
-	let sum-label = if state.pending > 0 {
-		"computing on the server… ($(to-string state.pending) in flight)"
-	} else {
-		"last server sum = $(to-string state.sum)"
-	}
-	let ticks-label = if state.ticking {
-		"server tick: $(to-string state.tick)"
-	} else {
-		"ticks stopped (last: $(to-string state.tick))"
-	}
-	html.div [] [
-		html.div [] [html.span [] [html.text sum-label]],
-		html.button [events.on-click msg.compute] [html.text "add on server (×2)"],
-		html.div [] [html.span [] [html.text ticks-label]],
-		html.button [events.on-click msg.toggle-ticks] [html.text "toggle ticks"],
-	]
-}
 
 def main = fun {
 	# No transport plumbing in code: the build installs the web transport pointed
 	# at the baked origin (`pluma build/dev --server-url`; default
 	# `http://localhost:8080` for `build`, same-origin for `dev`, which proxies
 	# `/rpc/*` to the server). The origin is build-time only — never settable here.
-	app.application init update subscriptions view
+	render.mount (dom.body ()) fun {
+		# sum/pending track the unary calls; tick is the latest streamed value;
+		# ticking says whether the subscription is currently active.
+		let sum = signal.new 0
+		let pending = signal.new 0
+		let tick = signal.new 0
+		let ticking = signal.new true
+		# The live tick subscription's cancel thunk (none when stopped).
+		let cancel :: ref (option (fun nothing -> nothing)) = ref.new none
+
+		let start-ticks = fun {
+			let stop = task.spawn-cancelable (stream.for-each (api.ticks 1) fun n {
+				signal.set tick n
+				task.return ()
+			})
+			ref.set cancel (some stop)
+		}
+		let stop-ticks = fun {
+			when ref.get cancel is some stop {
+				stop ()
+			} is none {
+				()
+			}
+			ref.set cancel none
+		}
+
+		# Start streaming if the (possibly restored) state wants it.
+		if signal.peek ticking {
+			start-ticks ()
+		} else {
+			()
+		}
+
+		view.div [] [
+			view.div [] [
+				view.span [] [
+					view.text-of fun {
+						if signal.get pending > 0 {
+							"computing on the server… ($(to-string (signal.get pending)) in flight)"
+						} else {
+							"last server sum = $(to-string (signal.get sum))"
+						}
+					},
+				],
+			],
+			view.button [
+				view.on-click fun {
+					# Fire TWO remote calls at once. With the async transport both are in
+					# flight together (the cooperative scheduler suspends each fiber on its
+					# fetch) — no main-thread freeze, unlike a sync XHR.
+					signal.set pending 2
+					task.spawn (task.map (api.add 2 3) fun n {
+						signal.set sum n
+						signal.update pending fun p {
+							p - 1
+						}
+					})
+					task.spawn (task.map (api.add 20 30) fun n {
+						signal.set sum n
+						signal.update pending fun p {
+							p - 1
+						}
+					})
+				},
+			] [view.text "add on server (×2)"],
+			view.div [] [
+				view.span [] [
+					view.text-of fun {
+						if signal.get ticking {
+							"server tick: $(to-string (signal.get tick))"
+						} else {
+							"ticks stopped (last: $(to-string (signal.get tick)))"
+						}
+					},
+				],
+			],
+			view.button [
+				view.on-click fun {
+					let now-on = if signal.get ticking {
+						false
+					} else {
+						true
+					}
+					signal.set ticking now-on
+					if now-on {
+						start-ticks ()
+					} else {
+						stop-ticks ()
+					}
+				},
+			] [view.text "toggle ticks"],
+		]
+	}
 }

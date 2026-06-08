@@ -100,9 +100,8 @@ public def prevent-default :: fun event -> nothing = built-in "event-prevent-def
 # Run `handler` whenever the named DOM event (`"click"`, `"input"`,
 # `"submit"`, ...) fires on the node. The handler receives the `event`.
 # Returns a *handler id* -- an opaque int naming the registry slot the handler
-# lives in. Pass it to `set-handler` to re-point the listener in place (the
-# `std.web.app` diff does this to update a reused node without detaching it);
-# ignore it for a one-off listener.
+# lives in. Pass it to `set-handler` to re-point the listener in place without
+# detaching the node; ignore it for a one-off listener.
 #
 #     dom.add-listener btn "click" (fun _e { dom.set-text label "clicked" })
 public def add-listener :: fun node string (fun event -> nothing) -> int = built-in "dom-add-listener"
