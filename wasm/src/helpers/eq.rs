@@ -205,16 +205,30 @@ pub(crate) fn build_eq_fn(self_idx: u32, dict_eq_idx: u32) -> Function {
 	w.if_(|w| {
 		w.local_get(a).local_get(b).ref_eq().ret();
 	});
-	// CLOSURE: reference identity (`ref.eq`, like `$ref`/extern). A function value is
-	// equal only to itself — extensional equality of functions is undecidable, so
-	// identity is the only sound choice. This also keeps `==` *total* (it never traps),
-	// so `signal.set`'s value-equality short-circuit is safe for a signal of any type,
-	// including one that happens to hold a closure.
+	// Opaque, function-like, and handle values compare by reference identity
+	// (`ref.eq`, like `$ref`/extern above): a closure, a bare/partial constructor, a
+	// method dict, a task, a scope handle, a task-local cell. Their extensional
+	// equality is undecidable (functions/tasks) or, for handles/cells, identity is
+	// the designed semantics. Folding them all in here keeps `==` *total* over every
+	// value a user program can hold — so `signal.set`'s value-equality short-circuit
+	// is safe for a signal of any element type, never trapping.
 	w.local_get(ta).i32(types::TAG_CLOSURE).i32_eq();
+	w.local_get(ta).i32(types::TAG_CTOR).i32_eq();
+	w.i32_or();
+	w.local_get(ta).i32(types::TAG_METHODDICT).i32_eq();
+	w.i32_or();
+	w.local_get(ta).i32(types::TAG_TASK).i32_eq();
+	w.i32_or();
+	w.local_get(ta).i32(types::TAG_SCOPE_HANDLE).i32_eq();
+	w.i32_or();
+	w.local_get(ta).i32(types::TAG_LOCAL).i32_eq();
+	w.i32_or();
 	w.if_(|w| {
 		w.local_get(a).local_get(b).ref_eq().ret();
 	});
-	// Unhandled: not structurally compared.
+	// Only `$cnode` (an internal `$dict` trie node, which never escapes to user code)
+	// can reach here — so anything that does is a structural type missing an `__eq`
+	// arm: trap loudly rather than answer wrong.
 	w.unreachable();
 	w.finish()
 }
