@@ -309,10 +309,23 @@ fn emit_init_sched_state(
 	empty_list(w);
 	push_fiber(w, ROOT_SCOPE, NO_SCOPE);
 	w.call(list_append).global_set(g.fibers);
+	// Initialise the ready queue BEFORE running the root body. The body
+	// (`seed_root` = the program's `main`) runs synchronously here, and a browser
+	// app's `main` can `spawn` during it (the initial mount kicking off a remote
+	// call or subscription) -- those spawns append to `ready`, so it must already
+	// be a valid list. Then enqueue the root fiber's own entry by appending to the
+	// (possibly already-grown) queue, so the spawned fibers aren't clobbered.
 	empty_list(w);
-	push_ready_entry(w, 0, focus::START, seed_root);
-	w.call(list_append).global_set(g.ready);
+	w.global_set(g.ready);
 	w.i32(0).global_set(g.rhead);
+	let root_task = w.local(types::value_ref());
+	seed_root(w);
+	w.local_set(root_task);
+	let root_fid = w.local(ValType::I32);
+	w.i32(0).local_set(root_fid);
+	ready_push(w, g, list_append, root_fid, focus::START, |w| {
+		w.local_get(root_task);
+	});
 }
 
 /// `__browser_run() -> ()`: the browser command pump. Drains deferred
