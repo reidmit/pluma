@@ -1,0 +1,77 @@
+# Phase 1 of styling (notes/CSS.md): the pure value layer. These pin the
+# serialization -- color/length rendering, the `.0`-stripping number format, inline
+# declaration joining -- plus the `std.view` integration helpers (`style-of`,
+# `classes`) via `view.to-string`. All pure, so they run headless under V8.
+
+use std.assert
+use std.css
+use std.test
+use std.view
+
+def tests :: test.suite = [
+	test.case "hex color keeps an existing leading hash" fun {
+		assert.equals (css.inline [css.color (css.hex "#e11")]) "color: #e11"
+	},
+	test.case "hex color adds a missing leading hash" fun {
+		assert.equals (css.inline [css.color (css.hex "2563eb")]) "color: #2563eb"
+	},
+	test.case "rgb renders comma-separated channels" fun {
+		assert.equals (css.inline [css.color (css.rgb 37 99 235)]) "color: rgb(37, 99, 235)"
+	},
+	test.case "rgba renders the alpha, dropping a whole .0" fun {
+		assert.equals (css.inline [
+			css.background (css.rgba 0 0 0 0.5),
+		]) "background: rgba(0, 0, 0, 0.5)"
+	},
+	test.case "named color passes through" fun {
+		assert.equals (css.inline [css.color (css.named "rebeccapurple")]) "color: rebeccapurple"
+	},
+	test.case "whole-number length drops the trailing .0" fun {
+		assert.equals (css.inline [css.padding (css.px 16.0)]) "padding: 16px"
+	},
+	test.case "fractional length keeps its decimals" fun {
+		assert.equals (css.inline [css.font-size (css.rem 1.5)]) "font-size: 1.5rem"
+	},
+	test.case "percent and viewport units render their suffix" fun {
+		assert.equals (css.inline [
+			css.width (css.pct 50.0),
+			css.height (css.vh 100.0),
+		]) "width: 50%; height: 100vh"
+	},
+	test.case "opacity renders as a bare number" fun {
+		assert.equals (css.inline [css.opacity 0.5]) "opacity: 0.5"
+	},
+	test.case "z-index renders an int" fun {
+		assert.equals (css.inline [css.z-index 10]) "z-index: 10"
+	},
+	test.case "keyword properties take a string value" fun {
+		assert.equals (css.inline [
+			css.display "flex",
+			css.justify-content "center",
+		]) "display: flex; justify-content: center"
+	},
+	test.case "the generic property escape hatch" fun {
+		assert.equals (css.inline [
+			css.property "grid-template-columns" "1fr 1fr",
+		]) "grid-template-columns: 1fr 1fr"
+	},
+	test.case "multiple declarations join with '; '" fun {
+		let s = css.inline [
+			css.color (css.hex "#fff"),
+			css.padding (css.rem 1.0),
+			css.gap (css.px 8.0),
+		]
+		assert.equals s "color: #fff; padding: 1rem; gap: 8px"
+	},
+	test.case "style-of renders a typed style attribute" fun {
+		let v = view.div [view.style-of [css.color (css.hex "#e11"), css.padding (css.rem 1.0)]] []
+		assert.equals (view.to-string v) "<div style=\"color: #e11; padding: 1rem\"></div>"
+	},
+	test.case "classes keeps only the enabled names" fun {
+		let v = view.span [view.classes [("btn", true), ("active", false), ("lg", true)]] []
+		assert.equals (view.to-string v) "<span class=\"btn lg\"></span>"
+	},
+	test.case "class-list is the bare joined string" fun {
+		assert.equals (view.class-list [("a", true), ("b", false), ("c", true)]) "a c"
+	},
+]

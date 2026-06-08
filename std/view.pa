@@ -24,6 +24,7 @@
 # `std.web.dom`), so `std.view` builds on the server profile too -- the only DOM
 # the server ever needs is the handler *type*, never the DOM itself.
 
+use std.css
 use std.event
 use std.list
 use std.string
@@ -658,6 +659,34 @@ public def id :: fun string -> attribute = fun v {
 
 public def style :: fun string -> attribute = fun v {
 	attribute.static "style" v
+}
+
+# A conditional `class` attribute: keep each class whose flag is true.
+# `view.classes [("btn", true), ("active", signal.get on)]` => `class="btn active"`
+# when `on`. For a *reactive* class that re-renders as a signal changes, wrap the
+# string form in `bind`: `view.bind "class" (fun { view.class-list [...] })`.
+public def classes :: fun (list (string, bool)) -> attribute = fun pairs {
+	attribute.static "class" (class-list pairs)
+}
+
+# The space-joined class string from `(name, on)` pairs -- the value behind
+# `classes`, exposed for use inside a reactive `bind`.
+public def class-list :: fun (list (string, bool)) -> string = fun pairs {
+	let on = list.filter pairs fun pair {
+		let (_name, flag) = pair
+		flag
+	}
+	string.join (list.map on fun pair {
+		let (name, _flag) = pair
+		name
+	}) " "
+}
+
+# A typed inline `style` attribute from a `std.css` declaration list:
+# `view.style-of [css.color (css.hex "#e11"), css.padding (css.rem 1.0)]`. For a
+# reactive style, wrap `css.inline` in `bind`: `view.bind "style" (fun { css.inline [...] })`.
+public def style-of :: fun (list css.decl) -> attribute = fun decls {
+	attribute.static "style" (css.inline decls)
 }
 
 public def title :: fun string -> attribute = fun v {

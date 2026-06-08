@@ -1,0 +1,298 @@
+# std.css -- typed CSS values and declarations.
+#
+# Phase 1 of the styling story (see notes/CSS.md): the pure, tier-neutral value
+# layer. You build typed colors and lengths (`css.hex`, `css.rem`, `css.px`) and
+# combine them into declarations (`css.color`, `css.padding`), then serialize a
+# list of declarations to an inline `style` string with `css.inline`. The win over
+# a hand-written `view.style "color: red; padding: 1rem"` is type-safety and units
+# you can't typo.
+#
+#     css.inline [css.color (css.hex "#e11"), css.padding (css.rem 1.0)]
+#     # => "color: #e11; padding: 1rem"
+#
+# This module is `std.*` (tier-neutral, no host capabilities), so it produces the
+# same strings on the server (SSR, via `view.to-string`) and in the browser. The
+# higher tiers -- extracted `css.rule` stylesheets and reactive custom properties --
+# build on these same value types in a later phase; nothing here touches the DOM.
+#
+# Pair it with `std.view`'s `style-of` (a declaration list as a `style` attribute)
+# and `classes` (a conditional class list); both lower to plain string attributes.
+
+use std.list
+use std.math
+use std.string
+
+# A CSS color value. Build with `hex`/`rgb`/`rgba`/`named` rather than naming the
+# constructors; public (not opaque) only so it can appear in signatures. (Named
+# `paint`, not `color`, so it doesn't clash with the `css.color` property builder --
+# types and defs share one namespace.)
+public enum paint {
+	rgb int int int
+	rgba int int int float
+	hex string
+	named string
+}
+
+# A CSS length/size value: a number paired with its unit (`16px`, `1.5rem`, `50%`).
+# Build with `px`/`rem`/`em`/`pct`/`vh`/`vw`.
+public enum length {
+	len float string
+}
+
+# A single CSS declaration -- a property name and its already-serialized value
+# (`color: #fff`). Build with the property helpers (`css.color`, `css.padding`, ...)
+# or the generic `css.property`; serialize a list with `css.inline`.
+public enum decl {
+	decl string string
+}
+
+# --- colors -----------------------------------------------------------------
+
+# A hex color. The leading `#` is optional -- `hex "#e11"` and `hex "e11"` both
+# render as `#e11`.
+public def hex :: fun string -> paint = fun s {
+	paint.hex s
+}
+
+# An opaque RGB color from three 0-255 channels: `rgb 37 99 235` => `rgb(37, 99, 235)`.
+public def rgb :: fun int int int -> paint = fun r g b {
+	paint.rgb r g b
+}
+
+# An RGB color with an alpha (0.0-1.0): `rgba 0 0 0 0.5` => `rgba(0, 0, 0, 0.5)`.
+public def rgba :: fun int int int float -> paint = fun r g b a {
+	paint.rgba r g b a
+}
+
+# A named CSS color, passed through verbatim: `named "rebeccapurple"`.
+public def named :: fun string -> paint = fun s {
+	paint.named s
+}
+
+# --- lengths ----------------------------------------------------------------
+#
+# All length builders take a `float` (Pluma doesn't promote `int` to `float`, so
+# write `px 16.0`, not `px 16`); a whole number renders without a trailing `.0`
+# (`16px`, not `16.0px`).
+
+# Pixels: `px 16.0` => `16px`.
+public def px :: fun float -> length = fun n {
+	length.len n "px"
+}
+
+# Root-em (relative to the root font size): `rem 1.5` => `1.5rem`.
+public def rem :: fun float -> length = fun n {
+	length.len n "rem"
+}
+
+# Em (relative to the element's font size): `em 1.25` => `1.25em`.
+public def em :: fun float -> length = fun n {
+	length.len n "em"
+}
+
+# Percent: `pct 50.0` => `50%`.
+public def pct :: fun float -> length = fun n {
+	length.len n "%"
+}
+
+# Viewport height units: `vh 100.0` => `100vh`.
+public def vh :: fun float -> length = fun n {
+	length.len n "vh"
+}
+
+# Viewport width units: `vw 50.0` => `50vw`.
+public def vw :: fun float -> length = fun n {
+	length.len n "vw"
+}
+
+# --- declarations: color-valued properties ----------------------------------
+
+public def color :: fun paint -> decl = fun c {
+	decl.decl "color" (color-to-string c)
+}
+
+public def background :: fun paint -> decl = fun c {
+	decl.decl "background" (color-to-string c)
+}
+
+public def border-color :: fun paint -> decl = fun c {
+	decl.decl "border-color" (color-to-string c)
+}
+
+# --- declarations: length-valued properties ---------------------------------
+
+public def padding :: fun length -> decl = fun l {
+	decl.decl "padding" (length-to-string l)
+}
+
+public def margin :: fun length -> decl = fun l {
+	decl.decl "margin" (length-to-string l)
+}
+
+public def width :: fun length -> decl = fun l {
+	decl.decl "width" (length-to-string l)
+}
+
+public def height :: fun length -> decl = fun l {
+	decl.decl "height" (length-to-string l)
+}
+
+public def min-width :: fun length -> decl = fun l {
+	decl.decl "min-width" (length-to-string l)
+}
+
+public def max-width :: fun length -> decl = fun l {
+	decl.decl "max-width" (length-to-string l)
+}
+
+public def gap :: fun length -> decl = fun l {
+	decl.decl "gap" (length-to-string l)
+}
+
+public def font-size :: fun length -> decl = fun l {
+	decl.decl "font-size" (length-to-string l)
+}
+
+public def border-radius :: fun length -> decl = fun l {
+	decl.decl "border-radius" (length-to-string l)
+}
+
+public def top :: fun length -> decl = fun l {
+	decl.decl "top" (length-to-string l)
+}
+
+public def right :: fun length -> decl = fun l {
+	decl.decl "right" (length-to-string l)
+}
+
+public def bottom :: fun length -> decl = fun l {
+	decl.decl "bottom" (length-to-string l)
+}
+
+public def left :: fun length -> decl = fun l {
+	decl.decl "left" (length-to-string l)
+}
+
+# --- declarations: number-valued properties ---------------------------------
+
+# Opacity (0.0-1.0): `opacity 0.5` => `opacity: 0.5`.
+public def opacity :: fun float -> decl = fun n {
+	decl.decl "opacity" (fmt-num n)
+}
+
+# Stacking order: `z-index 10` => `z-index: 10`.
+public def z-index :: fun int -> decl = fun n {
+	decl.decl "z-index" (to-string n)
+}
+
+# Line height as a unitless multiple: `line-height 1.5` => `line-height: 1.5`.
+public def line-height :: fun float -> decl = fun n {
+	decl.decl "line-height" (fmt-num n)
+}
+
+# --- declarations: keyword-valued properties --------------------------------
+#
+# Phase 1 takes keyword values as plain strings (`display "flex"`); the property
+# name is still checked, so it's a step up from a fully hand-rolled style string. A
+# typed keyword layer can come later.
+
+public def display :: fun string -> decl = fun v {
+	decl.decl "display" v
+}
+
+public def position :: fun string -> decl = fun v {
+	decl.decl "position" v
+}
+
+public def text-align :: fun string -> decl = fun v {
+	decl.decl "text-align" v
+}
+
+public def flex-direction :: fun string -> decl = fun v {
+	decl.decl "flex-direction" v
+}
+
+public def justify-content :: fun string -> decl = fun v {
+	decl.decl "justify-content" v
+}
+
+public def align-items :: fun string -> decl = fun v {
+	decl.decl "align-items" v
+}
+
+public def font-weight :: fun string -> decl = fun v {
+	decl.decl "font-weight" v
+}
+
+public def font-family :: fun string -> decl = fun v {
+	decl.decl "font-family" v
+}
+
+public def text-decoration :: fun string -> decl = fun v {
+	decl.decl "text-decoration" v
+}
+
+public def cursor :: fun string -> decl = fun v {
+	decl.decl "cursor" v
+}
+
+public def overflow :: fun string -> decl = fun v {
+	decl.decl "overflow" v
+}
+
+# A raw property/value pair -- the escape hatch for any property without its own
+# builder: `css.property "grid-template-columns" "1fr 1fr"`. Still us producing the
+# bytes (one declaration), not the untrusted-CSS seam (`css.raw`, deferred).
+public def property :: fun string string -> decl = fun k v {
+	decl.decl k v
+}
+
+# --- serialization ----------------------------------------------------------
+
+# Serialize a declaration list to an inline `style` string:
+# `inline [color (hex "#e11"), padding (rem 1.0)]` => `"color: #e11; padding: 1rem"`.
+# This is what `std.view`'s `style-of` wraps into a `style` attribute; you can also
+# call it directly inside `view.bind "style" (fun { ... })` for a reactive style.
+public def inline :: fun (list decl) -> string = fun decls {
+	string.join (list.map decls fun d { decl-to-string d }) "; "
+}
+
+# --- internal value rendering -----------------------------------------------
+
+# Render a number, dropping a trailing `.0` so whole values stay clean (`16`, `1.5`).
+def fmt-num :: fun float -> string = fun n {
+	let i = math.to-int n
+	if math.to-float i == n {
+		to-string i
+	} else {
+		to-string n
+	}
+}
+
+def length-to-string :: fun length -> string = fun l {
+	when l is length.len v unit {
+		"$(fmt-num v)$(unit)"
+	}
+}
+
+def color-to-string :: fun paint -> string = fun c {
+	when c is paint.rgb r g b {
+		"rgb($(to-string r), $(to-string g), $(to-string b))"
+	} is paint.rgba r g b a {
+		"rgba($(to-string r), $(to-string g), $(to-string b), $(fmt-num a))"
+	} is paint.hex s {
+		if string.starts-with s "#" {
+			s
+		} else {
+			"#$(s)"
+		}
+	} is paint.named s {
+		s
+	}
+}
+
+def decl-to-string :: fun decl -> string = fun d {
+	when d is decl.decl k v {
+		"$(k): $(v)"
+	}
+}
