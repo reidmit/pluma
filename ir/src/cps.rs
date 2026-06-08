@@ -15,11 +15,12 @@
 // into the wasm module) advances it by *calling* it, no stack snapshot — exactly
 // the shape WASM wants (state = a GC struct).
 //
-// **Rollout is per-function and additive.** The original async function `f` is
-// left in place (it still drives `MakeAsyncClosure`/`do_call`, so its callers are
-// unchanged); we only generate a sibling poll fn and set `f.poll_fn = Some(it)`.
-// The driver dispatches on that. Functions this pass doesn't support stay
-// `poll_fn: None` and run the existing Await-style driver — both coexist.
+// **This pass is additive.** It doesn't touch `f`'s body — it only mints a
+// sibling poll fn and sets `f.poll_fn = Some(it)`. Its caller (`wasm::async_lower`)
+// then replaces `f`'s awaiting body with a `$task` constructor over that poll fn,
+// so `f`'s callers (which just build/await a task) are unchanged. Every awaiting
+// function is eligible — the flattener handles every control-flow shape lowering
+// produces (see `eligible`) — so there is no un-transformed-async fallback.
 //
 // **The transform is a flat dispatch loop over basic blocks** — the structured
 // encoding of a CFG, and exactly the shape WASM wants (`Loop`+`Match` →

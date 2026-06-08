@@ -97,18 +97,21 @@ pub struct Function {
 	/// Free variables captured from the enclosing scope, in order. Produced by
 	/// closure conversion; each backend realizes the environment its own way.
 	pub captures: Vec<VarId>,
-	/// True if the function awaits (its body contains `Await`). Drives
-	/// `MakeAsyncClosure` emission and is the input the CPS state-machine pass
-	/// keys on.
+	/// True if the function awaits — set by `lower_try` when a task `try` appears
+	/// in the body (the same place the `Await` node is emitted). This is the
+	/// *single* source of truth for async-ness: `ir::cps` keys on it, and the WASM
+	/// async-lowering pass (`wasm::async_lower`) consumes it and resets it to
+	/// `false`. No pass after async-lowering branches on async-ness — an awaiting
+	/// function is rewritten into an ordinary `$task`-returning function.
 	pub is_async: bool,
-	/// The CPS state-machine rollout marker (`ir::cps`). `None` in freshly-lowered
-	/// IR. `wasm::emit`'s async-lowering pass (`ir::cps::cps_transform`, driven by
-	/// `wasm/src/async_lower.rs`) rewrites every awaiting function to poll style and
-	/// sets this to `Some(poll_fn)`: the function stays in place (still drives
-	/// `MakeAsyncClosure`/`do_call`, so callers are unchanged), but the driver
-	/// advances it by calling `poll_fn` — `poll(state, resume) -> __poll`. The
-	/// referenced `poll_fn` is an ordinary (`poll_fn: None`) 2-arg function. Set by
-	/// the CPS pass; `None` until it runs.
+	/// Transient marker linking an awaiting function to the poll fn that replaces
+	/// it. `None` in freshly-lowered IR *and* in emitted IR — it is only `Some`
+	/// between the two halves of `wasm::async_lower`. `ir::cps::cps_transform` mints
+	/// a sibling poll fn `poll(state, resume) -> __poll` (itself an ordinary
+	/// `poll_fn: None` 2-arg function) and sets this to `Some(pf)`; the same pass
+	/// then replaces this function's awaiting body with a cold `$task` constructor
+	/// over `pf` and resets `poll_fn` to `None`. The hand-written driver
+	/// (`wasm/src/helpers/task.rs`) advances the `$task` by calling `pf`.
 	pub poll_fn: Option<FuncId>,
 	pub body: Block,
 	/// Representation of every `VarId` defined in this function, indexed by
@@ -253,9 +256,13 @@ pub enum Pattern {
 	Bind(VarId),
 	/// Matches a constant by value.
 	Literal(Const),
-	/// Matches an enum variant by name; each payload field is a sub-pattern.
+	/// Matches an enum variant. The tag is resolved at lowering time from the
+	/// subject's (known) enum type, so the emitter does a direct discriminant
+	/// compare — no name lookup, no cross-enum ambiguity. `variant` is retained
+	/// for diagnostics/Debug only. Each payload field is a sub-pattern.
 	Variant {
 		variant: String,
+		tag: u32,
 		fields: Vec<Pattern>,
 	},
 	/// Matches a tuple of the given arity; elements are sub-patterns.

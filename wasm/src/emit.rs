@@ -359,7 +359,7 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::LocalSet(dst));
 			}
 			Literal(c) => self.test_literal(c, subj, fail_level),
-			Variant { variant, fields } => self.test_variant(variant, fields, subj, fail_level),
+			Variant { tag, fields, .. } => self.test_variant(*tag, fields, subj, fail_level),
 			Tuple(elems) => {
 				// A tuple's arity is fixed by its type — no tag/length check.
 				for (i, sub) in elems.iter().enumerate() {
@@ -662,11 +662,7 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
-	fn test_variant(&mut self, name: &str, fields: &[ir::Pattern], subj: u32, fail_level: u32) {
-		let Some(tag) = self.variant_tag(name) else {
-			self.diags.push(format!("cannot resolve variant `{name}`"));
-			return;
-		};
+	fn test_variant(&mut self, tag: u32, fields: &[ir::Pattern], subj: u32, fail_level: u32) {
 		// Tag check.
 		self.ins(Instruction::LocalGet(subj));
 		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
@@ -683,23 +679,6 @@ impl<'a> FnEmitter<'a> {
 		for (i, field) in fields.iter().enumerate() {
 			self.bind_at(field, subj, types::T_VARIANT, 3, i, fail_level);
 		}
-	}
-
-	/// Resolve a variant name to its within-enum tag. Sound when the name is
-	/// unique across enums, or all its occurrences share a tag (the within-match
-	/// enum is fixed by the type system, so a same-tag collision is harmless).
-	fn variant_tag(&self, name: &str) -> Option<u32> {
-		let mut found: Option<u32> = None;
-		for variants in self.enums.values() {
-			if let Some(i) = variants.iter().position(|(n, _)| n == name) {
-				match found {
-					None => found = Some(i as u32),
-					Some(t) if t == i as u32 => {}
-					Some(_) => return None, // ambiguous: differing tags
-				}
-			}
-		}
-		found
 	}
 
 	fn rvalue(&mut self, rv: &Rvalue) {

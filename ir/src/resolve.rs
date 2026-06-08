@@ -16,10 +16,10 @@
 // **Behavior-neutral.** A top-level function captures nothing, so the global
 // holds a zero-capture closure of `fid`; `from_ir`'s `Callee::Function` arm emits
 // a zero-capture `MakeClosure(fid)` + `Call`, identical to loading that global
-// and calling it. The one exception is **async** callees: an awaiting function
-// lowers to a cold `Value::AsyncFn` (the global's `MakeClosure` becomes
-// `MakeAsyncClosure`), but the `Callee::Function` emit path always builds a plain
-// closure — so async targets are deliberately left indirect.
+// and calling it. Async needs no special case here: this pass runs after
+// `wasm::async_lower`, which has already rewritten every awaiting function into an
+// ordinary `$task`-returning function (no `is_async`, no `Await`) — so there is
+// nothing async left to resolve differently.
 //
 // Only `CallClosure` is resolved, not `TailCall`: the IR has no direct-tail-call
 // form, and tail-called functions are simply left ineligible for monomorphization
@@ -47,9 +47,9 @@ pub fn resolve_direct_calls(program: &mut IrProgram) {
 
 /// Map each global index to the function it directly holds, when its initializer
 /// is a thunk whose body is exactly `Let(v, MakeClosure(fid, [])); Return(v)` —
-/// a capture-free closure returned directly — and `fid` is not async. Public so
-/// `mono` identifies monomorphization candidates by the same rule resolution uses
-/// (a function is a candidate iff its calls were resolvable to it).
+/// a capture-free closure returned directly. Public so `mono` identifies
+/// monomorphization candidates by the same rule resolution uses (a function is a
+/// candidate iff its calls were resolvable to it).
 pub fn direct_call_targets(program: &IrProgram) -> HashMap<u32, FuncId> {
 	let mut map = HashMap::new();
 	for (gid, init) in program.globals.iter().enumerate() {
@@ -60,13 +60,7 @@ pub fn direct_call_targets(program: &IrProgram) -> HashMap<u32, FuncId> {
 			continue;
 		};
 		if let Some(fid) = closure_returned_by(thunk) {
-			let is_async = program
-				.functions
-				.get(fid.0 as usize)
-				.is_some_and(|f| f.is_async);
-			if !is_async {
-				map.insert(gid as u32, fid);
-			}
+			map.insert(gid as u32, fid);
 		}
 	}
 	map
@@ -617,12 +611,13 @@ mod tests {
 		)));
 	}
 
-	// An async target is left indirect (its global holds a cold AsyncFn, which the
-	// direct-call emit path doesn't reproduce).
+	// A former-async target resolves like any other. By the time this pass runs,
+	// `wasm::async_lower` has rewritten awaiting functions into ordinary
+	// `$task`-returning functions (`is_async` cleared), so there is nothing to
+	// treat specially — the call becomes a direct `Call`.
 	#[test]
-	fn leaves_async_target_indirect() {
-		let mut callee = boxed_fn("awaits", vec![VarId(0)], vec![]);
-		callee.is_async = true;
+	fn resolves_former_async_target() {
+		let callee = boxed_fn("awaited", vec![VarId(0)], vec![]);
 		let thunk = thunk_for(0);
 		let caller = boxed_fn(
 			"caller",
@@ -639,10 +634,11 @@ mod tests {
 		resolve_direct_calls(&mut program);
 		let body = &program.functions[2].body.0;
 		assert!(
-			body
-				.iter()
-				.any(|s| matches!(&s.kind, StmtKind::Let(_, Rvalue::CallClosure(..)))),
-			"async target must stay an indirect CallClosure"
+			body.iter().any(|s| matches!(
+				&s.kind,
+				StmtKind::Let(_, Rvalue::Call(Callee::Function(FuncId(0)), _))
+			)),
+			"former-async target must resolve to a direct Call"
 		);
 	}
 

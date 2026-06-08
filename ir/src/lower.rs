@@ -678,6 +678,7 @@ impl<'a> Lowerer<'a> {
 					MatchArm {
 						pattern: Pattern::Variant {
 							variant: "ok".to_string(),
+							tag: self.pattern_variant_tag("__prelude__.result", "ok")?,
 							fields: vec![argpat],
 						},
 						body: ok_block,
@@ -685,6 +686,7 @@ impl<'a> Lowerer<'a> {
 					MatchArm {
 						pattern: Pattern::Variant {
 							variant: "err".to_string(),
+							tag: self.pattern_variant_tag("__prelude__.result", "err")?,
 							fields: vec![Pattern::Wildcard],
 						},
 						body: err_block,
@@ -1420,6 +1422,66 @@ impl<'a> Lowerer<'a> {
 			.map(|i| i as u32)
 	}
 
+	/// Resolve a pattern variant's discriminant tag within its (known) enum,
+	/// erroring if the enum or variant is unknown. Used at pattern lowering so
+	/// the IR carries the tag and the emitter never re-derives it by name.
+	fn pattern_variant_tag(&self, enum_name: &str, variant: &str) -> Result<u32, String> {
+		self
+			.variant_tag(enum_name, variant)
+			.ok_or_else(|| format!("unknown variant `{variant}` of `{enum_name}`"))
+	}
+
+	/// The qualified enum a constructor pattern belongs to. The top-level subject
+	/// carries a concrete enum type, but nested sub-patterns are lowered with
+	/// `Type::Unknown` (the analyzer threads their types but lowering doesn't), so
+	/// fall back to the source qualification on the head — `module.enum.variant`,
+	/// `enum.variant`, or a bare prelude variant — mirroring `lower_namespace`.
+	fn resolve_variant_enum(
+		&self,
+		head: &compiler::ast::ConstructorHead,
+		subject_ty: &Type,
+	) -> Result<String, String> {
+		if let Type::Enum(qualified, _) = subject_ty {
+			return Ok(qualified.clone());
+		}
+		let variant = &head.variant.name;
+		// `module.enum.variant`: qualify the enum through the import.
+		if let (Some(module), Some(enum_name)) = (&head.module, &head.enum_name) {
+			let qualified_module = self
+				.imports
+				.get(&module.name)
+				.ok_or_else(|| format!("`{}` is not an imported module", module.name))?;
+			return Ok(format!("{qualified_module}.{}", enum_name.name));
+		}
+		// `enum.variant`: a local-module enum, a prelude enum, or the eponymous
+		// enum of an imported module — same precedence as `lower_namespace`.
+		if let Some(enum_name) = &head.enum_name {
+			let mut candidates = vec![
+				format!("{}.{}", self.current_module, enum_name.name),
+				format!("__prelude__.{}", enum_name.name),
+			];
+			if let Some(qualified_module) = self.imports.get(&enum_name.name) {
+				let eponym = qualified_module
+					.rsplit('.')
+					.next()
+					.unwrap_or(qualified_module);
+				candidates.push(format!("{qualified_module}.{eponym}"));
+			}
+			return candidates
+				.into_iter()
+				.find(|q| self.variant_tag(q, variant).is_some())
+				.ok_or_else(|| format!("variant `{variant}` of `{}` not found", enum_name.name));
+		}
+		// Bare head: a prelude variant (`some`/`none`/`ok`/`err`/...).
+		self
+			.enums
+			.keys()
+			.filter(|k| k.starts_with("__prelude__."))
+			.find(|k| self.variant_tag(k, variant).is_some())
+			.cloned()
+			.ok_or_else(|| format!("bare variant `{variant}` is not a prelude variant"))
+	}
+
 	fn lower_call(&mut self, call: &compiler::ast::CallNode, range: Range) -> Result<Atom, String> {
 		if let Some(result) = self.try_lower_wire_call(call, range) {
 			return result;
@@ -1980,8 +2042,10 @@ impl<'a> Lowerer<'a> {
 						.get(qualified)
 						.map_or(false, |vs| vs.iter().any(|(n, a)| n == &id.name && *a == 0));
 					if is_variant {
+						let tag = self.pattern_variant_tag(qualified, &id.name)?;
 						return Ok(Pattern::Variant {
 							variant: id.name.clone(),
+							tag,
 							fields: Vec::new(),
 						});
 					}
@@ -1995,12 +2059,18 @@ impl<'a> Lowerer<'a> {
 			}
 			PatternKind::Literal(lit) => Ok(Pattern::Literal(literal_to_const(&lit.kind)?)),
 			PatternKind::Constructor(head, subs) => {
-				// The subject's enum type already disambiguates the tag, so the IR
-				// needs only the variant name — the enum/module qualifier is
-				// resolved away by analysis.
+				// Resolve the variant's enum (and thus its discriminant tag) here,
+				// where the type is known, and carry the tag in the IR. The emitter
+				// then compares tags directly — it never re-derives a tag from the
+				// bare name, which would be ambiguous when two enums share a variant
+				// name (e.g. `pending` in both `run-status` and the synthetic
+				// `__poll`).
+				let qualified = self.resolve_variant_enum(head, subject_ty)?;
+				let tag = self.pattern_variant_tag(&qualified, &head.variant.name)?;
 				let fields = self.lower_sub_patterns(subs)?;
 				Ok(Pattern::Variant {
 					variant: head.variant.name.clone(),
+					tag,
 					fields,
 				})
 			}
@@ -2090,9 +2160,8 @@ impl<'a> Lowerer<'a> {
 	/// Lower a closure body into its own `Function` and return a `MakeClosure`
 	/// atom for it. Shared by `fun` literals, `defer` thunks, and `scope` body
 	/// closures. A task `try` anywhere in the body marks the new function
-	/// `is_async` (via `lower_try`), which drives `MakeAsyncClosure` in the
-	/// emitter — mirroring `emit.rs`'s `body_is_async` decision, but observed
-	/// during lowering rather than pre-scanned.
+	/// `is_async` (via `lower_try`); the async-lowering pass later turns such a
+	/// function into a poll-driven `$task` (see `Function::is_async`).
 	fn lower_closure(
 		&mut self,
 		fn_name: String,
@@ -2146,10 +2215,10 @@ impl<'a> Lowerer<'a> {
 
 	/// A task-carrier `try Pattern = value` and its continuation (`rest`). Lowers
 	/// to: evaluate the awaited task, `Await` it (suspend), bind the pattern, then
-	/// lower the continuation inline — the CPS state machine, mirroring
-	/// `emit.rs`'s `Try` arm. Sets the enclosing function `is_async` (its frame
-	/// awaits), which drives `MakeAsyncClosure`. `option`/`result` `try`s are
-	/// rewritten to `<carrier>.then` calls by the analyzer and never reach here.
+	/// lower the continuation inline. Sets the enclosing function `is_async` — the
+	/// single async marker; `ir::cps` turns the `Await`-bearing body into a poll fn.
+	/// `option`/`result` `try`s are rewritten to `<carrier>.then` calls by the
+	/// analyzer and never reach here.
 	fn lower_try(&mut self, node: &TryNode, range: Range) -> Result<Atom, String> {
 		if !node.task_carrier {
 			return Err("non-task `try` was not rewritten by the analyzer".to_string());
@@ -2583,10 +2652,31 @@ impl<'a> Lowerer<'a> {
 	// ---- entry / poison / function table -------------------------------
 
 	fn build_entry(&mut self, test_suites: &[(String, GlobalId)]) -> Result<FuncId, String> {
-		// `pluma test`: ignore `main` and synthesize a runner over the suites.
-		if let Some(color) = self.test_color {
-			return self.build_test_entry(test_suites, color);
-		}
+		// The entry drives one root to completion, then returns its result. The
+		// only choice is *what* root: a `pluma test` runner over the discovered
+		// suites, or the module's `main`. Everything downstream — the scheduler
+		// wrapper, sync/async tolerance — is shared, so this is the single place
+		// the two programs diverge.
+		let mut body: Vec<Stmt> = Vec::new();
+		let mut next: u32 = 0;
+		let result = match self.test_color {
+			Some(color) => self.emit_test_runner(&mut body, &mut next, test_suites, color)?,
+			None => self.emit_main_call(&mut body, &mut next, test_suites)?,
+		};
+		body.push(Stmt::synthetic(StmtKind::Return(result)));
+		Ok(self.wrap_entry(body))
+	}
+
+	/// The `pluma run` root: load `main` and invoke it with unit. On a client emit
+	/// with `remote def`s, install the web transport first (the build's one bit of
+	/// injected setup, so app code configures nothing). A suite-bearing module with
+	/// no `main` (a `*.test.pa` reached outside test mode) drives nothing.
+	fn emit_main_call(
+		&mut self,
+		body: &mut Vec<Stmt>,
+		next: &mut u32,
+		test_suites: &[(String, GlobalId)],
+	) -> Result<Atom, String> {
 		let main_module = match &self.entry_override {
 			Some(m) => m.clone(),
 			None => self
@@ -2598,59 +2688,77 @@ impl<'a> Lowerer<'a> {
 		};
 		let main = match self.globals.lookup(&main_module, "main") {
 			Some(g) => g,
-			// No `main`, but `pluma test` programs are entered via a no-op (push
-			// `nothing` and return); the runner then invokes each test directly.
-			None if !test_suites.is_empty() => {
-				let func = Function {
-					name: "__entry__".to_string(),
-					module: String::new(),
-					params: Vec::new(),
-					captures: Vec::new(),
-					is_async: false,
-					poll_fn: None,
-					body: Block(vec![Stmt::synthetic(StmtKind::Return(Atom::Const(
-						Const::Unit,
-					)))]),
-					var_reprs: Vec::new(),
-					param_reprs: Vec::new(),
-					ret_repr: Repr::Boxed,
-				};
-				return Ok(self.add_function(func));
-			}
+			None if !test_suites.is_empty() => return Ok(Atom::Const(Const::Unit)),
 			None => return Err(format!("module `{}` has no `main` def", main_module)),
 		};
-		// On a client emit with `remote def`s, install the web transport as the
-		// ambient sender before `main` runs (the build's one bit of injected setup,
-		// so app code configures nothing). `install` just mutates `std.rpc`'s
-		// module ref; we run it for effect, then proceed to `main`.
-		let mut body: Vec<Stmt> = Vec::new();
-		let mut next: u32 = 0;
 		if self.is_client_emit() && !self.compiler.rpc_endpoints.is_empty() {
 			if let Some(install) = self.globals.lookup("std.rpc.web", "install") {
-				let g = VarId(next);
-				next += 1;
-				body.push(Stmt::synthetic(StmtKind::Let(
-					g,
-					Rvalue::GlobalRef(install),
-				)));
+				let g = fresh_let(body, next, Rvalue::GlobalRef(install));
 				body.push(Stmt::synthetic(StmtKind::Discard(Rvalue::CallClosure(
 					Atom::Var(g),
 					vec![Atom::Const(Const::Unit)],
 				))));
 			}
 		}
-		// Load `main`, call it with the unit arg, return the result.
-		let mainref = VarId(next);
-		let result = VarId(next + 1);
-		body.push(Stmt::synthetic(StmtKind::Let(
-			mainref,
-			Rvalue::GlobalRef(main),
-		)));
-		body.push(Stmt::synthetic(StmtKind::Let(
-			result,
+		let mainref = fresh_let(body, next, Rvalue::GlobalRef(main));
+		let result = fresh_let(
+			body,
+			next,
 			Rvalue::CallClosure(Atom::Var(mainref), vec![Atom::Const(Const::Unit)]),
-		)));
-		body.push(Stmt::synthetic(StmtKind::Return(Atom::Var(result))));
+		);
+		Ok(Atom::Var(result))
+	}
+
+	/// The `pluma test` root: build a `list {name, tests}` from the discovered
+	/// suites and call `std.test.run-all color suites`. The suites are referenced
+	/// by `GlobalId`, so their privacy (a `*.test.pa`'s `tests` is private) doesn't
+	/// matter — no source-level import is involved.
+	fn emit_test_runner(
+		&mut self,
+		body: &mut Vec<Stmt>,
+		next: &mut u32,
+		test_suites: &[(String, GlobalId)],
+		color: bool,
+	) -> Result<Atom, String> {
+		let run_all = self
+			.globals
+			.lookup("std.test", "run-all")
+			.ok_or("`std.test.run-all` was not compiled — does a `*.test.pa` file `use std.test`?")?;
+
+		// One `{name, tests}` record per suite. Field order is name-sorted to
+		// match the record-shape layout the backends expect from `MakeRecord`.
+		let mut items: Vec<ListItem> = Vec::new();
+		for (module, gid) in test_suites {
+			let display = module.strip_suffix(".test").unwrap_or(module).to_string();
+			let tests = fresh_let(body, next, Rvalue::GlobalRef(*gid));
+			let rec = fresh_let(
+				body,
+				next,
+				Rvalue::MakeRecord(vec![
+					("name".to_string(), Atom::Const(Const::Str(display))),
+					("tests".to_string(), Atom::Var(tests)),
+				]),
+			);
+			items.push(ListItem::Elem(Atom::Var(rec)));
+		}
+
+		let list = fresh_let(body, next, Rvalue::MakeList(items));
+		let runner = fresh_let(body, next, Rvalue::GlobalRef(run_all));
+		let result = fresh_let(
+			body,
+			next,
+			Rvalue::CallClosure(
+				Atom::Var(runner),
+				vec![Atom::Const(Const::Bool(color)), Atom::Var(list)],
+			),
+		);
+		Ok(Atom::Var(result))
+	}
+
+	/// Wrap a synthesized entry body in the `__entry__` function. Zero params, no
+	/// captures, not async (the scheduler wrapper tolerates a task or plain value
+	/// the body returns) — the single shape every entry takes.
+	fn wrap_entry(&mut self, body: Vec<Stmt>) -> FuncId {
 		let func = Function {
 			name: "__entry__".to_string(),
 			module: String::new(),
@@ -2663,72 +2771,7 @@ impl<'a> Lowerer<'a> {
 			param_reprs: Vec::new(),
 			ret_repr: Repr::Boxed,
 		};
-		Ok(self.add_function(func))
-	}
-
-	/// Synthesize the `pluma test` entry: build a `list {name, tests}` from the
-	/// discovered suites and tail it into `std.test.run-all color suites`. The
-	/// suites are referenced by `GlobalId`, so their privacy (a `*.test.pa`'s
-	/// `tests` is private) doesn't matter — no source-level import is involved.
-	fn build_test_entry(
-		&mut self,
-		test_suites: &[(String, GlobalId)],
-		color: bool,
-	) -> Result<FuncId, String> {
-		let run_all = self
-			.globals
-			.lookup("std.test", "run-all")
-			.ok_or("`std.test.run-all` was not compiled — does a `*.test.pa` file `use std.test`?")?;
-
-		let mut stmts: Vec<Stmt> = Vec::new();
-		let mut next: u32 = 0;
-		let mut fresh = |stmts: &mut Vec<Stmt>, rv: Rvalue| -> VarId {
-			let v = VarId(next);
-			next += 1;
-			stmts.push(Stmt::synthetic(StmtKind::Let(v, rv)));
-			v
-		};
-
-		// One `{name, tests}` record per suite. Field order is name-sorted to
-		// match the record-shape layout the backends expect from `MakeRecord`.
-		let mut items: Vec<ListItem> = Vec::new();
-		for (module, gid) in test_suites {
-			let display = module.strip_suffix(".test").unwrap_or(module).to_string();
-			let tests = fresh(&mut stmts, Rvalue::GlobalRef(*gid));
-			let rec = fresh(
-				&mut stmts,
-				Rvalue::MakeRecord(vec![
-					("name".to_string(), Atom::Const(Const::Str(display))),
-					("tests".to_string(), Atom::Var(tests)),
-				]),
-			);
-			items.push(ListItem::Elem(Atom::Var(rec)));
-		}
-
-		let list = fresh(&mut stmts, Rvalue::MakeList(items));
-		let runner = fresh(&mut stmts, Rvalue::GlobalRef(run_all));
-		let result = fresh(
-			&mut stmts,
-			Rvalue::CallClosure(
-				Atom::Var(runner),
-				vec![Atom::Const(Const::Bool(color)), Atom::Var(list)],
-			),
-		);
-		stmts.push(Stmt::synthetic(StmtKind::Return(Atom::Var(result))));
-
-		let func = Function {
-			name: "__test_entry__".to_string(),
-			module: String::new(),
-			params: Vec::new(),
-			captures: Vec::new(),
-			is_async: false,
-			poll_fn: None,
-			body: Block(stmts),
-			var_reprs: Vec::new(),
-			param_reprs: Vec::new(),
-			ret_repr: Repr::Boxed,
-		};
-		Ok(self.add_function(func))
+		self.add_function(func)
 	}
 
 	/// Point a global at the shared poison thunk — used for any def whose body
@@ -2784,6 +2827,16 @@ fn finish_scope(scope: FnScope) -> Function {
 		param_reprs: scope.param_reprs,
 		ret_repr: scope.ret_repr,
 	}
+}
+
+/// Append a synthetic `let v = rv` to a flat statement list and return the fresh
+/// `VarId`, bumping the caller's counter. Used by the entry synthesizers, which
+/// build a straight-line body outside the normal scope machinery.
+fn fresh_let(body: &mut Vec<Stmt>, next: &mut u32, rv: Rvalue) -> VarId {
+	let v = VarId(*next);
+	*next += 1;
+	body.push(Stmt::synthetic(StmtKind::Let(v, rv)));
+	v
 }
 
 /// Build the module's local-namespace -> qualified-module map: explicit `use`
