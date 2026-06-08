@@ -175,4 +175,136 @@ fn build_fullstack(entry_path: String, out_base: Option<String>, server_url: Str
 		 `python3 -m http.server --directory {0}` and open the printed URL",
 		dir.display()
 	);
+
+	// Build-time CSS extraction (notes/CSS.md "CSR + build extraction"): lift the
+	// SSR stylesheet into a cacheable `app.css` linked from the static client shell.
+	extract_css_to_bundle(&dir, &server_path);
+}
+
+// The port the example server binds (`http.serve "127.0.0.1:8080"`), matching
+// `dev.rs`'s `FULLSTACK_SERVER_PORT`. The build can't know a custom port, so this is
+// a best-effort convention; a mismatch just skips extraction.
+const SSR_PROBE_PORT: u16 = 8080;
+
+/// Best-effort: run the freshly-built server, `GET /`, and lift the inline `<style>`
+/// the server-side render emits (via `css.style-tag`) into a cacheable `app.css`
+/// linked from the client `index.html`. The SSR document still inlines its CSS at
+/// runtime; `app.css` is for the *static* CSR path — `index.html` served without the
+/// SSR server in front of it. Never fails the build: any hiccup (server doesn't SSR
+/// `/`, port busy, sandbox blocks the socket) silently skips, leaving the inline-only
+/// behaviour unchanged.
+fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) {
+	let Ok(exe) = std::env::current_exe() else {
+		return;
+	};
+	// Run the server as a child (`pluma run server.wasm`), silenced.
+	let Ok(mut child) = std::process::Command::new(&exe)
+		.arg("run")
+		.arg(server_wasm)
+		.stdout(std::process::Stdio::null())
+		.stderr(std::process::Stdio::null())
+		.spawn()
+	else {
+		return;
+	};
+	let doc = fetch_ssr_document(&mut child);
+	let _ = child.kill();
+	let _ = child.wait();
+
+	let css = doc
+		.as_deref()
+		.and_then(extract_style_block)
+		.unwrap_or_default();
+	if css.trim().is_empty() {
+		// No SSR stylesheet (the app uses no extracted rules, or the server doesn't
+		// SSR `/`) — leave the bundle as-is.
+		return;
+	}
+	let css_path = dir.join("app.css");
+	if std::fs::write(&css_path, css.as_bytes()).is_err() {
+		return;
+	}
+	link_stylesheet_in_index(dir);
+	println!(
+		"  + {0}/app.css ({1} bytes, extracted from SSR) — linked in {0}/index.html",
+		dir.display(),
+		css.len()
+	);
+}
+
+/// Connect to the running server on the probe port and `GET /`, returning the HTML
+/// body of a 200 response. Retries briefly while the child boots; `None` if it never
+/// answers a 200 (e.g. a bare RPC server 404s `/`) or the child exits first (a port
+/// clash — fail fast rather than burn the whole retry budget).
+fn fetch_ssr_document(child: &mut std::process::Child) -> Option<String> {
+	use std::io::{Read, Write};
+	use std::net::TcpStream;
+
+	for _ in 0..30 {
+		std::thread::sleep(std::time::Duration::from_millis(100));
+		// If the server already exited (couldn't bind the port), there's nothing to hit.
+		if matches!(child.try_wait(), Ok(Some(_))) {
+			return None;
+		}
+		let Ok(mut up) = TcpStream::connect(("127.0.0.1", SSR_PROBE_PORT)) else {
+			continue;
+		};
+		let req =
+			format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{SSR_PROBE_PORT}\r\nConnection: close\r\n\r\n");
+		if up.write_all(req.as_bytes()).is_err() {
+			continue;
+		}
+		let _ = up.flush();
+		let mut raw = Vec::new();
+		if up.read_to_end(&mut raw).is_err() {
+			continue;
+		}
+		let text = String::from_utf8_lossy(&raw);
+		let status_ok = text
+			.lines()
+			.next()
+			.map(|l| l.contains(" 200 "))
+			.unwrap_or(false);
+		if !status_ok {
+			return None;
+		}
+		return text
+			.split_once("\r\n\r\n")
+			.map(|(_, body)| body.to_string());
+	}
+	None
+}
+
+/// Lift the concatenated contents of every `<style>…</style>` block out of an HTML
+/// document. We emit one (from `css.style-tag`), but join any others defensively.
+fn extract_style_block(html: &str) -> Option<String> {
+	let mut out = String::new();
+	let mut rest = html;
+	while let Some(open) = rest.find("<style>") {
+		let after = &rest[open + "<style>".len()..];
+		let Some(close) = after.find("</style>") else {
+			break;
+		};
+		out.push_str(&after[..close]);
+		rest = &after[close + "</style>".len()..];
+	}
+	if out.is_empty() { None } else { Some(out) }
+}
+
+/// Add `<link rel="stylesheet" href="app.css">` to the client `index.html` `<head>`
+/// (idempotent). Best-effort — a missing/unreadable file just leaves it unlinked.
+fn link_stylesheet_in_index(dir: &std::path::Path) {
+	let index = dir.join("index.html");
+	let Ok(html) = std::fs::read_to_string(&index) else {
+		return;
+	};
+	if html.contains("href=\"app.css\"") {
+		return;
+	}
+	let linked = html.replacen(
+		"</head>",
+		"<link rel=\"stylesheet\" href=\"app.css\"></head>",
+		1,
+	);
+	let _ = std::fs::write(&index, linked);
 }
