@@ -74,6 +74,10 @@ def tests :: test.suite = [
 		let v = view.button [view.on-click fun { () }] [view.text "ok"]
 		assert.equals (view.to-string v) "<button>ok</button>"
 	},
+	test.case "on-mount is server-skipped (no markup, action not run)" fun {
+		let v = view.div [view.id "app", view.on-mount fun { () }] [view.text "x"]
+		assert.equals (view.to-string v) "<div id=\"app\">x</div>"
+	},
 	test.case "nested children render in document order" fun {
 		let v = view.ul [] [view.li [] [view.text "a"], view.li [] [view.text "b"]]
 		assert.equals (view.to-string v) "<ul><li>a</li><li>b</li></ul>"

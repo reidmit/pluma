@@ -181,14 +181,17 @@ public def page :: fun nothing -> view = using view {
 			] [.text label]
 		}
 
-		.div [.id "app", .styled card] [
+		# `on-mount` is client-only: after hydration, load the board the server already
+		# persisted. It rides the element's attribute list (server-skipped, runs once).
+		.div [
+			.id "app",
+			.styled card,
 			.on-mount fun {
-				# Client-only: after hydration, load the board the server already persisted.
-
 				task.spawn (task.map (api.list-todos ()) fun board {
 					signal.set todos board
 				})
 			},
+		] [
 			.h1 [] [.text "Pluma Tasks"],
 			.p [] [
 				.text-of fun {

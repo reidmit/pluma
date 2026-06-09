@@ -47,6 +47,7 @@ public enum attribute {
 	styled-when string (fun nothing -> bool)
 	prop-bind-str string (fun nothing -> string) string (fun event -> nothing)
 	prop-bind-bool string (fun nothing -> bool) string (fun event -> nothing)
+	on-mount (fun nothing -> nothing)
 }
 
 # A node in the view tree: an element, static text, a reactive text node, or
@@ -63,7 +64,6 @@ public enum view {
 	dynamic-text (fun nothing -> string)
 	dyn-node (fun nothing -> view)
 	for-node (fun nothing -> list (string, (fun nothing -> view)))
-	on-mount-node (fun nothing -> nothing)
 }
 
 # --- core builders ----------------------------------------------------------
@@ -83,21 +83,6 @@ public def text-of :: fun (fun nothing -> string) -> view = fun f {
 # A generic element -- the escape hatch for any tag without its own builder.
 public def element :: fun string (list attribute) (list view) -> view = fun tag attrs kids {
 	view.el tag attrs kids
-}
-
-# Run `action` once, on the client, when this point in the tree is mounted -- the
-# analog of SolidJS's `onMount`. It is *server-skipped*: `to-string` renders an empty
-# host and never runs the action, while `build`/`hydrate` run it (untracked, so it
-# fires exactly once). That makes it the home for client-only setup the SSR'd HTML
-# doesn't need -- most usefully an initial data fetch, which would otherwise run
-# during SSR if placed in the view body. Renders nothing visible, so drop it anywhere
-# a `view` goes; call `signal.on-cleanup` inside `action` to tear down on unmount.
-#
-#     view.on-mount (fun {
-#         task.spawn (task.map (api.list-todos ()) fun board { signal.set todos board })
-#     })
-public def on-mount :: fun (fun nothing -> nothing) -> view = fun action {
-	view.on-mount-node action
 }
 
 # --- reactive control flow --------------------------------------------------
@@ -267,6 +252,22 @@ public def on-submit :: fun (fun nothing -> nothing) -> attribute = fun handler 
 	}
 }
 
+# Run `action` once, on the client, when this element is mounted -- the analog of
+# SolidJS's `onMount`, and the lifecycle dual of the event handlers above. It is
+# *server-skipped*: `to-string` drops it (no markup, nothing run), while `build` and
+# `hydrate` run it once (untracked, so a signal it reads doesn't make it re-run). That
+# makes it the home for client-only setup the SSR'd HTML doesn't need -- most usefully
+# an initial data fetch, which would otherwise run during SSR if placed in the view
+# body. Sits in the element's attribute list alongside `id`/`styled`; call
+# `signal.on-cleanup` inside `action` to tear down when the element unmounts.
+#
+#     view.div [view.id "app", view.on-mount (fun {
+#         task.spawn (task.map (api.list-todos ()) fun board { signal.set todos board })
+#     })] [...]
+public def on-mount :: fun (fun nothing -> nothing) -> attribute = fun action {
+	attribute.on-mount action
+}
+
 # --- to-string: render a view to an HTML string (SSR / headless) -------------
 #
 # Pure: never touches the DOM. Static text and attribute values are HTML-escaped
@@ -355,6 +356,9 @@ def render-attr :: fun attribute -> string = fun a {
 		} else {
 			""
 		}
+	} is attribute.on-mount _action {
+		# Server-skipped: a client-only mount effect, no markup.
+		""
 	}
 }
 
@@ -421,6 +425,8 @@ def style-fragment :: fun attribute -> option string = fun a {
 		none
 	} is attribute.prop-bind-bool _k _r _e _w {
 		none
+	} is attribute.on-mount _action {
+		none
 	}
 }
 
@@ -475,10 +481,6 @@ public def to-string :: fun view -> string = fun v {
 			to-string (mk ())
 		}) ""
 		"<span style=\"display: contents\">$(inner)</span>"
-	} is view.on-mount-node _action {
-		# Server-skipped: emit the empty host (so the client tree lines up by index) but
-		# never run the action -- it is a client-only mount effect.
-		"<span style=\"display: contents\"></span>"
 	}
 }
 

@@ -56,12 +56,6 @@ def build :: fun view -> dom.node = fun v {
 		build-dyn f
 	} is view.for-node thunk {
 		build-for thunk
-	} is view.on-mount-node action {
-		# A `view.on-mount`: an invisible host plus the client-only mount action, run
-		# once and untracked (so a signal it reads doesn't make it re-run).
-		let host = fragment-host ()
-		signal.untrack action
-		host
 	}
 }
 
@@ -124,6 +118,10 @@ def apply-attr :: fun dom.node view.attribute -> nothing = fun node a {
 		}
 		let _id = dom.add-listener node evt write
 		()
+	} is view.attribute.on-mount action {
+		# A `view.on-mount`: the client-only mount effect, run once and untracked (so a
+		# signal it reads doesn't make it re-run).
+		signal.untrack action
 	}
 }
 
@@ -468,10 +466,6 @@ def adopt :: fun view dom.node -> nothing = fun v node {
 		adopt-dyn node f
 	} is view.for-node thunk {
 		adopt-for node thunk
-	} is view.on-mount-node action {
-		# The server emitted an empty host; we keep it and run the client-only mount
-		# action once (untracked), exactly as `build` does.
-		signal.untrack action
 	}
 }
 
@@ -534,6 +528,10 @@ def adopt-attr :: fun dom.node view.attribute -> nothing = fun node a {
 		}
 		let _id = dom.add-listener node evt write
 		()
+	} is view.attribute.on-mount action {
+		# Re-run the client-only mount action once (untracked), exactly as `build` does --
+		# the server emitted no markup for it, so there's nothing to adopt.
+		signal.untrack action
 	}
 }
 
