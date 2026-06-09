@@ -1,0 +1,26 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+/a/b/c.txt
+a/b
+/b
+src/std/path.pa
+/a/b
+/
+.
+c.pa
+b.tar
+pa
+<none>
+src/main.wasm
+/a/c/d
+../b
+true
+[a, b]
+target/pluma-path-fixture
+<not found>
+== stderr ==

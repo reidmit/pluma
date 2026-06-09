@@ -200,6 +200,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-args", cb_io_args);
 	register(scope, pluma, data, "io-env", cb_io_env);
 	register(scope, pluma, data, "io-exit", cb_io_exit);
+	register(scope, pluma, data, "io-cwd", cb_io_cwd);
 	// Unary float math — the libm calls (`(f64) -> f64`).
 	register(scope, pluma, data, "math-log", cb_math_log);
 	register(scope, pluma, data, "math-log10", cb_math_log10);

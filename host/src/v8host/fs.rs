@@ -292,6 +292,33 @@ pub(super) fn cb_io_env(
 	rv.set_int32(n);
 }
 
+/// `io-cwd(dst, cap) -> len`: the process's current working directory as a string (the
+/// `(dst, cap)` read shape, like `io-read`; `len < 0` → `err` with the OS message). Backs
+/// `process.cwd` and `path.project-root`.
+pub(super) fn cb_io_cwd(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let n = match std::env::current_dir() {
+		Ok(p) => deliver_read_v8(
+			scope,
+			mem,
+			ctx,
+			dst,
+			cap,
+			p.to_string_lossy().into_owned().into_bytes(),
+		),
+		Err(e) => {
+			ctx.state.last_error = e.to_string();
+			-1
+		}
+	};
+	rv.set_int32(n);
+}
+
 /// `io-exit(code)`: stop the program immediately with `code` via
 /// `std::process::exit` (`io.exit` diverges). Streamed stdout/stderr are already
 /// flushed per-write, so no draining is needed. Never returns.

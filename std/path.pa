@@ -1,0 +1,159 @@
+# Working with filesystem paths as text: joining, splitting, and inspecting them.
+#
+# Every helper here is pure -- none of them touch the filesystem, so they work anywhere,
+# on any target. They use forward-slash `/` separators (Pluma's deploy targets are Unix).
+# The filesystem walks that go with paths -- `fs.find-up` and `fs.project-root` (the
+# nearest `pluma.pa`) -- live in `std.sys.fs`, since they read the disk.
+use std.list
+use std.string
+
+# --- inspecting ----------------------------------------------------------------
+
+# True when `p` is an absolute path (begins at the filesystem root, `/`).
+public def is-absolute :: fun string -> bool = fun p {
+	string.starts-with p "/"
+}
+
+# The non-empty components of `p`, in order. Collapses repeated and trailing slashes, so
+# `path.segments "/a//b/"` is `["a", "b"]`.
+public def segments :: fun string -> list string = fun p {
+	list.filter (string.split p "/") fun s {
+		string.length s > 0
+	}
+}
+
+# The final component of `p` -- the file or directory name. `path.filename "/a/b/c.pa"`
+# is `"c.pa"`; an empty or root path gives `""`.
+public def filename :: fun string -> string = fun p {
+	when list.last (segments p) is some name {
+		name
+	} is none {
+		""
+	}
+}
+
+# The parent directory of `p` -- everything before the final component. `path.parent
+# "/a/b/c"` is `"/a/b"`; `path.parent "/a"` is `"/"`; a bare name like `"a"` gives `"."`.
+public def parent :: fun string -> string = fun p {
+	let segs = segments p
+	let n = list.length segs
+	if n <= 1 {
+		if is-absolute p {
+			"/"
+		} else {
+			"."
+		}
+	} else {
+		let init = string.join (list.take segs (n - 1)) "/"
+		if is-absolute p {
+			"/" ++ init
+		} else {
+			init
+		}
+	}
+}
+
+# The file extension of `p`, without the dot -- `some "pa"` for `"main.pa"`. `none` for a
+# name with no extension, or a leading-dot dotfile like `".bashrc"`.
+public def extension :: fun string -> option string = fun p {
+	let parts = string.split (filename p) "."
+	let n = list.length parts
+	# a non-empty stem before the last dot means the last part is a real extension (rules
+	# out dotfiles, whose only dot is the leading one, leaving an empty stem).
+	if n >= 2 {
+		if string.length (string.join (list.take parts (n - 1)) ".") > 0 {
+			some (list.get parts (n - 1))
+		} else {
+			none
+		}
+	} else {
+		none
+	}
+}
+
+# `p`'s final component with its extension stripped. `path.stem "/a/b.tar.gz"` is
+# `"b.tar"` (only the last extension goes); a dotfile like `".bashrc"` is unchanged.
+public def stem :: fun string -> string = fun p {
+	let name = filename p
+	when extension name is some _ {
+		let parts = string.split name "."
+		string.join (list.take parts (list.length parts - 1)) "."
+	} is none {
+		name
+	}
+}
+
+# --- building ------------------------------------------------------------------
+
+# Joins `b` onto `a`, tidying the slashes between them. An absolute `b` replaces `a`
+# entirely (`path.join "/a" "/b"` is `"/b"`); an empty side is dropped.
+public def join :: fun string string -> string = fun a b {
+	if string.is-empty a {
+		b
+	} else if string.is-empty b {
+		a
+	} else if is-absolute b {
+		b
+	} else {
+		let left = if string.ends-with a "/" {
+			string.slice a 0 (string.length a - 1)
+		} else {
+			a
+		}
+		left ++ "/" ++ b
+	}
+}
+
+# Joins a list of components into one path, left to right. `path.join-all ["a", "b", "c"]`
+# is `"a/b/c"`.
+public def join-all :: fun (list string) -> string = fun parts {
+	list.fold parts "" join
+}
+
+# `p` with its extension set to `ext` (given without a dot); an empty `ext` removes the
+# extension. `path.with-extension "src/main.pa" "wasm"` is `"src/main.wasm"`.
+public def with-extension :: fun string string -> string = fun p ext {
+	let base = if string.is-empty ext {
+		stem p
+	} else {
+		stem p ++ "." ++ ext
+	}
+	join (parent p) base
+}
+
+# Resolves `.` and `..` components and collapses redundant slashes -- a purely textual
+# normalization, no filesystem access. `path.normalize "/a/b/../c"` is `"/a/c"`.
+public def normalize :: fun string -> string = fun p {
+	let abs = is-absolute p
+	let resolved = list.fold (segments p) [] fun acc seg {
+		if seg == "." {
+			acc
+		} else if seg == ".." {
+			when list.last acc is some top {
+				# a real component above us is cancelled; a leading `..` (or another `..`
+				# on a relative path) is kept.
+				if top == ".." {
+					[...acc, ".."]
+				} else {
+					list.take acc (list.length acc - 1)
+				}
+			} is none {
+				if abs {
+					[]
+				} else {
+					[".."]
+				}
+			}
+		} else {
+			[...acc, seg]
+		}
+	}
+	let joined = string.join resolved "/"
+	if abs {
+		"/" ++ joined
+	} else if string.is-empty joined {
+		"."
+	} else {
+		joined
+	}
+}

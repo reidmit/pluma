@@ -1103,7 +1103,7 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		// actual wasm `Io2`/`Io4` import type); `host_sig` is consulted only for the
 		// "is this a host builtin?" classification.
 		"io-read" | "io-read-all" | "io-read-all-bytes" | "io-read-file" | "io-read-file-bytes"
-		| "io-delete-file" | "io-make-dir" | "io-read-dir"
+		| "io-delete-file" | "io-make-dir" | "io-read-dir" | "io-cwd"
 		// `io.args` rides the same marshalled-read path (`(dst,cap) -> len`, a blob in
 		// scratch) but returns a bare `list string`, not a `result` (`IoKind::Args`).
 		| "io-args"
@@ -1446,7 +1446,7 @@ pub(crate) enum IoKind {
 /// read). `None` for non-io tags.
 pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 	Some(match tag {
-		"io-read" | "io-read-all" | "io-last-error" => IoKind::ReadStr,
+		"io-read" | "io-read-all" | "io-last-error" | "io-cwd" => IoKind::ReadStr,
 		"io-read-all-bytes" => IoKind::ReadBytes,
 		// `uuid-parse` isn't io, but it has the same shape — a string in, a `result
 		// string` out — so it reuses the `(path, plen, dst, cap)` read marshalling.
@@ -1498,6 +1498,7 @@ pub(crate) fn is_io_result(tag: &str) -> bool {
 			| "io-delete-file"
 			| "io-make-dir"
 			| "io-read-dir"
+			| "io-cwd"
 			// rides the io read path; its `result string` is shaped by `__io_result`.
 			| "uuid-parse"
 			// the sync `std.sys.fs` op — its `result bytes` is shaped by `__io_result`.

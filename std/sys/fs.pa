@@ -14,9 +14,11 @@
 # `bool` instead, since "no" is an ordinary answer rather than an error.
 use std.bytes
 use std.list
+use std.path
 use std.string
 use std.task
 use std.time
+use std.sys.process
 
 # What a path points at, as reported by `fs.stat`. A symlink reports `symlink` (its own
 # type), not the type of whatever it points to.
@@ -339,4 +341,39 @@ public def is-dir :: fun string -> task bool = fun path {
 
 public def is-dir-sync :: fun string -> bool = fun path {
 	to-bool (fs-op-sync-s op-is-dir path "")
+}
+
+# --- the project root ----------------------------------------------------------
+
+# Walks up from directory `start` looking for a file named `name`, returning the first
+# directory that contains it (`some dir`), or `none` if the filesystem root is reached
+# without finding it. The path manipulation comes from `std.path`.
+public def find-up :: fun string string -> option string = fun start name {
+	if is-file-sync (path.join start name) {
+		some start
+	} else {
+		let up = path.parent start
+		if up == start {
+			none
+		} else {
+			find-up up name
+		}
+	}
+}
+
+# The project root: the nearest ancestor directory (starting from the current working
+# directory) that holds a `pluma.pa` file -- the marker for a Pluma project. `err` if
+# there's no `pluma.pa` above the cwd, or the cwd can't be read.
+#
+#     try root = fs.project-root ()   # e.g. ok "/Users/you/my-app"
+public def project-root :: fun nothing -> result string string = fun {
+	when process.cwd () is ok here {
+		when find-up here "pluma.pa" is some root {
+			ok root
+		} is none {
+			err "fs.project-root: no pluma.pa found above $(here)"
+		}
+	} is err e {
+		err e
+	}
 }

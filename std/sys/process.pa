@@ -13,6 +13,12 @@ public def args :: fun nothing -> list string = built-in "io-args"
 #     process.env "NOT_SET_ANYWHERE" # => none
 public def env :: fun string -> option string = built-in "io-env"
 
+# The current working directory the program was started from, as an absolute
+# path. `err` only if the directory was removed out from under the process.
+#
+#     process.cwd ()   # ok "/Users/you/project" -- wherever you ran it
+public def cwd :: fun nothing -> result string string = built-in "io-cwd"
+
 # Stops the program right away with the given exit code (0 means
 # success; anything else signals an error). It never returns, so it
 # fits anywhere a value is expected.
