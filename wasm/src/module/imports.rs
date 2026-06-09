@@ -134,6 +134,7 @@ pub(super) fn classify_host_call(
 					| IoKind::ReadDir
 					| IoKind::Args
 					| IoKind::EnvVar
+					| IoKind::FsOpSync
 			);
 			if is_read {
 				requested.insert(Helper::MarshalLoad);
@@ -142,6 +143,11 @@ pub(super) fn classify_host_call(
 			// Both split a NUL-blob into a `$list` of `$str`.
 			if matches!(kind, IoKind::ReadDir | IoKind::Args) {
 				requested.insert(Helper::MarshalReadNames);
+			}
+			// `fs-op-sync` has no `host_sig` entry (its custom 7-arg type is handled in
+			// `import_type`), so register it here rather than via the generic fallback below.
+			if kind == IoKind::FsOpSync {
+				imports.register("fs-op-sync");
 			}
 		}
 	}
@@ -258,6 +264,10 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 		ftypes.for_io_copyout()
 	} else if tag == "io-last-error" {
 		ftypes.for_io2()
+	} else if tag == "fs-op-sync" {
+		// `(op, pp, pl, dp, dl, dst, cap) -> len` — the sync fs op (7 args; neither io2 nor
+		// io4, so handled before the generic io branch).
+		ftypes.for_fs_op_sync()
 	} else if tag == "web-fetch" {
 		// `(req_ptr, req_len, dst, cap) -> len` — the sys host's blocking exchange, the
 		// same shape as a path io read.
@@ -324,8 +334,8 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 		ftypes.for_net_unwatch()
 	} else if tag == "offload-sleep" {
 		ftypes.for_offload_sleep()
-	} else if tag == "fs-read" || tag == "fs-write" || tag == "fs-append" {
-		ftypes.for_offload_file()
+	} else if tag == "fs-op" {
+		ftypes.for_offload_op()
 	} else {
 		let sig = host_sig(tag).unwrap();
 		ftypes.for_host(sig.arity, sig.returns_value)

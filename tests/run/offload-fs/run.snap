@@ -6,5 +6,7 @@ expression: combined
 ok
 == stdout ==
 hello worker thread
+19
+true
 read missing: err
 == stderr ==

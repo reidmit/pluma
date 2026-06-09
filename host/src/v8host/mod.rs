@@ -235,10 +235,11 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-poll", cb_io_poll);
 	register(scope, pluma, data, "io-unwatch", cb_io_unwatch);
 	register(scope, pluma, data, "offload-sleep", cb_offload_sleep);
-	// Async fs (notes/IO.md v1): non-blocking file ops run on a pool worker.
-	register(scope, pluma, data, "fs-read", cb_fs_read);
-	register(scope, pluma, data, "fs-write", cb_fs_write);
-	register(scope, pluma, data, "fs-append", cb_fs_append);
+	// std.sys.fs (notes/IO.md): one generic op-code dispatch — `fs-op` runs the op on a
+	// pool worker (async, the default surface), `fs-op-sync` runs it inline (the `-sync`
+	// twin). Both shape `(dst, cap) -> bytes` like the other reads.
+	register(scope, pluma, data, "fs-op", cb_fs_op);
+	register(scope, pluma, data, "fs-op-sync", cb_fs_op_sync);
 	// std.web.fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
 	register(scope, pluma, data, "web-fetch", cb_web_fetch);
 	// std.event — SSR stubs (a server build constructs view handlers but never runs

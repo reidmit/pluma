@@ -52,13 +52,12 @@ pub(crate) mod task_kind {
 	// on `wait::IO` and woken through `io-poll` — the completion analogue of the net read's
 	// readiness park. Settled by the same `io_settle` shape (`ok …`/`err …`).
 	pub(crate) const OFFLOAD_SLEEP: i32 = 18;
-	// Async fs (notes/IO.md v1): the first real offload client. Each parks on `wait::IO`
-	// while a pool worker runs the blocking `std::fs` call. read marshals a path in + bytes
-	// out (with the `io-copyout` overflow path, the file size being unknown); write/append
-	// marshal path + data in, `nothing` out.
-	pub(crate) const FILE_READ: i32 = 19;
-	pub(crate) const FILE_WRITE: i32 = 20;
-	pub(crate) const FILE_APPEND: i32 = 21;
+	// std.sys.fs (notes/IO.md): one generic op (`fs-op`) for the whole async surface. The
+	// op-code selects read/write/stat/remove/… host-side; the pump marshals op + path + data
+	// in and bytes out (with the `io-copyout` overflow path — payload size is unknown), and
+	// the Pluma wrapper interprets the bytes per op. Parks on `wait::IO` while a pool worker
+	// runs the blocking `std::fs` call.
+	pub(crate) const FILE_OP: i32 = 19;
 }
 
 /// The host-fed RPC stream channel (`std.web.stream`): a per-subscription mailbox
@@ -649,9 +648,8 @@ pub(crate) struct IoImports {
 #[derive(Clone, Copy, Default)]
 pub(crate) struct OffloadImports {
 	pub(crate) sleep: u32,
-	pub(crate) read: u32,
-	pub(crate) write: u32,
-	pub(crate) append: u32,
+	/// `fs-op` — the generic `std.sys.fs` op (op-code in the payload selects which).
+	pub(crate) op: u32,
 }
 
 /// The marshalling helper/global indices the suspending net ops (`accept`/`read`/
@@ -683,7 +681,7 @@ pub(crate) fn is_net_builtin(tag: &str) -> bool {
 /// kind whose blocking call the scheduler offloads to a host worker thread. Drives
 /// offload-import registration (`module.rs`), like `is_net_builtin` does for net.
 pub(crate) fn is_offload_builtin(tag: &str) -> bool {
-	matches!(tag, "offload-sleep" | "fs-read" | "fs-write" | "fs-append")
+	matches!(tag, "offload-sleep" | "fs-op")
 }
 
 /// Whether `tag` is a *synchronous* `std.sys.net` op — a host call shaped into a
@@ -1434,6 +1432,11 @@ pub(crate) enum IoKind {
 	PathStatus,
 	/// `(path, plen) -> bool` (`io-file-exists`/`io-is-dir`).
 	PathBool,
+	/// `(op, path, plen, data, dlen, dst, cap) -> len`; the synchronous `std.sys.fs` twin
+	/// (`fs-op-sync`). One op-code dispatch like the async `fs-op`, returning the op's bytes
+	/// through `(dst, cap)` (overflow → `io-copyout`), wrapped `ok`/`err` by `__io_result`;
+	/// the Pluma `-sync` wrapper interprets the bytes per op.
+	FsOpSync,
 }
 
 /// Classify a marshalled `std.sys.io` builtin tag (and `io-last-error`, an internal
@@ -1454,6 +1457,7 @@ pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 		}
 		"io-delete-file" | "io-make-dir" => IoKind::PathStatus,
 		"io-file-exists" | "io-is-dir" => IoKind::PathBool,
+		"fs-op-sync" => IoKind::FsOpSync,
 		_ => return None,
 	})
 }
@@ -1493,6 +1497,8 @@ pub(crate) fn is_io_result(tag: &str) -> bool {
 			| "io-read-dir"
 			// rides the io read path; its `result string` is shaped by `__io_result`.
 			| "uuid-parse"
+			// the sync `std.sys.fs` op — its `result bytes` is shaped by `__io_result`.
+			| "fs-op-sync"
 	)
 }
 
@@ -1576,9 +1582,7 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		// BlockingPool offload ops (notes/IO.md): a `$task` carrying the op's args; the
 		// scheduler submits the blocking call to a worker thread + parks on `wait::IO`.
 		"offload-sleep" => task_kind::OFFLOAD_SLEEP,
-		"fs-read" => task_kind::FILE_READ,
-		"fs-write" => task_kind::FILE_WRITE,
-		"fs-append" => task_kind::FILE_APPEND,
+		"fs-op" => task_kind::FILE_OP,
 		_ => return None,
 	})
 }

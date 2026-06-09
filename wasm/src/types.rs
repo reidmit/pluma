@@ -338,10 +338,12 @@ enum FuncKind {
 	/// A `BlockingPool` offload op with an i64 arg: `(i32 fid, i64 arg) -> (i32 status, i32
 	/// n)` — `offload-sleep` (arg = nanos). Submit-or-collect like the net read/write ops.
 	OffloadSleep,
-	/// An async-fs offload op: `(i32 fid, i32 path_ptr, i32 path_len, i32 a, i32 b) -> (i32
-	/// status, i32 n)`. `fs-read` (a/b = dst/cap, n = bytes read); `fs-write`/`fs-append`
-	/// (a/b = data_ptr/data_len, n unused).
-	OffloadFile,
+	/// The async `std.sys.fs` op `fs-op`: `(i32 fid, i32 op, i32 path_ptr, i32 path_len, i32
+	/// data_ptr, i32 data_len, i32 dst, i32 cap) -> (i32 status, i32 len)`.
+	OffloadOp,
+	/// The sync `std.sys.fs` op `fs-op-sync`: `(i32 op, i32 path_ptr, i32 path_len, i32
+	/// data_ptr, i32 data_len, i32 dst, i32 cap) -> i32 len`.
+	FsOpSync,
 	/// A `std.web.dom` node-producing import: `(i32 ptr, i32 len) -> externref`
 	/// (`dom-create-element`/`dom-create-text` — a tag/text string in scratch →
 	/// a fresh DOM node). The host returns the engine-managed `externref`; wasm
@@ -622,10 +624,15 @@ impl FuncTypes {
 		self.intern(FuncKind::OffloadSleep)
 	}
 
-	/// `fs-read`/`fs-write`/`fs-append`: `(i32 fid, i32 pp, i32 pl, i32 a, i32 b) -> (i32
-	/// status, i32 n)`.
-	pub fn for_offload_file(&mut self) -> u32 {
-		self.intern(FuncKind::OffloadFile)
+	/// `fs-op`: `(i32 fid, i32 op, i32 pp, i32 pl, i32 dp, i32 dl, i32 dst, i32 cap) -> (i32
+	/// status, i32 len)`.
+	pub fn for_offload_op(&mut self) -> u32 {
+		self.intern(FuncKind::OffloadOp)
+	}
+
+	/// `fs-op-sync`: `(i32 op, i32 pp, i32 pl, i32 dp, i32 dl, i32 dst, i32 cap) -> i32 len`.
+	pub fn for_fs_op_sync(&mut self) -> u32 {
+		self.intern(FuncKind::FsOpSync)
 	}
 
 	/// The type index for a `wire` value mixer: `(i64, ref $value) -> i64`.
@@ -1130,17 +1137,14 @@ impl FuncTypes {
 						.function([ValType::I32, ValType::I64], [ValType::I32, ValType::I32]);
 					continue;
 				}
-				FuncKind::OffloadFile => {
-					types.ty().function(
-						[
-							ValType::I32,
-							ValType::I32,
-							ValType::I32,
-							ValType::I32,
-							ValType::I32,
-						],
-						[ValType::I32, ValType::I32],
-					);
+				FuncKind::OffloadOp => {
+					types
+						.ty()
+						.function([ValType::I32; 8], [ValType::I32, ValType::I32]);
+					continue;
+				}
+				FuncKind::FsOpSync => {
+					types.ty().function([ValType::I32; 7], [ValType::I32]);
 					continue;
 				}
 				FuncKind::WireMixVal => {

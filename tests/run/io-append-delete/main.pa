@@ -1,5 +1,5 @@
-use std.sys.io
 use std.sys.fs
+use std.sys.io
 
 def show-result = fun r {
 	when r is ok _ {
@@ -14,24 +14,24 @@ def main = fun {
 	let path = "target/pluma-io-append-delete.txt"
 
 	# ensure known starting state: write empty (creates or truncates)
-	show-result (fs.write-file path "")
+	show-result (fs.write-text-sync path "")
 
 	# append three lines
-	show-result (fs.append-file path "one\n")
-	show-result (fs.append-file path "two\n")
-	show-result (fs.append-file path "three\n")
+	show-result (fs.append-text-sync path "one\n")
+	show-result (fs.append-text-sync path "two\n")
+	show-result (fs.append-text-sync path "three\n")
 
 	# read it back
-	when fs.read-file path is ok contents {
+	when fs.read-text-sync path is ok contents {
 		let _ = io.write contents
 	} is err msg {
 		print "read err: $(msg)"
 	}
 
 	# delete it
-	show-result (fs.delete-file path)
-	print (fs.file-exists path)
+	show-result (fs.remove-sync path)
+	print (fs.is-file-sync path)
 
 	# deleting again should err
-	show-result (fs.delete-file path)
+	show-result (fs.remove-sync path)
 }

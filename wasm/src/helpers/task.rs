@@ -1316,43 +1316,29 @@ pub(crate) fn build_pump_fn(
 						});
 					});
 
-					// fs-write / fs-append (notes/IO.md v1): marshal path (payload[0]) + data
-					// (payload[1]) into scratch, call the worker-offloaded write, settle
-					// `nothing`. Same shape as net-write but with two string args.
-					for (kind, import) in [
-						(task_kind::FILE_WRITE, offload.write),
-						(task_kind::FILE_APPEND, offload.append),
-					] {
-						w.local_get(tk).i32(kind).i32_eq();
-						w.if_(|w| {
-							w.i32(0).global_set(nm.bump);
-							let (pp, plen) = marshal_str_arg(w, nm, tp, 0);
-							let (dp, dlen) = marshal_str_arg(w, nm, tp, 1);
-							w.local_get(fid);
-							w.local_get(pp).local_get(plen);
-							w.local_get(dp).local_get(dlen);
-							w.call(import);
-							net_settle(w, g, fid, fval, fkind, nm, |w, _n| {
-								push_nothing(w);
-							});
-						});
-					}
-
-					// fs-read (notes/IO.md v1): marshal the path, hand the worker a `dst`
-					// buffer, and settle the file's text. The size is unknown, so on overflow
-					// (`n > cap`) re-`alloc` the true size and drain the host stash via
-					// `io-copyout` — the same read-overflow path the sync `fs.read-file` uses.
-					w.local_get(tk).i32(task_kind::FILE_READ).i32_eq();
+					// fs-op (notes/IO.md): the generic `std.sys.fs` op. Payload = [op-code $int,
+					// path $str, data $str]; marshal op + both strings into scratch, hand the
+					// worker a `dst` buffer, and settle the op's bytes. The payload size is
+					// unknown (a whole-file read), so on overflow (`n > cap`) re-`alloc` the true
+					// size and drain the host stash via `io-copyout`. The Pluma wrapper decodes
+					// the bytes per op; `nothing`-returning ops come back as an empty payload.
+					w.local_get(tk).i32(task_kind::FILE_OP).i32_eq();
 					w.if_(|w| {
 						const CAP: i32 = 4096;
+						let opc = w.local(ValType::I32);
 						let dst = w.local(ValType::I32);
 						w.i32(0).global_set(nm.bump);
-						let (pp, plen) = marshal_str_arg(w, nm, tp, 0);
+						elem(w, tp, 0);
+						unbox_i_any(w); // op-code (a small int — may be i31-packed, not a $int)
+						w.local_set(opc);
+						let (pp, plen) = marshal_str_arg(w, nm, tp, 1);
+						let (dp, dlen) = marshal_str_arg(w, nm, tp, 2);
 						w.i32(CAP).call(nm.alloc).local_set(dst);
-						w.local_get(fid);
+						w.local_get(fid).local_get(opc);
 						w.local_get(pp).local_get(plen);
+						w.local_get(dp).local_get(dlen);
 						w.local_get(dst).i32(CAP);
-						w.call(offload.read);
+						w.call(offload.op);
 						net_settle(w, g, fid, fval, fkind, nm, move |w, n| {
 							if let Some(copyout) = nm.copyout {
 								w.local_get(n).i32(CAP).i32_gt_s();
@@ -1361,7 +1347,7 @@ pub(crate) fn build_pump_fn(
 									w.local_get(dst).call(copyout);
 								});
 							}
-							w.i32(types::TAG_STR);
+							w.i32(types::TAG_BYTES);
 							w.local_get(dst).local_get(n).call(nm.load);
 							w.struct_new(types::T_STR);
 						});

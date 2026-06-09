@@ -160,9 +160,7 @@ impl Module {
 		// defines them all unconditionally, so registering the full set is harmless.
 		let offload_imports = uses_offload.then(|| OffloadImports {
 			sleep: imports.register("offload-sleep"),
-			read: imports.register("fs-read"),
-			write: imports.register("fs-write"),
-			append: imports.register("fs-append"),
+			op: imports.register("fs-op"),
 		});
 		// Both net and offload shape their results through `__io_result` (the same `ok`/`err`
 		// + `io-last-error` channel as `std.sys.io`) and marshal byte payloads through scratch

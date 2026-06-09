@@ -2335,7 +2335,88 @@ impl<'a> FnEmitter<'a> {
 				let name = self.marshal_strlike_arg(&args[0], alloc, store);
 				self.emit_env(tag, idx, name, READ_CAP, alloc);
 			}
+			IoKind::FsOpSync => {
+				self.emit_fs_op_sync(tag, idx, args, READ_CAP, alloc, store);
+			}
 		}
+	}
+
+	/// `fs-op-sync(op, pp, pl, dp, dl, dst, cap) -> len`: the synchronous `std.sys.fs` op.
+	/// Marshal the op-code + path + data into scratch, length-probe the bytes result (with
+	/// the `io-copyout` overflow drain), and wrap it `ok`/`err` via `__io_result`. Like a
+	/// path read, but with the leading op-code i32 and a second (data) string arg. The
+	/// Pluma `-sync` wrapper decodes the bytes per op (`args` = [op, path, data]).
+	fn emit_fs_op_sync(
+		&mut self,
+		tag: &str,
+		idx: u32,
+		args: &[Atom],
+		cap: i32,
+		alloc: u32,
+		store: u32,
+	) {
+		let (Some(load), Some(io_result)) = (
+			self.runtime.idx(Helper::MarshalLoad),
+			self.runtime.idx(Helper::IoResult),
+		) else {
+			self
+				.diags
+				.push(format!("`{tag}` needs the io read helpers"));
+			self.push_nothing();
+			return;
+		};
+		let Some(copyout) = self.host_index.get("io-copyout").copied() else {
+			self
+				.diags
+				.push(format!("`{tag}` needs the io-copyout import"));
+			self.push_nothing();
+			return;
+		};
+		// op-code (i32), then the path + data strings into scratch.
+		self.atom(&args[0]);
+		self.unbox_int();
+		self.ins(Instruction::I32WrapI64);
+		let op = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(op));
+		let (pp, pl) = self.marshal_strlike_arg(&args[1], alloc, store);
+		let (dp, dl) = self.marshal_strlike_arg(&args[2], alloc, store);
+		let dst = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		// fs-op-sync(op, pp, pl, dp, dl, dst, cap) -> len.
+		for v in [op, pp, pl, dp, dl, dst] {
+			self.ins(Instruction::LocalGet(v));
+		}
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::Call(idx));
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		// Overflow: the bytes didn't fit `cap` — reserve the true size, drain the stash.
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32Const(cap));
+		self.ins(Instruction::I32GtS);
+		self.ins(Instruction::If(BlockType::Empty));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::Call(copyout));
+		self.ins(Instruction::End);
+		// payload-or-null: `len < 0` is failure (null → `__io_result` builds `err`).
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::I32Const(0));
+		self.ins(Instruction::I32LtS);
+		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
+		self.push_nothing();
+		self.ins(Instruction::Else);
+		self.ins(Instruction::I32Const(types::TAG_BYTES));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(load));
+		self.ins(Instruction::StructNew(types::T_STR));
+		self.ins(Instruction::End);
+		self.ins(Instruction::Call(io_result));
 	}
 
 	/// The length-probe read core: `dst = __alloc(cap)`; call the import (`(dst, cap)`

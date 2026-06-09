@@ -100,101 +100,86 @@ pub(super) fn cb_offload_sleep(
 // collects the result and marshals it back — bytes into the caller's `(dst, cap)` buffer
 // (overflow → `read_stash` for `io-copyout`) exactly like the sync `fs.rs` reads.
 
-/// `fs-read(i32 fid, i32 path_ptr, i32 path_len, i32 dst, i32 cap) -> (i32 status, i32
-/// len)`: read a whole file as text on a worker thread. ok delivers the bytes into
-/// `(dst, cap)` (true `len`, overflow stashed); `read_to_string` keeps it parity with the
-/// sync `fs.read-file`. status: 0 ok, 1 would-block, 2 error.
-pub(super) fn cb_fs_read(
+/// Deliver an fs `OpResult` into the caller's `(dst, cap)` read buffer + a `(status, len)`
+/// pair, the shared tail of the async + sync fs callbacks. ok payload = the op's `Bytes`
+/// (text, the dir blob, the stat record, a query's `"1"`/`"0"`), or empty for the void
+/// ops (`Nothing`); `Err` stashes its message in `last_error`. status: 0 ok, 2 error.
+fn deliver_fs(
+	scope: &mut v8::HandleScope,
+	mem: v8::Local<v8::Object>,
+	ctx: &mut Ctx,
+	dst: i32,
+	cap: i32,
+	res: OpResult,
+) -> (i32, i32) {
+	match res {
+		OpResult::Bytes(b) => (0, deliver_read_v8(scope, mem, ctx, dst, cap, b)),
+		OpResult::Nothing => (0, 0),
+		OpResult::Err(e) => {
+			ctx.state.last_error = e;
+			(2, 0)
+		}
+		OpResult::Count(_) => unreachable!("fs op produced a Count"),
+	}
+}
+
+/// `fs-op(i32 fid, i32 op, i32 path_ptr, i32 path_len, i32 data_ptr, i32 data_len, i32
+/// dst, i32 cap) -> (i32 status, i32 len)`: run any `std.sys.fs` op (selected by `op`,
+/// see `fsop::op`) on a worker thread. `data` is the write payload or the rename/copy
+/// destination path; the ok payload comes back through `(dst, cap)` (overflow stashed for
+/// `io-copyout`). Submit-or-collect like the net/sleep ops: the first call submits + would-
+/// blocks (status 1), the wake's re-run collects the worker's result.
+pub(super) fn cb_fs_op(
 	scope: &mut v8::HandleScope,
 	args: v8::FunctionCallbackArguments,
 	mut rv: v8::ReturnValue,
 ) {
 	let fid = argi(scope, &args, 0);
-	let (pp, pl) = (argi(scope, &args, 1), argi(scope, &args, 2));
-	let (dst, cap) = (argi(scope, &args, 3), argi(scope, &args, 4));
+	let op = argi(scope, &args, 1);
+	let (pp, pl) = (argi(scope, &args, 2), argi(scope, &args, 3));
+	let (dp, dl) = (argi(scope, &args, 4), argi(scope, &args, 5));
+	let (dst, cap) = (argi(scope, &args, 6), argi(scope, &args, 7));
 	let (ctx, mem) = ctx_and_mem(scope, &args);
 	match ctx.state.reactor.collect(fid) {
-		Some(OpResult::Bytes(b)) => {
-			let n = deliver_read_v8(scope, mem, ctx, dst, cap, b);
-			set_pair(scope, &mut rv, 0, n);
+		Some(res) => {
+			let (s, n) = deliver_fs(scope, mem, ctx, dst, cap, res);
+			set_pair(scope, &mut rv, s, n);
 		}
-		Some(OpResult::Err(e)) => {
-			ctx.state.last_error = e;
-			set_pair(scope, &mut rv, 2, 0);
-		}
-		Some(_) => unreachable!("fs-read collected a non-bytes result"),
 		None => {
 			let path = read_str(scope, mem, pp, pl);
+			let data = read_mem(scope, mem, dp.max(0) as usize, dl.max(0) as usize);
 			ctx.state.reactor.submit(
 				fid,
-				Box::new(move || match std::fs::read_to_string(&path) {
-					Ok(s) => OpResult::Bytes(s.into_bytes()),
-					Err(e) => OpResult::Err(e.to_string()),
-				}),
+				Box::new(move || crate::fsop::dispatch(op, &path, &data)),
 			);
 			set_pair(scope, &mut rv, 1, 0);
 		}
 	}
 }
 
-/// Shared body for `fs-write` / `fs-append` (`(fid, path_ptr, path_len, data_ptr,
-/// data_len) -> (status, n)`): write `data` to `path` on a worker thread, ok = `nothing`.
-fn fs_write_impl(
+/// `fs-op-sync(i32 op, i32 path_ptr, i32 path_len, i32 data_ptr, i32 data_len, i32 dst,
+/// i32 cap) -> i32 len`: the synchronous `-sync` twin — run the op inline (blocking this
+/// thread) and deliver into `(dst, cap)`, returning the byte length or `-1` on error (the
+/// message stashed in `last_error`, shaped to `err` by the wasm side, like `io-read-file`).
+pub(super) fn cb_fs_op_sync(
 	scope: &mut v8::HandleScope,
-	args: &v8::FunctionCallbackArguments,
-	append: bool,
-	rv: &mut v8::ReturnValue,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
 ) {
-	let fid = argi(scope, args, 0);
-	let (pp, pl) = (argi(scope, args, 1), argi(scope, args, 2));
-	let (dp, dl) = (argi(scope, args, 3), argi(scope, args, 4));
-	let (ctx, mem) = ctx_and_mem(scope, args);
-	match ctx.state.reactor.collect(fid) {
-		Some(OpResult::Nothing) => set_pair(scope, rv, 0, 0),
-		Some(OpResult::Err(e)) => {
-			ctx.state.last_error = e;
-			set_pair(scope, rv, 2, 0);
-		}
-		Some(_) => unreachable!("fs-write collected a non-nothing result"),
-		None => {
-			let path = read_str(scope, mem, pp, pl);
-			let data = read_mem(scope, mem, dp.max(0) as usize, dl.max(0) as usize);
-			ctx.state.reactor.submit(
-				fid,
-				Box::new(move || {
-					let res = if append {
-						use std::io::Write;
-						std::fs::OpenOptions::new()
-							.create(true)
-							.append(true)
-							.open(&path)
-							.and_then(|mut f| f.write_all(&data))
-					} else {
-						std::fs::write(&path, &data)
-					};
-					match res {
-						Ok(()) => OpResult::Nothing,
-						Err(e) => OpResult::Err(e.to_string()),
-					}
-				}),
-			);
-			set_pair(scope, rv, 1, 0);
-		}
-	}
-}
-
-pub(super) fn cb_fs_write(
-	s: &mut v8::HandleScope,
-	a: v8::FunctionCallbackArguments,
-	mut r: v8::ReturnValue,
-) {
-	fs_write_impl(s, &a, false, &mut r);
-}
-
-pub(super) fn cb_fs_append(
-	s: &mut v8::HandleScope,
-	a: v8::FunctionCallbackArguments,
-	mut r: v8::ReturnValue,
-) {
-	fs_write_impl(s, &a, true, &mut r);
+	let op = argi(scope, &args, 0);
+	let (pp, pl) = (argi(scope, &args, 1), argi(scope, &args, 2));
+	let (dp, dl) = (argi(scope, &args, 3), argi(scope, &args, 4));
+	let (dst, cap) = (argi(scope, &args, 5), argi(scope, &args, 6));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let path = read_str(scope, mem, pp, pl);
+	let data = read_mem(scope, mem, dp.max(0) as usize, dl.max(0) as usize);
+	let (s, n) = deliver_fs(
+		scope,
+		mem,
+		ctx,
+		dst,
+		cap,
+		crate::fsop::dispatch(op, &path, &data),
+	);
+	rv.set_int32(if s == 0 { n } else { -1 });
 }

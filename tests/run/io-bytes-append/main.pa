@@ -12,11 +12,11 @@ def show-write = fun r {
 def main = fun {
 	let path = "target/pluma-io-bytes-append.bin"
 
-	show-write (fs.write-file-bytes path '\x01\x02')
-	show-write (fs.append-file-bytes path '\x03\x04')
-	show-write (fs.append-file-bytes path '\x05')
+	show-write (fs.write-bytes-sync path '\x01\x02')
+	show-write (fs.append-bytes-sync path '\x03\x04')
+	show-write (fs.append-bytes-sync path '\x05')
 
-	when fs.read-file-bytes path is ok b {
+	when fs.read-bytes-sync path is ok b {
 		print (to-string b)
 		print (to-string (bytes.length b))
 	} is err msg {

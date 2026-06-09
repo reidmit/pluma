@@ -4,11 +4,11 @@ def main = fun {
 	let missing = "target/pluma-this-file-does-not-exist.txt"
 
 	# discard the OS-specific error message; just verify the err branch fires
-	when fs.read-file missing is ok _ {
+	when fs.read-text-sync missing is ok _ {
 		print "unexpected ok"
 	} is err _ {
 		print "got err"
 	}
 
-	print (fs.file-exists missing)
+	print (fs.is-file-sync missing)
 }

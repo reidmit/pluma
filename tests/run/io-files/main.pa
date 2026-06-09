@@ -3,15 +3,15 @@ use std.sys.fs
 def main = fun {
 	let path = "target/pluma-io-test-roundtrip.txt"
 
-	when fs.write-file path "hello from pluma" is ok _ {
+	when fs.write-text-sync path "hello from pluma" is ok _ {
 		print "wrote"
 	} is err msg {
 		print "write err: $(msg)"
 	}
 
-	print (fs.file-exists path)
+	print (fs.is-file-sync path)
 
-	when fs.read-file path is ok contents {
+	when fs.read-text-sync path is ok contents {
 		print contents
 	} is err msg {
 		print "read err: $(msg)"

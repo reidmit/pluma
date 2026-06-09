@@ -35,6 +35,10 @@ mod net;
 // `std.sys.net` parks socket reads on it; offload clients (fs, db, …) submit blocking jobs.
 mod offload;
 
+// Engine-independent `std.sys.fs` ops (one op-code dispatch), shared by the async pool
+// path and the synchronous `-sync` path so the two can't drift.
+mod fsop;
+
 // The V8 backend (ABI.md Phase 2): instantiates the WasmGC artifact under V8 over the
 // marshalling ABI. Reuses this crate's engine-independent core (`HostState`/`HostNet`/
 // `NetRet`/`BufferedIo`/`read_line_from`) — a descendant module sees its ancestors'

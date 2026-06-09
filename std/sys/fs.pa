@@ -1,57 +1,342 @@
-# Files and directories: reading, writing, listing, and the queries
-# that go with them.
+# Files and directories: reading, writing, listing, moving, and the queries that go with
+# them.
 #
-# Anything that touches the filesystem can fail -- a file might not
-# exist, a directory might not be readable -- so those operations hand
-# back a `result`, with a message from the OS on the `err` side. The
-# plain `file-exists`/`is-dir` queries answer with a `bool` instead,
-# since "no" is an ordinary answer rather than an error.
-
-# Reads an entire file into a string. `ok contents` if it worked, or
-# `err message` if the file is missing or can't be read.
+# Every operation is **asynchronous by default** -- it returns a `task`, run by the
+# scheduler, so a slow disk or network filesystem parks the calling fiber on a worker
+# thread (notes/IO.md) rather than freezing every other fiber. Each op has a synchronous
+# `-sync` twin (e.g. `fs.read-text-sync`) that blocks the current thread instead; reach
+# for those only in one-shot scripts and build tools where there is no concurrency to
+# starve. Default is async; sync is the opt-in escape hatch.
 #
-#     fs.read-file "notes.txt"   # ok "...the file's text..." or err
-public def read-file :: fun string -> result string string = built-in "io-read-file"
+# Anything that touches the filesystem can fail -- a file might not exist, a directory
+# might not be readable -- so those operations hand back a `result`, with a message from
+# the OS on the `err` side. The plain `exists`/`is-file`/`is-dir` queries answer with a
+# `bool` instead, since "no" is an ordinary answer rather than an error.
+use std.bytes
+use std.list
+use std.string
+use std.task
+use std.time
 
-# Writes `data` to a file, replacing whatever was there before. Creates
-# the file if it doesn't exist. `ok nothing` on success, `err` on
-# failure.
+# What a path points at, as reported by `fs.stat`. A symlink reports `symlink` (its own
+# type), not the type of whatever it points to.
+public enum file-kind {
+	file
+	dir
+	symlink
+	other
+}
+
+# Metadata about a path, from `fs.stat`: its size in bytes, what kind of entry it is, and
+# when it was last modified.
+public alias file-info {size :: int, kind :: file-kind, modified :: instant}
+
+# --- the host bridge -----------------------------------------------------------
 #
-#     fs.write-file "out.txt" "hello"
-public def write-file :: fun string string -> result nothing string = built-in "io-write-file"
+# One generic op-code dispatch backs the whole surface (notes/IO.md): `fs-op` runs the op
+# on a pool worker (the async default), `fs-op-sync` runs it inline (the `-sync` twin).
+# The op-code selects the operation host-side; the result comes back as `bytes` that the
+# wrappers below decode per op. Two arities each -- one for a `string` data arg
+# (content / a destination path / unused `""`), one for raw `bytes` (binary writes) --
+# both lower to the same host call (string and bytes share a representation).
 
-# Adds `data` to the end of a file, keeping the existing contents.
-# Creates the file if it doesn't exist.
-public def append-file :: fun string string -> result nothing string = built-in "io-append-file"
+def op-read-text = 0
 
-# True when the path exists and is a file (not a directory).
+def op-read-bytes = 1
+
+def op-read-dir = 2
+
+def op-stat = 3
+
+def op-write = 4
+
+def op-append = 5
+
+def op-make-dir = 6
+
+def op-remove = 7
+
+def op-remove-all = 8
+
+def op-rename = 9
+
+def op-copy = 10
+
+def op-exists = 11
+
+def op-is-file = 12
+
+def op-is-dir = 13
+
+def fs-op-s :: fun int string string -> task (result bytes string) = built-in "fs-op"
+
+def fs-op-b :: fun int string bytes -> task (result bytes string) = built-in "fs-op"
+
+def fs-op-sync-s :: fun int string string -> result bytes string = built-in "fs-op-sync"
+
+def fs-op-sync-b :: fun int string bytes -> result bytes string = built-in "fs-op-sync"
+
+# Await an async op and decode its raw `result bytes string` with `decode`. The sync
+# wrappers call the `decode` helpers directly (no await); the async ones run through here.
+def run :: fun (task (result bytes string)) (fun (result bytes string) -> a) -> task a = fun t decode {
+	try r = t
+	task.return (decode r)
+}
+
+# --- decoders (shared by the async + sync wrappers) ----------------------------
+
+# Raw bytes are already valid UTF-8 here (the host read them with `read_to_string`), but
+# decode through `bytes.to-string` so a surprise still surfaces as `err`.
+def to-text :: fun (result bytes string) -> result string string = fun r {
+	when r is ok raw {
+		bytes.to-string raw
+	} is err e {
+		err e
+	}
+}
+
+# A `nothing`-returning op: the payload is empty; keep only ok/err.
+def to-void :: fun (result bytes string) -> result nothing string = fun r {
+	when r is ok _ {
+		ok ()
+	} is err e {
+		err e
+	}
+}
+
+# A `bool` query: infallible host-side, "1"/"0" on the ok side; any error reads as false.
+def to-bool :: fun (result bytes string) -> bool = fun r {
+	when r is ok raw {
+		(bytes.to-string raw ?? "0") == "1"
+	} is err _ {
+		false
+	}
+}
+
+# `read-dir`: names are NUL-separated with a trailing NUL; split, drop the trailing empty,
+# decode each (a non-UTF-8 name reads as "" and is dropped).
+def to-names :: fun (result bytes string) -> result (list string) string = fun r {
+	when r is ok raw {
+		ok (bytes.split raw '\x00' | list.map fun b {
+			bytes.to-string b ?? ""
+		} | list.filter fun s { string.length s > 0 })
+	} is err e {
+		err e
+	}
+}
+
+# `stat`: the host returns `"<kind>\t<size>\t<modified-nanos>"`.
+def to-info :: fun (result bytes string) -> result file-info string = fun r {
+	when r is ok raw {
+		when bytes.to-string raw is ok line {
+			parse-info line
+		} is err e {
+			err e
+		}
+	} is err e {
+		err e
+	}
+}
+
+def parse-info :: fun string -> result file-info string = fun line {
+	let fields = string.split line "\t"
+	if list.length fields == 3 {
+		when string.to-int (list.get fields 1) is ok size {
+			when string.to-int (list.get fields 2) is ok nanos {
+				ok {
+					size,
+					kind: parse-kind (list.get fields 0),
+					modified: time.from-unix-nanos nanos,
+				}
+			} is err e {
+				err e
+			}
+		} is err e {
+			err e
+		}
+	} else {
+		err "fs.stat: malformed stat record"
+	}
+}
+
+def parse-kind :: fun string -> file-kind = fun s {
+	if s == "dir" {
+		file-kind.dir
+	} else if s == "file" {
+		file-kind.file
+	} else if s == "symlink" {
+		file-kind.symlink
+	} else {
+		file-kind.other
+	}
+}
+
+# --- reading -------------------------------------------------------------------
+
+# Reads an entire file as text (UTF-8). `ok contents`, or `err message` if the file is
+# missing, unreadable, or not valid UTF-8.
 #
-#     fs.file-exists "out.txt"   # true or false
-public def file-exists :: fun string -> bool = built-in "io-file-exists"
+#     try text = fs.read-text "notes.txt"
+public def read-text :: fun string -> task (result string string) = fun path {
+	run (fs-op-s op-read-text path "") to-text
+}
 
-# Deletes a file. `err` if it isn't there.
-public def delete-file :: fun string -> result nothing string = built-in "io-delete-file"
+public def read-text-sync :: fun string -> result string string = fun path {
+	to-text (fs-op-sync-s op-read-text path "")
+}
 
-# True when the path exists and is a directory.
-public def is-dir :: fun string -> bool = built-in "io-is-dir"
+# Reads an entire file as raw `bytes`, making no assumption that it is text. Reach for this
+# with images, compressed files, or anything that isn't UTF-8.
+public def read-bytes :: fun string -> task (result bytes string) = fun path {
+	run (fs-op-s op-read-bytes path "") fun r {
+		r
+	}
+}
 
-# Lists the entries in a directory -- just the names, not full paths,
-# sorted, with hidden dotfiles included. `err` if the path isn't a
-# directory you can read.
+public def read-bytes-sync :: fun string -> result bytes string = fun path {
+	fs-op-sync-s op-read-bytes path ""
+}
+
+# Lists the entries in a directory -- just the names, not full paths, sorted. `err` if the
+# path isn't a directory you can read.
 #
-#     fs.read-dir "."   # ok ["README.md", "src", ...] or err
-public def read-dir :: fun string -> result (list string) string = built-in "io-read-dir"
+#     try entries = fs.read-dir "."
+public def read-dir :: fun string -> task (result (list string) string) = fun path {
+	run (fs-op-s op-read-dir path "") to-names
+}
 
-# Creates a directory, along with any parent directories that don't
-# exist yet (like `mkdir -p`). Quietly succeeds if it's already there.
-public def make-dir :: fun string -> result nothing string = built-in "io-make-dir"
+public def read-dir-sync :: fun string -> result (list string) string = fun path {
+	to-names (fs-op-sync-s op-read-dir path "")
+}
 
-# Byte-oriented versions of the file operations above, for binary data:
-# they read and write `bytes` instead of `string`, so they make no
-# assumption that the content is text. Reach for these with images,
-# compressed files, or anything that isn't UTF-8.
-public def read-file-bytes :: fun string -> result bytes string = built-in "io-read-file-bytes"
+# Reads a path's metadata: its size, kind, and last-modified time. `err` if the path
+# doesn't exist or can't be read.
+public def stat :: fun string -> task (result file-info string) = fun path {
+	run (fs-op-s op-stat path "") to-info
+}
 
-public def write-file-bytes :: fun string bytes -> result nothing string = built-in "io-write-file-bytes"
+public def stat-sync :: fun string -> result file-info string = fun path {
+	to-info (fs-op-sync-s op-stat path "")
+}
 
-public def append-file-bytes :: fun string bytes -> result nothing string = built-in "io-append-file-bytes"
+# --- writing -------------------------------------------------------------------
+
+# Writes text to a file, replacing whatever was there before. Creates the file if it
+# doesn't exist. `ok nothing` on success.
+#
+#     try _ = fs.write-text "out.txt" "hello"
+public def write-text :: fun string string -> task (result nothing string) = fun path content {
+	run (fs-op-s op-write path content) to-void
+}
+
+public def write-text-sync :: fun string string -> result nothing string = fun path content {
+	to-void (fs-op-sync-s op-write path content)
+}
+
+# Writes raw `bytes` to a file, replacing whatever was there before.
+public def write-bytes :: fun string bytes -> task (result nothing string) = fun path content {
+	run (fs-op-b op-write path content) to-void
+}
+
+public def write-bytes-sync :: fun string bytes -> result nothing string = fun path content {
+	to-void (fs-op-sync-b op-write path content)
+}
+
+# Adds text to the end of a file, keeping the existing contents. Creates the file if it
+# doesn't exist.
+public def append-text :: fun string string -> task (result nothing string) = fun path content {
+	run (fs-op-s op-append path content) to-void
+}
+
+public def append-text-sync :: fun string string -> result nothing string = fun path content {
+	to-void (fs-op-sync-s op-append path content)
+}
+
+# Adds raw `bytes` to the end of a file.
+public def append-bytes :: fun string bytes -> task (result nothing string) = fun path content {
+	run (fs-op-b op-append path content) to-void
+}
+
+public def append-bytes-sync :: fun string bytes -> result nothing string = fun path content {
+	to-void (fs-op-sync-b op-append path content)
+}
+
+# --- directories & mutation ----------------------------------------------------
+
+# Creates a directory, along with any parent directories that don't exist yet (like
+# `mkdir -p`). Quietly succeeds if it's already there.
+public def make-dir :: fun string -> task (result nothing string) = fun path {
+	run (fs-op-s op-make-dir path "") to-void
+}
+
+public def make-dir-sync :: fun string -> result nothing string = fun path {
+	to-void (fs-op-sync-s op-make-dir path "")
+}
+
+# Removes a file or an *empty* directory. `err` if the path doesn't exist, or if it's a
+# non-empty directory (use `fs.remove-all` for that).
+public def remove :: fun string -> task (result nothing string) = fun path {
+	run (fs-op-s op-remove path "") to-void
+}
+
+public def remove-sync :: fun string -> result nothing string = fun path {
+	to-void (fs-op-sync-s op-remove path "")
+}
+
+# Removes a file, or a directory and everything inside it (like `rm -rf`).
+public def remove-all :: fun string -> task (result nothing string) = fun path {
+	run (fs-op-s op-remove-all path "") to-void
+}
+
+public def remove-all-sync :: fun string -> result nothing string = fun path {
+	to-void (fs-op-sync-s op-remove-all path "")
+}
+
+# Renames or moves a path from `source` to `dest`. `err` if `source` doesn't exist (or the
+# move crosses filesystems, which the OS may reject).
+public def rename :: fun string string -> task (result nothing string) = fun source dest {
+	run (fs-op-s op-rename source dest) to-void
+}
+
+public def rename-sync :: fun string string -> result nothing string = fun source dest {
+	to-void (fs-op-sync-s op-rename source dest)
+}
+
+# Copies a file's contents (and permission bits) from `source` to `dest`, replacing `dest`
+# if it exists.
+public def copy :: fun string string -> task (result nothing string) = fun source dest {
+	run (fs-op-s op-copy source dest) to-void
+}
+
+public def copy-sync :: fun string string -> result nothing string = fun source dest {
+	to-void (fs-op-sync-s op-copy source dest)
+}
+
+# --- queries -------------------------------------------------------------------
+
+# True when the path exists (a file, directory, or anything else).
+public def exists :: fun string -> task bool = fun path {
+	run (fs-op-s op-exists path "") to-bool
+}
+
+public def exists-sync :: fun string -> bool = fun path {
+	to-bool (fs-op-sync-s op-exists path "")
+}
+
+# True when the path exists and is a regular file (following symlinks).
+public def is-file :: fun string -> task bool = fun path {
+	run (fs-op-s op-is-file path "") to-bool
+}
+
+public def is-file-sync :: fun string -> bool = fun path {
+	to-bool (fs-op-sync-s op-is-file path "")
+}
+
+# True when the path exists and is a directory (following symlinks).
+public def is-dir :: fun string -> task bool = fun path {
+	run (fs-op-s op-is-dir path "") to-bool
+}
+
+public def is-dir-sync :: fun string -> bool = fun path {
+	to-bool (fs-op-sync-s op-is-dir path "")
+}

@@ -25,7 +25,7 @@ public def main = fun {
 	} is some path-expr {
 		let rest = list.drop args 1
 		let source = when list.head rest is some file {
-			fs.read-file file
+			fs.read-text-sync file
 		} is none {
 			io.read-all ()
 		}

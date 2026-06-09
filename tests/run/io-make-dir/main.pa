@@ -7,16 +7,16 @@ use std.sys.fs
 def main = fun {
 	let d = "target/pluma-mkdir-test/nested/deep"
 
-	when fs.make-dir d is ok _ {
+	when fs.make-dir-sync d is ok _ {
 		print "made"
 	} is err msg {
 		print "err: $(msg)"
 	}
-	print (fs.is-dir d)
-	print (fs.is-dir "target/pluma-mkdir-test")
+	print (fs.is-dir-sync d)
+	print (fs.is-dir-sync "target/pluma-mkdir-test")
 
 	# Idempotent: making an existing path again still succeeds.
-	when fs.make-dir d is ok _ {
+	when fs.make-dir-sync d is ok _ {
 		print "again ok"
 	} is err msg {
 		print "again err: $(msg)"
@@ -24,12 +24,12 @@ def main = fun {
 
 	# The new directory is usable.
 	let f = d ++ "/hello.txt"
-	let _ = fs.write-file f "hi"
-	when fs.read-file f is ok s {
+	let _ = fs.write-text-sync f "hi"
+	when fs.read-text-sync f is ok s {
 		print s
 	} is err msg {
 		print "read err: $(msg)"
 	}
-	let _ = fs.delete-file f
+	let _ = fs.remove-sync f
 	print "done"
 }
