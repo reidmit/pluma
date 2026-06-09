@@ -35,6 +35,9 @@ pub(crate) enum OpResult {
 	Bytes(Vec<u8>),
 	Count(i64),
 	Nothing,
+	/// A connected socket from an offloaded `net.connect` (the worker did the blocking DNS +
+	/// handshake); the scheduler thread adopts it into `HostNet` on collect.
+	Conn(std::net::TcpStream),
 	Err(String),
 }
 

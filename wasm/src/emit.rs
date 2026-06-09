@@ -2792,20 +2792,15 @@ impl<'a> FnEmitter<'a> {
 		};
 		// Address strings are short; the length-probe cap never overflows.
 		const ADDR_CAP: i32 = 256;
-		let wrap_task = tag == "net-connect";
 		self.reset_bump();
 		match tag {
-			"net-listen" | "net-connect" => {
-				// (addr, alen) -> (status, socket-id).
-				let import = if tag == "net-listen" {
-					net.listen
-				} else {
-					net.connect
-				};
+			"net-listen" => {
+				// (addr, alen) -> (status, socket-id). (connect is no longer here — it's an
+				// offloaded suspending op, built via `make_task` like accept/read/write.)
 				let (ap, al) = self.marshal_strlike_arg(&args[0], alloc, store);
 				self.ins(Instruction::LocalGet(ap));
 				self.ins(Instruction::LocalGet(al));
-				self.ins(Instruction::Call(import));
+				self.ins(Instruction::Call(net.listen));
 				self.shape_net_id_result(io_result);
 			}
 			"net-close" => {
@@ -2836,21 +2831,7 @@ impl<'a> FnEmitter<'a> {
 			other => {
 				self.diags.push(format!("`{other}` is not a sync net op"));
 				self.push_nothing();
-				return;
 			}
-		}
-		if wrap_task {
-			// Wrap the `result` (on the stack) in `task.return result` — a Pure `$task`.
-			let r = self.fresh_local(types::value_ref());
-			self.ins(Instruction::LocalSet(r));
-			self.ins(Instruction::I32Const(types::TAG_TASK));
-			self.ins(Instruction::I32Const(task_kind::PURE));
-			self.ins(Instruction::LocalGet(r));
-			self.ins(Instruction::ArrayNewFixed {
-				array_type_index: types::T_VALARRAY,
-				array_size: 1,
-			});
-			self.ins(Instruction::StructNew(types::T_TASK));
 		}
 	}
 

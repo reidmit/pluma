@@ -47,36 +47,56 @@ fn net_bytes_v8(
 	(0, len as i32)
 }
 
-fn net_dial(
-	scope: &mut v8::HandleScope,
-	args: &v8::FunctionCallbackArguments,
-	connect: bool,
-	rv: &mut v8::ReturnValue,
-) {
-	let (ap, al) = (argi(scope, args, 0), argi(scope, args, 1));
-	let (ctx, mem) = ctx_and_mem(scope, args);
-	let addr = read_str(scope, mem, ap, al);
-	let ret = if connect {
-		ctx.state.net.connect(&addr)
-	} else {
-		ctx.state.net.listen(&addr)
-	};
-	let (s, n) = net_scalar_v8(ctx, ret);
-	set_pair(scope, rv, s, n);
-}
 pub(super) fn cb_net_listen(
-	s: &mut v8::HandleScope,
-	a: v8::FunctionCallbackArguments,
-	mut r: v8::ReturnValue,
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
 ) {
-	net_dial(s, &a, false, &mut r);
+	let (ap, al) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let addr = read_str(scope, mem, ap, al);
+	let ret = ctx.state.net.listen(&addr);
+	let (s, n) = net_scalar_v8(ctx, ret);
+	set_pair(scope, &mut rv, s, n);
 }
+
+/// `net-connect(i32 fid, i32 addr_ptr, i32 addr_len) -> (i32 status, i32 conn-id)`: dial a
+/// server, offloaded to a pool worker so the blocking DNS resolution + TCP handshake don't
+/// stall the scheduler thread (notes/IO.md). Submit-or-collect like the other offload ops:
+/// the first call submits the blocking `TcpStream::connect` and reports would-block (status
+/// 1); after the wake re-runs the parked task, the second call adopts the connected socket
+/// into the table and returns its id. status: 0 ok, 1 would-block, 2 error.
 pub(super) fn cb_net_connect(
-	s: &mut v8::HandleScope,
-	a: v8::FunctionCallbackArguments,
-	mut r: v8::ReturnValue,
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
 ) {
-	net_dial(s, &a, true, &mut r);
+	let fid = argi(scope, &args, 0);
+	let (ap, al) = (argi(scope, &args, 1), argi(scope, &args, 2));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	match ctx.state.reactor.collect(fid) {
+		Some(crate::offload::OpResult::Conn(stream)) => {
+			let ret = ctx.state.net.adopt_conn(stream);
+			let (s, n) = net_scalar_v8(ctx, ret);
+			set_pair(scope, &mut rv, s, n);
+		}
+		Some(crate::offload::OpResult::Err(e)) => {
+			ctx.state.last_error = e;
+			set_pair(scope, &mut rv, 2, 0);
+		}
+		Some(_) => unreachable!("net-connect collected a non-conn result"),
+		None => {
+			let addr = read_str(scope, mem, ap, al);
+			ctx.state.reactor.submit(
+				fid,
+				Box::new(move || match std::net::TcpStream::connect(&addr) {
+					Ok(s) => crate::offload::OpResult::Conn(s),
+					Err(e) => crate::offload::OpResult::Err(e.to_string()),
+				}),
+			);
+			set_pair(scope, &mut rv, 1, 0);
+		}
+	}
 }
 
 pub(super) fn cb_net_close(

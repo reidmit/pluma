@@ -58,6 +58,11 @@ pub(crate) mod task_kind {
 	// the Pluma wrapper interprets the bytes per op. Parks on `wait::IO` while a pool worker
 	// runs the blocking `std::fs` call.
 	pub(crate) const FILE_OP: i32 = 19;
+	// `net.connect`: dial a server, offloaded to a pool worker so the blocking DNS + TCP
+	// handshake don't stall the scheduler (notes/IO.md). Unlike accept/read/write (which
+	// park on socket *readiness*), connect parks on offload *completion* — the worker hands
+	// back the connected socket, adopted into the table on collect. Settles `result conn`.
+	pub(crate) const NET_CONNECT: i32 = 20;
 }
 
 /// The host-fed RPC stream channel (`std.web.stream`): a per-subscription mailbox
@@ -614,9 +619,10 @@ impl Runtime {
 }
 
 /// The `std.sys.net` host import indices. The synchronous ops (`listen`/`close`/
-/// `local_addr`/`connect`) are marshalled at `emit`'s `host_call`; the suspending ops
-/// (`accept`/`read`/`write`) are called from the hand-emitted scheduler
-/// (`helpers/task.rs`). The reactor controls (`poll`/`unwatch`) are no longer here — they
+/// `local_addr`) are marshalled at `emit`'s `host_call`; the suspending ops
+/// (`accept`/`read`/`write`, plus `connect` — offloaded to a pool worker) are called from
+/// the hand-emitted scheduler (`helpers/task.rs`). The reactor controls (`poll`/`unwatch`)
+/// are no longer here — they
 /// moved to the shared `IoImports`, since offload-only programs (fs, db) drive the same
 /// block step without any socket op.
 #[derive(Clone, Copy, Default)]
@@ -674,7 +680,7 @@ pub(crate) struct NetMarshal {
 /// `accept`/`read`/`write` plus the synchronous `listen`/`close`/`local-addr`/
 /// `connect`). Drives net-import registration (`module.rs`).
 pub(crate) fn is_net_builtin(tag: &str) -> bool {
-	is_net_sync(tag) || matches!(tag, "net-accept" | "net-read" | "net-write")
+	is_net_sync(tag) || matches!(tag, "net-accept" | "net-read" | "net-write" | "net-connect")
 }
 
 /// Whether `tag` is a `BlockingPool` offload builtin (notes/IO.md) — a suspending `$task`
@@ -688,10 +694,7 @@ pub(crate) fn is_offload_builtin(tag: &str) -> bool {
 /// `result` (or a Pure `$task`, for `connect`) at the `emit` call site, rather
 /// than a suspending `$task` the scheduler drives.
 pub(crate) fn is_net_sync(tag: &str) -> bool {
-	matches!(
-		tag,
-		"net-listen" | "net-close" | "net-local-addr" | "net-connect"
-	)
+	matches!(tag, "net-listen" | "net-close" | "net-local-addr")
 }
 
 /// One helper's wasm function type, resolved against the interner at emission.
@@ -1571,11 +1574,14 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		"scope-new" => task_kind::SCOPE,
 		"scope-next" => task_kind::NEXT,
 		// std.sys.net suspending socket ops: a `$task` carrying the op's args (the
-		// scheduler does the non-blocking host call + reactor park). listen/close/
-		// local-addr/connect are NOT here — they're synchronous host calls.
+		// scheduler does the non-blocking host call + reactor park, or the offload submit
+		// for connect). listen/close/local-addr are NOT here — they're synchronous calls.
 		"net-accept" => task_kind::NET_ACCEPT,
 		"net-read" => task_kind::NET_READ,
 		"net-write" => task_kind::NET_WRITE,
+		// connect is offloaded to a pool worker (blocking DNS + handshake), not a readiness
+		// park; the host submits the dial and hands back the socket on collect.
+		"net-connect" => task_kind::NET_CONNECT,
 		// `std.web.stream`: pull the next host-fed RPC stream event (a `$task` the
 		// scheduler drives — dequeue or park on `wait::RPC`).
 		"rpc-stream-next" => task_kind::RPC_NEXT,

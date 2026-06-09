@@ -1294,6 +1294,23 @@ pub(crate) fn build_pump_fn(
 							});
 						});
 					});
+					// connect: (fid, addr-ptr, addr-len) -> (status, conn-id). The blocking
+					// DNS + handshake run on a pool worker (notes/IO.md); the fiber parks on
+					// offload completion (`wait::IO`) until the host hands back the socket id.
+					// ok = boxed conn-id, same settle as accept.
+					w.local_get(tk).i32(task_kind::NET_CONNECT).i32_eq();
+					w.if_(|w| {
+						w.i32(0).global_set(nm.bump);
+						let (ap, al) = marshal_str_arg(w, nm, tp, 0);
+						w.local_get(fid);
+						w.local_get(ap).local_get(al);
+						w.call(net.connect);
+						net_settle(w, g, fid, fval, fkind, nm, |w, n| {
+							box_i(w, |w| {
+								w.local_get(n);
+							});
+						});
+					});
 				}
 
 				// BlockingPool offload ops (notes/IO.md): hand the blocking call to a host

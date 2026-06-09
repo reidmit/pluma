@@ -112,12 +112,12 @@ impl HostNet {
 		}
 	}
 
-	pub(crate) fn connect(&mut self, addr: &str) -> NetRet {
-		match TcpStream::connect(addr) {
-			Ok(s) => match s.set_nonblocking(true) {
-				Ok(()) => NetRet::OkInt(self.store(SocketEntry::Conn(s)) as i32),
-				Err(e) => NetRet::Err(e.to_string()),
-			},
+	/// Adopt a connected stream (handed back by an offloaded `net.connect` worker — see
+	/// `crate::offload`): set it non-blocking and store it, returning the socket id. Runs on
+	/// the scheduler thread (the only one that touches the socket table) at collect time.
+	pub(crate) fn adopt_conn(&mut self, stream: TcpStream) -> NetRet {
+		match stream.set_nonblocking(true) {
+			Ok(()) => NetRet::OkInt(self.store(SocketEntry::Conn(stream)) as i32),
 			Err(e) => NetRet::Err(e.to_string()),
 		}
 	}

@@ -22,7 +22,7 @@ fn offload_scalar(ctx: &mut Ctx, res: OpResult) -> (i32, i32) {
 			ctx.state.last_error = e;
 			(2, 0)
 		}
-		OpResult::Bytes(_) => unreachable!("offload_scalar on a byte op"),
+		OpResult::Bytes(_) | OpResult::Conn(_) => unreachable!("offload_scalar on a byte/conn op"),
 	}
 }
 
@@ -119,7 +119,7 @@ fn deliver_fs(
 			ctx.state.last_error = e;
 			(2, 0)
 		}
-		OpResult::Count(_) => unreachable!("fs op produced a Count"),
+		OpResult::Count(_) | OpResult::Conn(_) => unreachable!("fs op produced a Count/Conn"),
 	}
 }
 
