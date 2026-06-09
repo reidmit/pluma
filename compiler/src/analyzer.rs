@@ -4467,7 +4467,18 @@ impl<'compiler> Analyzer<'compiler> {
 		if let Some((enum_name, params)) = prelude.into_iter().next() {
 			return VariantResolution::Found(enum_name, params);
 		}
-		// Only user enums declare this variant — require qualification.
+		// Only user enums declare this variant, and the subject type doesn't pin one.
+		// A bare *constructor head* (`mod.variant x` written `variant x`) can't be a
+		// binding, so it still errors asking for qualification. But a bare *identifier*
+		// in nullary position (`when … is x`) IS a valid binding — treat it as one rather
+		// than reach across imports to reinterpret it as some unrelated enum's nullary
+		// variant. That import-wide reinterpretation was the wart where a stray
+		// `use std.sys.fs` made `is ok dir` resolve `dir` to `file-kind.dir` instead of
+		// binding it. Matching a user variant in pattern position is done by qualifying
+		// (`color.red`) or, when the subject type is a known enum, via the branch above.
+		if nullary_only {
+			return VariantResolution::NotFound;
+		}
 		let enums: Vec<String> = user.into_iter().map(|(n, _)| n).collect();
 		self.bare_variant_error(name, &enums);
 		VariantResolution::Reported

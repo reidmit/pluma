@@ -2,10 +2,10 @@
 source: tests/errors.rs
 expression: output
 ---
-error[E0135]: Variant `red` must be qualified by its enum.
+error[E0135]: Variant `wrap` must be qualified by its enum.
    │
-   ├─𜱶 help: qualify it, e.g. `color.red` (one of: `color.red`, `fruit.red`).
+   ├─𜱶 help: qualify it, e.g. `boxed.wrap` (one of: `boxed.wrap`, `tagged.wrap`).
    │
-15 │  if c is red {
-   │          ^^^
-   ╰─𜱶 tests/errors/bare-variant-ambiguous/main.pa:15:10
+14 │  when x is wrap _ {
+   │            ^^^^
+   ╰─𜱶 tests/errors/bare-variant-ambiguous/main.pa:14:12

@@ -1,0 +1,11 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Variant `circle` must be qualified by its enum.
+> 12 | 	when s is circle _ {
+                  ^^^^^^
+
+error: Variant `square` must be qualified by its enum.
+> 14 | 	} is square _ {
+             ^^^^^^

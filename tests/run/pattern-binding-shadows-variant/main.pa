@@ -1,0 +1,40 @@
+# Regression: a bare identifier in pattern position is a binding, even when its
+# name collides with a nullary variant that's in scope. Here `dir` is a variant
+# of `kind`, but `when r is ok dir` binds `dir` to the ok payload rather than
+# trying to match (and failing to qualify) `kind.dir`. Matching a variant is done
+# by qualifying it (`kind.dir`). This is what lets a module bind common names like
+# `dir`/`file`/`node` without an in-scope enum stealing them.
+enum kind {
+	file
+	dir
+}
+
+def unwrap-or = fun r {
+	when r is ok dir {
+		dir
+	} is err _ {
+		0
+	}
+}
+
+# A parameter named after a variant is fine for the same reason.
+def kept = fun dir {
+	dir + 1
+}
+
+# Qualified still matches the variant.
+def is-dir = fun k {
+	when k is kind.dir {
+		true
+	} else {
+		false
+	}
+}
+
+def main = fun {
+	print (to-string (unwrap-or (ok 42)))
+	print (to-string (unwrap-or (err "x")))
+	print (to-string (kept 7))
+	print (is-dir kind.dir)
+	print (is-dir kind.file)
+}

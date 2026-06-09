@@ -1,0 +1,17 @@
+# A bare user-variant *constructor* in a pattern (one that takes arguments) must
+# still be qualified by its enum -- it can't be a binding, so the analyzer points
+# you at `shape.circle`. A bare nullary identifier, by contrast, is now read as a
+# plain binding (write `enum.variant` if you meant to match a nullary variant);
+# that's what keeps an in-scope variant name from stealing a pattern binding.
+enum shape {
+	circle int
+	square int
+}
+
+def describe = fun s {
+	when s is circle _ {
+		"circle"
+	} is square _ {
+		"square"
+	}
+}

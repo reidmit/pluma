@@ -1,7 +1,0 @@
----
-source: tests/analyze.rs
-expression: output
----
-error: Variant `red` must be qualified by its enum.
-> 15 | 	if c is red {
-                ^^^

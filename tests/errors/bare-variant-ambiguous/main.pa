@@ -1,18 +1,19 @@
-enum color {
-	red
-	green
+enum boxed {
+	wrap int
 }
 
-enum fruit {
-	red
-	apple
+enum tagged {
+	wrap string
 }
 
-# Bare `red` must be qualified. Two enums declare it and the subject's type
-# isn't known here (`c` is a fresh type var), so the help offers both
-# `color.red` and `fruit.red`.
-def check = fun c {
-	if c is red {
+# A bare variant *constructor* (one taking arguments) must be qualified. Two enums
+# declare `wrap` and the subject's type isn't known here (`x` is a fresh type var),
+# so the help offers both `boxed.wrap` and `tagged.wrap`. A bare nullary identifier,
+# by contrast, would be read as a binding.
+def check = fun x {
+	when x is wrap _ {
 		0
+	} else {
+		1
 	}
 }
