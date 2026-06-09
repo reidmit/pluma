@@ -1837,6 +1837,11 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 
+			// `pluma dev`: give a top-level `css.ruleset` def a devtools-friendly
+			// class name by wrapping its value in `css.label "<def-name>" (…)`. A
+			// no-op off `hmr` and for non-ruleset defs.
+			self.maybe_name_css_ruleset_def(definition);
+
 			match &mut definition.kind {
 				DefinitionKind::Expr(expr) => {
 					// `built-in "tag"` as the immediate def RHS: the
@@ -2506,6 +2511,118 @@ impl<'compiler> Analyzer<'compiler> {
 				field: member,
 			};
 		}
+	}
+
+	// `pluma dev` hot-reload: rewrite a top-level `def card = css.rule [...]` (or
+	// `css.compose [...]`, possibly inside a `using css { ... }` block) into
+	// `def card = css.label "card" (...)`, so the rule's generated class reads
+	// `card-<hash>` in browser devtools instead of a bare `c<hash>`. `css.label` is
+	// content-neutral (the name never enters the hash), so dedup and the emitted CSS
+	// are unchanged; this is purely a debug-build legibility aid. A no-op off `hmr`,
+	// matching `pluma build`'s bare-hash classes. Keyed on the value's head being a
+	// `std.css` `rule`/`compose` call — the shape that reliably marks a ruleset value
+	// before inference — so non-ruleset defs are untouched.
+	fn maybe_name_css_ruleset_def(&mut self, definition: &mut DefinitionNode) {
+		if !self.hmr {
+			return;
+		}
+		let DefinitionKind::Expr(value) = &definition.kind else {
+			return;
+		};
+		// A `using css { ... }` block's value is its last expression; peek through it
+		// to classify the rule, but wrap the whole def value so the injected
+		// `css.label` callee resolves at module scope.
+		let head = match &value.kind {
+			ExprKind::Using { body, .. } => match body.last() {
+				Some(e) => e,
+				None => return,
+			},
+			_ => value,
+		};
+		if !self.is_css_ruleset_call(head) {
+			return;
+		}
+		// The local name `std.css` was imported under, for the `<css>.label` callee.
+		let Some(css_local) = self
+			.import_qualified
+			.iter()
+			.find(|(_, full)| full.as_str() == "std.css")
+			.map(|(local, _)| local.clone())
+		else {
+			return;
+		};
+
+		let name = definition.name.name.clone();
+		let DefinitionKind::Expr(value) = &mut definition.kind else {
+			return;
+		};
+		let range = value.range;
+		let placeholder = ExprNode {
+			ty: Type::Unknown,
+			kind: ExprKind::EmptyTuple,
+			range,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+		let original = std::mem::replace(value, placeholder);
+		let callee = ExprNode {
+			ty: Type::Unknown,
+			kind: ExprKind::FieldAccess {
+				receiver: Box::new(ExprNode {
+					ty: Type::Unknown,
+					kind: ExprKind::Identifier(IdentifierNode {
+						name: css_local,
+						range,
+					}),
+					range,
+					trait_dispatch: None,
+					dispatch_sink: None,
+				}),
+				field: IdentifierNode {
+					name: "label".to_string(),
+					range,
+				},
+			},
+			range,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+		let name_arg = ExprNode {
+			ty: Type::Unknown,
+			kind: ExprKind::Literal(LiteralNode {
+				kind: LiteralKind::String(name),
+				range,
+			}),
+			range,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+		value.kind = ExprKind::Call(CallNode {
+			range,
+			callee: Box::new(callee),
+			args: vec![name_arg, original],
+			dict_args: Vec::new(),
+		});
+	}
+
+	// True when `expr` is a call to `std.css`'s `rule` or `compose` (the two
+	// ruleset-producing builders), written either qualified (`css.rule …`) or as a
+	// `using css { ... }` leading-dot member (`.rule …`). Alias-agnostic via
+	// `import_qualified`.
+	fn is_css_ruleset_call(&self, expr: &ExprNode) -> bool {
+		let ExprKind::Call(call) = &expr.kind else {
+			return false;
+		};
+		let (ns_local, member) = match &call.callee.kind {
+			ExprKind::ImplicitMember { namespace, member } => (&namespace.name, &member.name),
+			ExprKind::FieldAccess { receiver, field } => match &receiver.kind {
+				ExprKind::Identifier(id) => (&id.name, &field.name),
+				_ => return false,
+			},
+			_ => return false,
+		};
+		(member == "rule" || member == "compose")
+			&& self.import_qualified.get(ns_local).map(String::as_str) == Some("std.css")
 	}
 
 	fn maybe_rewrite_scope_method(&mut self, expr: &mut ExprNode) {

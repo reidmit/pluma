@@ -352,15 +352,30 @@ def color-to-string :: fun color-value -> string = fun c {
 # -- types and defs share one namespace.)
 
 # A complete style rule -- a flat list of declarations and nested blocks scoped to one
-# hashed class.
+# hashed class. The leading string is an optional *debug name*: empty in a normal build,
+# set to the source `def` name under `pluma dev` (see `label`) so the generated class
+# reads `card-<hash>` in devtools instead of a bare `c<hash>`. It never enters the
+# content hash, so dedup and the rendered CSS are unaffected.
 public enum ruleset {
-	blocks (list decl)
+	blocks string (list decl)
 }
 
 # Assemble a ruleset from its entries -- plain declarations and any `on`/`media`
 # blocks, mixed freely in one list.
 public def rule :: fun (list decl) -> ruleset = fun ds {
-	ruleset.blocks ds
+	ruleset.blocks "" ds
+}
+
+# Tag a ruleset with a *debug name* so its generated class reads `name-<hash>` (e.g.
+# `card-1a2b3c4`) rather than a bare `c<hash>` -- friendlier to spot in browser devtools.
+# The name only prefixes the class; it never enters the content hash, so the rendered CSS
+# and dedup are unchanged. `pluma dev` injects this automatically around a top-level
+# `css.ruleset` def, passing the def's own name; a normal build carries no name and the
+# class stays `c<hash>`. You rarely call it by hand.
+public def label :: fun string ruleset -> ruleset = fun name r {
+	when r is ruleset.blocks _ ds {
+		ruleset.blocks name ds
+	}
 }
 
 # A pseudo-class (or pseudo-element) variant: `on "hover" [...]` =>
@@ -381,8 +396,8 @@ public def media :: fun string (list decl) -> decl = fun q ds {
 # class). The order-explicit way to combine styles -- preferred over stacking two
 # `view.styled` attributes on a node, whose conflicts resolve by stylesheet order.
 public def compose :: fun (list ruleset) -> ruleset = fun rs {
-	ruleset.blocks (list.flat-map rs fun r {
-		when r is ruleset.blocks bs {
+	ruleset.blocks "" (list.flat-map rs fun r {
+		when r is ruleset.blocks _ bs {
 			bs
 		}
 	})
@@ -393,9 +408,34 @@ public def compose :: fun (list ruleset) -> ruleset = fun rs {
 # class and one entry). This is what `view.styled` calls; call it directly only if
 # you are assembling a `class` string by hand.
 public def class-of :: fun ruleset -> string = fun r {
-	let cls = "c$(to-hex (hash-css (canonical r)))"
+	let cls = class-name r
 	let _ = register cls (render-rule cls r)
 	cls
+}
+
+# The class string for a ruleset: the content hash, prefixed with the rule's debug name
+# (`card-1a2b3c4`) when it carries one (see `label`), or a bare `c1a2b3c4` otherwise. The
+# name is sanitized to CSS-identifier-safe characters and dropped entirely if nothing
+# survives, so the hash alone always keeps the class valid and unique.
+def class-name :: fun ruleset -> string = fun r {
+	let hash = to-hex (hash-css (canonical r))
+	when r is ruleset.blocks name _ {
+		let safe = debug-prefix name
+		if string.is-empty safe {
+			"c$(hash)"
+		} else {
+			"$(safe)-$(hash)"
+		}
+	}
+}
+
+# Keep only the characters legal in a CSS class identifier (lowercase letters, digits,
+# `-`, `_`); anything else is dropped. A def name like `card` or `nav-link` passes
+# through untouched; an empty result falls back to the bare hash in `class-name`.
+def debug-prefix :: fun string -> string = fun s {
+	string.join (list.filter (string.chars s) fun c {
+		string.contains "abcdefghijklmnopqrstuvwxyz0123456789-_" c
+	}) ""
 }
 
 # All collected CSS as one stylesheet string -- every rule registered (via
@@ -514,7 +554,7 @@ def register :: fun string string -> nothing = fun cls css {
 # to the content hash. Two rulesets with the same blocks and declarations in the
 # same order serialize identically -> same hash -> same class.
 def canonical :: fun ruleset -> string = fun r {
-	when r is ruleset.blocks ds {
+	when r is ruleset.blocks _ ds {
 		string.join (list.map ds fun d { canon-decl d }) "|"
 	}
 }
@@ -532,7 +572,7 @@ def canon-decl :: fun decl -> string = fun d {
 # Render a ruleset to real CSS, scoped to `cls`. The plain declarations become the
 # element's own block (emitted first, if any); each nested `on`/`media` follows.
 def render-rule :: fun string ruleset -> string = fun cls r {
-	when r is ruleset.blocks ds {
+	when r is ruleset.blocks _ ds {
 		let own = inline ds
 		let own-block = if string.is-empty own {
 			""

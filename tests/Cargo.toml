@@ -48,3 +48,10 @@ harness = false
 [[test]]
 name = "soundness"
 path = "soundness.rs"
+
+# `pluma dev` CSS class naming. Pins that `hmr` mode tags a `css.ruleset` def's
+# generated class with the def name (`card-<hash>`) while a normal build keeps the
+# bare content hash (`c<hash>`) — the one path the ungated run-suite can't exercise.
+[[test]]
+name = "css_dev_names"
+path = "css_dev_names.rs"
