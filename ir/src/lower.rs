@@ -1272,6 +1272,10 @@ impl<'a> Lowerer<'a> {
 			ExprKind::Defer(inner) => self.lower_defer(inner, range),
 			ExprKind::Try(node) => self.lower_try(node, range),
 			ExprKind::Scope(node) => self.lower_scope(node, range),
+			// A `using` block is a transparent scope; lower its body as a statement
+			// sequence whose value is the last expression. (The leading-dot members
+			// were rewritten to `NamespaceAccess` during analysis.)
+			ExprKind::Using { body, .. } => self.lower_body(body),
 			other => Err(format!("unsupported expr: {}", expr_kind_name(other))),
 		}
 	}

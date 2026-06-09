@@ -187,6 +187,10 @@ pub enum Token {
 	/// `use` keyword (module import)
 	KeywordUse(usize, usize),
 
+	/// `using` keyword (ambient-namespace block: `using css { .color ... }` —
+	/// inside the block a leading-dot `.member` resolves in `css`)
+	KeywordUsing(usize, usize),
+
 	/// `when` keyword
 	KeywordWhen(usize, usize),
 
@@ -359,6 +363,7 @@ impl Token {
 			| KeywordTrait(start, end)
 			| KeywordTry(start, end)
 			| KeywordUse(start, end)
+			| KeywordUsing(start, end)
 			| KeywordWhile(start, end)
 			| KeywordWhen(start, end)
 			| KeywordWhere(start, end)
@@ -398,10 +403,10 @@ impl Token {
 
 		match self {
 			Identifier(..) | KeywordBuiltin(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..)
-			| KeywordScope(..) | KeywordManual(..) | DecimalDigits(..) | DurationLiteral(..)
-			| HexDigits(..) | BinaryDigits(..) | OctalDigits(..) | LeftParen(..) | LeftBracket(..)
-			| LeftBrace(..) | Backtick(..) | StringLiteral(..) | BytesLiteral(..) | BoolTrue(..)
-			| BoolFalse(..) | UnaryMinus(..) => true,
+			| KeywordUsing(..) | KeywordScope(..) | KeywordManual(..) | DecimalDigits(..)
+			| DurationLiteral(..) | HexDigits(..) | BinaryDigits(..) | OctalDigits(..)
+			| LeftParen(..) | LeftBracket(..) | LeftBrace(..) | Backtick(..) | StringLiteral(..)
+			| BytesLiteral(..) | BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
 			_ => false,
 		}
 	}
@@ -468,6 +473,7 @@ impl fmt::Display for Token {
 			&KeywordTrait(..) => "keyword `trait`",
 			&KeywordTry(..) => "keyword `try`",
 			&KeywordUse(..) => "keyword `use`",
+			&KeywordUsing(..) => "keyword `using`",
 			&KeywordWhile(..) => "keyword `while`",
 			&KeywordWhen(..) => "keyword `when`",
 			&KeywordWhere(..) => "keyword `where`",

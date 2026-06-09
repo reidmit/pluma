@@ -396,11 +396,17 @@ fn collect_dispatch_cells(expr: &ExprNode, cells: &mut Vec<DispatchCell>) {
 				collect_dispatch_cells(e, cells);
 			}
 		}
+		ExprKind::Using { body, .. } => {
+			for e in body {
+				collect_dispatch_cells(e, cells);
+			}
+		}
 		ExprKind::Identifier(_)
 		| ExprKind::Literal(_)
 		| ExprKind::Regex(_)
 		| ExprKind::EmptyTuple
 		| ExprKind::Builtin(_)
+		| ExprKind::ImplicitMember { .. }
 		| ExprKind::NamespaceAccess(_) => {}
 	}
 }
@@ -2477,6 +2483,31 @@ impl<'compiler> Analyzer<'compiler> {
 	// Rewrite a scope-handle method call `s.method args` into a call to the
 	// corresponding `task.scope-*` kernel builtin with `s` prepended:
 	// `s.spawn t` -> `task.scope-spawn s t`. No-op for anything else.
+	// Rewrite a `using`-block leading-dot `.member` into the equivalent
+	// `FieldAccess { receiver: <namespace>, field: member }`, so the existing
+	// field-access analysis resolves it to a `NamespaceAccess` — codegen never
+	// sees an `ImplicitMember`. Called before `constrain_expr`'s match.
+	fn maybe_rewrite_implicit_member(&mut self, expr: &mut ExprNode) {
+		if !matches!(&expr.kind, ExprKind::ImplicitMember { .. }) {
+			return;
+		}
+		if let ExprKind::ImplicitMember { namespace, member } =
+			std::mem::replace(&mut expr.kind, ExprKind::EmptyTuple)
+		{
+			let receiver = ExprNode {
+				range: namespace.range,
+				kind: ExprKind::Identifier(namespace),
+				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
+			};
+			expr.kind = ExprKind::FieldAccess {
+				receiver: Box::new(receiver),
+				field: member,
+			};
+		}
+	}
+
 	fn maybe_rewrite_scope_method(&mut self, expr: &mut ExprNode) {
 		// Resolve to the kernel def name iff this is `handle.method args` with a
 		// scope-handle receiver and a method valid for that handle kind.
@@ -2583,6 +2614,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// handle prepended as the first argument. Done before the main match so
 		// the rewritten call is type-checked + lowered like any other call.
 		self.maybe_rewrite_scope_method(expr);
+		self.maybe_rewrite_implicit_member(expr);
 
 		match &mut expr.kind {
 			// For each of these, we don't bother introducing a new type var and generating
@@ -3732,6 +3764,27 @@ impl<'compiler> Analyzer<'compiler> {
 				// rest of unification can proceed.
 				self.error(expr.range, BuiltinMustBeTopLevelRhs);
 				expr.ty = self.new_type_var();
+			}
+
+			ExprKind::Using { body, .. } => {
+				// A `using` block is a transparent scope: constrain its body like a
+				// function body; its value (and type) is the last expression. The
+				// leading-dot `.member`s inside have already been rewritten to
+				// `FieldAccess` by `maybe_rewrite_implicit_member`.
+				self.enter_scope();
+				let mut body_ty = Type::Nothing;
+				for e in body {
+					self.constrain_expr(e, constraints);
+					body_ty = e.ty.clone();
+				}
+				self.leave_scope();
+				expr.ty = body_ty;
+			}
+
+			ExprKind::ImplicitMember { .. } => {
+				// Rewritten to `FieldAccess` by `maybe_rewrite_implicit_member`
+				// before this match runs.
+				unreachable!("ImplicitMember should have been rewritten before constrain_expr's match");
 			}
 		}
 	}
@@ -5565,11 +5618,17 @@ impl<'compiler> Analyzer<'compiler> {
 					expr.ty = Type::Unknown;
 				}
 			}
+			ExprKind::Using { body, .. } => {
+				for e in body.iter_mut() {
+					self.report_unresolved_try_in_expr(e, subst);
+				}
+			}
 			ExprKind::Identifier(_)
 			| ExprKind::Literal(_)
 			| ExprKind::Regex(_)
 			| ExprKind::EmptyTuple
 			| ExprKind::Builtin(_)
+			| ExprKind::ImplicitMember { .. }
 			| ExprKind::NamespaceAccess(_) => {}
 		}
 	}
@@ -5772,11 +5831,18 @@ impl<'compiler> Analyzer<'compiler> {
 					*dispatched_any = true;
 				}
 			}
+			ExprKind::Using { body, .. } => {
+				// Transparent block: a `try` inside ties the same enclosing tail.
+				for e in body.iter_mut() {
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, enclosing_tail);
+				}
+			}
 			ExprKind::Identifier(_)
 			| ExprKind::Literal(_)
 			| ExprKind::Regex(_)
 			| ExprKind::EmptyTuple
 			| ExprKind::Builtin(_)
+			| ExprKind::ImplicitMember { .. }
 			| ExprKind::NamespaceAccess(_) => {}
 		}
 	}
@@ -6299,6 +6365,17 @@ impl<'compiler> Analyzer<'compiler> {
 				for body_expr in body.iter_mut() {
 					self.annotate_expr(body_expr, subst);
 				}
+			}
+
+			ExprKind::Using { body, .. } => {
+				for body_expr in body.iter_mut() {
+					self.annotate_expr(body_expr, subst);
+				}
+			}
+
+			ExprKind::ImplicitMember { .. } => {
+				// Rewritten to FieldAccess (then NamespaceAccess) during constrain;
+				// never reaches annotate.
 			}
 
 			ExprKind::Grouping(inner) => {

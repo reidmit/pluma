@@ -467,6 +467,12 @@ impl AstWalker {
 					self.walk_expr(e, out);
 				}
 			}
+			ExprKind::Using { body, .. } => {
+				for e in body {
+					self.walk_expr(e, out);
+				}
+			}
+			ExprKind::ImplicitMember { .. } => {}
 			ExprKind::Scope(s) => {
 				for e in &s.body {
 					self.walk_expr(e, out);

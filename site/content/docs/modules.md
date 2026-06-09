@@ -87,6 +87,30 @@ when c is colors.color.red {
 }
 ```
 
+## Ambient namespaces: `using`
+
+Qualification keeps provenance explicit, but in a block that leans hard on one module — a CSS ruleset, a view tree — the repeated prefix is noise. A `using <namespace> { … }` block makes that namespace *ambient*: inside it, a leading-dot `.member` resolves in the named module, so `css.color` becomes `.color`. It's the scoped, opt-in counterpart to `use` (which binds a namespace for the whole file).
+
+```pluma
+use std.css
+
+def card :: css.ruleset = using css {
+    .rule [.base [.padding (.rem 1.0), .background (.hex "#0b1020")]]
+}
+```
+
+Only the leading dot is ambient: `.color` is `css.color`, but `.color.foo` is `(css.color).foo`, and a bare name (no dot) is an ordinary lexical lookup — so other namespaces stay qualified inside the block (`signal.get`, `list.map`). The block's value is its last expression, like a `fun` body; `let` bindings inside it are scoped to the block.
+
+Blocks nest, and the innermost ambient wins:
+
+```pluma
+using view {
+    .div [] [.text (using string { .join parts ", " })]
+}
+```
+
+A leading `.member` outside any `using` block is an error (E0031) — write it qualified, or wrap it in a `using`. The dot makes provenance legible *and* greppable: unlike a wildcard import, you can always see which names are coming from the ambient namespace. (A line that *starts* with `.` is its own statement, never a field-access chain continuing the line above.)
+
 ## A module and its principal type
 
 It's common for a module to be named after the one type it's built around — `shapes.circle` exporting a `circle`, the way `std.task` is the home of `task`. To avoid `circle.circle` stutter, the **eponymous type** — an enum named like the module's last path segment — is brought into scope *bare* when you `use` the module:

@@ -524,6 +524,13 @@ impl<'a> Formatter<'a> {
 			When(w) => self.format_when(w),
 			While(w) => self.format_while(w),
 			Scope(s) => self.format_scope(s),
+			Using { namespace, body } => concat(vec![
+				text("using "),
+				text(namespace.name.clone()),
+				text(" "),
+				self.format_block(body),
+			]),
+			ImplicitMember { member, .. } => concat(vec![text("."), text(member.name.clone())]),
 			Builtin(tag) => concat(vec![text("built-in \""), text(tag.clone()), text("\"")]),
 		}
 	}

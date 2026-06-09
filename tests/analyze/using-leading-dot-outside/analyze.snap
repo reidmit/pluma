@@ -1,0 +1,11 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: A leading `.member` is only valid inside a `using` block.
+> 4 | 	let x = .foo
+               ^^^^
+
+error: Unexpected token (an identifier). Expected a '}'.
+> 5 | 	x
+       ^

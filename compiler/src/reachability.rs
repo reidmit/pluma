@@ -99,6 +99,15 @@ fn collect_namespace_prefixes(expr: &ExprNode, out: &mut HashSet<String>) {
 			collect_block(&n.body, out);
 		}
 		Scope(n) => collect_block(&n.body, out),
+		Using { namespace, body } => {
+			// `using css { ... }` references the `css` namespace (so its import is
+			// reachable) even before its leading-dot members are counted.
+			out.insert(namespace.name.clone());
+			collect_block(body, out);
+		}
+		ImplicitMember { namespace, .. } => {
+			out.insert(namespace.name.clone());
+		}
 		Identifier(_) | Literal(_) | EmptyTuple | Regex(_) | Builtin(_) => {}
 	}
 }

@@ -612,6 +612,12 @@ impl Resolver {
 					self.walk_expr(e, inner);
 				}
 			}
+			ExprKind::Using { body, .. } => {
+				for e in body {
+					self.walk_expr(e, scope);
+				}
+			}
+			ExprKind::ImplicitMember { .. } => {}
 			ExprKind::Try(t) => {
 				let inner = Some(t.range);
 				self.bind_pattern(&t.pattern, inner);

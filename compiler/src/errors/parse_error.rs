@@ -22,6 +22,7 @@ pub enum ParseErrorKind {
 	InvalidRegularExpressionCountModifier,
 	QuantifierOnRegexAnchor,
 	InvalidExpressionAfterDot,
+	LeadingDotOutsideUsing,
 	InvalidDefBody,
 	MissingReturnType,
 	OverflowingIntegerLiteral,
@@ -71,6 +72,10 @@ impl fmt::Display for ParseError {
 			InvalidExpressionAfterDot => write!(
 				f,
 				"Invalid expression after `.`: expected either an integer or a field name."
+			),
+			LeadingDotOutsideUsing => write!(
+				f,
+				"A leading `.member` is only valid inside a `using` block."
 			),
 			InvalidDefBody => write!(
 				f,
@@ -181,6 +186,7 @@ impl Reportable for ParseError {
 			MisplacedVisibility { .. } => "E0028",
 			ExpectedExpression { .. } => "E0029",
 			MisplacedRemote => "E0030",
+			LeadingDotOutsideUsing => "E0031",
 		}
 	}
 
@@ -205,6 +211,9 @@ impl Reportable for ParseError {
 				"write the tag as a plain literal, e.g. `built-in \"io.print\"`."
 			}
 			InvalidExpressionAfterDot => "use `.field` for a record field or `.0` for a tuple element.",
+			LeadingDotOutsideUsing => {
+				"wrap it in `using <namespace> { ... }`, or write the access in full (e.g. `css.color`)."
+			}
 
 			// The generic `expected }` / `expected {` recoveries are where the
 			// common record-vs-block mix-ups surface. The offending token tells

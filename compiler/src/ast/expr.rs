@@ -110,6 +110,25 @@ pub enum ExprKind {
 	/// to the hidden `task.scope-new` kernel builtin, so it never survives to
 	/// codegen.
 	Scope(ScopeNode),
+
+	/// `using <namespace> { body }` — an ambient-namespace block. Inside `body`,
+	/// a leading-dot `.member` (an `ImplicitMember`) resolves in `namespace`, so
+	/// a css/view-builder block drops the repeated `css.`/`view.` prefix. Purely
+	/// a scoping construct: its value is the block's last expression, like a `fun`
+	/// body. The `namespace` is an imported module's local name.
+	Using {
+		namespace: IdentifierNode,
+		body: Vec<ExprNode>,
+	},
+
+	/// `.member` inside a `using` block — sugar for `<namespace>.member`. The
+	/// parser bakes in the enclosing `using`'s namespace (innermost wins); the
+	/// analyzer rewrites it to the equivalent `FieldAccess` (then `NamespaceAccess`)
+	/// so codegen never sees it. Formats back as `.member`.
+	ImplicitMember {
+		namespace: IdentifierNode,
+		member: IdentifierNode,
+	},
 }
 
 /// One entry in a list literal: either a single element or a spliced
@@ -278,6 +297,19 @@ impl std::fmt::Debug for ExprKind {
 
 			Scope(scope_node) => {
 				write!(f, "{:#?}", scope_node)
+			}
+
+			Using { namespace, body } => f
+				.debug_struct(&format!("using `{}`", namespace.name))
+				.field("body", body)
+				.finish(),
+
+			ImplicitMember { namespace, member } => {
+				write!(
+					f,
+					"implicit-member `.{}` (in `{}`)",
+					member.name, namespace.name
+				)
 			}
 		}
 	}

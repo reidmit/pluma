@@ -1,0 +1,6 @@
+# A leading-dot `.member` is only meaningful inside a `using` block. In primary
+# position with no enclosing `using`, it is a parse error (E0031).
+def main = fun {
+	let x = .foo
+	x
+}

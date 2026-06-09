@@ -110,6 +110,10 @@ pub struct Parser<'a> {
 	lookahead: VecDeque<Token>,
 	current_line: usize,
 	line_start_offsets: HashMap<usize, usize>,
+	// Stack of the namespaces of the enclosing `using` blocks (innermost last).
+	// Non-empty means a leading-dot `.member` is in scope and resolves against
+	// the top entry; empty means a leading `.` is a parse error.
+	using_ambient: Vec<IdentifierNode>,
 }
 
 impl<'a> Parser<'a> {
@@ -123,6 +127,7 @@ impl<'a> Parser<'a> {
 			lookahead: VecDeque::new(),
 			current_line: 0,
 			line_start_offsets: HashMap::from_iter(vec![(0, 0)]),
+			using_ambient: Vec::new(),
 		};
 	}
 
@@ -640,6 +645,62 @@ impl<'a> Parser<'a> {
 		})
 	}
 
+	// `using <namespace> { body }` — an ambient-namespace block. The namespace is
+	// a single identifier (an imported module's local name). While parsing the
+	// body, it is pushed onto `using_ambient` so a leading-dot `.member` inside
+	// resolves against it (innermost wins). The block parses like a `fun` body and
+	// its value is the last expression.
+	fn parse_using_expression(&mut self) -> Option<ExprNode> {
+		let (start, _) = expect_token_and_advance!(self, Token::KeywordUsing);
+
+		let namespace = self.expect_identifier()?;
+
+		expect_token_and_advance!(self, Token::LeftBrace);
+
+		self.using_ambient.push(namespace.clone());
+		let body = self.parse_body_expressions();
+		self.using_ambient.pop();
+		let body = body?;
+
+		self.skip_line_breaks();
+
+		let (_, end) = expect_token_and_advance!(self, Token::RightBrace);
+
+		Some(ExprNode {
+			range: Range::between(start, end),
+			kind: ExprKind::Using { namespace, body },
+			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		})
+	}
+
+	// A leading `.member` — sugar for `<namespace>.member` against the innermost
+	// enclosing `using` block. Reports an error if there is no enclosing `using`.
+	fn parse_implicit_member(&mut self) -> Option<ExprNode> {
+		let (start, _) = expect_token_and_advance!(self, Token::Dot);
+
+		let member = self.expect_identifier()?;
+
+		let namespace = match self.using_ambient.last() {
+			Some(ns) => ns.clone(),
+			None => {
+				return self.error(ParseError {
+					range: Range::between(start, member.range.end),
+					kind: ParseErrorKind::LeadingDotOutsideUsing,
+				});
+			}
+		};
+
+		Some(ExprNode {
+			range: Range::between(start, member.range.end),
+			kind: ExprKind::ImplicitMember { namespace, member },
+			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		})
+	}
+
 	fn parse_decimal_number(&mut self) -> Option<LiteralNode> {
 		let (start, end) = expect_token_and_advance!(self, Token::DecimalDigits);
 
@@ -895,6 +956,11 @@ impl<'a> Parser<'a> {
 				dispatch_sink: None,
 			}),
 			Some(Token::KeywordBuiltin(..)) => self.parse_builtin(),
+			Some(Token::KeywordUsing(..)) => self.parse_using_expression(),
+			// A leading `.member` — only valid inside a `using` block, where it
+			// resolves against the ambient namespace. `parse_implicit_member`
+			// reports an error if there is no enclosing `using`.
+			Some(Token::Dot(..)) => self.parse_implicit_member(),
 			Some(Token::Identifier(..)) => self.parse_identifier().map(|ident| ExprNode {
 				range: ident.range,
 				kind: ExprKind::Identifier(ident),
@@ -987,6 +1053,10 @@ impl<'a> Parser<'a> {
 				Some(Token::LineBreak(..) | Token::Indent(..) | Token::Outdent(..))
 			) {
 				match self.peek_past_breaks().and_then(Operator::from_token) {
+					// Inside a `using` block, a line that *starts* with `.` is a new
+					// leading-dot statement (`.member`), not a field-access chain
+					// continuing the previous expression. Don't glue it on.
+					Some(Operator::FieldAccess) if !self.using_ambient.is_empty() => break,
 					Some(_) => self.skip_line_breaks(),
 					None => break,
 				}

@@ -1,0 +1,20 @@
+---
+source: tests/format.rs
+expression: once
+---
+use std.list
+
+# `using <namespace> { ... }` and its leading-dot `.member` accesses round-trip
+# through the formatter unchanged; a line that starts with `.` is its own
+# statement, not a field-access chain continuing the previous one.
+def doubled = fun xs {
+	using list {
+		.map xs fun x {
+			x * 2
+		}
+	}
+}
+
+def first-two = fun xs {
+	using list { .concat [.length xs] [.length (.reverse xs)] }
+}
