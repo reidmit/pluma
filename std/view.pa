@@ -442,18 +442,41 @@ def fragments :: fun (list attribute) (fun attribute -> option string) -> list s
 }
 
 def render-attrs :: fun (list attribute) -> string = fun attrs {
-	let plain = string.join (list.map attrs fun a { render-attr a }) ""
 	let class-frags = fragments attrs class-fragment
 	let style-frags = fragments attrs style-fragment
-	let with-class = if list.is-empty class-frags {
-		plain
-	} else {
-		"$(plain) class=\"$(escape-attr (string.join class-frags " "))\""
+	let first-class = first-contributor attrs class-fragment
+	let first-style = first-contributor attrs style-fragment
+	# Render in source order: each attribute emits its own markup, EXCEPT the merged
+	# `class`/`style`, which lands once at its first contributor (later contributors --
+	# and the gathered handlers -- emit nothing via `render-attr`). No single attribute
+	# feeds both, so the two first-contributor positions never collide.
+	string.join (list.map (list.enumerate attrs) fun p {
+		if at-index first-class p.0 {
+			" class=\"$(escape-attr (string.join class-frags " "))\""
+		} else if at-index first-style p.0 {
+			" style=\"$(escape-attr (string.join style-frags "; "))\""
+		} else {
+			render-attr p.1
+		}
+	}) ""
+}
+
+# The index of the first attribute that contributes a `class`/`style` fragment, if any.
+def first-contributor :: fun (list attribute) (fun attribute -> option string) -> option int = fun attrs frag {
+	list.find-index attrs fun a {
+		when frag a is some _ {
+			true
+		} else {
+			false
+		}
 	}
-	if list.is-empty style-frags {
-		with-class
+}
+
+def at-index :: fun (option int) int -> bool = fun oi i {
+	when oi is some j {
+		j == i
 	} else {
-		"$(with-class) style=\"$(escape-attr (string.join style-frags "; "))\""
+		false
 	}
 }
 
