@@ -34,30 +34,26 @@ def accent-color :: fun int -> string = fun i {
 
 # The page shell: a dark card whose border tracks the live `--accent`.
 def card :: css.ruleset = css.rule [
-	css.base [
-		css.max-width (css.px 520.0),
-		css.margin (css.rem 2.0),
-		css.padding (css.rem 1.5),
-		css.border-radius (css.px 12.0),
-		css.background (css.hex "#0b1020"),
-		css.color (css.hex "#e2e8f0"),
-		css.property "border" "2px solid var(--accent)",
-		css.property "font-family" "system-ui, sans-serif",
-	],
+	css.max-width (css.px 520.0),
+	css.margin (css.rem 2.0),
+	css.padding (css.rem 1.5),
+	css.border-radius (css.px 12.0),
+	css.background (css.hex "#0b1020"),
+	css.color (css.hex "#e2e8f0"),
+	css.property "border" "2px solid var(--accent)",
+	css.property "font-family" "system-ui, sans-serif",
 ]
 
 # Buttons: background reads the inherited `--accent`; `:hover` is real extracted CSS
 # an inline style could never express.
 def button :: css.ruleset = css.rule [
-	css.base [
-		css.background (css.var "accent"),
-		css.color (css.hex "#ffffff"),
-		css.property "border" "none",
-		css.padding (css.rem 0.6),
-		css.margin (css.px 4.0),
-		css.border-radius (css.px 8.0),
-		css.cursor "pointer",
-	],
+	css.background (css.var "accent"),
+	css.color (css.hex "#ffffff"),
+	css.property "border" "none",
+	css.padding (css.rem 0.6),
+	css.margin (css.px 4.0),
+	css.border-radius (css.px 8.0),
+	css.cursor "pointer",
 	css.on "hover" [css.opacity 0.85],
 ]
 

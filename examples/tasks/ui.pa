@@ -22,69 +22,59 @@ use api
 
 def card :: css.ruleset = using css {
 	.rule [
-		.base [
-			.max-width (.px 560.0),
-			.margin (.rem 2.0),
-			.padding (.rem 1.5),
-			.border-radius (.px 14.0),
-			.background (.hex "#0b1020"),
-			.color (.hex "#e2e8f0"),
-			.property "border" "1px solid #1e293b",
-			.property "font-family" "system-ui, sans-serif",
-		],
+		.max-width (.px 560.0),
+		.margin (.rem 2.0),
+		.padding (.rem 1.5),
+		.border-radius (.px 14.0),
+		.background (.hex "#0b1020"),
+		.color (.hex "#e2e8f0"),
+		.property "border" "1px solid #1e293b",
+		.property "font-family" "system-ui, sans-serif",
 	]
 }
 
 def row :: css.ruleset = using css {
 	.rule [
-		.base [
-			.property "display" "flex",
-			.property "align-items" "center",
-			.property "gap" "0.6rem",
-			.padding (.rem 0.5),
-			.border-radius (.px 8.0),
-			.property "list-style" "none",
-		],
+		.property "display" "flex",
+		.property "align-items" "center",
+		.property "gap" "0.6rem",
+		.padding (.rem 0.5),
+		.border-radius (.px 8.0),
+		.property "list-style" "none",
 		.on "hover" [.background (.hex "#11182e")],
 	]
 }
 
 def check :: css.ruleset = using css {
 	.rule [
-		.base [
-			.background (.hex "#0b1020"),
-			.color (.hex "#2563eb"),
-			.property "border" "none",
-			.property "font-size" "1.1rem",
-			.cursor "pointer",
-		],
+		.background (.hex "#0b1020"),
+		.color (.hex "#2563eb"),
+		.property "border" "none",
+		.property "font-size" "1.1rem",
+		.cursor "pointer",
 	]
 }
 
 def field :: css.ruleset = using css {
 	.rule [
-		.base [
-			.property "flex" "1",
-			.padding (.rem 0.5),
-			.border-radius (.px 8.0),
-			.background (.hex "#0b1020"),
-			.color (.hex "#e2e8f0"),
-			.property "border" "1px solid #1e293b",
-		],
+		.property "flex" "1",
+		.padding (.rem 0.5),
+		.border-radius (.px 8.0),
+		.background (.hex "#0b1020"),
+		.color (.hex "#e2e8f0"),
+		.property "border" "1px solid #1e293b",
 	]
 }
 
 def btn :: css.ruleset = using css {
 	.rule [
-		.base [
-			.background (.hex "#2563eb"),
-			.color (.hex "#ffffff"),
-			.property "border" "none",
-			.padding (.rem 0.5),
-			.margin (.px 3.0),
-			.border-radius (.px 8.0),
-			.cursor "pointer",
-		],
+		.background (.hex "#2563eb"),
+		.color (.hex "#ffffff"),
+		.property "border" "none",
+		.padding (.rem 0.5),
+		.margin (.px 3.0),
+		.border-radius (.px 8.0),
+		.cursor "pointer",
 		.on "hover" [.opacity 0.85],
 	]
 }
@@ -92,16 +82,16 @@ def btn :: css.ruleset = using css {
 # Reactive state rules, applied with `view.styled-when`:
 #   `dim` greys an inactive filter pill, `strike` crosses off a done task,
 #   `muted` softens the empty-state line, `list-reset` strips the <ul> chrome.
-def dim :: css.ruleset = using css { .rule [.base [.opacity 0.45]] }
+def dim :: css.ruleset = using css { .rule [.opacity 0.45] }
 
 def strike :: css.ruleset = using css {
-	.rule [.base [.property "text-decoration" "line-through", .opacity 0.5]]
+	.rule [.property "text-decoration" "line-through", .opacity 0.5]
 }
 
-def muted :: css.ruleset = using css { .rule [.base [.opacity 0.5]] }
+def muted :: css.ruleset = using css { .rule [.opacity 0.5] }
 
 def list-reset :: css.ruleset = using css {
-	.rule [.base [.property "list-style" "none", .padding (.px 0.0), .margin (.px 0.0)]]
+	.rule [.property "list-style" "none", .padding (.px 0.0), .margin (.px 0.0)]
 }
 
 # --- helpers ----------------------------------------------------------------

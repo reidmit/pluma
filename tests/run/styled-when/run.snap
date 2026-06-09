@@ -5,6 +5,6 @@ expression: combined
 == status ==
 ok
 == stdout ==
-<div class="c512a1ba8 c72ade912">a</div>
-<div class="c512a1ba8">b</div>
+<div class="cb30c6231 cd722bd7f">a</div>
+<div class="cb30c6231">b</div>
 == stderr ==

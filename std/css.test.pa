@@ -80,9 +80,9 @@ def tests :: test.suite = [
 		assert.equals (css.inline [css.background (css.var "accent")]) "background: var(--accent)"
 	},
 	test.case "class-of is stable and content-addressed" fun {
-		let a = css.rule [css.base [css.color (css.hex "#fff")]]
-		let b = css.rule [css.base [css.color (css.hex "#fff")]]
-		let c = css.rule [css.base [css.color (css.hex "#000")]]
+		let a = css.rule [css.color (css.hex "#fff")]
+		let b = css.rule [css.color (css.hex "#fff")]
+		let c = css.rule [css.color (css.hex "#000")]
 		assert.all [
 			assert.equals (css.class-of a) (css.class-of b),
 			assert.is-true (string.starts-with (css.class-of a) "c"),
@@ -92,7 +92,8 @@ def tests :: test.suite = [
 	test.case "render emits base, pseudo, and media blocks under the hashed class" fun {
 		let _ = css.reset ()
 		let r = css.rule [
-			css.base [css.color (css.hex "#fff"), css.padding (css.rem 1.0)],
+			css.color (css.hex "#fff"),
+			css.padding (css.rem 1.0),
 			css.on "hover" [css.background (css.hex "#1e51c8")],
 			css.media "(max-width: 600px)" [css.padding (css.rem 0.5)],
 		]
@@ -101,8 +102,8 @@ def tests :: test.suite = [
 	},
 	test.case "the collector dedups identical rules and keeps distinct ones" fun {
 		let _ = css.reset ()
-		let r = css.rule [css.base [css.color (css.hex "#fff")]]
-		let s = css.rule [css.base [css.color (css.hex "#000")]]
+		let r = css.rule [css.color (css.hex "#fff")]
+		let s = css.rule [css.color (css.hex "#000")]
 		let _a = css.class-of r
 		let _b = css.class-of r
 		let _c = css.class-of s
@@ -111,16 +112,16 @@ def tests :: test.suite = [
 	},
 	test.case "compose concatenates declarations into one new class" fun {
 		let _ = css.reset ()
-		let bg = css.rule [css.base [css.background (css.hex "#2563eb")]]
-		let fg = css.rule [css.base [css.color (css.hex "#fff")]]
+		let bg = css.rule [css.background (css.hex "#2563eb")]
+		let fg = css.rule [css.color (css.hex "#fff")]
 		let merged = css.compose [bg, fg]
 		let cls = css.class-of merged
-		# both base blocks under the one composed class, in source order
-		assert.equals (css.collect ()) ".$(cls){background: #2563eb}.$(cls){color: #fff}"
+		# both rules' declarations gather into the one composed class's block, in source order
+		assert.equals (css.collect ()) ".$(cls){background: #2563eb; color: #fff}"
 	},
 	test.case "view.styled registers the rule and yields its class" fun {
 		let _ = css.reset ()
-		let primary = css.rule [css.base [css.color (css.hex "#fff")]]
+		let primary = css.rule [css.color (css.hex "#fff")]
 		let v = view.button [view.styled primary] [view.text "Save"]
 		let cls = css.class-of primary
 		assert.all [
@@ -130,7 +131,7 @@ def tests :: test.suite = [
 	},
 	test.case "style-tag wraps the collected CSS" fun {
 		let _ = css.reset ()
-		let r = css.rule [css.base [css.color (css.hex "#fff")]]
+		let r = css.rule [css.color (css.hex "#fff")]
 		let cls = css.class-of r
 		assert.equals (css.style-tag ()) "<style>.$(cls){color: #fff}</style>"
 	},
@@ -210,7 +211,7 @@ def tests :: test.suite = [
 			css.frame "from" [css.property "transform" "rotate(0deg)"],
 			css.frame "to" [css.property "transform" "rotate(360deg)"],
 		]
-		let spinner = css.rule [css.base [css.animation spin "1s linear infinite"]]
+		let spinner = css.rule [css.animation spin "1s linear infinite"]
 		let cls = css.class-of spinner
 		let out = css.collect ()
 		assert.all [

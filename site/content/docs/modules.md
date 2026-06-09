@@ -95,7 +95,7 @@ Qualification keeps provenance explicit, but in a block that leans hard on one m
 use std.css
 
 def card :: css.ruleset = using css {
-    .rule [.base [.padding (.rem 1.0), .background (.hex "#0b1020")]]
+    .rule [.padding (.rem 1.0), .background (.hex "#0b1020")]
 }
 ```
 

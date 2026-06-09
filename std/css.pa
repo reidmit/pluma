@@ -43,11 +43,17 @@ public enum length {
 	len float string
 }
 
-# A single CSS declaration -- a property name and its already-serialized value
-# (`color: #fff`). Build with the property helpers (`css.color`, `css.padding`, ...)
-# or the generic `css.property`; serialize a list with `css.inline`.
+# An entry in a style block. Usually a single declaration -- a property name and its
+# already-serialized value (`color: #fff`), built with the property helpers
+# (`css.color`, `css.padding`, ...) or the generic `css.property`. Inside a `css.rule`
+# it may also be a nested pseudo-class (`css.on "hover" [...]`) or media
+# (`css.media "(...)" [...]`) block, which sit as siblings of the plain declarations --
+# there is no separate base wrapper. `css.inline`/`view.style-of` serialize the plain
+# declarations and ignore any nested blocks (an inline style can't carry them).
 public enum decl {
 	decl string string
+	on string (list decl)
+	media string (list decl)
 }
 
 # --- colors -----------------------------------------------------------------
@@ -265,8 +271,18 @@ public def property :: fun string string -> decl = fun k v {
 # `inline [color (hex "#e11"), padding (rem 1.0)]` => `"color: #e11; padding: 1rem"`.
 # This is what `std.view`'s `style-of` wraps into a `style` attribute; you can also
 # call it directly inside `view.bind-attr "style" (fun { ... })` for a reactive style.
+# Only plain declarations are serialized -- any nested `on`/`media` block (which can
+# appear in a `css.rule` list but not in an inline style) is skipped.
 public def inline :: fun (list decl) -> string = fun decls {
-	string.join (list.map decls fun d { decl-to-string d }) "; "
+	string.join (list.flat-map decls fun d {
+		when d is decl.decl k v {
+			["$(k): $(v)"]
+		} is decl.on _ _ {
+			[]
+		} is decl.media _ _ {
+			[]
+		}
+	}) "; "
 }
 
 # --- internal value rendering -----------------------------------------------
@@ -305,22 +321,22 @@ def color-to-string :: fun paint -> string = fun c {
 	}
 }
 
-def decl-to-string :: fun decl -> string = fun d {
-	when d is decl.decl k v {
-		"$(k): $(v)"
-	}
-}
-
 # --- tier 3: extracted, content-hashed stylesheet rules ----------------------
 #
-# A `ruleset` is the full power of CSS as a value: a base block plus any number of
-# pseudo-class (`:hover`) and `@media` blocks, all scoped to one generated class.
-# It is meant to be a top-level `def` (a *named*, statically-evaluable thing, like a
-# CSS class) -- model-driven values cross in via `css.var`, not by rebuilding the
-# rule.
+# A `ruleset` is the full power of CSS as a value: the element's own declarations
+# plus any number of pseudo-class (`:hover`) and `@media` blocks, all scoped to one
+# generated class. It is meant to be a top-level `def` (a *named*, statically-evaluable
+# thing, like a CSS class) -- model-driven values cross in via `css.var`, not by
+# rebuilding the rule.
+#
+# The plain declarations and the nested `on`/`media` blocks sit as siblings in one
+# flat list -- there is no base wrapper. `render-rule` gathers the plain declarations
+# into the element's own `.<class> { ... }` block (emitted first) and renders each
+# nested block after it.
 #
 #     def primary :: css.ruleset = css.rule [
-#         css.base  [css.color (css.hex "#fff"), css.background (css.hex "#2563eb")],
+#         css.color (css.hex "#fff"),
+#         css.background (css.hex "#2563eb"),
 #         css.on    "hover"              [css.background (css.hex "#1e51c8")],
 #         css.media "(max-width: 600px)" [css.padding (css.rem 0.5)],
 #     ]
@@ -335,40 +351,29 @@ def decl-to-string :: fun decl -> string = fun d {
 # (The type is `ruleset`, not `rule`, because the `css.rule` builder takes the name
 # -- types and defs share one namespace.)
 
-# One block within a ruleset: the base declarations, a pseudo-class variant, or a
-# media-query variant. Build with `base`/`on`/`media`.
-public enum block {
-	base (list decl)
-	on string (list decl)
-	media string (list decl)
-}
-
-# A complete style rule -- a bundle of blocks scoped to one hashed class.
+# A complete style rule -- a flat list of declarations and nested blocks scoped to one
+# hashed class.
 public enum ruleset {
-	blocks (list block)
+	blocks (list decl)
 }
 
-# Assemble a ruleset from its blocks.
-public def rule :: fun (list block) -> ruleset = fun bs {
-	ruleset.blocks bs
-}
-
-# The base declarations, applied to the element unconditionally.
-public def base :: fun (list decl) -> block = fun ds {
-	block.base ds
+# Assemble a ruleset from its entries -- plain declarations and any `on`/`media`
+# blocks, mixed freely in one list.
+public def rule :: fun (list decl) -> ruleset = fun ds {
+	ruleset.blocks ds
 }
 
 # A pseudo-class (or pseudo-element) variant: `on "hover" [...]` =>
 # `.<class>:hover { ... }`. Pass the suffix after the colon (`"hover"`, `"focus"`,
 # `"disabled"`); a pseudo-element needs the leading colon yourself (`":before"`).
-public def on :: fun string (list decl) -> block = fun sel ds {
-	block.on sel ds
+public def on :: fun string (list decl) -> decl = fun sel ds {
+	decl.on sel ds
 }
 
 # A media-query variant: `media "(max-width: 600px)" [...]` =>
 # `@media (max-width: 600px) { .<class> { ... } }`.
-public def media :: fun string (list decl) -> block = fun q ds {
-	block.media q ds
+public def media :: fun string (list decl) -> decl = fun q ds {
+	decl.media q ds
 }
 
 # Merge several rulesets into one: all their blocks are concatenated, so a later
@@ -509,35 +514,41 @@ def register :: fun string string -> nothing = fun cls css {
 # to the content hash. Two rulesets with the same blocks and declarations in the
 # same order serialize identically -> same hash -> same class.
 def canonical :: fun ruleset -> string = fun r {
-	when r is ruleset.blocks bs {
-		string.join (list.map bs fun b { canon-block b }) "|"
+	when r is ruleset.blocks ds {
+		string.join (list.map ds fun d { canon-decl d }) "|"
 	}
 }
 
-def canon-block :: fun block -> string = fun b {
-	when b is block.base ds {
-		"base{$(inline ds)}"
-	} is block.on sel ds {
-		"on:$(sel){$(inline ds)}"
-	} is block.media q ds {
-		"media:$(q){$(inline ds)}"
+def canon-decl :: fun decl -> string = fun d {
+	when d is decl.decl k v {
+		"$(k):$(v)"
+	} is decl.on sel inner {
+		"on:$(sel){$(inline inner)}"
+	} is decl.media q inner {
+		"media:$(q){$(inline inner)}"
 	}
 }
 
-# Render a ruleset to real CSS, scoped to `cls`.
+# Render a ruleset to real CSS, scoped to `cls`. The plain declarations become the
+# element's own block (emitted first, if any); each nested `on`/`media` follows.
 def render-rule :: fun string ruleset -> string = fun cls r {
-	when r is ruleset.blocks bs {
-		string.join (list.map bs fun b { render-block cls b }) ""
-	}
-}
-
-def render-block :: fun string block -> string = fun cls b {
-	when b is block.base ds {
-		".$(cls){$(inline ds)}"
-	} is block.on sel ds {
-		".$(cls):$(sel){$(inline ds)}"
-	} is block.media q ds {
-		"@media $(q){.$(cls){$(inline ds)}}"
+	when r is ruleset.blocks ds {
+		let own = inline ds
+		let own-block = if string.is-empty own {
+			""
+		} else {
+			".$(cls){$(own)}"
+		}
+		let nested = string.join (list.flat-map ds fun d {
+			when d is decl.decl _ _ {
+				[]
+			} is decl.on sel inner {
+				[".$(cls):$(sel){$(inline inner)}"]
+			} is decl.media q inner {
+				["@media $(q){.$(cls){$(inline inner)}}"]
+			}
+		}) ""
+		"$(own-block)$(nested)"
 	}
 }
 
