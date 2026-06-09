@@ -318,10 +318,14 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 		ftypes.for_net_local_addr()
 	} else if tag == "net-read" || tag == "net-write" {
 		ftypes.for_net_rw()
-	} else if tag == "net-poll" {
+	} else if tag == "io-poll" {
 		ftypes.for_net_poll()
-	} else if tag == "net-unwatch" {
+	} else if tag == "io-unwatch" {
 		ftypes.for_net_unwatch()
+	} else if tag == "offload-sleep" {
+		ftypes.for_offload_sleep()
+	} else if tag == "fs-read" || tag == "fs-write" || tag == "fs-append" {
+		ftypes.for_offload_file()
 	} else {
 		let sig = host_sig(tag).unwrap();
 		ftypes.for_host(sig.arity, sig.returns_value)

@@ -531,7 +531,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::Park),
 				c.dep(H::RunTimers),
 				c.dep(H::ListAppend),
-				c.rt.net,
+				c.rt.io,
 				c.rt.taskg,
 				c.rt.tasklits,
 			)
@@ -599,15 +599,17 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		],
 		build: |c| {
 			let arity1 = c.arity(1);
-			// The suspending net ops marshal byte payloads through scratch; bundle the
-			// helper/global indices (present exactly when net is reachable).
-			let net_m = c.rt.net.map(|_| crate::runtime::NetMarshal {
-				alloc: c.dep(H::MarshalAlloc),
-				store: c.dep(H::MarshalStore),
-				load: c.dep(H::MarshalLoad),
-				io_result: c.dep(H::IoResult),
-				bump: c.rt.bump,
-			});
+			// The suspending net + offload ops marshal byte payloads through scratch; bundle
+			// the helper/global indices (present when either is reachable — same helper set).
+			let io_m =
+				(c.rt.net.is_some() || c.rt.offload.is_some()).then(|| crate::runtime::NetMarshal {
+					alloc: c.dep(H::MarshalAlloc),
+					store: c.dep(H::MarshalStore),
+					load: c.dep(H::MarshalLoad),
+					io_result: c.dep(H::IoResult),
+					bump: c.rt.bump,
+					copyout: c.rt.io_copyout,
+				});
 			task::build_pump_fn(
 				c.dep(H::PollStep),
 				c.dep(H::PollDefersState),
@@ -616,7 +618,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::DrainNext),
 				arity1,
 				c.rt.net,
-				net_m,
+				c.rt.offload,
+				io_m,
 				c.rt.rpc_channels,
 				c.rt.taskg,
 				c.rt.tasklits,
@@ -684,7 +687,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			task::build_reap_fiber_fn(
 				c.dep(H::CancelScope),
 				c.dep(H::PollDefersState),
-				c.rt.net,
+				c.rt.io,
 				c.rt.taskg,
 			)
 		},

@@ -4,18 +4,8 @@
 // import result).
 
 use super::Ctx;
-use super::marshal::{argi, ctx_and_mem, deliver_read_v8, read_mem, read_str, write_mem};
+use super::marshal::{argi, ctx_and_mem, deliver_read_v8, read_mem, read_str, set_pair, write_mem};
 use crate::net::NetRet;
-
-/// Set a multi-result return as a `[a, b]` JS array.
-fn set_pair(scope: &mut v8::HandleScope, rv: &mut v8::ReturnValue, a: i32, b: i32) {
-	let arr = v8::Array::new(scope, 2);
-	let av: v8::Local<v8::Value> = v8::Integer::new(scope, a).into();
-	arr.set_index(scope, 0, av);
-	let bv: v8::Local<v8::Value> = v8::Integer::new(scope, b).into();
-	arr.set_index(scope, 1, bv);
-	rv.set(arr.into());
-}
 
 /// Shape a scalar `NetRet` (id / count / nothing) into `(status, n)`; an error stashes
 /// its message in `last_error` (read back via `io-last-error`, like std.sys.io).
@@ -121,7 +111,7 @@ pub(super) fn cb_net_accept(
 	let fid = argi(scope, &args, 0);
 	let lid = argi(scope, &args, 1) as u32;
 	let (ctx, _mem) = ctx_and_mem(scope, &args);
-	let ret = ctx.state.net.try_accept(fid, lid);
+	let ret = ctx.state.net.try_accept(&mut ctx.state.reactor, fid, lid);
 	let (s, n) = net_scalar_v8(ctx, ret);
 	set_pair(scope, &mut rv, s, n);
 }
@@ -135,7 +125,10 @@ pub(super) fn cb_net_read(
 	let cid = argi(scope, &args, 1) as u32;
 	let (dst, cap) = (argi(scope, &args, 2), argi(scope, &args, 3));
 	let (ctx, mem) = ctx_and_mem(scope, &args);
-	let ret = ctx.state.net.try_read(fid, cid, cap.max(0) as usize);
+	let ret = ctx
+		.state
+		.net
+		.try_read(&mut ctx.state.reactor, fid, cid, cap.max(0) as usize);
 	let (s, n) = net_bytes_v8(scope, mem, ctx, dst, cap, ret);
 	set_pair(scope, &mut rv, s, n);
 }
@@ -150,35 +143,12 @@ pub(super) fn cb_net_write(
 	let (src, len) = (argi(scope, &args, 2), argi(scope, &args, 3));
 	let (ctx, mem) = ctx_and_mem(scope, &args);
 	let data = read_mem(scope, mem, src.max(0) as usize, len.max(0) as usize);
-	let ret = ctx.state.net.try_write(fid, cid, &data);
+	let ret = ctx
+		.state
+		.net
+		.try_write(&mut ctx.state.reactor, fid, cid, &data);
 	let (s, n) = net_scalar_v8(ctx, ret);
 	set_pair(scope, &mut rv, s, n);
-}
-
-/// `net-poll(i64 deadline) -> i32`: block until a parked socket is ready (the deadline
-/// arrives as a JS BigInt).
-pub(super) fn cb_net_poll(
-	scope: &mut v8::HandleScope,
-	args: v8::FunctionCallbackArguments,
-	mut rv: v8::ReturnValue,
-) {
-	let deadline = args
-		.get(0)
-		.to_big_int(scope)
-		.map(|b| b.i64_value().0)
-		.unwrap_or(-1);
-	let (ctx, _mem) = ctx_and_mem(scope, &args);
-	rv.set_int32(ctx.state.net.poll(deadline));
-}
-
-pub(super) fn cb_net_unwatch(
-	scope: &mut v8::HandleScope,
-	args: v8::FunctionCallbackArguments,
-	_r: v8::ReturnValue,
-) {
-	let fid = argi(scope, &args, 0);
-	let (ctx, _mem) = ctx_and_mem(scope, &args);
-	ctx.state.net.unwatch(fid);
 }
 
 /// `web-fetch(req_ptr, req_len, dst, cap) -> i32 len` — the `std.web.fetch` transport

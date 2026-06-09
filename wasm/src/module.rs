@@ -16,7 +16,8 @@ mod lits;
 use crate::emit::FnEmitter;
 use crate::helpers::{REGISTRY, build_builtin_wrapper, builtin_arity, close_deps};
 use crate::runtime::{
-	Helper, HelperCtx, HelperSet, NetImports, Runtime, is_net_builtin, scan_helpers,
+	Helper, HelperCtx, HelperSet, IoImports, NetImports, OffloadImports, Runtime, is_net_builtin,
+	is_offload_builtin, scan_helpers,
 };
 use crate::scan::{StrPool, collect_host_calls, collect_zero_arg_closures, scan_strings};
 use crate::types::FuncTypes;
@@ -60,6 +61,11 @@ impl Module {
 		// constructors driven by the scheduler, and `poll`/`unwatch` are reached only
 		// from the emitted driver, so none surface as ordinary host calls here.
 		let mut uses_net = false;
+		// Whether the program reaches a `BlockingPool` offload builtin (notes/IO.md) — a
+		// suspending op whose blocking call the scheduler offloads to a host worker thread
+		// (`offload-sleep` in v0; async fs next). Gates the offload imports + the shared
+		// reactor controls, like `uses_net` does for sockets.
+		let mut uses_offload = false;
 		// Whether the program reaches the task-local builtins. `local-get` walks the
 		// scheduler's per-fiber env; `local-enter`/`-exit` only appear inside
 		// `local.with`. Tracked here (like net) so their helper requests can be gated
@@ -84,6 +90,10 @@ impl Module {
 			collect_host_calls(&p.functions[func_id as usize].body, &builtin_g, |tag| {
 				if is_net_builtin(tag) {
 					uses_net = true;
+					return;
+				}
+				if is_offload_builtin(tag) {
+					uses_offload = true;
 					return;
 				}
 				if matches!(
@@ -124,11 +134,10 @@ impl Module {
 		if requested.contains(&Helper::ToString) {
 			imports.register("float_to_str");
 		}
-		// `std.sys.net`: register the whole import set together when any net builtin is
-		// reachable (the sync ops shaped at the call site, the suspending ops + the
-		// reactor controls driven by the scheduler). The host defines all nine
-		// unconditionally, so importing the full set even when only some are used is
-		// harmless; it keeps the indices a single contiguous block.
+		// `std.sys.net`: register the seven socket ops together when any net builtin is
+		// reachable (the sync ops shaped at the call site, the suspending ops driven by the
+		// scheduler). The host defines them all unconditionally, so importing the full set
+		// even when only some are used is harmless; it keeps the indices a contiguous block.
 		let net_imports = uses_net.then(|| NetImports {
 			listen: imports.register("net-listen"),
 			close: imports.register("net-close"),
@@ -137,18 +146,38 @@ impl Module {
 			accept: imports.register("net-accept"),
 			read: imports.register("net-read"),
 			write: imports.register("net-write"),
-			poll: imports.register("net-poll"),
-			unwatch: imports.register("net-unwatch"),
 		});
-		// `std.sys.net` shapes its results through `__io_result` (the same `ok`/`err` +
-		// `io-last-error` channel as `std.sys.io`) and marshals byte payloads (addr/data,
-		// the read result) through scratch — pull those helpers + the error import in.
-		if uses_net {
+		// The shared offload reactor controls (`io-poll`/`io-unwatch`, notes/IO.md): the
+		// scheduler's block step + reap drive these for *any* async-I/O client — sockets
+		// (readiness) and offloaded blocking work (completion) feed one poll step. Present
+		// when either kind of builtin is reached.
+		let io_imports = (uses_net || uses_offload).then(|| IoImports {
+			poll: imports.register("io-poll"),
+			unwatch: imports.register("io-unwatch"),
+		});
+		// `BlockingPool` offload clients: the suspending ops whose blocking call runs on a
+		// host worker thread (`offload-sleep` proving op + the async-fs ops). The host
+		// defines them all unconditionally, so registering the full set is harmless.
+		let offload_imports = uses_offload.then(|| OffloadImports {
+			sleep: imports.register("offload-sleep"),
+			read: imports.register("fs-read"),
+			write: imports.register("fs-write"),
+			append: imports.register("fs-append"),
+		});
+		// Both net and offload shape their results through `__io_result` (the same `ok`/`err`
+		// + `io-last-error` channel as `std.sys.io`) and marshal byte payloads through scratch
+		// — pull those helpers + the error import in when either is reachable.
+		if uses_net || uses_offload {
 			requested.insert(Helper::IoResult);
 			requested.insert(Helper::MarshalAlloc);
 			requested.insert(Helper::MarshalStore);
 			requested.insert(Helper::MarshalLoad);
 			imports.register("io-last-error");
+		}
+		// An offload-fs read produces an unknown-size payload, so it needs the read-overflow
+		// drain (`io-copyout`) the sync reads use — register it when offload is reachable.
+		if uses_offload {
+			imports.register("io-copyout");
 		}
 		// Browser MVU command runtime: the long-lived `__browser_entry` (replacing the
 		// run-to-completion `__task_entry`), the `__browser_resume` timer callback, and
@@ -273,7 +302,10 @@ impl Module {
 		}
 		runtime.float_to_str = imports.get("float_to_str");
 		runtime.io_last_error = imports.get("io-last-error");
+		runtime.io_copyout = imports.get("io-copyout");
 		runtime.net = net_imports;
+		runtime.io = io_imports;
+		runtime.offload = offload_imports;
 		runtime.dom_set_timeout = imports.get("dom-set-timeout");
 		runtime.rpc_stream_open = imports.get("rpc-stream-open");
 		runtime.rpc_stream_close = imports.get("rpc-stream-close");

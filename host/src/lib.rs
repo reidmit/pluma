@@ -24,10 +24,16 @@
 use std::io::{Read, Write};
 
 use net::HostNet;
+use offload::Reactor;
 
-// The `std.sys.net` host-side socket table + I/O reactor (`HostNet`/`NetRet`), kept in its
-// own engine-independent module; `HostState` holds one for the run.
+// The `std.sys.net` host-side socket table (`HostNet`/`NetRet`), kept in its own
+// engine-independent module; `HostState` holds one for the run.
 mod net;
+
+// The shared blocking-I/O offload subsystem (notes/IO.md): the `Reactor` (one poller for
+// both socket readiness and worker completion) + the `BlockingPool` of worker threads.
+// `std.sys.net` parks socket reads on it; offload clients (fs, db, …) submit blocking jobs.
+mod offload;
 
 // The V8 backend (ABI.md Phase 2): instantiates the WasmGC artifact under V8 over the
 // marshalling ABI. Reuses this crate's engine-independent core (`HostState`/`HostNet`/
@@ -247,6 +253,9 @@ struct HostState {
 	/// wasm side then reserves the true size and drains this via `__io_copyout`. Empty
 	/// on the common (fits-first-try) path. (ABI.md Phase 1, the read overflow path.)
 	read_stash: Vec<u8>,
-	/// `std.sys.net` runtime state: the socket table + the I/O reactor.
+	/// `std.sys.net` runtime state: the socket table.
 	net: HostNet,
+	/// The shared readiness + completion reactor (poller + worker pool) that socket reads
+	/// park on and offload clients (fs, db, …) submit blocking work to. (notes/IO.md.)
+	reactor: Reactor,
 }

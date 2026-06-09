@@ -10,14 +10,14 @@
 // Engine-independent: the V8 net callbacks in `v8host::net` shape these `NetRet`s
 // into the marshalling ABI, but nothing here touches V8.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
-use std::os::fd::{AsRawFd, BorrowedFd, RawFd};
-use std::time::Duration;
+use std::os::fd::{AsRawFd, RawFd};
 
-use polling::{Event, Events, Poller};
 use socket2::{Domain, Socket, Type};
+
+use crate::offload::{Interest, Reactor};
 
 /// A live socket the program holds a handle to (an opaque `int` id into `sockets`).
 enum SocketEntry {
@@ -46,39 +46,14 @@ pub(crate) enum NetRet {
 	WouldBlock,
 }
 
-/// Read- vs write-readiness for a park.
-#[derive(Clone, Copy)]
-enum Interest {
-	Read,
-	Write,
-}
-
-/// All `std.sys.net` runtime state: the socket table plus the readiness reactor.
-/// Lives in `HostState` so it persists across host calls for the whole run.
+/// The `std.sys.net` socket table. The readiness reactor (poller, parked fibers, the
+/// `poll`/`unwatch` step) now lives in the shared `Reactor` (`crate::offload`) so socket
+/// readiness and offload completion share one poll step; `HostNet` keeps only the socket
+/// handles, and threads a `&mut Reactor` through the suspending ops to park on it.
+#[derive(Default)]
 pub(crate) struct HostNet {
 	sockets: HashMap<u32, SocketEntry>,
 	next_id: u32,
-	/// Created lazily on the first park — a net-free program never makes one.
-	poller: Option<Poller>,
-	events: Events,
-	/// Parked fibers keyed by id (token = fid) → the socket fd to deregister on wake.
-	waits: HashMap<i32, RawFd>,
-	/// Fibers whose socket is ready, buffered across `net-poll` calls (one `wait`
-	/// can surface several; the scheduler consumes one fid per poll).
-	ready: VecDeque<i32>,
-}
-
-impl Default for HostNet {
-	fn default() -> Self {
-		HostNet {
-			sockets: HashMap::new(),
-			next_id: 0,
-			poller: None,
-			events: Events::new(),
-			waits: HashMap::new(),
-			ready: VecDeque::new(),
-		}
-	}
 }
 
 /// Bind a listening socket with `SO_REUSEADDR` set, the equivalent of std's
@@ -147,7 +122,7 @@ impl HostNet {
 		}
 	}
 
-	pub(crate) fn try_accept(&mut self, fid: i32, lid: u32) -> NetRet {
+	pub(crate) fn try_accept(&mut self, reactor: &mut Reactor, fid: i32, lid: u32) -> NetRet {
 		let res = match self.sockets.get(&lid) {
 			Some(SocketEntry::Listener(l)) => l.accept(),
 			_ => return NetRet::Err(format!("net.accept: not a listener ({lid})")),
@@ -157,12 +132,20 @@ impl HostNet {
 				Ok(()) => NetRet::OkInt(self.store(SocketEntry::Conn(stream)) as i32),
 				Err(e) => NetRet::Err(e.to_string()),
 			},
-			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => self.park(fid, lid, Interest::Read),
+			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+				self.park(reactor, fid, lid, Interest::Read)
+			}
 			Err(e) => NetRet::Err(e.to_string()),
 		}
 	}
 
-	pub(crate) fn try_read(&mut self, fid: i32, cid: u32, max: usize) -> NetRet {
+	pub(crate) fn try_read(
+		&mut self,
+		reactor: &mut Reactor,
+		fid: i32,
+		cid: u32,
+		max: usize,
+	) -> NetRet {
 		let mut buf = vec![0u8; max];
 		let res = match self.sockets.get_mut(&cid) {
 			Some(SocketEntry::Conn(c)) => c.read(&mut buf),
@@ -174,95 +157,43 @@ impl HostNet {
 				buf.truncate(n);
 				NetRet::OkBytes(buf)
 			}
-			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => self.park(fid, cid, Interest::Read),
+			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+				self.park(reactor, fid, cid, Interest::Read)
+			}
 			Err(e) => NetRet::Err(e.to_string()),
 		}
 	}
 
-	pub(crate) fn try_write(&mut self, fid: i32, cid: u32, data: &[u8]) -> NetRet {
+	pub(crate) fn try_write(
+		&mut self,
+		reactor: &mut Reactor,
+		fid: i32,
+		cid: u32,
+		data: &[u8],
+	) -> NetRet {
 		let res = match self.sockets.get_mut(&cid) {
 			Some(SocketEntry::Conn(c)) => c.write(data),
 			_ => return NetRet::Err(format!("net.write: not a connection ({cid})")),
 		};
 		match res {
 			Ok(n) => NetRet::OkInt(n as i32),
-			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => self.park(fid, cid, Interest::Write),
+			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+				self.park(reactor, fid, cid, Interest::Write)
+			}
 			Err(e) => NetRet::Err(e.to_string()),
 		}
 	}
 
-	/// Register fiber `fid` against socket `sid`'s readiness (token = fid), then
-	/// report would-block.
-	fn park(&mut self, fid: i32, sid: u32, interest: Interest) -> NetRet {
+	/// Register fiber `fid` against socket `sid`'s readiness on the shared reactor (token =
+	/// fid), then report would-block.
+	fn park(&self, reactor: &mut Reactor, fid: i32, sid: u32, interest: Interest) -> NetRet {
 		let fd = match self.sockets.get(&sid) {
 			Some(e) => e.raw_fd(),
 			None => return NetRet::Err(format!("net: park on unknown socket {sid}")),
 		};
-		if self.poller.is_none() {
-			match Poller::new() {
-				Ok(p) => self.poller = Some(p),
-				Err(e) => return NetRet::Err(format!("net: poller: {e}")),
-			}
-		}
-		let ev = match interest {
-			Interest::Read => Event::readable(fid as usize),
-			Interest::Write => Event::writable(fid as usize),
-		};
-		// SAFETY: the socket lives in `sockets` and is removed from the poller
-		// (`delete`) on wake or unwatch before it can be closed. One fiber owns a
-		// socket op at a time, so an fd is never double-added.
-		if let Err(e) = unsafe { self.poller.as_ref().unwrap().add(fd, ev) } {
-			return NetRet::Err(format!("net: poller add: {e}"));
-		}
-		self.waits.insert(fid, fd);
-		NetRet::WouldBlock
-	}
-
-	/// Block until a parked socket is ready (or `deadline` nanos elapse; `-1` =
-	/// block indefinitely), returning one woken fid (`-1` on timeout / nothing
-	/// pending). Extra simultaneously-ready fids are buffered for later calls
-	/// (paired with the scheduler's per-fiber consumption).
-	pub(crate) fn poll(&mut self, deadline: i64) -> i32 {
-		if self.ready.is_empty() {
-			if self.waits.is_empty() {
-				return -1;
-			}
-			let timeout = if deadline < 0 {
-				None
-			} else {
-				Some(Duration::from_nanos(deadline as u64))
-			};
-			let HostNet {
-				poller,
-				events,
-				waits,
-				ready,
-				..
-			} = self;
-			let poller = poller.as_mut().expect("poller exists when waits non-empty");
-			events.clear();
-			if poller.wait(events, timeout).is_err() {
-				return -1;
-			}
-			for ev in events.iter() {
-				let fid = ev.key as i32;
-				if let Some(fd) = waits.remove(&fid) {
-					// SAFETY: same fd we added; deleted before the socket is dropped.
-					let _ = poller.delete(unsafe { BorrowedFd::borrow_raw(fd) });
-					ready.push_back(fid);
-				}
-			}
-		}
-		self.ready.pop_front().unwrap_or(-1)
-	}
-
-	/// Drop a parked I/O wait (on cancellation / reaping). Idempotent.
-	pub(crate) fn unwatch(&mut self, fid: i32) {
-		if let Some(fd) = self.waits.remove(&fid) {
-			if let Some(p) = &self.poller {
-				// SAFETY: same fd we added; deleted before the socket is dropped.
-				let _ = p.delete(unsafe { BorrowedFd::borrow_raw(fd) });
-			}
+		match reactor.register_socket(fid, fd, interest) {
+			Ok(()) => NetRet::WouldBlock,
+			Err(e) => NetRet::Err(e),
 		}
 	}
 }

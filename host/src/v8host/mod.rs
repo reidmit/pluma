@@ -16,6 +16,7 @@
 use std::sync::Once;
 
 use crate::net::HostNet;
+use crate::offload::Reactor;
 use crate::{BufferedIo, CapturingIo, HostIo, HostState, RunCapture, RunResult, StdioIo};
 
 mod entropy;
@@ -23,6 +24,7 @@ mod fs;
 mod marshal;
 mod math;
 mod net;
+mod offload;
 mod time;
 mod writers;
 
@@ -33,6 +35,7 @@ use entropy::*;
 use fs::*;
 use math::*;
 use net::*;
+use offload::*;
 use time::*;
 use writers::*;
 
@@ -122,6 +125,7 @@ fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunCapture {
 			last_error: String::new(),
 			read_stash: Vec::new(),
 			net: HostNet::default(),
+			reactor: Reactor::default(),
 		},
 		memory: None,
 	};
@@ -216,9 +220,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "time-monotonic", cb_time_monotonic);
 	register(scope, pluma, data, "time-sleep", cb_time_sleep);
 	register(scope, pluma, data, "time-parse", cb_time_parse);
-	// std.sys.net — socket ops (the multi-result ones return a `[status, n]` JS array) +
-	// the reactor controls. `net-poll` blocks the thread synchronously (fine in a V8
-	// callback) until a parked socket is ready — the reactor step.
+	// std.sys.net — socket ops (the multi-result ones return a `[status, n]` JS array).
 	register(scope, pluma, data, "net-listen", cb_net_listen);
 	register(scope, pluma, data, "net-connect", cb_net_connect);
 	register(scope, pluma, data, "net-close", cb_net_close);
@@ -226,8 +228,17 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "net-accept", cb_net_accept);
 	register(scope, pluma, data, "net-read", cb_net_read);
 	register(scope, pluma, data, "net-write", cb_net_write);
-	register(scope, pluma, data, "net-poll", cb_net_poll);
-	register(scope, pluma, data, "net-unwatch", cb_net_unwatch);
+	// Shared offload reactor controls (notes/IO.md): the block step + reap, driven by the
+	// in-wasm scheduler for net *and* every offload client (fs, db, …). `io-poll` blocks the
+	// thread synchronously (fine in a V8 callback) until a parked socket is ready or a worker
+	// completion lands. Plus the v0 `offload-sleep` proving op (sleep on a pool worker).
+	register(scope, pluma, data, "io-poll", cb_io_poll);
+	register(scope, pluma, data, "io-unwatch", cb_io_unwatch);
+	register(scope, pluma, data, "offload-sleep", cb_offload_sleep);
+	// Async fs (notes/IO.md v1): non-blocking file ops run on a pool worker.
+	register(scope, pluma, data, "fs-read", cb_fs_read);
+	register(scope, pluma, data, "fs-write", cb_fs_write);
+	register(scope, pluma, data, "fs-append", cb_fs_append);
 	// std.web.fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
 	register(scope, pluma, data, "web-fetch", cb_web_fetch);
 	// std.event — SSR stubs (a server build constructs view handlers but never runs

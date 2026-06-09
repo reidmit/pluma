@@ -27,7 +27,8 @@
 use crate::helpers::wat::{Local, Wat};
 use crate::runtime::sched::{NO_AWAITER, NO_SCOPE, ROOT_SCOPE, fiber, focus, outcome, scope, wait};
 use crate::runtime::{
-	NetImports, NetMarshal, TaskGlobals, TaskLits, act_kind, rpc_chan, task_kind,
+	IoImports, NetImports, NetMarshal, OffloadImports, TaskGlobals, TaskLits, act_kind, rpc_chan,
+	task_kind,
 };
 use crate::types;
 use wasm_encoder::{Function, ValType};
@@ -76,7 +77,7 @@ pub(crate) fn build_run_task_fn(
 	park: u32,
 	run_timers: u32,
 	list_append: u32,
-	net: Option<NetImports>,
+	io: Option<IoImports>,
 	g: TaskGlobals,
 	lits: TaskLits,
 ) -> Function {
@@ -233,14 +234,15 @@ pub(crate) fn build_run_task_fn(
 					});
 				},
 				|w| {
-					// Nothing ready. With socket I/O pending, block the host reactor on
-					// readiness (the reactor's block-until-ready step); else fire the
-					// earliest virtual timer(s), else quiesce.
-					match net {
-						Some(net) => {
-							net_io_waits_present(w, g);
+					// Nothing ready. With async I/O pending (a socket read *or* an offloaded
+					// blocking op), block the host reactor on the next wake (the
+					// block-until-ready step); else fire the earliest virtual timer(s), else
+					// quiesce.
+					match io {
+						Some(io) => {
+							io_waits_present(w, g);
 							w.if_else(
-								|w| net_block_step(w, g, net, run_timers, list_append),
+								|w| io_block_step(w, g, io, run_timers, list_append),
 								|w| timers_or_exit(w, g, run_timers),
 							);
 						}
@@ -934,6 +936,7 @@ pub(crate) fn build_pump_fn(
 	drain_next: u32,
 	arity1: u32,
 	net: Option<NetImports>,
+	offload: Option<OffloadImports>,
 	net_m: Option<NetMarshal>,
 	rpc_channels: Option<u32>,
 	g: TaskGlobals,
@@ -1289,6 +1292,78 @@ pub(crate) fn build_pump_fn(
 							box_i(w, |w| {
 								w.local_get(n);
 							});
+						});
+					});
+				}
+
+				// BlockingPool offload ops (notes/IO.md): hand the blocking call to a host
+				// worker thread and settle its `result`, or park on `wait::IO` until the
+				// worker completes (woken through `io-poll`, re-Started from `fiber::RETRY`
+				// by the block step). Same `(status, n)` host shape + settle path as the net
+				// ops — the host keys the reactor by fid and the op is called twice (submit,
+				// then collect-after-wake).
+				if let (Some(offload), Some(nm)) = (offload, net_m) {
+					// sleep: (fid, nanos) -> (status, n). The `duration` arg is a `$int` of
+					// nanos riding the i64 channel; ok payload = `nothing`.
+					w.local_get(tk).i32(task_kind::OFFLOAD_SLEEP).i32_eq();
+					w.if_(|w| {
+						w.local_get(fid);
+						elem(w, tp, 0);
+						w.ref_cast(types::T_INT).struct_get(types::T_INT, 1); // nanos (i64)
+						w.call(offload.sleep);
+						net_settle(w, g, fid, fval, fkind, nm, |w, _n| {
+							push_nothing(w);
+						});
+					});
+
+					// fs-write / fs-append (notes/IO.md v1): marshal path (payload[0]) + data
+					// (payload[1]) into scratch, call the worker-offloaded write, settle
+					// `nothing`. Same shape as net-write but with two string args.
+					for (kind, import) in [
+						(task_kind::FILE_WRITE, offload.write),
+						(task_kind::FILE_APPEND, offload.append),
+					] {
+						w.local_get(tk).i32(kind).i32_eq();
+						w.if_(|w| {
+							w.i32(0).global_set(nm.bump);
+							let (pp, plen) = marshal_str_arg(w, nm, tp, 0);
+							let (dp, dlen) = marshal_str_arg(w, nm, tp, 1);
+							w.local_get(fid);
+							w.local_get(pp).local_get(plen);
+							w.local_get(dp).local_get(dlen);
+							w.call(import);
+							net_settle(w, g, fid, fval, fkind, nm, |w, _n| {
+								push_nothing(w);
+							});
+						});
+					}
+
+					// fs-read (notes/IO.md v1): marshal the path, hand the worker a `dst`
+					// buffer, and settle the file's text. The size is unknown, so on overflow
+					// (`n > cap`) re-`alloc` the true size and drain the host stash via
+					// `io-copyout` — the same read-overflow path the sync `fs.read-file` uses.
+					w.local_get(tk).i32(task_kind::FILE_READ).i32_eq();
+					w.if_(|w| {
+						const CAP: i32 = 4096;
+						let dst = w.local(ValType::I32);
+						w.i32(0).global_set(nm.bump);
+						let (pp, plen) = marshal_str_arg(w, nm, tp, 0);
+						w.i32(CAP).call(nm.alloc).local_set(dst);
+						w.local_get(fid);
+						w.local_get(pp).local_get(plen);
+						w.local_get(dst).i32(CAP);
+						w.call(offload.read);
+						net_settle(w, g, fid, fval, fkind, nm, move |w, n| {
+							if let Some(copyout) = nm.copyout {
+								w.local_get(n).i32(CAP).i32_gt_s();
+								w.if_(|w| {
+									w.local_get(n).call(nm.alloc).local_set(dst);
+									w.local_get(dst).call(copyout);
+								});
+							}
+							w.i32(types::TAG_STR);
+							w.local_get(dst).local_get(n).call(nm.load);
+							w.struct_new(types::T_STR);
 						});
 					});
 				}
@@ -2126,7 +2201,7 @@ pub(crate) fn build_cancel_scope_fn(
 pub(crate) fn build_reap_fiber_fn(
 	cancel_scope: u32,
 	poll_defers_state: u32,
-	net: Option<NetImports>,
+	io: Option<IoImports>,
 	g: TaskGlobals,
 ) -> Function {
 	let v = types::value_ref();
@@ -2160,14 +2235,16 @@ pub(crate) fn build_reap_fiber_fn(
 			});
 			w.call(cancel_scope).drop();
 		});
-		// If it was parked on socket readiness, drop its host reactor registration
-		// (token = fid) so a cancelled accept/read/write leaves no dangling fd.
-		if let Some(net) = net {
+		// If it was parked on the I/O reactor, drop its host registration (token = fid) so
+		// a cancelled socket read leaves no dangling fd, and an in-flight offload op's
+		// worker result is discarded on arrival rather than stranded. `io-unwatch` is
+		// uniform over both wake sources.
+		if let Some(io) = io {
 			fld_i(w, g, g.fibers, fid, fiber::WAIT_KIND);
 			w.i32(wait::IO).i32_eq();
 			w.if_(|w| {
 				w.local_get(fid);
-				w.call(net.unwatch);
+				w.call(io.unwatch);
 			});
 		}
 		// Run the fiber's poll `defer`s, innermost (top of stack) first. These run
@@ -3285,6 +3362,24 @@ fn park_out(w: &mut Wat, g: TaskGlobals, wait_kind: i32, arg: impl FnOnce(&mut W
 	w.global_set(g.out_arg);
 }
 
+/// Copy a `$str`/`$bytes` task-payload arg (`tp[idx]`) into scratch and return its
+/// `(ptr, len)` locals — the shared marshal step for the offload-fs ops (path, data).
+/// Assumes the bump cursor was reset by the caller; each call advances it (so two args
+/// land in distinct regions). Mirrors net-write's inline marshal.
+fn marshal_str_arg(w: &mut Wat, nm: NetMarshal, tp: Local, idx: i32) -> (Local, Local) {
+	let bytes = w.local(types::bytes_ref());
+	let ptr = w.local(ValType::I32);
+	let len = w.local(ValType::I32);
+	elem(w, tp, idx);
+	w.ref_cast(types::T_STR)
+		.struct_get(types::T_STR, 1)
+		.local_set(bytes);
+	w.local_get(bytes).array_len().local_set(len);
+	w.local_get(len).call(nm.alloc).local_set(ptr);
+	w.local_get(bytes).local_get(ptr).call(nm.store);
+	(ptr, len)
+}
+
 /// Consume a net host op's `(status, n, payload)` result (on the stack, after the
 /// import call) and either park the fiber on socket readiness (would-block) or
 /// settle the produced `result` value down the chain (`br "main"`). `box_n` true →
@@ -3353,11 +3448,11 @@ fn timers_or_exit(w: &mut Wat, g: TaskGlobals, run_timers: u32) {
 	);
 }
 
-/// Push i32 1 if any alive fiber is parked on socket readiness (`wait::IO`), else
-/// 0 — the signal that the block step must drive `net-poll` rather than the
-/// virtual-timer path. The host owns the reactor, so this scans the fiber table
-/// (i.e. whether any socket I/O is in flight).
-fn net_io_waits_present(w: &mut Wat, g: TaskGlobals) {
+/// Push i32 1 if any alive fiber is parked on the I/O reactor (`wait::IO`) — a socket
+/// read awaiting readiness *or* an offloaded blocking op awaiting completion — else 0.
+/// The signal that the block step must drive `io-poll` rather than the virtual-timer
+/// path. The host owns the reactor, so this scans the fiber table.
+fn io_waits_present(w: &mut Wat, g: TaskGlobals) {
 	let n = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
 	let res = w.local(ValType::I32);
@@ -3384,14 +3479,14 @@ fn net_io_waits_present(w: &mut Wat, g: TaskGlobals) {
 	w.local_get(res);
 }
 
-/// The reactor block step (net path): with socket I/O pending and nothing ready,
-/// block the host reactor (`net-poll`, bounded by the soonest virtual timer) and
-/// re-Start whatever woke; on timeout fall back to firing due virtual timers.
-/// The reactor's block-until-ready step.
-fn net_block_step(w: &mut Wat, g: TaskGlobals, net: NetImports, run_timers: u32, list_append: u32) {
+/// The reactor block step: with async I/O pending and nothing ready, block the host
+/// reactor (`io-poll`, bounded by the soonest virtual timer) on the next wake — a socket
+/// becoming ready or a worker completion landing — and re-Start whatever woke; on timeout
+/// fall back to firing due virtual timers. The reactor's block-until-ready step.
+fn io_block_step(w: &mut Wat, g: TaskGlobals, io: IoImports, run_timers: u32, list_append: u32) {
 	let woke = w.local(ValType::I32);
 	push_net_deadline(w, g);
-	w.call(net.poll);
+	w.call(io.poll);
 	w.local_tee(woke).i32(0).i32_ge_s();
 	w.if_else(
 		|w| {

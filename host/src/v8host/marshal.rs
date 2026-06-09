@@ -99,6 +99,17 @@ pub(super) fn register<'s>(
 	pluma.set(scope, key.into(), f.into());
 }
 
+/// Set a multi-result import return as a `[a, b]` JS array (how V8 surfaces a multi-value
+/// wasm import result). Used by the `(status, n)`-returning net + offload ops.
+pub(super) fn set_pair(scope: &mut v8::HandleScope, rv: &mut v8::ReturnValue, a: i32, b: i32) {
+	let arr = v8::Array::new(scope, 2);
+	let av: v8::Local<v8::Value> = v8::Integer::new(scope, a).into();
+	arr.set_index(scope, 0, av);
+	let bv: v8::Local<v8::Value> = v8::Integer::new(scope, b).into();
+	arr.set_index(scope, 1, bv);
+	rv.set(arr.into());
+}
+
 /// A UTF-8-lossy string read of `(ptr, len)` scratch bytes.
 pub(super) fn read_str(
 	scope: &mut v8::HandleScope,

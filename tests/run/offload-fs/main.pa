@@ -1,0 +1,34 @@
+# Async fs — the BlockingPool's first real client (notes/IO.md v1). These file ops run on
+# a host worker thread rather than the single scheduler thread: each parks its fiber on
+# the I/O reactor (`wait::IO`) while `std::fs` runs off-thread, then settles the produced
+# `result` once the worker completes. The builtins are declared here directly (the
+# `std.sys.fs` surface stays synchronous for now; wiring these in as the default-async
+# surface is the deferred follow-up). A write → append → read roundtrip proves the
+# bytes-through-scratch offload path end to end, and a read of a missing file proves the
+# error path (the OS message arrives on the `err` side).
+use std.task
+
+def read-file :: fun string -> task (result string string) = built-in "fs-read"
+
+def write-file :: fun string string -> task (result nothing string) = built-in "fs-write"
+
+def append-file :: fun string string -> task (result nothing string) = built-in "fs-append"
+
+def main = fun {
+	let path = "target/pluma-offload-fs-test.txt"
+	try _ = write-file path "hello "
+	try _ = append-file path "worker thread"
+	try contents = read-file path
+	when contents is ok text {
+		print text
+	} is err msg {
+		print "read err: $(msg)"
+	}
+	try missing = read-file "target/no-such-offload-file-xyz.txt"
+	when missing is ok _ {
+		print "unexpected ok"
+	} is err _ {
+		print "read missing: err"
+	}
+	task.return 0
+}

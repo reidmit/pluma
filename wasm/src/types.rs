@@ -330,10 +330,18 @@ enum FuncKind {
 	/// status, i32 n)`. read writes ≤ `cap` bytes into scratch (returns `len`); write
 	/// reads `len` bytes from scratch (returns the count written).
 	NetRW,
-	/// The reactor block step: `net-poll(i64 deadline) -> i32 woken-fid`.
+	/// The reactor block step: `io-poll(i64 deadline) -> i32 woken-fid` (shared by net +
+	/// offload).
 	NetPoll,
-	/// Drop a reactor registration: `net-unwatch(i32 fid) -> ()`.
+	/// Drop a reactor registration: `io-unwatch(i32 fid) -> ()`.
 	NetUnwatch,
+	/// A `BlockingPool` offload op with an i64 arg: `(i32 fid, i64 arg) -> (i32 status, i32
+	/// n)` — `offload-sleep` (arg = nanos). Submit-or-collect like the net read/write ops.
+	OffloadSleep,
+	/// An async-fs offload op: `(i32 fid, i32 path_ptr, i32 path_len, i32 a, i32 b) -> (i32
+	/// status, i32 n)`. `fs-read` (a/b = dst/cap, n = bytes read); `fs-write`/`fs-append`
+	/// (a/b = data_ptr/data_len, n unused).
+	OffloadFile,
 	/// A `std.web.dom` node-producing import: `(i32 ptr, i32 len) -> externref`
 	/// (`dom-create-element`/`dom-create-text` — a tag/text string in scratch →
 	/// a fresh DOM node). The host returns the engine-managed `externref`; wasm
@@ -607,6 +615,17 @@ impl FuncTypes {
 	/// `net-unwatch`: `(i32 fid) -> ()`.
 	pub fn for_net_unwatch(&mut self) -> u32 {
 		self.intern(FuncKind::NetUnwatch)
+	}
+
+	/// `offload-sleep` and kin: `(i32 fid, i64 arg) -> (i32 status, i32 n)`.
+	pub fn for_offload_sleep(&mut self) -> u32 {
+		self.intern(FuncKind::OffloadSleep)
+	}
+
+	/// `fs-read`/`fs-write`/`fs-append`: `(i32 fid, i32 pp, i32 pl, i32 a, i32 b) -> (i32
+	/// status, i32 n)`.
+	pub fn for_offload_file(&mut self) -> u32 {
+		self.intern(FuncKind::OffloadFile)
 	}
 
 	/// The type index for a `wire` value mixer: `(i64, ref $value) -> i64`.
@@ -1103,6 +1122,25 @@ impl FuncTypes {
 				}
 				FuncKind::NetUnwatch => {
 					types.ty().function([ValType::I32], []);
+					continue;
+				}
+				FuncKind::OffloadSleep => {
+					types
+						.ty()
+						.function([ValType::I32, ValType::I64], [ValType::I32, ValType::I32]);
+					continue;
+				}
+				FuncKind::OffloadFile => {
+					types.ty().function(
+						[
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+						],
+						[ValType::I32, ValType::I32],
+					);
 					continue;
 				}
 				FuncKind::WireMixVal => {

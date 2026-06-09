@@ -47,6 +47,18 @@ pub(crate) mod task_kind {
 	// or parks (`wait::RPC`) until the host's async `fetch` delivers. The sys host
 	// lowers `web-fetch` to a blocking exchange instead (no task kind).
 	pub(crate) const WEB_FETCH: i32 = 17;
+	// BlockingPool offload ops (notes/IO.md): a non-pollable blocking call (`offload-sleep`
+	// in v0; async-fs read/write next) submitted to a host worker thread, parking the fiber
+	// on `wait::IO` and woken through `io-poll` — the completion analogue of the net read's
+	// readiness park. Settled by the same `io_settle` shape (`ok …`/`err …`).
+	pub(crate) const OFFLOAD_SLEEP: i32 = 18;
+	// Async fs (notes/IO.md v1): the first real offload client. Each parks on `wait::IO`
+	// while a pool worker runs the blocking `std::fs` call. read marshals a path in + bytes
+	// out (with the `io-copyout` overflow path, the file size being unknown); write/append
+	// marshal path + data in, `nothing` out.
+	pub(crate) const FILE_READ: i32 = 19;
+	pub(crate) const FILE_WRITE: i32 = 20;
+	pub(crate) const FILE_APPEND: i32 = 21;
 }
 
 /// The host-fed RPC stream channel (`std.web.stream`): a per-subscription mailbox
@@ -550,11 +562,22 @@ pub(crate) struct Runtime {
 	/// Host import `io-last-error() -> $str` — the message `__io_result` attaches to
 	/// `err` on a failed io call. Present whenever `IoResult` is emitted.
 	pub(crate) io_last_error: Option<u32>,
-	/// The `std.sys.net` host import indices (the seven socket ops + the reactor's
-	/// `net-poll`/`net-unwatch`). `Some` exactly when the program reaches a net
-	/// builtin; the async scheduler's net machinery (pump NET arms, block step,
-	/// reap unwatch) and the emit-side sync shaping read it.
+	/// Host import `io-copyout(dst) -> ()` — drains the read-overflow stash. `Some` when an
+	/// offload-fs read is reachable (the only offload op whose payload can exceed the first
+	/// buffer); the pump's `FILE_READ` settle calls it.
+	pub(crate) io_copyout: Option<u32>,
+	/// The `std.sys.net` host import indices (the seven socket ops). `Some` exactly when
+	/// the program reaches a net builtin; the pump's NET arms and the emit-side sync
+	/// shaping read it.
 	pub(crate) net: Option<NetImports>,
+	/// The shared offload-reactor controls (`io-poll`/`io-unwatch`). `Some` when the
+	/// program reaches any async-I/O builtin (`net` *or* offload); the scheduler block
+	/// step + reap read it.
+	pub(crate) io: Option<IoImports>,
+	/// The `BlockingPool` offload-client host imports (`offload-sleep`, and the async-fs
+	/// ops next). `Some` exactly when an offload builtin is reached; the pump's offload
+	/// arms read it.
+	pub(crate) offload: Option<OffloadImports>,
 	/// Wasm index of the mutable `(ref null $list)` global holding the `std.web.dom`
 	/// event-handler registry — a `$list` of handler closures, indexed by the i32
 	/// token `dom.add-listener` hands the host. `Some` exactly when a `dom-add-listener`
@@ -593,8 +616,10 @@ impl Runtime {
 
 /// The `std.sys.net` host import indices. The synchronous ops (`listen`/`close`/
 /// `local_addr`/`connect`) are marshalled at `emit`'s `host_call`; the suspending ops
-/// (`accept`/`read`/`write`) and the reactor controls (`poll`/`unwatch`) are called
-/// from the hand-emitted scheduler (`helpers/task.rs`).
+/// (`accept`/`read`/`write`) are called from the hand-emitted scheduler
+/// (`helpers/task.rs`). The reactor controls (`poll`/`unwatch`) are no longer here — they
+/// moved to the shared `IoImports`, since offload-only programs (fs, db) drive the same
+/// block step without any socket op.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct NetImports {
 	pub(crate) listen: u32,
@@ -604,8 +629,29 @@ pub(crate) struct NetImports {
 	pub(crate) accept: u32,
 	pub(crate) read: u32,
 	pub(crate) write: u32,
+}
+
+/// The shared offload-reactor controls (notes/IO.md), driven by the hand-emitted
+/// scheduler regardless of which async-I/O client is in play: `io-poll` is the block
+/// step (block until a socket is ready or a worker completion lands), `io-unwatch` drops
+/// a parked wait on reap. `Some` when the program reaches *any* async-I/O builtin
+/// (`uses_net || uses_offload`) — both feed the one poll step.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct IoImports {
 	pub(crate) poll: u32,
 	pub(crate) unwatch: u32,
+}
+
+/// The `BlockingPool` offload-client host import indices (notes/IO.md): non-pollable
+/// blocking ops run on a worker thread, parked on `wait::IO` like the suspending net ops
+/// and woken through the same `io-poll`. `sleep` is the v0 proving op (`offload-sleep`);
+/// the async-fs ops land here next (v1). `Some` exactly when an offload builtin is reached.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct OffloadImports {
+	pub(crate) sleep: u32,
+	pub(crate) read: u32,
+	pub(crate) write: u32,
+	pub(crate) append: u32,
 }
 
 /// The marshalling helper/global indices the suspending net ops (`accept`/`read`/
@@ -620,6 +666,10 @@ pub(crate) struct NetMarshal {
 	pub(crate) load: u32,
 	pub(crate) io_result: u32,
 	pub(crate) bump: u32,
+	/// `io-copyout` host import — drains the host's overflow stash when a read's bytes
+	/// didn't fit the first `(dst, cap)` buffer. `Some` only for offload-fs reads (whose
+	/// payload size is unknown); net ops read with a caller-bounded cap and never overflow.
+	pub(crate) copyout: Option<u32>,
 }
 
 /// Whether `tag` is one of the seven `std.sys.net` socket builtins (the suspending
@@ -627,6 +677,13 @@ pub(crate) struct NetMarshal {
 /// `connect`). Drives net-import registration (`module.rs`).
 pub(crate) fn is_net_builtin(tag: &str) -> bool {
 	is_net_sync(tag) || matches!(tag, "net-accept" | "net-read" | "net-write")
+}
+
+/// Whether `tag` is a `BlockingPool` offload builtin (notes/IO.md) — a suspending `$task`
+/// kind whose blocking call the scheduler offloads to a host worker thread. Drives
+/// offload-import registration (`module.rs`), like `is_net_builtin` does for net.
+pub(crate) fn is_offload_builtin(tag: &str) -> bool {
+	matches!(tag, "offload-sleep" | "fs-read" | "fs-write" | "fs-append")
 }
 
 /// Whether `tag` is a *synchronous* `std.sys.net` op — a host call shaped into a
@@ -1516,6 +1573,12 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		// `std.web.stream`: pull the next host-fed RPC stream event (a `$task` the
 		// scheduler drives — dequeue or park on `wait::RPC`).
 		"rpc-stream-next" => task_kind::RPC_NEXT,
+		// BlockingPool offload ops (notes/IO.md): a `$task` carrying the op's args; the
+		// scheduler submits the blocking call to a worker thread + parks on `wait::IO`.
+		"offload-sleep" => task_kind::OFFLOAD_SLEEP,
+		"fs-read" => task_kind::FILE_READ,
+		"fs-write" => task_kind::FILE_WRITE,
+		"fs-append" => task_kind::FILE_APPEND,
 		_ => return None,
 	})
 }
