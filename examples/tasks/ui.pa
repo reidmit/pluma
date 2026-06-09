@@ -152,24 +152,24 @@ public def page :: fun nothing -> view = using view {
 				()
 			} else {
 				signal.set draft ""
-				task.spawn (task.map (api.add-todo text) fun created {
+				task.fire (api.add-todo text) fun created {
 					signal.update todos fun ts {
 						[...ts, created]
 					}
-				})
+				}
 			}
 		}
 
 		let toggle = fun id {
-			task.spawn (task.map (api.toggle-todo id) fun board {
+			task.fire (api.toggle-todo id) fun board {
 				signal.set todos board
-			})
+			}
 		}
 
 		let clear = fun {
-			task.spawn (task.map (api.clear-done ()) fun board {
+			task.fire (api.clear-done ()) fun board {
 				signal.set todos board
-			})
+			}
 		}
 
 		# A filter pill: `dim` greys it while it is not the active filter.
@@ -187,9 +187,9 @@ public def page :: fun nothing -> view = using view {
 			.id "app",
 			.styled card,
 			.on-mount fun {
-				task.spawn (task.map (api.list-todos ()) fun board {
+				task.fire (api.list-todos ()) fun board {
 					signal.set todos board
-				})
+				}
 			},
 		] [
 			.h1 [] [.text "Pluma Tasks"],

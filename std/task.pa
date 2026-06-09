@@ -116,6 +116,19 @@ public def spawn-cancelable :: fun (task nothing) -> (fun nothing -> nothing) = 
 	}
 }
 
+# `spawn` for a task that carries a *result*: run `t` detached and hand its value to
+# `f` when it settles. It's exactly `spawn (map t f)`, and the canonical "RPC result
+# flows into a signal" move reads in one line:
+#
+#     task.fire (api.list-todos ()) (fun board { signal.set todos board })
+#
+# Fire-and-forget like `spawn` -- it returns at once; `f` runs later, off the
+# scheduler, with the result. (`spawn` itself is the `task nothing` case, no result
+# to route.)
+public def fire :: fun (task a) (fun a -> nothing) -> nothing = fun t f {
+	spawn (map t f)
+}
+
 # --- structured-concurrency kernel ---------------------------------------
 #
 # The primitives the `scope` keyword (and the concurrent combinators) lower
