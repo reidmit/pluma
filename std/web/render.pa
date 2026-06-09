@@ -27,6 +27,7 @@ use std.dict
 use std.hex
 use std.list
 use std.signal
+use std.string
 use std.task
 use std.view
 use std.web.dom
@@ -46,6 +47,7 @@ def build :: fun view -> dom.node = fun v {
 		list.each attrs fun a {
 			apply-attr node a
 		}
+		apply-classes node attrs
 		list.each kids fun k {
 			dom.append-child node (build k)
 		}
@@ -67,16 +69,26 @@ def build :: fun view -> dom.node = fun v {
 # handlers get a real DOM listener.
 def apply-attr :: fun dom.node view.attribute -> nothing = fun node a {
 	when a is view.attribute.static k v {
-		dom.set-attribute node k v
+		# `class` is owned by `apply-classes` (it merges every class contribution);
+		# everything else is set directly.
+		if k == "class" {
+			()
+		} else {
+			dom.set-attribute node k v
+		}
 	} is view.attribute.prop-str k v {
 		dom.set-string-property node k v
 	} is view.attribute.prop-bool k flag {
 		dom.set-bool-property node k flag
 	} is view.attribute.dynamic k f {
-		let _d = signal.effect fun {
-			dom.set-attribute node k (f ())
+		if k == "class" {
+			()
+		} else {
+			let _d = signal.effect fun {
+				dom.set-attribute node k (f ())
+			}
+			()
 		}
-		()
 	} is view.attribute.prop-str-of k f {
 		let _d = signal.effect fun {
 			dom.set-string-property node k (f ())
@@ -94,6 +106,85 @@ def apply-attr :: fun dom.node view.attribute -> nothing = fun node a {
 		let _d = signal.effect fun {
 			dom.set-style-property node "--$(name)" (f ())
 		}
+		()
+	} is view.attribute.styled-when _name _cond {
+		# Owned by `apply-classes` (merged into the element's `class`).
+		()
+	}
+}
+
+# --- class merging ----------------------------------------------------------
+#
+# An element's `class` is the merge of every class contribution: `static "class"`
+# (from `view.class`/`styled`/`classes`), a reactive `bind "class"`, and each
+# `styled-when` whose condition holds. `apply-attr` skips them so this owns the
+# attribute; if any contribution is reactive, one effect recomputes the whole
+# string, otherwise it's set once.
+
+def class-token :: fun view.attribute -> string = fun a {
+	when a is view.attribute.static k v {
+		if k == "class" { v } else { "" }
+	} is view.attribute.dynamic k f {
+		if k == "class" { f () } else { "" }
+	} is view.attribute.styled-when name cond {
+		if cond () { name } else { "" }
+	} else {
+		""
+	}
+}
+
+def merged-class :: fun (list view.attribute) -> string = fun attrs {
+	let toks = list.filter (list.map attrs class-token) fun t {
+		if string.is-empty t { false } else { true }
+	}
+	string.join toks " "
+}
+
+def has-reactive-class :: fun (list view.attribute) -> bool = fun attrs {
+	let reactive = list.filter attrs fun a {
+		when a is view.attribute.styled-when _n _c {
+			true
+		} is view.attribute.dynamic k _f {
+			k == "class"
+		} else {
+			false
+		}
+	}
+	if list.is-empty reactive {
+		false
+	} else {
+		true
+	}
+}
+
+# Build the element's class: one effect when any class attribute is reactive (a
+# `styled-when` or a `bind "class"`), otherwise set once.
+def apply-classes :: fun dom.node (list view.attribute) -> nothing = fun node attrs {
+	if has-reactive-class attrs {
+		let _d = signal.effect fun {
+			dom.set-attribute node "class" (merged-class attrs)
+		}
+		()
+	} else {
+		let cls = merged-class attrs
+		if string.is-empty cls {
+			()
+		} else {
+			dom.set-attribute node "class" cls
+		}
+	}
+}
+
+# Hydration: the server already rendered the static merge into `class`. Re-install
+# the reactive effect (its first run re-applies the same string, then tracks); a
+# fully-static class needs nothing.
+def adopt-classes :: fun dom.node (list view.attribute) -> nothing = fun node attrs {
+	if has-reactive-class attrs {
+		let _d = signal.effect fun {
+			dom.set-attribute node "class" (merged-class attrs)
+		}
+		()
+	} else {
 		()
 	}
 }
@@ -340,6 +431,7 @@ def adopt :: fun view dom.node -> nothing = fun v node {
 		list.each attrs fun a {
 			adopt-attr node a
 		}
+		adopt-classes node attrs
 		list.each (list.enumerate kids) fun pair {
 			let (i, k) = pair
 			adopt k (dom.child-at node i)
@@ -367,10 +459,14 @@ def adopt-attr :: fun dom.node view.attribute -> nothing = fun node a {
 	} is view.attribute.prop-bool _k _flag {
 		()
 	} is view.attribute.dynamic k f {
-		let _d = signal.effect fun {
-			dom.set-attribute node k (f ())
+		if k == "class" {
+			()
+		} else {
+			let _d = signal.effect fun {
+				dom.set-attribute node k (f ())
+			}
+			()
 		}
-		()
 	} is view.attribute.prop-str-of k f {
 		# The server rendered the initial value as an attribute; this effect sets the
 		# live *property* (what the browser reflects after edits) and tracks the signal.
@@ -392,6 +488,9 @@ def adopt-attr :: fun dom.node view.attribute -> nothing = fun node a {
 		let _d = signal.effect fun {
 			dom.set-style-property node "--$(name)" (f ())
 		}
+		()
+	} is view.attribute.styled-when _name _cond {
+		# Owned by `adopt-classes` (merged into the element's `class`).
 		()
 	}
 }

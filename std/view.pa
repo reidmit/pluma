@@ -43,6 +43,7 @@ public enum attribute {
 	prop-bool-of string (fun nothing -> bool)
 	handler string (fun event -> nothing)
 	style-var string (fun nothing -> string)
+	styled-when string (fun nothing -> bool)
 }
 
 # A node in the view tree: an element, static text, a reactive text node, or
@@ -249,13 +250,13 @@ def escape-attr :: fun string -> string = fun s {
 	string.replace c "\"" "&quot;"
 }
 
-# Render one attribute, EXCEPT style-contributing ones (a `style` attribute or a
-# custom property) -- those are gathered separately by `style-fragment` and merged
-# into a single `style="..."` by `render-attrs`, so they don't emit a duplicate
-# `style` attribute here.
+# Render one attribute, EXCEPT the `style`- and `class`-contributing ones -- those
+# are gathered separately (`style-fragment` / `class-fragment`) and merged into a
+# single `style="..."` / `class="..."` by `render-attrs`, so a node with several of
+# either doesn't emit duplicate attributes.
 def render-attr :: fun attribute -> string = fun a {
 	when a is attribute.static k v {
-		if k == "style" {
+		if k == "style" || k == "class" {
 			""
 		} else {
 			" $(k)=\"$(escape-attr v)\""
@@ -269,7 +270,7 @@ def render-attr :: fun attribute -> string = fun a {
 			""
 		}
 	} is attribute.dynamic k f {
-		if k == "style" {
+		if k == "style" || k == "class" {
 			""
 		} else {
 			" $(k)=\"$(escape-attr (f ()))\""
@@ -286,6 +287,36 @@ def render-attr :: fun attribute -> string = fun a {
 		""
 	} is attribute.style-var _name _f {
 		""
+	} is attribute.styled-when _name _cond {
+		""
+	}
+}
+
+# The `class` token an attribute contributes, if any: a `class` attribute's value
+# (static or reactive, the thunk run once) or a `styled-when` rule whose condition
+# holds. These merge into one `class` so a node can stack a base `styled` rule and
+# several conditional ones.
+def class-fragment :: fun attribute -> option string = fun a {
+	when a is attribute.static k v {
+		if k == "class" {
+			some v
+		} else {
+			none
+		}
+	} is attribute.dynamic k f {
+		if k == "class" {
+			some (f ())
+		} else {
+			none
+		}
+	} is attribute.styled-when name cond {
+		if cond () {
+			some name
+		} else {
+			none
+		}
+	} else {
+		none
 	}
 }
 
@@ -318,22 +349,35 @@ def style-fragment :: fun attribute -> option string = fun a {
 		none
 	} is attribute.handler _name _h {
 		none
+	} is attribute.styled-when _name _cond {
+		none
 	}
 }
 
-def render-attrs :: fun (list attribute) -> string = fun attrs {
-	let non-style = string.join (list.map attrs fun a { render-attr a }) ""
-	let frags = list.fold attrs [] fun acc a {
-		when style-fragment a is some s {
+# Collect, in order, the `some` values an attribute-to-fragment function yields.
+def fragments :: fun (list attribute) (fun attribute -> option string) -> list string = fun attrs frag {
+	list.fold attrs [] fun acc a {
+		when frag a is some s {
 			list.concat acc [s]
 		} else {
 			acc
 		}
 	}
-	if list.is-empty frags {
-		non-style
+}
+
+def render-attrs :: fun (list attribute) -> string = fun attrs {
+	let plain = string.join (list.map attrs fun a { render-attr a }) ""
+	let class-frags = fragments attrs class-fragment
+	let style-frags = fragments attrs style-fragment
+	let with-class = if list.is-empty class-frags {
+		plain
 	} else {
-		"$(non-style) style=\"$(escape-attr (string.join frags "; "))\""
+		"$(plain) class=\"$(escape-attr (string.join class-frags " "))\""
+	}
+	if list.is-empty style-frags {
+		with-class
+	} else {
+		"$(with-class) style=\"$(escape-attr (string.join style-frags "; "))\""
 	}
 }
 
@@ -812,6 +856,18 @@ public def style-of :: fun (list css.decl) -> attribute = fun decls {
 # inline `style` can't express.
 public def styled :: fun css.ruleset -> attribute = fun r {
 	attribute.static "class" (css.class-of r)
+}
+
+# Apply an extracted `css.ruleset` reactively: its hashed class is on the element
+# while `cond ()` holds and removed when it doesn't, re-evaluated when the signals
+# `cond` reads change. The reactive companion to `styled` -- the idiomatic way to
+# express a state-dependent style (`.active`, `.done`) without an inline `style`
+# string. Composes with `styled` and other class attributes on the same node: all
+# of them merge into one `class` (like `style`/`css-var` already do), so a base rule
+# and any number of conditional ones stack. The rule is registered up front (so the
+# stylesheet always carries it), only its presence on the element is conditional.
+public def styled-when :: fun css.ruleset (fun nothing -> bool) -> attribute = fun r cond {
+	attribute.styled-when (css.class-of r) cond
 }
 
 # A reactive CSS custom property on this element: `view.css-var "accent" (fun {

@@ -1,0 +1,10 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+<div class="c512a1ba8 c72ade912">a</div>
+<div class="c512a1ba8">b</div>
+== stderr ==
