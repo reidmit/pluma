@@ -4,10 +4,10 @@
 # work — the remote calls — lives inside event handlers, which only run in the
 # browser after hydration; `view.to-string` drops them.
 #
-# Reactivity model worth noting: `view.each` builds each row ONCE per key, so a
-# row's done-state can't come from re-running its builder. Instead the reactive
-# parts inside a row (`view.bind "style"`, `view.text-of`) re-read the `todos`
-# signal and re-derive — fine-grained, no row rebuild on toggle.
+# The CSS rules and the view tree are written inside `using css { ... }` /
+# `using view { ... }` blocks: inside, a leading-dot `.member` resolves in that
+# namespace, so the repeated `css.`/`view.` prefix drops away. Other namespaces
+# (`signal`, `task`, `list`, …) stay qualified — only the ambient one goes bare.
 
 use std.css
 use std.list
@@ -19,64 +19,74 @@ use api
 
 # --- styling (extracted, content-hashed rules; emitted into <head> by SSR) ----
 
-def card :: css.ruleset = css.rule [
-	css.base [
-		css.max-width (css.px 560.0),
-		css.margin (css.rem 2.0),
-		css.padding (css.rem 1.5),
-		css.border-radius (css.px 14.0),
-		css.background (css.hex "#0b1020"),
-		css.color (css.hex "#e2e8f0"),
-		css.property "border" "1px solid #1e293b",
-		css.property "font-family" "system-ui, sans-serif",
-	],
-]
+def card :: css.ruleset = using css {
+	.rule [
+		.base [
+			.max-width (.px 560.0),
+			.margin (.rem 2.0),
+			.padding (.rem 1.5),
+			.border-radius (.px 14.0),
+			.background (.hex "#0b1020"),
+			.color (.hex "#e2e8f0"),
+			.property "border" "1px solid #1e293b",
+			.property "font-family" "system-ui, sans-serif",
+		],
+	]
+}
 
-def row :: css.ruleset = css.rule [
-	css.base [
-		css.property "display" "flex",
-		css.property "align-items" "center",
-		css.property "gap" "0.6rem",
-		css.padding (css.rem 0.5),
-		css.border-radius (css.px 8.0),
-		css.property "list-style" "none",
-	],
-	css.on "hover" [css.background (css.hex "#11182e")],
-]
+def row :: css.ruleset = using css {
+	.rule [
+		.base [
+			.property "display" "flex",
+			.property "align-items" "center",
+			.property "gap" "0.6rem",
+			.padding (.rem 0.5),
+			.border-radius (.px 8.0),
+			.property "list-style" "none",
+		],
+		.on "hover" [.background (.hex "#11182e")],
+	]
+}
 
-def check :: css.ruleset = css.rule [
-	css.base [
-		css.background (css.hex "#0b1020"),
-		css.color (css.var "accent"),
-		css.property "border" "none",
-		css.property "font-size" "1.1rem",
-		css.cursor "pointer",
-	],
-]
+def check :: css.ruleset = using css {
+	.rule [
+		.base [
+			.background (.hex "#0b1020"),
+			.color (.var "accent"),
+			.property "border" "none",
+			.property "font-size" "1.1rem",
+			.cursor "pointer",
+		],
+	]
+}
 
-def field :: css.ruleset = css.rule [
-	css.base [
-		css.property "flex" "1",
-		css.padding (css.rem 0.5),
-		css.border-radius (css.px 8.0),
-		css.background (css.hex "#0b1020"),
-		css.color (css.hex "#e2e8f0"),
-		css.property "border" "1px solid #1e293b",
-	],
-]
+def field :: css.ruleset = using css {
+	.rule [
+		.base [
+			.property "flex" "1",
+			.padding (.rem 0.5),
+			.border-radius (.px 8.0),
+			.background (.hex "#0b1020"),
+			.color (.hex "#e2e8f0"),
+			.property "border" "1px solid #1e293b",
+		],
+	]
+}
 
-def btn :: css.ruleset = css.rule [
-	css.base [
-		css.background (css.var "accent"),
-		css.color (css.hex "#ffffff"),
-		css.property "border" "none",
-		css.padding (css.rem 0.5),
-		css.margin (css.px 3.0),
-		css.border-radius (css.px 8.0),
-		css.cursor "pointer",
-	],
-	css.on "hover" [css.opacity 0.85],
-]
+def btn :: css.ruleset = using css {
+	.rule [
+		.base [
+			.background (.var "accent"),
+			.color (.hex "#ffffff"),
+			.property "border" "none",
+			.padding (.rem 0.5),
+			.margin (.px 3.0),
+			.border-radius (.px 8.0),
+			.cursor "pointer",
+		],
+		.on "hover" [.opacity 0.85],
+	]
+}
 
 # --- helpers ----------------------------------------------------------------
 
@@ -103,140 +113,133 @@ def count-active :: fun (list api.todo) -> int = fun all {
 
 # --- the page ---------------------------------------------------------------
 
-public def page :: fun nothing -> view = fun {
-	let todos :: signal (list api.todo) = signal.new []
-	let draft = signal.new ""
-	let filter = signal.new "all"
+public def page :: fun nothing -> view = using view {
+	fun {
+		let todos :: signal (list api.todo) = signal.new []
+		let draft = signal.new ""
+		let filter = signal.new "all"
 
-	# Visible rows depend on both the board and the active filter.
-	let visible = fun {
-		let all = signal.get todos
-		let f = signal.get filter
-		if f == "active" {
-			list.filter all fun t {
-				if t.done {
-					false
-				} else {
-					true
+		# Visible rows depend on both the board and the active filter.
+		let visible = fun {
+			let all = signal.get todos
+			let f = signal.get filter
+			if f == "active" {
+				list.filter all fun t {
+					if t.done {
+						false
+					} else {
+						true
+					}
 				}
+			} else if f == "done" {
+				list.filter all fun t {
+					t.done
+				}
+			} else {
+				all
 			}
-		} else if f == "done" {
-			list.filter all fun t {
-				t.done
+		}
+
+		# Add the draft as a new todo via the server, then append the returned record.
+		let submit = fun {
+			let text = string.trim (signal.get draft)
+			if string.is-empty text {
+				()
+			} else {
+				signal.set draft ""
+				task.spawn (task.map (api.add-todo text) fun created {
+					signal.update todos fun ts {
+						[...ts, created]
+					}
+				})
 			}
-		} else {
-			all
 		}
-	}
 
-	# Add the draft as a new todo via the server, then append the returned record.
-	# Spread builds a NEW list so the signal's deep-`==` check notifies.
-	let submit = fun {
-		let text = string.trim (signal.get draft)
-		if string.is-empty text {
-			()
-		} else {
-			signal.set draft ""
-			task.spawn (task.map (api.add-todo text) fun created {
-				signal.update todos fun ts {
-					[...ts, created]
-				}
-			})
-		}
-	}
-
-	let toggle = fun id {
-		task.spawn (task.map (api.toggle-todo id) fun board {
-			signal.set todos board
-		})
-	}
-
-	let clear = fun {
-		task.spawn (task.map (api.clear-done ()) fun board {
-			signal.set todos board
-		})
-	}
-
-	# A filter pill: reactive style highlights the active one.
-	let pill = fun label value {
-		view.button [
-			view.styled btn,
-			view.bind "style" fun {
-				if signal.get filter == value {
-					"opacity: 1"
-				} else {
-					"opacity: 0.45"
-				}
-			},
-			view.on-click fun { signal.set filter value },
-		] [view.text label]
-	}
-
-	view.div [
-		view.id "app",
-		view.styled card,
-		view.css-var "accent" fun {
-			# The whole subtree reads `var(--accent)`; the live value is one signal.
-			"#2563eb"
-		},
-	] [
-		view.on-mount fun {
-			# Client-only: after hydration, load the board the server already persisted.
-			# Server-skipped, so it never runs during SSR (which renders the empty shell).
-
-			task.spawn (task.map (api.list-todos ()) fun board {
+		let toggle = fun id {
+			task.spawn (task.map (api.toggle-todo id) fun board {
 				signal.set todos board
 			})
-		},
-		view.h1 [] [view.text "Pluma Tasks"],
-		view.p [] [
-			view.text-of fun {
-				"$(to-string (count-active (signal.get todos))) of $(to-string (list.length (signal.get todos))) remaining"
+		}
+
+		let clear = fun {
+			task.spawn (task.map (api.clear-done ()) fun board {
+				signal.set todos board
+			})
+		}
+
+		# A filter pill: reactive style highlights the active one.
+		let pill = fun label value {
+			.button [
+				.styled btn,
+				.bind "style" fun {
+					if signal.get filter == value {
+						"opacity: 1"
+					} else {
+						"opacity: 0.45"
+					}
+				},
+				.on-click fun { signal.set filter value },
+			] [.text label]
+		}
+
+		.div [.id "app", .styled card, .css-var "accent" fun { "#2563eb" }] [
+			.on-mount fun {
+				# Client-only: after hydration, load the board the server already persisted.
+
+				task.spawn (task.map (api.list-todos ()) fun board {
+					signal.set todos board
+				})
 			},
-		],
-		view.form [view.on-submit submit] [
-			view.input [
-				view.styled field,
-				view.placeholder "Add a task…",
-				view.value-of fun { signal.get draft },
-				view.on-input fun s { signal.set draft s },
-			] [],
-			view.button [view.styled btn, view.input-type "submit"] [view.text "Add"],
-		],
-		view.div [] [
-			pill "All" "all",
-			pill "Active" "active",
-			pill "Done" "done",
-			view.button [view.styled btn, view.on-click clear] [view.text "Clear done"],
-		],
-		view.ul [view.id "list", view.style "padding: 0"] [
-			view.each fun { visible () } fun t { to-string t.id } fun t {
-				view.li [view.styled row] [
-					view.button [view.styled check, view.on-click fun { toggle t.id }] [
-						view.text-of fun {
-							if done-of (signal.get todos) t.id {
-								"☑"
-							} else {
-								"☐"
-							}
-						},
-					],
-					view.span [
-						view.bind "style" fun {
-							if done-of (signal.get todos) t.id {
-								"text-decoration: line-through; opacity: 0.5"
-							} else {
-								""
-							}
-						},
-					] [view.text t.text],
-				]
+			.h1 [] [.text "Pluma Tasks"],
+			.p [] [
+				.text-of fun {
+					"$(to-string (count-active (signal.get todos))) of $(to-string (list.length (signal.get todos))) remaining"
+				},
+			],
+			.form [.on-submit submit] [
+				.input [
+					.styled field,
+					.placeholder "Add a task…",
+					.value-of fun { signal.get draft },
+					.on-input fun s { signal.set draft s },
+				] [],
+				.button [.styled btn, .input-type "submit"] [.text "Add"],
+			],
+			.div [] [
+				pill "All" "all",
+				pill "Active" "active",
+				pill "Done" "done",
+				.button [.styled btn, .on-click clear] [.text "Clear done"],
+			],
+			.ul [.id "list", .style "padding: 0"] [
+				.each fun { visible () } fun t { to-string t.id } fun t {
+					.li [.styled row] [
+						.button [.styled check, .on-click fun { toggle t.id }] [
+							.text-of fun {
+								if done-of (signal.get todos) t.id {
+									"☑"
+								} else {
+									"☐"
+								}
+							},
+						],
+						.span [
+							.bind "style" fun {
+								if done-of (signal.get todos) t.id {
+									"text-decoration: line-through; opacity: 0.5"
+								} else {
+									""
+								}
+							},
+						] [.text t.text],
+					]
+				},
+			],
+			.show fun { list.is-empty (signal.get todos) } fun {
+				.p [.style "opacity: 0.5"] [.text "No tasks yet — add one above."]
 			},
-		],
-		view.show fun { list.is-empty (signal.get todos) } fun {
-			view.p [view.style "opacity: 0.5"] [view.text "No tasks yet — add one above."]
-		},
-	]
+		]
+	}
 }
 
 # The full HTML document for a server-rendered first paint.
