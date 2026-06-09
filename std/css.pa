@@ -27,9 +27,9 @@ use std.string
 
 # A CSS color value. Build with `hex`/`rgb`/`rgba`/`named` rather than naming the
 # constructors; public (not opaque) only so it can appear in signatures. (Named
-# `paint`, not `color`, so it doesn't clash with the `css.color` property builder --
-# types and defs share one namespace.)
-public enum paint {
+# `color-value`, not `color`, so it doesn't clash with the `css.color` property
+# builder -- types and defs share one namespace.)
+public enum color-value {
 	rgb int int int
 	rgba int int int float
 	hex string
@@ -60,31 +60,31 @@ public enum decl {
 
 # A hex color. The leading `#` is optional -- `hex "#e11"` and `hex "e11"` both
 # render as `#e11`.
-public def hex :: fun string -> paint = fun s {
-	paint.hex s
+public def hex :: fun string -> color-value = fun s {
+	color-value.hex s
 }
 
 # An opaque RGB color from three 0-255 channels: `rgb 37 99 235` => `rgb(37, 99, 235)`.
-public def rgb :: fun int int int -> paint = fun r g b {
-	paint.rgb r g b
+public def rgb :: fun int int int -> color-value = fun r g b {
+	color-value.rgb r g b
 }
 
 # An RGB color with an alpha (0.0-1.0): `rgba 0 0 0 0.5` => `rgba(0, 0, 0, 0.5)`.
-public def rgba :: fun int int int float -> paint = fun r g b a {
-	paint.rgba r g b a
+public def rgba :: fun int int int float -> color-value = fun r g b a {
+	color-value.rgba r g b a
 }
 
 # A named CSS color, passed through verbatim: `named "rebeccapurple"`.
-public def named :: fun string -> paint = fun s {
-	paint.named s
+public def named :: fun string -> color-value = fun s {
+	color-value.named s
 }
 
 # A reference to a CSS custom property (`var(--accent)`) -- the bridge for
 # model-driven values into an otherwise-static extracted rule. The live value is
 # supplied separately (a later phase's `view.vars`); here a rule just names it:
 # `css.background (css.var "accent")` => `background: var(--accent)`.
-public def var :: fun string -> paint = fun name {
-	paint.var name
+public def var :: fun string -> color-value = fun name {
+	color-value.var name
 }
 
 # --- lengths ----------------------------------------------------------------
@@ -125,15 +125,15 @@ public def vw :: fun float -> length = fun n {
 
 # --- declarations: color-valued properties ----------------------------------
 
-public def color :: fun paint -> decl = fun c {
+public def color :: fun color-value -> decl = fun c {
 	decl.decl "color" (color-to-string c)
 }
 
-public def background :: fun paint -> decl = fun c {
+public def background :: fun color-value -> decl = fun c {
 	decl.decl "background" (color-to-string c)
 }
 
-public def border-color :: fun paint -> decl = fun c {
+public def border-color :: fun color-value -> decl = fun c {
 	decl.decl "border-color" (color-to-string c)
 }
 
@@ -303,20 +303,20 @@ def length-to-string :: fun length -> string = fun l {
 	}
 }
 
-def color-to-string :: fun paint -> string = fun c {
-	when c is paint.rgb r g b {
+def color-to-string :: fun color-value -> string = fun c {
+	when c is color-value.rgb r g b {
 		"rgb($(to-string r), $(to-string g), $(to-string b))"
-	} is paint.rgba r g b a {
+	} is color-value.rgba r g b a {
 		"rgba($(to-string r), $(to-string g), $(to-string b), $(fmt-num a))"
-	} is paint.hex s {
+	} is color-value.hex s {
 		if string.starts-with s "#" {
 			s
 		} else {
 			"#$(s)"
 		}
-	} is paint.named s {
+	} is color-value.named s {
 		s
-	} is paint.var name {
+	} is color-value.var name {
 		"var(--$(name))"
 	}
 }
