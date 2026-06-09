@@ -52,7 +52,7 @@ def check :: css.ruleset = using css {
 	.rule [
 		.base [
 			.background (.hex "#0b1020"),
-			.color (.var "accent"),
+			.color (.hex "#2563eb"),
 			.property "border" "none",
 			.property "font-size" "1.1rem",
 			.cursor "pointer",
@@ -76,7 +76,7 @@ def field :: css.ruleset = using css {
 def btn :: css.ruleset = using css {
 	.rule [
 		.base [
-			.background (.var "accent"),
+			.background (.hex "#2563eb"),
 			.color (.hex "#ffffff"),
 			.property "border" "none",
 			.padding (.rem 0.5),
@@ -86,6 +86,21 @@ def btn :: css.ruleset = using css {
 		],
 		.on "hover" [.opacity 0.85],
 	]
+}
+
+# Reactive state rules, applied with `view.styled-when`:
+#   `dim` greys an inactive filter pill, `strike` crosses off a done task,
+#   `muted` softens the empty-state line, `list-reset` strips the <ul> chrome.
+def dim :: css.ruleset = using css { .rule [.base [.opacity 0.45]] }
+
+def strike :: css.ruleset = using css {
+	.rule [.base [.property "text-decoration" "line-through", .opacity 0.5]]
+}
+
+def muted :: css.ruleset = using css { .rule [.base [.opacity 0.5]] }
+
+def list-reset :: css.ruleset = using css {
+	.rule [.base [.property "list-style" "none", .padding (.px 0.0), .margin (.px 0.0)]]
 }
 
 # --- helpers ----------------------------------------------------------------
@@ -167,22 +182,16 @@ public def page :: fun nothing -> view = using view {
 			})
 		}
 
-		# A filter pill: reactive style highlights the active one.
+		# A filter pill: `dim` greys it while it is not the active filter.
 		let pill = fun label value {
 			.button [
 				.styled btn,
-				.bind "style" fun {
-					if signal.get filter == value {
-						"opacity: 1"
-					} else {
-						"opacity: 0.45"
-					}
-				},
+				.styled-when dim fun { signal.get filter != value },
 				.on-click fun { signal.set filter value },
 			] [.text label]
 		}
 
-		.div [.id "app", .styled card, .css-var "accent" fun { "#2563eb" }] [
+		.div [.id "app", .styled card] [
 			.on-mount fun {
 				# Client-only: after hydration, load the board the server already persisted.
 
@@ -211,7 +220,7 @@ public def page :: fun nothing -> view = using view {
 				pill "Done" "done",
 				.button [.styled btn, .on-click clear] [.text "Clear done"],
 			],
-			.ul [.id "list", .style "padding: 0"] [
+			.ul [.id "list", .styled list-reset] [
 				.each fun { visible () } fun t { to-string t.id } fun t {
 					.li [.styled row] [
 						.button [.styled check, .on-click fun { toggle t.id }] [
@@ -223,20 +232,14 @@ public def page :: fun nothing -> view = using view {
 								}
 							},
 						],
-						.span [
-							.bind "style" fun {
-								if done-of (signal.get todos) t.id {
-									"text-decoration: line-through; opacity: 0.5"
-								} else {
-									""
-								}
-							},
-						] [.text t.text],
+						.span [.styled-when strike fun { done-of (signal.get todos) t.id }] [
+							.text t.text,
+						],
 					]
 				},
 			],
 			.show fun { list.is-empty (signal.get todos) } fun {
-				.p [.style "opacity: 0.5"] [.text "No tasks yet — add one above."]
+				.p [.styled muted] [.text "No tasks yet — add one above."]
 			},
 		]
 	}
