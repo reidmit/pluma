@@ -29,6 +29,7 @@ use std.stream
 use std.string
 use std.task
 use std.sys.net
+use std.sys.process
 
 # The HTTP method (verb). `other` carries any method name not listed
 # here, so unusual verbs still parse.
@@ -122,12 +123,35 @@ public def stream-response :: fun int (dict string string) (stream bytes) -> res
 # forever. `err`s as a failed task if the address can't be bound.
 #
 #     http.serve "0.0.0.0:8080" handler
+#
+# If the `PORT` environment variable is set, its value replaces the port in
+# `address` (the host is kept). This is the platform convention -- a host like
+# Cloud Run, Heroku, or Render hands your server a port via `$PORT` -- and it's
+# what lets `pluma dev` place the server subprocess on a free port without you
+# hardcoding one to match. With `PORT` unset, `address` is used verbatim.
 public def serve :: fun string (fun request -> task response) -> task nothing = fun address handler {
-	when net.listen address is ok server {
+	when net.listen (with-port-from-env address) is ok server {
 		serve-on server handler
 	} is err e {
 		task.fail ("http.serve: " ++ e)
 	}
+}
+
+# `address` with its port replaced by `$PORT` when that variable is set, else
+# `address` unchanged. See `serve` for why.
+def with-port-from-env :: fun string -> string = fun address {
+	when process.env "PORT" is some port {
+		host-part address ++ ":" ++ port
+	} is none {
+		address
+	}
+}
+
+# The host portion of a `host:port` address: everything up to the last colon, so
+# `127.0.0.1:8080` keeps `127.0.0.1`. (v1 assumes an IPv4/host:port form.)
+def host-part :: fun string -> string = fun address {
+	let segs = string.split address ":"
+	string.join (list.take segs (list.length segs - 1)) ":"
 }
 
 # Serves `handler` on a listener you've already opened. Useful when you

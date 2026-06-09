@@ -31,6 +31,185 @@ type Clients = Arc<Mutex<Vec<TcpStream>>>;
 
 const POLL: Duration = Duration::from_millis(250);
 
+// --------------------------------------------------------------------------
+// The dev dashboard: a full-screen status panel for the browser-facing modes
+// (web + fullstack), redrawn on every rebuild. The app runs in the browser, so
+// the terminal is free for a live status display:
+//
+//     pluma dev · fullstack
+//
+//     ▸ examples/tasks/
+//
+//     ● ready
+//       build #3 · reloaded 1 client
+//
+//     http://localhost:2222/    client · live-reload
+//     /rpc/*  →  127.0.0.1:8080  server subprocess
+//
+//     ctrl-c to stop
+//
+// On a failed rebuild the panel goes red and renders the compiler diagnostics
+// inline (the last good build keeps serving); fix the error and it flips green.
+// When stdout can't take ANSI (not a TTY, or NO_COLOR) `tui` is false and the
+// dashboard degrades to the old one-line-per-event logging, so piped output and
+// CI stay readable.
+
+/// ANSI styling, gated on a single `on` flag so the same call sites work colored
+/// or plain. Mirrors the compiler's `Palette` but for the CLI's own chrome.
+#[derive(Clone, Copy)]
+struct Style {
+	on: bool,
+}
+
+impl Style {
+	fn paint(self, codes: &str, text: &str) -> String {
+		if self.on {
+			format!("\x1b[{codes}m{text}\x1b[0m")
+		} else {
+			text.to_string()
+		}
+	}
+	fn bold(self, t: &str) -> String {
+		self.paint("1", t)
+	}
+	fn dim(self, t: &str) -> String {
+		self.paint("2", t)
+	}
+	fn green(self, t: &str) -> String {
+		self.paint("1;32", t)
+	}
+	fn red(self, t: &str) -> String {
+		self.paint("1;31", t)
+	}
+	fn yellow(self, t: &str) -> String {
+		self.paint("33", t)
+	}
+	fn cyan(self, t: &str) -> String {
+		self.paint("36", t)
+	}
+}
+
+/// The resting state of the panel: ready (with an optional last-build detail), or
+/// failing (carrying the rendered diagnostics to show inline).
+enum Status {
+	Ready(Option<String>),
+	Failed(String),
+}
+
+struct Dashboard {
+	tui: bool,
+	style: Style,
+	mode: &'static str,
+	entry: String,
+	/// A persistent sub-line under `ready` (e.g. the HMR note). `None` to omit.
+	note: Option<String>,
+	/// `(target, annotation)` rows — the served URL and the RPC proxy. The target
+	/// is painted cyan, the annotation dim.
+	rows: Vec<(String, String)>,
+}
+
+impl Dashboard {
+	fn new(
+		mode: &'static str,
+		entry: String,
+		note: Option<String>,
+		rows: Vec<(String, String)>,
+	) -> Self {
+		let on = crate::colors::should_colorize();
+		Dashboard {
+			tui: on,
+			style: Style { on },
+			mode,
+			entry,
+			note,
+			rows,
+		}
+	}
+
+	fn draw(&self, status: &Status) {
+		if !self.tui {
+			self.draw_plain(status);
+			return;
+		}
+		let s = self.style;
+		let mut o = String::new();
+		// Clear the visible screen and home the cursor (watch-style; scrollback is
+		// left intact so the user's prior history isn't destroyed).
+		o.push_str("\x1b[2J\x1b[H\n");
+		o += &format!(
+			"  {} {}\n\n",
+			s.bold("pluma dev"),
+			s.dim(&format!("· {}", self.mode))
+		);
+		o += &format!("  {} {}\n\n", s.dim("▸"), self.entry);
+
+		match status {
+			Status::Ready(last) => {
+				o += &format!("  {} {}\n", s.green("●"), s.bold("ready"));
+				if let Some(n) = &self.note {
+					o += &format!("    {}\n", s.dim(n));
+				}
+				if let Some(l) = last {
+					o += &format!("    {}\n", s.dim(l));
+				}
+			}
+			Status::Failed(diags) => {
+				o += &format!("  {} {}\n\n", s.red("●"), s.bold("build failed"));
+				// The diagnostics are already colorized; just indent them into the panel.
+				for line in diags.lines() {
+					o += &format!("  {line}\n");
+				}
+				o += &format!(
+					"\n  {}\n",
+					s.yellow("serving last good build — fix the error to reload")
+				);
+			}
+		}
+		o.push('\n');
+
+		// Align the dim annotations: pad each target to the widest one.
+		let w = self
+			.rows
+			.iter()
+			.map(|(l, _)| l.chars().count())
+			.max()
+			.unwrap_or(0);
+		for (target, annotation) in &self.rows {
+			let pad = " ".repeat(w.saturating_sub(target.chars().count()));
+			o += &format!("  {}{}   {}\n", s.cyan(target), pad, s.dim(annotation));
+		}
+		if !self.rows.is_empty() {
+			o.push('\n');
+		}
+		o += &format!("  {}\n", s.dim("ctrl-c to stop"));
+
+		print!("{o}");
+		let _ = std::io::stdout().flush();
+	}
+
+	/// Non-TTY fallback: a banner once at startup, then one line per event — the
+	/// behavior `pluma dev` had before the dashboard.
+	fn draw_plain(&self, status: &Status) {
+		match status {
+			Status::Ready(None) => {
+				println!("pluma dev — {} {}", self.mode, self.entry);
+				for (target, annotation) in &self.rows {
+					println!("  {target}  ({annotation})");
+				}
+				if let Some(n) = &self.note {
+					println!("  {n}");
+				}
+				println!("  ctrl-c to stop");
+			}
+			Status::Ready(Some(detail)) => println!("[pluma dev] {detail}"),
+			Status::Failed(diags) => {
+				eprint!("{diags}");
+				eprintln!("[pluma dev] build failed — keeping previous version");
+			}
+		}
+	}
+}
+
 pub(crate) fn dev_command(web: bool, port: u16, server_url: Option<String>, entry_path: String) {
 	// A fullstack directory (`server.pa` + `client.pa`) runs both halves: the server
 	// as a subprocess, the client served + live-reloaded, with `/rpc/*` proxied to
@@ -62,10 +241,7 @@ fn dev_web(entry_path: String, port: u16) {
 	let (wasm, hmr_on) = match build_web(&entry_path, true) {
 		Ok(w) => (w, true),
 		Err(_) => match build_web(&entry_path, false) {
-			Ok(w) => {
-				eprintln!("[pluma dev] note: model isn't serializable — HMR off, using full reload");
-				(w, false)
-			}
+			Ok(w) => (w, false),
 			Err(diags) => {
 				print_diagnostics(diags);
 				std::process::exit(1);
@@ -99,16 +275,26 @@ fn dev_web(entry_path: String, port: u16) {
 		});
 	}
 
-	println!("pluma dev — serving {entry_path}");
-	println!("  http://localhost:{port}/  (live-reload on save)");
-	if hmr_on {
-		println!("  hot-reload: model state is preserved across edits");
-	}
-	println!("  ctrl-c to stop");
+	let note = Some(if hmr_on {
+		"hot-reload — model state is preserved across edits".to_string()
+	} else {
+		"full reload — model isn't serializable, so HMR is off".to_string()
+	});
+	let dash = Dashboard::new(
+		"web",
+		entry_path.clone(),
+		note,
+		vec![(
+			format!("http://localhost:{port}/"),
+			"live-reload on save".to_string(),
+		)],
+	);
+	dash.draw(&Status::Ready(None));
 
 	// Watch + rebuild loop on the main thread, in the mode chosen at startup.
 	let root = watch_root(&entry_path);
 	let mut last = scan(&root);
+	let mut builds = 0usize;
 	loop {
 		thread::sleep(POLL);
 		let now = scan(&root);
@@ -120,20 +306,23 @@ fn dev_web(entry_path: String, port: u16) {
 			Ok(w) => {
 				*served.lock().unwrap() = w;
 				let n = broadcast_reload(&clients);
-				println!("[pluma dev] rebuilt — reloaded {n} client(s)");
+				builds += 1;
+				dash.draw(&Status::Ready(Some(format!(
+					"build #{builds} · reloaded {n} client(s)"
+				))));
 			}
 			Err(diags) => {
 				// Keep serving the last good build while the source is broken.
-				print_diagnostics(diags);
-				eprintln!("[pluma dev] build failed — keeping previous version");
+				dash.draw(&Status::Failed(render_diagnostics_string(&diags)));
 			}
 		}
 	}
 }
 
 /// Compile `entry_path` for the web target (with `hmr` redirection on or off),
-/// returning the wasm bytes or the analysis diagnostics. Post-analysis lower/codegen
-/// failures are fatal and unrelated to HMR, so they print and return empty diags.
+/// returning the wasm bytes or the diagnostics to display. Post-analysis lower/
+/// codegen failures are reported as a synthetic `Diagnostic` so they surface in
+/// the dashboard alongside ordinary type errors.
 fn build_web(entry_path: &str, hmr: bool) -> Result<Vec<u8>, Vec<Diagnostic>> {
 	let mut compiler = match Compiler::from_entry_path(entry_path.to_string()) {
 		Ok(c) => c.with_target(Some(Target::Web)).with_hmr(hmr),
@@ -144,10 +333,7 @@ fn build_web(entry_path: &str, hmr: bool) -> Result<Vec<u8>, Vec<Diagnostic>> {
 	}
 	let program = match ir::lower(&compiler) {
 		Ok(p) => p,
-		Err(msg) => {
-			print_error(format!("ir::lower: {msg}"));
-			return Err(Vec::new());
-		}
+		Err(msg) => return Err(vec![Diagnostic::error(format!("ir::lower: {msg}"))]),
 	};
 	match wasm::emit_with_options(
 		&program,
@@ -157,10 +343,10 @@ fn build_web(entry_path: &str, hmr: bool) -> Result<Vec<u8>, Vec<Diagnostic>> {
 		},
 	) {
 		Ok(b) => Ok(b),
-		Err(diags) => {
-			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
-			Err(Vec::new())
-		}
+		Err(diags) => Err(vec![Diagnostic::error(format!(
+			"wasm codegen error: {}",
+			diags.0.join("; ")
+		))]),
 	}
 }
 
@@ -281,9 +467,6 @@ es.onerror = () => {};\n\
 // Fullstack mode: run the server subprocess + serve the client, proxying RPC.
 // --------------------------------------------------------------------------
 
-// The port the server subprocess binds (the example's `server.pa` uses 8080).
-const FULLSTACK_SERVER_PORT: u16 = 8080;
-
 fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 	let exe = match std::env::current_exe() {
 		Ok(p) => p,
@@ -301,6 +484,12 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 		}
 	};
 
+	// Pick a free port for the server subprocess and hand it over via `$PORT`, which
+	// `http.serve` honors — so the server binds wherever we put it instead of the
+	// literal address in `server.pa`, and the proxy below always knows where it is.
+	// No more guessing a hardcoded 8080 (and no collision when 8080 is taken).
+	let server_port = pick_free_port();
+
 	// The server runs as a `pluma run <server.wasm>` child, rebuilt + restarted on
 	// change. Keep the wasm in a temp file the child re-reads.
 	let server_path = std::env::temp_dir().join("pluma-dev-server.wasm");
@@ -308,7 +497,7 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 		print_error(format!("writing {}: {e}", server_path.display()));
 		std::process::exit(1);
 	}
-	let mut child = spawn_run(&exe, &server_path.to_string_lossy());
+	let mut child = spawn_server(&exe, &server_path.to_string_lossy(), server_port);
 
 	let served: Served = Arc::new(Mutex::new(client_bytes));
 	let clients: Clients = Arc::new(Mutex::new(Vec::new()));
@@ -329,18 +518,31 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 			for stream in listener.incoming().flatten() {
 				let served = served.clone();
 				let clients = clients.clone();
-				thread::spawn(move || handle_conn_fs(stream, served, clients));
+				thread::spawn(move || handle_conn_fs(stream, served, clients, server_port));
 			}
 		});
 	}
 
-	println!("pluma dev — fullstack {entry_path}");
-	println!("  http://localhost:{port}/  (client, live-reload on save)");
-	println!("  /rpc/* → 127.0.0.1:{FULLSTACK_SERVER_PORT}  (server subprocess)");
-	println!("  ctrl-c to stop");
+	let dash = Dashboard::new(
+		"fullstack",
+		entry_path.clone(),
+		None,
+		vec![
+			(
+				format!("http://localhost:{port}/"),
+				"client · live-reload".to_string(),
+			),
+			(
+				format!("/rpc/*  →  127.0.0.1:{server_port}"),
+				"server subprocess".to_string(),
+			),
+		],
+	);
+	dash.draw(&Status::Ready(None));
 
 	let root = watch_root(&entry_path);
 	let mut last = scan(&root);
+	let mut builds = 0usize;
 	loop {
 		thread::sleep(POLL);
 		let now = scan(&root);
@@ -356,22 +558,24 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 				if let Err(e) = std::fs::write(&server_path, &server_bytes) {
 					print_error(format!("writing {}: {e}", server_path.display()));
 				}
-				child = spawn_run(&exe, &server_path.to_string_lossy());
+				child = spawn_server(&exe, &server_path.to_string_lossy(), server_port);
 				*served.lock().unwrap() = client_bytes;
 				let n = broadcast_reload(&clients);
-				println!("[pluma dev] rebuilt both halves — reloaded {n} client(s)");
+				builds += 1;
+				dash.draw(&Status::Ready(Some(format!(
+					"build #{builds} · rebuilt both halves · reloaded {n} client(s)"
+				))));
 			}
 			Err(diags) => {
-				print_diagnostics(diags);
-				eprintln!("[pluma dev] build failed — keeping previous version");
+				dash.draw(&Status::Failed(render_diagnostics_string(&diags)));
 			}
 		}
 	}
 }
 
 /// Compile a fullstack directory to its two artifacts (server wasm, client web
-/// bundle wasm), or return the analysis diagnostics. Post-analysis lower/codegen
-/// failures print and return empty diags (fatal, unrelated to source typos).
+/// bundle wasm), or return the diagnostics to display. Post-analysis lower/codegen
+/// failures are reported as a synthetic `Diagnostic` (so they show in the dashboard).
 fn build_fullstack_artifacts(
 	entry_path: &str,
 	server_url: &str,
@@ -398,10 +602,8 @@ fn build_fullstack_with_hmr(
 	let server = compiler.entry_modules[0].clone();
 	let client = compiler.entry_modules[1].clone();
 	let emit = |entry: &str, browser: bool| -> Result<Vec<u8>, Vec<Diagnostic>> {
-		let program = ir::lower_entry(&compiler, entry).map_err(|msg| {
-			print_error(format!("ir::lower: {msg}"));
-			Vec::new()
-		})?;
+		let program = ir::lower_entry(&compiler, entry)
+			.map_err(|msg| vec![Diagnostic::error(format!("ir::lower: {msg}"))])?;
 		wasm::emit_with_options(
 			&program,
 			wasm::EmitOptions {
@@ -410,8 +612,10 @@ fn build_fullstack_with_hmr(
 			},
 		)
 		.map_err(|diags| {
-			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
-			Vec::new()
+			vec![Diagnostic::error(format!(
+				"wasm codegen error: {}",
+				diags.0.join("; ")
+			))]
 		})
 	};
 	let server_bytes = emit(&server, false)?;
@@ -421,7 +625,7 @@ fn build_fullstack_with_hmr(
 
 /// Like `handle_conn`, but proxies `/rpc/*` to the server subprocess (same origin,
 /// so the browser needs no CORS) and serves the client bundle for everything else.
-fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients) {
+fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients, server_port: u16) {
 	let clone = match stream.try_clone() {
 		Ok(s) => s,
 		Err(_) => return,
@@ -464,7 +668,7 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients) {
 			respond(&mut stream, "400 Bad Request", "text/plain", b"short body");
 			return;
 		}
-		proxy_rpc(&mut stream, &request_line, &headers, &body);
+		proxy_rpc(&mut stream, &request_line, &headers, &body, server_port);
 		return;
 	}
 	// Document requests are server-side rendered: fetch the page HTML from the
@@ -472,7 +676,7 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients) {
 	// browser hydrates that markup. If the server has no SSR route (a bare RPC
 	// server) or is down, fall back to the plain CSR dev shell.
 	if path == "/" || path == "/index.html" {
-		if let Some(doc) = fetch_ssr_document() {
+		if let Some(doc) = fetch_ssr_document(server_port) {
 			let injected = doc.replacen("</body>", &format!("{LIVERELOAD_SNIPPET}</body>"), 1);
 			respond(
 				&mut stream,
@@ -490,11 +694,9 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients) {
 /// full HTML on a 200, or `None` if the server is down or `/` isn't a 200 HTML
 /// page (e.g. a fullstack app whose server only mounts `rpc.dispatch`) — the
 /// caller then falls back to the plain CSR dev shell.
-fn fetch_ssr_document() -> Option<String> {
-	let mut up = TcpStream::connect(("127.0.0.1", FULLSTACK_SERVER_PORT)).ok()?;
-	let req = format!(
-		"GET / HTTP/1.1\r\nHost: 127.0.0.1:{FULLSTACK_SERVER_PORT}\r\nConnection: close\r\n\r\n"
-	);
+fn fetch_ssr_document(server_port: u16) -> Option<String> {
+	let mut up = TcpStream::connect(("127.0.0.1", server_port)).ok()?;
+	let req = format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{server_port}\r\nConnection: close\r\n\r\n");
 	up.write_all(req.as_bytes()).ok()?;
 	up.flush().ok()?;
 	let mut raw = Vec::new();
@@ -521,8 +723,14 @@ fn fetch_ssr_document() -> Option<String> {
 /// would hang every subscription forever. A unary reply still works (copy ends at
 /// the server's close). A down server surfaces as a 502 (the client stub turns it
 /// into a clean transport failure).
-fn proxy_rpc(downstream: &mut TcpStream, request_line: &str, headers: &[String], body: &[u8]) {
-	let mut up = match TcpStream::connect(("127.0.0.1", FULLSTACK_SERVER_PORT)) {
+fn proxy_rpc(
+	downstream: &mut TcpStream,
+	request_line: &str,
+	headers: &[String],
+	body: &[u8],
+	server_port: u16,
+) {
+	let mut up = match TcpStream::connect(("127.0.0.1", server_port)) {
 		Ok(u) => u,
 		Err(_) => {
 			respond(
@@ -572,7 +780,18 @@ fn dev_server(entry_path: String) {
 		}
 	};
 
-	println!("pluma dev — running {entry_path} (restart on save, ctrl-c to stop)");
+	// The child program owns the terminal (it prints its own output), so server
+	// mode keeps the plain line log — just lightly styled — rather than a full
+	// dashboard that the child's stdout would fight with.
+	let s = Style {
+		on: crate::colors::should_colorize(),
+	};
+	println!(
+		"{} {} {}",
+		s.bold("pluma dev"),
+		s.dim(&format!("· running {entry_path}")),
+		s.dim("(restart on save, ctrl-c to stop)")
+	);
 	let mut child = spawn_run(&exe, &entry_path);
 
 	// On ctrl-c the terminal signals the whole foreground process group, so the
@@ -586,7 +805,7 @@ fn dev_server(entry_path: String) {
 			continue;
 		}
 		last = now;
-		println!("\n[pluma dev] change detected — restarting");
+		println!("\n{}", s.dim("[pluma dev] change detected — restarting"));
 		let _ = child.kill();
 		let _ = child.wait();
 		child = spawn_run(&exe, &entry_path);
@@ -601,6 +820,38 @@ fn spawn_run(exe: &Path, entry_path: &str) -> Child {
 			std::process::exit(1);
 		}
 	}
+}
+
+/// Like `spawn_run`, but pins the child's listening port via `$PORT` (which
+/// `http.serve` honors). The fullstack server subprocess binds there instead of
+/// the literal address in `server.pa`, so the dev proxy and the server always
+/// agree on the port without hardcoding one.
+fn spawn_server(exe: &Path, server_wasm: &str, port: u16) -> Child {
+	match Command::new(exe)
+		.arg("run")
+		.arg(server_wasm)
+		.env("PORT", port.to_string())
+		.spawn()
+	{
+		Ok(c) => c,
+		Err(e) => {
+			print_error(format!("could not start the server subprocess: {e}"));
+			std::process::exit(1);
+		}
+	}
+}
+
+/// Grab a currently-free TCP port by binding `:0` (the OS assigns one) and reading
+/// it back. There's a small race — another process could claim it between this
+/// drop and the child's bind — but on loopback ephemeral ports that's negligible,
+/// and it's how dev servers everywhere pick a port. Falls back to 8080 if the bind
+/// somehow fails.
+pub(crate) fn pick_free_port() -> u16 {
+	TcpListener::bind(("127.0.0.1", 0))
+		.ok()
+		.and_then(|l| l.local_addr().ok())
+		.map(|a| a.port())
+		.unwrap_or(8080)
 }
 
 // --------------------------------------------------------------------------

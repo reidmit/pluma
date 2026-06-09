@@ -181,11 +181,6 @@ fn build_fullstack(entry_path: String, out_base: Option<String>, server_url: Str
 	extract_css_to_bundle(&dir, &server_path);
 }
 
-// The port the example server binds (`http.serve "127.0.0.1:8080"`), matching
-// `dev.rs`'s `FULLSTACK_SERVER_PORT`. The build can't know a custom port, so this is
-// a best-effort convention; a mismatch just skips extraction.
-const SSR_PROBE_PORT: u16 = 8080;
-
 /// Best-effort: run the freshly-built server, `GET /`, and lift the inline `<style>`
 /// the server-side render emits (via `css.style-tag`) into a cacheable `app.css`
 /// linked from the client `index.html`. The SSR document still inlines its CSS at
@@ -197,17 +192,21 @@ fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) {
 	let Ok(exe) = std::env::current_exe() else {
 		return;
 	};
+	// Pin the server to a free port via `$PORT` (which `http.serve` honors), so the
+	// probe always knows where to reach it — no matter what address `server.pa` names.
+	let port = crate::commands::dev::pick_free_port();
 	// Run the server as a child (`pluma run server.wasm`), silenced.
 	let Ok(mut child) = std::process::Command::new(&exe)
 		.arg("run")
 		.arg(server_wasm)
+		.env("PORT", port.to_string())
 		.stdout(std::process::Stdio::null())
 		.stderr(std::process::Stdio::null())
 		.spawn()
 	else {
 		return;
 	};
-	let doc = fetch_ssr_document(&mut child);
+	let doc = fetch_ssr_document(&mut child, port);
 	let _ = child.kill();
 	let _ = child.wait();
 
@@ -236,7 +235,7 @@ fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) {
 /// body of a 200 response. Retries briefly while the child boots; `None` if it never
 /// answers a 200 (e.g. a bare RPC server 404s `/`) or the child exits first (a port
 /// clash — fail fast rather than burn the whole retry budget).
-fn fetch_ssr_document(child: &mut std::process::Child) -> Option<String> {
+fn fetch_ssr_document(child: &mut std::process::Child, port: u16) -> Option<String> {
 	use std::io::{Read, Write};
 	use std::net::TcpStream;
 
@@ -246,11 +245,10 @@ fn fetch_ssr_document(child: &mut std::process::Child) -> Option<String> {
 		if matches!(child.try_wait(), Ok(Some(_))) {
 			return None;
 		}
-		let Ok(mut up) = TcpStream::connect(("127.0.0.1", SSR_PROBE_PORT)) else {
+		let Ok(mut up) = TcpStream::connect(("127.0.0.1", port)) else {
 			continue;
 		};
-		let req =
-			format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{SSR_PROBE_PORT}\r\nConnection: close\r\n\r\n");
+		let req = format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
 		if up.write_all(req.as_bytes()).is_err() {
 			continue;
 		}

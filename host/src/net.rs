@@ -12,11 +12,12 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::os::fd::{AsRawFd, BorrowedFd, RawFd};
 use std::time::Duration;
 
 use polling::{Event, Events, Poller};
+use socket2::{Domain, Socket, Type};
 
 /// A live socket the program holds a handle to (an opaque `int` id into `sockets`).
 enum SocketEntry {
@@ -80,6 +81,25 @@ impl Default for HostNet {
 	}
 }
 
+/// Bind a listening socket with `SO_REUSEADDR` set, the equivalent of std's
+/// `TcpListener::bind` but tolerant of a just-closed predecessor. Without it, a
+/// server that restarts while connections to its port are still draining in
+/// `TIME_WAIT` (exactly what `pluma dev` does — it proxies long-lived SSE to the
+/// server subprocess, then kills and respawns it on each edit) fails to rebind
+/// with `EADDRINUSE`. `SO_REUSEADDR` is the standard server idiom for this; it
+/// only permits reuse of a dead/closed address, not stealing a live listener.
+fn bind_reusable(addr: &str) -> std::io::Result<TcpListener> {
+	let sockaddr = addr
+		.to_socket_addrs()?
+		.next()
+		.ok_or_else(|| std::io::Error::other(format!("could not resolve address `{addr}`")))?;
+	let socket = Socket::new(Domain::for_address(sockaddr), Type::STREAM, None)?;
+	socket.set_reuse_address(true)?;
+	socket.bind(&sockaddr.into())?;
+	socket.listen(1024)?;
+	Ok(socket.into())
+}
+
 impl HostNet {
 	fn store(&mut self, e: SocketEntry) -> u32 {
 		let id = self.next_id;
@@ -89,7 +109,7 @@ impl HostNet {
 	}
 
 	pub(crate) fn listen(&mut self, addr: &str) -> NetRet {
-		match TcpListener::bind(addr) {
+		match bind_reusable(addr) {
 			Ok(l) => match l.set_nonblocking(true) {
 				Ok(()) => NetRet::OkInt(self.store(SocketEntry::Listener(l)) as i32),
 				Err(e) => NetRet::Err(e.to_string()),
