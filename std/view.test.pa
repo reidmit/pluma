@@ -29,7 +29,7 @@ def tests :: test.suite = [
 		assert.equals (view.to-string v) "<br>"
 	},
 	test.case "string properties render as attributes" fun {
-		let v = view.input [view.value "hi"] []
+		let v = view.input [view.property "value" "hi"] []
 		assert.equals (view.to-string v) "<input value=\"hi\">"
 	},
 	test.case "boolean properties render bare when true" fun {
@@ -50,7 +50,7 @@ def tests :: test.suite = [
 	test.case "reactive attribute is evaluated once" fun {
 		let active = signal.new true
 		let v = view.div [
-			view.bind "class" fun {
+			view.bind-attr "class" fun {
 				if signal.get active {
 					"on"
 				} else {
@@ -59,6 +59,16 @@ def tests :: test.suite = [
 			},
 		] []
 		assert.equals (view.to-string v) "<div class=\"on\"></div>"
+	},
+	test.case "two-way value bind renders the signal as the initial attribute" fun {
+		let draft = signal.new "hi"
+		let v = view.input [view.value draft] []
+		assert.equals (view.to-string v) "<input value=\"hi\">"
+	},
+	test.case "two-way checked bind renders bare when the signal is true" fun {
+		let on = signal.new true
+		let v = view.input [view.checked on] []
+		assert.equals (view.to-string v) "<input checked>"
 	},
 	test.case "event handlers are dropped" fun {
 		let v = view.button [view.on-click fun { () }] [view.text "ok"]
@@ -77,6 +87,17 @@ def tests :: test.suite = [
 	test.case "show renders nothing when the condition is false" fun {
 		let v = view.show fun { false } fun {
 			view.span [] [view.text "yes"]
+		}
+		assert.equals (view.to-string v) "<span style=\"display: contents\"></span>"
+	},
+	test.case "dyn renders the branch its thunk chooses" fun {
+		let n = signal.new 0
+		let v = view.dyn fun {
+			if signal.get n > 0 {
+				view.span [] [view.text "pos"]
+			} else {
+				view.empty
+			}
 		}
 		assert.equals (view.to-string v) "<span style=\"display: contents\"></span>"
 	},

@@ -17,6 +17,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std.event", include_str!("../../std/event.pa")),
 		("std.hex", include_str!("../../std/hex.pa")),
 		("std.json", include_str!("../../std/json.pa")),
+		("std.keyed", include_str!("../../std/keyed.pa")),
 		("std.list", include_str!("../../std/list.pa")),
 		("std.local", include_str!("../../std/local.pa")),
 		("std.math", include_str!("../../std/math.pa")),

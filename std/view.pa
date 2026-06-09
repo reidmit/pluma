@@ -27,6 +27,7 @@
 use std.css
 use std.event
 use std.list
+use std.signal
 use std.string
 
 # An attribute, property, reactive attribute, or event handler on an element.
@@ -44,20 +45,23 @@ public enum attribute {
 	handler string (fun event -> nothing)
 	style-var string (fun nothing -> string)
 	styled-when string (fun nothing -> bool)
+	prop-bind-str string (fun nothing -> string) string (fun event -> nothing)
+	prop-bind-bool string (fun nothing -> bool) string (fun event -> nothing)
 }
 
 # A node in the view tree: an element, static text, a reactive text node, or
-# reactive control flow. `show-node` mounts/unmounts a subtree as its condition
-# flips; `for-node` carries a thunk producing the current keyed children. Each
-# child is a `(key, fun nothing -> view)` pair -- a *deferred* builder, not a built
-# view, so the renderer can run it once per new key (inside that row's owner) and
-# skip it entirely for a surviving key. (The generic element type is erased into
-# the thunks so `view` stays monomorphic.)
+# reactive control flow. `dyn-node` carries one thunk producing the current subtree
+# -- the renderer re-runs it (and swaps the built DOM) when a signal it read changes,
+# so a plain `if`/`when` inside chooses what to show. `for-node` carries a thunk
+# producing the current keyed children. Each child is a `(key, fun nothing -> view)`
+# pair -- a *deferred* builder, not a built view, so the renderer can run it once per
+# new key (inside that row's owner) and skip it entirely for a surviving key. (The
+# generic element type is erased into the thunks so `view` stays monomorphic.)
 public enum view {
 	el string (list attribute) (list view)
 	txt string
 	dynamic-text (fun nothing -> string)
-	show-node (fun nothing -> bool) (fun nothing -> view)
+	dyn-node (fun nothing -> view)
 	for-node (fun nothing -> list (string, (fun nothing -> view)))
 	on-mount-node (fun nothing -> nothing)
 }
@@ -98,10 +102,35 @@ public def on-mount :: fun (fun nothing -> nothing) -> view = fun action {
 
 # --- reactive control flow --------------------------------------------------
 
-# Mount `child ()` while `cond ()` is true, unmount it (disposing its effects)
-# when it goes false. `view.show (fun { signal.get open }) (fun { panel () })`
+# A reactive subtree: re-run `f` (and swap the mounted DOM, disposing the old
+# subtree's effects) whenever a signal it read changes. The thunk is the reactive
+# boundary -- Pluma builds the view tree by evaluating it once, so a region that must
+# re-render on a signal change has to be deferred, exactly as `text-of`/`each` are.
+# Inside, a plain `if`/`when`/`else if` chooses what to show, with `view.empty` for
+# "nothing":
+#
+#     view.dyn (fun {
+#         if signal.get loading { spinner () } else { content () }
+#     })
+public def dyn :: fun (fun nothing -> view) -> view = fun f {
+	view.dyn-node f
+}
+
+# The empty view -- renders nothing. The `else` branch of a `view.dyn` when one case
+# shows nothing.
+public def empty :: view = view.txt ""
+
+# Mount `child ()` while `cond ()` is true, render nothing when it's false -- the
+# terse hide/show case, sugar for a `view.dyn` whose `else` is `view.empty`.
+# `view.show (fun { signal.get open }) (fun { panel () })`
 public def show :: fun (fun nothing -> bool) (fun nothing -> view) -> view = fun cond child {
-	view.show-node cond child
+	view.dyn-node fun {
+		if cond () {
+			child ()
+		} else {
+			empty
+		}
+	}
 }
 
 # Render one child per item, reconciled by a stable key. When the list changes,
@@ -140,16 +169,18 @@ public def bool-property :: fun string bool -> attribute = fun k v {
 	attribute.prop-bool k v
 }
 
-# A reactive attribute: re-read the thunk and re-set the attribute when its
-# signals change. `view.bind "class" (fun { if signal.get active { "on" } else { "off" } })`
-public def bind :: fun string (fun nothing -> string) -> attribute = fun k f {
+# A reactive attribute: re-read the thunk and re-set the attribute when its signals
+# change. `view.bind-attr "class" (fun { if signal.get active { "on" } else { "off" } })`.
+# (The two-way `view.bind` below is for form-control *properties* tied to a signal;
+# this is the one-way reactive *attribute* dual of `view.attr`.)
+public def bind-attr :: fun string (fun nothing -> string) -> attribute = fun k f {
 	attribute.dynamic k f
 }
 
-# A reactive live DOM *string property* -- the property dual of `bind`. Use this for
+# A reactive live DOM *string property* -- the property dual of `bind-attr`. Use this for
 # what a controlled input needs (`value`, `value` of a `select`/`textarea`): the
 # property, not the attribute, is what the browser reflects after the user has
-# edited the field, so `view.bind "value"` (an attribute write) is silently ignored
+# edited the field, so `view.bind-attr "value"` (an attribute write) is silently ignored
 # once typing starts. `view.value-of (fun { signal.get draft })` keeps the field's
 # text in sync with -- and resettable from -- a signal.
 public def bind-property :: fun string (fun nothing -> string) -> attribute = fun k f {
@@ -171,6 +202,33 @@ public def value-of :: fun (fun nothing -> string) -> attribute = fun f {
 # Reactive `checked` property of a controlled checkbox/radio: `view.checked-of (fun { signal.get on })`.
 public def checked-of :: fun (fun nothing -> bool) -> attribute = fun f {
 	attribute.prop-bool-of "checked" f
+}
+
+# --- two-way binding --------------------------------------------------------
+#
+# A two-way binder ties a form-control *property* to a signal in both directions:
+# the live DOM property tracks the signal (a reactive write) AND the user's edits
+# write the signal back (an event listener). `view.value draft` replaces the
+# `value-of` + `on-input` pair with a single declaration -- in a `using view` block,
+# `.value draft`. The `-of` builders above are the one-way (display-only) duals, for
+# when the DOM should follow the signal but not the reverse. Only a couple of
+# properties round-trip, so this is just `value`/`checked`, not an entry per
+# attribute.
+
+# Two-way bind a controlled input/textarea/select `value` to a string signal: the
+# field shows the signal and every keystroke (`input`) writes it back.
+public def value :: fun (signal string) -> attribute = fun s {
+	attribute.prop-bind-str "value" fun { signal.get s } "input" fun e {
+		signal.set s (event.target-value e)
+	}
+}
+
+# Two-way bind a checkbox/radio `checked` to a bool signal: the box reflects the
+# signal and toggling it (`change`) writes the new state back.
+public def checked :: fun (signal bool) -> attribute = fun s {
+	attribute.prop-bind-bool "checked" fun { signal.get s } "change" fun e {
+		signal.set s (event.target-checked e)
+	}
 }
 
 # --- event handlers (effectful) ---------------------------------------------
@@ -289,6 +347,14 @@ def render-attr :: fun attribute -> string = fun a {
 		""
 	} is attribute.styled-when _name _cond {
 		""
+	} is attribute.prop-bind-str k read _evt _write {
+		" $(k)=\"$(escape-attr (read ()))\""
+	} is attribute.prop-bind-bool k read _evt _write {
+		if read () {
+			" $(k)"
+		} else {
+			""
+		}
 	}
 }
 
@@ -351,6 +417,10 @@ def style-fragment :: fun attribute -> option string = fun a {
 		none
 	} is attribute.styled-when _name _cond {
 		none
+	} is attribute.prop-bind-str _k _r _e _w {
+		none
+	} is attribute.prop-bind-bool _k _r _e _w {
+		none
 	}
 }
 
@@ -394,16 +464,11 @@ public def to-string :: fun view -> string = fun v {
 			let kids-str = string.join (list.map kids fun k { to-string k }) ""
 			"<$(tag)$(attr-str)>$(kids-str)</$(tag)>"
 		}
-	} is view.show-node cond child {
+	} is view.dyn-node f {
 		# Wrap in the same `display: contents` host the browser renderer uses, so the
 		# server DOM and the client's build/hydrate agree structurally (one node per
 		# control-flow point). `display: contents` is layout-neutral.
-		let inner = if cond () {
-			to-string (child ())
-		} else {
-			""
-		}
-		"<span style=\"display: contents\">$(inner)</span>"
+		"<span style=\"display: contents\">$(to-string (f ()))</span>"
 	} is view.for-node thunk {
 		let inner = string.join (list.map (thunk ()) fun pair {
 			let (_key, mk) = pair
@@ -824,7 +889,7 @@ public def style :: fun string -> attribute = fun v {
 # A conditional `class` attribute: keep each class whose flag is true.
 # `view.classes [("btn", true), ("active", signal.get on)]` => `class="btn active"`
 # when `on`. For a *reactive* class that re-renders as a signal changes, wrap the
-# string form in `bind`: `view.bind "class" (fun { view.class-list [...] })`.
+# string form in `bind`: `view.bind-attr "class" (fun { view.class-list [...] })`.
 public def classes :: fun (list (string, bool)) -> attribute = fun pairs {
 	attribute.static "class" (class-list pairs)
 }
@@ -844,7 +909,7 @@ public def class-list :: fun (list (string, bool)) -> string = fun pairs {
 
 # A typed inline `style` attribute from a `std.css` declaration list:
 # `view.style-of [css.color (css.hex "#e11"), css.padding (css.rem 1.0)]`. For a
-# reactive style, wrap `css.inline` in `bind`: `view.bind "style" (fun { css.inline [...] })`.
+# reactive style, wrap `css.inline` in `bind`: `view.bind-attr "style" (fun { css.inline [...] })`.
 public def style-of :: fun (list css.decl) -> attribute = fun decls {
 	attribute.static "style" (css.inline decls)
 }
@@ -994,20 +1059,12 @@ public def rowspan :: fun string -> attribute = fun v {
 	attribute.static "rowspan" v
 }
 
-public def value :: fun string -> attribute = fun v {
-	attribute.prop-str "value" v
-}
-
 public def disabled :: fun bool -> attribute = fun b {
 	attribute.prop-bool "disabled" b
 }
 
 public def required :: fun bool -> attribute = fun b {
 	attribute.prop-bool "required" b
-}
-
-public def checked :: fun bool -> attribute = fun b {
-	attribute.prop-bool "checked" b
 }
 
 public def selected :: fun bool -> attribute = fun b {

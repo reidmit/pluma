@@ -105,6 +105,9 @@ const pluma = {
   "dom-get-value": (n, dst, cap) => writeStr(dst, cap, (n && n.value) || ""),
   // event accessors (the event externref flows in as the handler's arg).
   "event-target-value": (e, dst, cap) => writeStr(dst, cap, (e && e.target && e.target.value) || ""),
+  // `checked` rides the same string-probe shape as `target-value`: "true"/"false",
+  // parsed back to a bool in `std.event` (no separate boxed-bool host return path).
+  "event-target-checked": (e, dst, cap) => writeStr(dst, cap, (e && e.target && e.target.checked) ? "true" : "false"),
   "event-prevent-default": (e) => { e.preventDefault(); },
   // Register a handler for `name`: the wasm side stowed the closure at `token`; on the
   // event we call the module's exported dispatcher with the token + the event object.

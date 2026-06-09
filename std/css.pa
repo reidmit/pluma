@@ -264,7 +264,7 @@ public def property :: fun string string -> decl = fun k v {
 # Serialize a declaration list to an inline `style` string:
 # `inline [color (hex "#e11"), padding (rem 1.0)]` => `"color: #e11; padding: 1rem"`.
 # This is what `std.view`'s `style-of` wraps into a `style` attribute; you can also
-# call it directly inside `view.bind "style" (fun { ... })` for a reactive style.
+# call it directly inside `view.bind-attr "style" (fun { ... })` for a reactive style.
 public def inline :: fun (list decl) -> string = fun decls {
 	string.join (list.map decls fun d { decl-to-string d }) "; "
 }

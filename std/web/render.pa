@@ -52,8 +52,8 @@ def build :: fun view -> dom.node = fun v {
 			dom.append-child node (build k)
 		}
 		node
-	} is view.show-node cond child {
-		build-show cond child
+	} is view.dyn-node f {
+		build-dyn f
 	} is view.for-node thunk {
 		build-for thunk
 	} is view.on-mount-node action {
@@ -110,6 +110,20 @@ def apply-attr :: fun dom.node view.attribute -> nothing = fun node a {
 	} is view.attribute.styled-when _name _cond {
 		# Owned by `apply-classes` (merged into the element's `class`).
 		()
+	} is view.attribute.prop-bind-str k read evt write {
+		# Two-way `view.bind`: a reactive string property (signal -> DOM) plus the
+		# listener that writes the user's edits back (DOM -> signal).
+		let _d = signal.effect fun {
+			dom.set-string-property node k (read ())
+		}
+		let _id = dom.add-listener node evt write
+		()
+	} is view.attribute.prop-bind-bool k read evt write {
+		let _d = signal.effect fun {
+			dom.set-bool-property node k (read ())
+		}
+		let _id = dom.add-listener node evt write
+		()
 	}
 }
 
@@ -123,11 +137,23 @@ def apply-attr :: fun dom.node view.attribute -> nothing = fun node a {
 
 def class-token :: fun view.attribute -> string = fun a {
 	when a is view.attribute.static k v {
-		if k == "class" { v } else { "" }
+		if k == "class" {
+			v
+		} else {
+			""
+		}
 	} is view.attribute.dynamic k f {
-		if k == "class" { f () } else { "" }
+		if k == "class" {
+			f ()
+		} else {
+			""
+		}
 	} is view.attribute.styled-when name cond {
-		if cond () { name } else { "" }
+		if cond () {
+			name
+		} else {
+			""
+		}
 	} else {
 		""
 	}
@@ -135,7 +161,11 @@ def class-token :: fun view.attribute -> string = fun a {
 
 def merged-class :: fun (list view.attribute) -> string = fun attrs {
 	let toks = list.filter (list.map attrs class-token) fun t {
-		if string.is-empty t { false } else { true }
+		if string.is-empty t {
+			false
+		} else {
+			true
+		}
 	}
 	string.join toks " "
 }
@@ -197,34 +227,32 @@ def fragment-host :: fun nothing -> dom.node = fun {
 	host
 }
 
-# `view.show`: mount the child while `cond` is true, tearing it down (disposing
-# its effects) when it goes false. The effect tracks only `cond`; the rebuild is
-# untracked so the child's own signals don't re-trigger it.
-def build-show :: fun (fun nothing -> bool) (fun nothing -> view) -> dom.node = fun cond child {
+# `view.dyn`: mount the subtree `f` produces, re-running it (tearing the old subtree
+# down, disposing its effects, and rebuilding) whenever a signal `f` read changes.
+# `f` runs tracked so the effect subscribes to whatever the chosen branch read while
+# being *constructed* (its condition signals); the rebuild itself is untracked so the
+# new subtree's own signals don't re-trigger this effect.
+def build-dyn :: fun (fun nothing -> view) -> dom.node = fun f {
 	let host = fragment-host ()
 	let cur :: ref (option (fun nothing -> nothing)) = ref.new none
 	let _eff = signal.effect fun {
-		let visible = cond ()
+		let v = f ()
 		signal.untrack fun {
-			teardown-show cur host
-			if visible {
-				let built = signal.owned "" fun {
-					dom.append-child host (build (child ()))
-				}
-				let (_unit, dispose) = built
-				ref.set cur (some dispose)
-			} else {
-				()
+			teardown-subtree cur host
+			let built = signal.owned "" fun {
+				dom.append-child host (build v)
 			}
+			let (_unit, dispose) = built
+			ref.set cur (some dispose)
 		}
 	}
 	signal.on-cleanup fun {
-		teardown-show cur host
+		teardown-subtree cur host
 	}
 	host
 }
 
-def teardown-show :: fun (ref (option (fun nothing -> nothing))) dom.node -> nothing = fun cur host {
+def teardown-subtree :: fun (ref (option (fun nothing -> nothing))) dom.node -> nothing = fun cur host {
 	if ref.get cur is some dispose {
 		dispose ()
 	} else {
@@ -436,8 +464,8 @@ def adopt :: fun view dom.node -> nothing = fun v node {
 			let (i, k) = pair
 			adopt k (dom.child-at node i)
 		}
-	} is view.show-node cond child {
-		adopt-show node cond child
+	} is view.dyn-node f {
+		adopt-dyn node f
 	} is view.for-node thunk {
 		adopt-for node thunk
 	} is view.on-mount-node action {
@@ -492,47 +520,53 @@ def adopt-attr :: fun dom.node view.attribute -> nothing = fun node a {
 	} is view.attribute.styled-when _name _cond {
 		# Owned by `adopt-classes` (merged into the element's `class`).
 		()
+	} is view.attribute.prop-bind-str k read evt write {
+		# The server rendered the initial value as an attribute; this effect drives the
+		# live *property* and tracks the signal, and the listener re-attaches the write-back.
+		let _d = signal.effect fun {
+			dom.set-string-property node k (read ())
+		}
+		let _id = dom.add-listener node evt write
+		()
+	} is view.attribute.prop-bind-bool k read evt write {
+		let _d = signal.effect fun {
+			dom.set-bool-property node k (read ())
+		}
+		let _id = dom.add-listener node evt write
+		()
 	}
 }
 
-# `view.show` over a server-rendered subtree: the existing `host` is the
-# `display: contents` wrapper the server emitted. Adopt its current child (if the
-# condition holds now), then install the same condition-tracking effect as
-# `build-show` -- but its first run only *subscribes* (the child is already
-# adopted), so subsequent toggles drive teardown + rebuild via the build path.
-def adopt-show :: fun dom.node (fun nothing -> bool) (fun nothing -> view) -> nothing = fun host cond child {
+# `view.dyn` over a server-rendered subtree: the existing `host` is the
+# `display: contents` wrapper the server emitted, already holding the chosen branch's
+# DOM. Adopt that current subtree, then install the same tracking effect as
+# `build-dyn` -- its first run only *subscribes* (the subtree is already adopted), so
+# a later signal change drives teardown + rebuild via the build path.
+def adopt-dyn :: fun dom.node (fun nothing -> view) -> nothing = fun host f {
 	let cur :: ref (option (fun nothing -> nothing)) = ref.new none
-	if cond () {
-		let built = signal.owned "" fun {
-			adopt (child ()) (dom.child-at host 0)
-		}
-		let (_unit, dispose) = built
-		ref.set cur (some dispose)
-	} else {
-		()
+	let built = signal.owned "" fun {
+		adopt (f ()) (dom.child-at host 0)
 	}
+	let (_unit, dispose) = built
+	ref.set cur (some dispose)
 	let first :: ref bool = ref.new true
 	let _eff = signal.effect fun {
-		let visible = cond ()
+		let v = f ()
 		if ref.get first {
 			ref.set first false
 		} else {
 			signal.untrack fun {
-				teardown-show cur host
-				if visible {
-					let built = signal.owned "" fun {
-						dom.append-child host (build (child ()))
-					}
-					let (_unit, dispose) = built
-					ref.set cur (some dispose)
-				} else {
-					()
+				teardown-subtree cur host
+				let rebuilt = signal.owned "" fun {
+					dom.append-child host (build v)
 				}
+				let (_unit2, dispose2) = rebuilt
+				ref.set cur (some dispose2)
 			}
 		}
 	}
 	signal.on-cleanup fun {
-		teardown-show cur host
+		teardown-subtree cur host
 	}
 }
 

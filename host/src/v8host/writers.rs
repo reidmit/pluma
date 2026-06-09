@@ -109,6 +109,16 @@ pub(super) fn cb_event_target_value(
 	rv.set_int32(0);
 }
 
+/// `event-target-checked(externref, dst, cap) -> i32 len` — no value, length 0
+/// (decodes to `""`, i.e. `false`, in `std.event`).
+pub(super) fn cb_event_target_checked(
+	_scope: &mut v8::HandleScope,
+	_args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	rv.set_int32(0);
+}
+
 /// `event-prevent-default(externref) -> ()` — no-op.
 pub(super) fn cb_event_prevent_default(
 	_scope: &mut v8::HandleScope,

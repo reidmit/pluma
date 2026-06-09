@@ -1,0 +1,32 @@
+# std.keyed -- ready-made key functions for `view.each` (and any keyed API).
+#
+# `view.each` reconciles a list by a stable string key per item -- a `fun a -> string`.
+# When the key is just a field, these spare you the lambda:
+#
+#     view.each todos keyed.by-id row     # not  (fun t { to-string t.id })
+#
+# Each reads one field and renders it with `to-string`, so it works for any field
+# type (an int `id`, a string `name`, ...). They're row-polymorphic: `by-id` applies
+# to *any* record carrying an `id`, whatever its other fields, so one helper serves
+# every keyed list in your app.
+
+# Key by the item's `id` field -- the usual choice for records with a unique id.
+public def by-id = fun r {
+	to-string r.id
+}
+
+# Key by the item's `name` field.
+public def by-name = fun r {
+	to-string r.name
+}
+
+# Key by the item's `key` field.
+public def by-key = fun r {
+	to-string r.key
+}
+
+# Key by the whole item -- for a list whose elements are themselves the keys (a
+# `list string`, a `list int`): `view.each tags keyed.by-value chip`.
+public def by-value = fun x {
+	to-string x
+}

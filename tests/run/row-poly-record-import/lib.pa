@@ -1,0 +1,8 @@
+# A row-polymorphic accessor exported across the module boundary: `id-of` reads
+# an `id` field off *any* record, whatever its other fields. The exported type is
+# `fun {id: a, ..} -> string` -- an open record. `main` applies it to two different
+# record shapes, which only type-checks if each use site instantiates a *fresh* row
+# variable (the import must not pin the tail to the first call's shape).
+public def id-of = fun r {
+	to-string r.id
+}

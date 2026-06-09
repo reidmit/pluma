@@ -10,7 +10,7 @@ def field :: fun nothing -> view = fun {
 	view.form [view.on-submit fun { io.print "submit" }] [
 		view.input [
 			view.input-type "text",
-			view.value "a & b",
+			view.property "value" "a & b",
 			view.placeholder "name <here>",
 			view.on-input fun s { io.print s },
 			view.on-change fun s { io.print s },

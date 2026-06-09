@@ -3497,12 +3497,14 @@ impl<'compiler> Analyzer<'compiler> {
 								// cell; the cell ends up in the surrounding
 								// Call's dict_args via the dispatch_sink.
 								let mut mapping: HashMap<usize, Type> = HashMap::new();
-								let fresh_ty = self.instantiate_with(ty, &mut mapping);
+								let mut row_mapping: HashMap<usize, usize> = HashMap::new();
+								let fresh_ty = self.instantiate_with(ty, &mut mapping, &mut row_mapping);
 								expr.ty = fresh_ty;
 								if let Some(constraints_export) = exports.value_constraints.get(&field.name) {
 									let sink = crate::ast::new_dispatch_sink();
 									for vc in constraints_export {
-										let fresh_var = self.instantiate_with(&vc.dispatch_var, &mut mapping);
+										let fresh_var =
+											self.instantiate_with(&vc.dispatch_var, &mut mapping, &mut row_mapping);
 										let cell =
 											crate::ast::new_dispatch(vc.trait_name.clone(), None, fresh_var.clone());
 										sink.borrow_mut().push(cell.clone());
@@ -6627,9 +6629,10 @@ impl<'compiler> Analyzer<'compiler> {
 		// Instantiate: replace the trait's param_var (and any other free
 		// vars, defensively) with fresh vars at this use site.
 		let mut mapping: HashMap<usize, Type> = HashMap::new();
+		let mut row_mapping: HashMap<usize, usize> = HashMap::new();
 		let dispatch_var = self.new_type_var();
 		mapping.insert(param_var, dispatch_var.clone());
-		let instantiated = self.instantiate_with(method_type, &mut mapping);
+		let instantiated = self.instantiate_with(method_type, &mut mapping, &mut row_mapping);
 
 		expr.ty = instantiated;
 		// Set up the shared dispatch cell + Class constraint. The cell is
@@ -7270,6 +7273,7 @@ impl<'compiler> Analyzer<'compiler> {
 		enum_def: &EnumDef,
 	) -> (Type, Vec<Type>, Option<()>) {
 		let mut mapping: HashMap<usize, Type> = HashMap::new();
+		let mut row_mapping: HashMap<usize, usize> = HashMap::new();
 		let fresh_args: Vec<Type> = enum_def
 			.param_vars
 			.iter()
@@ -7285,7 +7289,7 @@ impl<'compiler> Analyzer<'compiler> {
 			Some((_, params)) => {
 				let instantiated = params
 					.iter()
-					.map(|p| self.instantiate_with(p, &mut mapping))
+					.map(|p| self.instantiate_with(p, &mut mapping, &mut row_mapping))
 					.collect();
 				(enum_ty, instantiated, Some(()))
 			}
@@ -7293,7 +7297,34 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
-	fn instantiate_with(&mut self, ty: &Type, mapping: &mut HashMap<usize, Type>) -> Type {
+	// Freshen an open record/tuple tail row variable through `row_mapping`,
+	// minting a fresh row var the first time each is seen (and reusing it for
+	// later occurrences so a type that mentions one tail twice keeps them shared).
+	// Symmetric with the type-var freshening in `instantiate_with` -- without it an
+	// imported open-record value (`fun {id: a, ..} -> string`) would share one row
+	// var across every use site, monomorphizing to the first call's record shape.
+	fn instantiate_tail(
+		&mut self,
+		tail: Option<usize>,
+		row_mapping: &mut HashMap<usize, usize>,
+	) -> Option<usize> {
+		tail.map(|r| {
+			if let Some(&fresh) = row_mapping.get(&r) {
+				fresh
+			} else {
+				let fresh = self.new_row_var();
+				row_mapping.insert(r, fresh);
+				fresh
+			}
+		})
+	}
+
+	fn instantiate_with(
+		&mut self,
+		ty: &Type,
+		mapping: &mut HashMap<usize, Type>,
+		row_mapping: &mut HashMap<usize, usize>,
+	) -> Type {
 		match ty {
 			Type::Var(n) => {
 				if let Some(replacement) = mapping.get(n) {
@@ -7307,28 +7338,29 @@ impl<'compiler> Analyzer<'compiler> {
 			Type::Fun(params, ret) => Type::Fun(
 				params
 					.iter()
-					.map(|t| self.instantiate_with(t, mapping))
+					.map(|t| self.instantiate_with(t, mapping, row_mapping))
 					.collect(),
-				Box::new(self.instantiate_with(ret, mapping)),
+				Box::new(self.instantiate_with(ret, mapping, row_mapping)),
 			),
 			Type::Tuple(elems) => Type::Tuple(
 				elems
 					.iter()
-					.map(|t| self.instantiate_with(t, mapping))
+					.map(|t| self.instantiate_with(t, mapping, row_mapping))
 					.collect(),
 			),
-			Type::Record(fields, tail) => Type::Record(
-				fields
+			Type::Record(fields, tail) => {
+				let fields = fields
 					.iter()
-					.map(|(n, t)| (n.clone(), self.instantiate_with(t, mapping)))
-					.collect(),
-				*tail,
-			),
+					.map(|(n, t)| (n.clone(), self.instantiate_with(t, mapping, row_mapping)))
+					.collect();
+				let tail = self.instantiate_tail(*tail, row_mapping);
+				Type::Record(fields, tail)
+			}
 			Type::Enum(name, args) => Type::Enum(
 				name.clone(),
 				args
 					.iter()
-					.map(|t| self.instantiate_with(t, mapping))
+					.map(|t| self.instantiate_with(t, mapping, row_mapping))
 					.collect(),
 			),
 			Type::Bool
@@ -7340,21 +7372,28 @@ impl<'compiler> Analyzer<'compiler> {
 			| Type::Duration
 			| Type::Unknown
 			| Type::Nothing => ty.clone(),
-			Type::PartialTuple(fields, tail) => Type::PartialTuple(
-				fields
+			Type::PartialTuple(fields, tail) => {
+				let fields = fields
 					.iter()
-					.map(|(i, t)| (*i, self.instantiate_with(t, mapping)))
-					.collect(),
-				*tail,
-			),
-			Type::List(element_type) => {
-				Type::List(Box::new(self.instantiate_with(element_type, mapping)))
+					.map(|(i, t)| (*i, self.instantiate_with(t, mapping, row_mapping)))
+					.collect();
+				let tail = self.instantiate_tail(*tail, row_mapping);
+				Type::PartialTuple(fields, tail)
 			}
+			Type::List(element_type) => Type::List(Box::new(self.instantiate_with(
+				element_type,
+				mapping,
+				row_mapping,
+			))),
 			Type::Dict(key_type, value_type) => Type::Dict(
-				Box::new(self.instantiate_with(key_type, mapping)),
-				Box::new(self.instantiate_with(value_type, mapping)),
+				Box::new(self.instantiate_with(key_type, mapping, row_mapping)),
+				Box::new(self.instantiate_with(value_type, mapping, row_mapping)),
 			),
-			Type::Ref(inner_type) => Type::Ref(Box::new(self.instantiate_with(inner_type, mapping))),
+			Type::Ref(inner_type) => Type::Ref(Box::new(self.instantiate_with(
+				inner_type,
+				mapping,
+				row_mapping,
+			))),
 		}
 	}
 }

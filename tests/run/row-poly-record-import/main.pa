@@ -1,0 +1,7 @@
+use lib
+
+def main = fun {
+	# Two distinct record shapes through one imported row-polymorphic accessor.
+	print (lib.id-of {id: 7, label: "a"})
+	print (lib.id-of {id: 99, done: true, tag: "x"})
+}

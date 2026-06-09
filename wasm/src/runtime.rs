@@ -1119,12 +1119,14 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 0,
 			returns_value: true,
 		}),
-		"dom-create-element" | "dom-create-text" | "dom-get-value" | "event-target-value" => {
-			Some(HostSig {
-				arity: 1,
-				returns_value: true,
-			})
-		}
+		"dom-create-element"
+		| "dom-create-text"
+		| "dom-get-value"
+		| "event-target-value"
+		| "event-target-checked" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
 		"event-prevent-default" => Some(HostSig {
 			arity: 1,
 			returns_value: false,
@@ -1315,7 +1317,7 @@ pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 		"dom-append-child" => DomKind::Append,
 		"dom-set-attribute" => DomKind::SetAttr,
 		"dom-set-text" => DomKind::SetText,
-		"dom-get-value" | "event-target-value" => DomKind::GetValue,
+		"dom-get-value" | "event-target-value" | "event-target-checked" => DomKind::GetValue,
 		"dom-add-listener" => DomKind::Listen,
 		"dom-remove-child" => DomKind::Append2,
 		"dom-replace-child" | "dom-insert-before" => DomKind::Extern3,

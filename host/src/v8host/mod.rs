@@ -243,6 +243,13 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 		scope,
 		pluma,
 		data,
+		"event-target-checked",
+		cb_event_target_checked,
+	);
+	register(
+		scope,
+		pluma,
+		data,
 		"event-prevent-default",
 		cb_event_prevent_default,
 	);

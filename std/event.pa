@@ -24,6 +24,17 @@ opaque enum event {
 # holds). Empty string when there's none.
 public def target-value :: fun event -> string = built-in "event-target-value"
 
+# The host reports the target's `checked` flag as the string `"true"`/`"false"`
+# (the same string-probe shape as `target-value`); `false` when there's no
+# checkable target.
+def target-checked-str :: fun event -> string = built-in "event-target-checked"
+
+# Whether the element the event fired on is `checked` -- for a checkbox/radio
+# `change` handler. The two-way `view.checked` binding reads it to write its signal.
+public def target-checked :: fun event -> bool = fun e {
+	target-checked-str e == "true"
+}
+
 # Suppress the browser's default action for this event -- e.g. stop a form
 # `submit` from reloading the page.
 public def prevent-default :: fun event -> nothing = built-in "event-prevent-default"

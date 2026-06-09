@@ -10,6 +10,7 @@
 # (`signal`, `task`, `list`, …) stay qualified — only the ambient one goes bare.
 
 use std.css
+use std.keyed
 use std.list
 use std.signal
 use std.string
@@ -106,24 +107,17 @@ def list-reset :: css.ruleset = using css {
 # --- helpers ----------------------------------------------------------------
 
 def done-of :: fun (list api.todo) int -> bool = fun all id {
-	let matches = list.filter all fun t {
-		t.id == id
-	}
-	if list.is-empty matches {
-		false
+	when list.find all fun t { t.id == id } is some t {
+		t.done
 	} else {
-		(list.get matches 0).done
+		false
 	}
 }
 
 def count-active :: fun (list api.todo) -> int = fun all {
-	list.length (list.filter all fun t {
-		if t.done {
-			false
-		} else {
-			true
-		}
-	})
+	list.count all fun t {
+		!t.done
+	}
 }
 
 # --- the page ---------------------------------------------------------------
@@ -140,11 +134,7 @@ public def page :: fun nothing -> view = using view {
 			let f = signal.get filter
 			if f == "active" {
 				list.filter all fun t {
-					if t.done {
-						false
-					} else {
-						true
-					}
+					!t.done
 				}
 			} else if f == "done" {
 				list.filter all fun t {
@@ -206,12 +196,7 @@ public def page :: fun nothing -> view = using view {
 				},
 			],
 			.form [.on-submit submit] [
-				.input [
-					.styled field,
-					.placeholder "Add a task…",
-					.value-of fun { signal.get draft },
-					.on-input fun s { signal.set draft s },
-				] [],
+				.input [.styled field, .placeholder "Add a task…", .value draft] [],
 				.button [.styled btn, .input-type "submit"] [.text "Add"],
 			],
 			.div [] [
@@ -221,7 +206,7 @@ public def page :: fun nothing -> view = using view {
 				.button [.styled btn, .on-click clear] [.text "Clear done"],
 			],
 			.ul [.id "list", .styled list-reset] [
-				.each fun { visible () } fun t { to-string t.id } fun t {
+				.each visible keyed.by-id fun t {
 					.li [.styled row] [
 						.button [.styled check, .on-click fun { toggle t.id }] [
 							.text-of fun {
@@ -238,8 +223,12 @@ public def page :: fun nothing -> view = using view {
 					]
 				},
 			],
-			.show fun { list.is-empty (signal.get todos) } fun {
-				.p [.styled muted] [.text "No tasks yet — add one above."]
+			.dyn fun {
+				if list.is-empty (signal.get todos) {
+					.p [.styled muted] [.text "No tasks yet — add one above."]
+				} else {
+					.empty
+				}
 			},
 		]
 	}

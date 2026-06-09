@@ -1,0 +1,19 @@
+use std.assert
+use std.keyed
+use std.test
+
+public def tests :: test.suite = [
+	test.case "by-id renders the id field" fun {
+		assert.equals (keyed.by-id {id: 42, label: "x"}) "42"
+	},
+	test.case "by-name renders the name field" fun {
+		assert.equals (keyed.by-name {name: "alice", id: 1}) "alice"
+	},
+	test.case "by-value renders the whole item" fun { assert.equals (keyed.by-value 7) "7" },
+	test.case "by-id is row-polymorphic across record shapes" fun {
+		# The same imported helper applied to two different record types -- guards the
+		# cross-module open-record instantiation (fresh row var per use site).
+		assert.equals (keyed.by-id {id: 1, a: "x"}) "1"
+		assert.equals (keyed.by-id {id: 2, b: 9, c: true}) "2"
+	},
+]
