@@ -23,6 +23,7 @@
 
 use std::io::{Read, Write};
 
+use db::HostDb;
 use net::HostNet;
 use offload::Reactor;
 
@@ -30,7 +31,7 @@ use offload::Reactor;
 // engine-independent module; `HostState` holds one for the run.
 mod net;
 
-// The shared blocking-I/O offload subsystem (notes/IO.md): the `Reactor` (one poller for
+// The shared blocking-I/O offload subsystem (host/src/offload.rs): the `Reactor` (one poller for
 // both socket readiness and worker completion) + the `BlockingPool` of worker threads.
 // `std.sys.net` parks socket reads on it; offload clients (fs, db, …) submit blocking jobs.
 mod offload;
@@ -38,6 +39,10 @@ mod offload;
 // Engine-independent `std.sys.fs` ops (one op-code dispatch), shared by the async pool
 // path and the synchronous `-sync` path so the two can't drift.
 mod fsop;
+
+// Engine-independent `std.sys.db` (embedded SQLite): the pinned worker owning the
+// `rusqlite::Connection`s + the value/row wire codec, an offload client of `offload.rs`.
+mod db;
 
 // The V8 backend (ABI.md Phase 2): instantiates the WasmGC artifact under V8 over the
 // marshalling ABI. Reuses this crate's engine-independent core (`HostState`/`HostNet`/
@@ -260,6 +265,9 @@ struct HostState {
 	/// `std.sys.net` runtime state: the socket table.
 	net: HostNet,
 	/// The shared readiness + completion reactor (poller + worker pool) that socket reads
-	/// park on and offload clients (fs, db, …) submit blocking work to. (notes/IO.md.)
+	/// park on and offload clients (fs, db, …) submit blocking work to. (host/src/offload.rs.)
 	reactor: Reactor,
+	/// `std.sys.db` runtime state: the pinned SQLite worker (spawned on first use). Reports
+	/// completions through `reactor`'s shared queue via a `CompletionSink`.
+	db: HostDb,
 }

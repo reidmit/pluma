@@ -1,0 +1,273 @@
+# Running queries against an embedded SQLite database. This is the *effectful* half of the
+# SQL story -- `std.sql` describes queries and decodes rows as pure data; this module is
+# what actually opens a database file and runs them. It's `Sys`-gated (like `std.sys.net`),
+# so a `--web` build can't reach it.
+#
+# Every operation is **asynchronous**: a query is offloaded to a dedicated database worker
+# thread so the single scheduler thread never blocks waiting on the disk, and other fibers
+# keep running. You await a result with `try`, exactly like `std.sys.fs`:
+#
+#     def adults :: fun connection -> task (result (list user) string) = fun conn {
+#         sql.from "users"
+#         | sql.filter (sql.gt "age" (sql.int 17))
+#         | db.fetch conn decode-user
+#     }
+#
+# Values cross to the host as a small length-prefixed binary blob and rows come back the
+# same way; the codec here mirrors the host side (`host/src/db.rs`).
+use std.bytes
+use std.list
+use std.sql
+use std.string
+use std.task
+
+# A handle to an open database. Opaque -- you get one from `db.open` and pass it to the
+# runners; the wrapped int is the host-side connection id.
+opaque enum connection {
+	handle int
+}
+
+# --- the host bridge -----------------------------------------------------------
+#
+# One generic op (`db-op`) backs the whole surface, selected by an op-code, all offloaded
+# to the pinned SQLite worker (host/src/db.rs). Args: the op-code, the connection id (0 for
+# `open`), a string (the path for `open`, the SQL for `execute`), and a bytes payload (the
+# encoded bind list for `execute`, empty otherwise). The result is raw bytes: the encoded
+# rows for `execute`, the new connection id as text for `open`, empty for `close`.
+
+def op-open = 0
+
+def op-execute = 1
+
+def op-close = 2
+
+def db-op :: fun int int string bytes -> task (result bytes string) = built-in "db-op"
+
+def no-bytes :: bytes = string.to-bytes ""
+
+# --- opening & closing ---------------------------------------------------------
+
+# Opens (creating if necessary) the SQLite database at `path`. Use `":memory:"` for a
+# private in-memory database. `err` if the file can't be opened.
+#
+#     try conn = db.open "app.db"
+public def open :: fun string -> task (result connection string) = fun path {
+	try r = db-op op-open 0 path no-bytes
+	task.return when r is ok raw {
+		when bytes.to-string raw is ok text {
+			when string.to-int text is ok id {
+				ok (connection.handle id)
+			} is err e {
+				err e
+			}
+		} is err e {
+			err e
+		}
+	} is err e {
+		err e
+	}
+}
+
+# Closes a connection, releasing its database file. After this the handle is dead. Awaiting
+# it confirms teardown finished; a connection is also dropped when the program exits.
+public def close :: fun connection -> task (result nothing string) = fun conn {
+	when conn is connection.handle id {
+		try r = db-op op-close id "" no-bytes
+		task.return when r is ok _ {
+			ok ()
+		} is err e {
+			err e
+		}
+	}
+}
+
+# --- running statements --------------------------------------------------------
+
+# Runs a parameterized SQL statement, binding `params` to its `?` placeholders in order,
+# and returns the result rows (empty for a statement that returns none, like INSERT or
+# CREATE TABLE). This is the raw escape hatch; prefer `db.fetch` with a `std.sql` query.
+#
+#     try _ = db.execute conn "create table users (id integer, name text)" []
+#     try _ = db.execute conn "insert into users values (?, ?)" [sql.int 1, sql.text "ada"]
+public def execute :: fun connection string (list value) -> task (result (list row) string) = fun conn sql params {
+	when conn is connection.handle id {
+		try r = db-op op-execute id sql (encode-params params)
+		task.return when r is ok raw {
+			decode-rows raw
+		} is err e {
+			err e
+		}
+	}
+}
+
+# Compiles a `std.sql` query, runs it, and decodes each row with `decode`. The terminal
+# stage of a `|`-built query pipeline: total, injection-free SQL in, typed rows out.
+#
+#     sql.from "users" | sql.filter (sql.gt "age" (sql.int 17)) | db.fetch conn decode-user
+public def fetch :: fun query connection (fun row -> result a string) -> task (result (list a) string) = fun q conn decode {
+	let compiled = sql.compile q
+	let (text, binds) = compiled
+	try rows = execute conn text binds
+	task.return when rows is ok rs {
+		list.try-map rs decode
+	} is err e {
+		err e
+	}
+}
+
+# --- the wire codec (mirrors the host side in host/src/db.rs) ------------------
+#
+# A value encodes as a tag byte then its payload: ints/floats as decimal text terminated
+# by a newline, strings/blobs length-prefixed (`<len>\n<bytes>`). The param blob is just
+# the values concatenated. Rows come back as `<row-count>\n` then, per row, `<col-count>\n`
+# then per column a length-prefixed name followed by a tagged value.
+
+def newline :: int = 10
+
+def one-byte :: fun int -> bytes = fun n {
+	bytes.build 1 fun _i {
+		n
+	}
+}
+
+# `<text>\n` as bytes -- used for both decimal numbers and length prefixes.
+def line-of :: fun string -> bytes = fun s {
+	string.to-bytes "$(s)\n"
+}
+
+def encode-value :: fun value -> bytes = fun v {
+	when v is sql.value.null {
+		one-byte 0
+	} is sql.value.int n {
+		bytes.concat (one-byte 1) (line-of (to-string n))
+	} is sql.value.float x {
+		bytes.concat (one-byte 2) (line-of (to-string x))
+	} is sql.value.text s {
+		let raw = string.to-bytes s
+		bytes.concat (bytes.concat (one-byte 3) (line-of (to-string (bytes.length raw)))) raw
+	} is sql.value.blob b {
+		bytes.concat (bytes.concat (one-byte 4) (line-of (to-string (bytes.length b)))) b
+	}
+}
+
+def encode-params :: fun (list value) -> bytes = fun vs {
+	bytes.join (list.map vs encode-value) no-bytes
+}
+
+# Scan forward from `pos` to the next newline (or end of buffer).
+def find-newline :: fun bytes int -> int = fun b pos {
+	if pos >= bytes.length b {
+		pos
+	} else if bytes.get b pos == newline {
+		pos
+	} else {
+		find-newline b (pos + 1)
+	}
+}
+
+# Read the text up to the next newline, returning it with the position just past the
+# newline.
+def read-line :: fun bytes int -> result (string, int) string = fun b pos {
+	let stop = find-newline b pos
+	if stop >= bytes.length b {
+		err "db: unterminated field in result"
+	} else {
+		when bytes.to-string (bytes.slice b pos stop) is ok s {
+			ok (s, stop + 1)
+		} is err e {
+			err e
+		}
+	}
+}
+
+def read-len :: fun bytes int -> result (int, int) string = fun b pos {
+	try line = read-line b pos
+	let (text, next) = line
+	when string.to-int text is ok n {
+		ok (n, next)
+	} is err e {
+		err e
+	}
+}
+
+# Decode one value starting at `pos`, returning it with the next position.
+def decode-value :: fun bytes int -> result (value, int) string = fun b pos {
+	let tag = bytes.get b pos
+	let after = pos + 1
+	if tag == 0 {
+		ok (sql.value.null, after)
+	} else if tag == 1 {
+		try line = read-line b after
+		let (text, next) = line
+		when string.to-int text is ok n {
+			ok (sql.value.int n, next)
+		} is err e {
+			err e
+		}
+	} else if tag == 2 {
+		try line = read-line b after
+		let (text, next) = line
+		when string.to-float text is ok x {
+			ok (sql.value.float x, next)
+		} is err e {
+			err e
+		}
+	} else if tag == 3 {
+		try header = read-len b after
+		let (n, start) = header
+		when bytes.to-string (bytes.slice b start (start + n)) is ok s {
+			ok (sql.value.text s, start + n)
+		} is err e {
+			err e
+		}
+	} else if tag == 4 {
+		try header = read-len b after
+		let (n, start) = header
+		ok (sql.value.blob (bytes.slice b start (start + n)), start + n)
+	} else {
+		err "db: bad value tag in result"
+	}
+}
+
+# Decode `n` columns (name + value) starting at `pos`, prepending onto `acc` (a row is a
+# dict, so column order doesn't matter).
+def decode-cells :: fun bytes int int (list (string, value)) -> result ((list (string, value)), int) string = fun b pos n acc {
+	if n == 0 {
+		ok (acc, pos)
+	} else {
+		try header = read-len b pos
+		let (name-len, name-start) = header
+		when bytes.to-string (bytes.slice b name-start (name-start + name-len)) is ok name {
+			try valpair = decode-value b (name-start + name-len)
+			let (v, next) = valpair
+			decode-cells b next (n - 1) [(name, v), ...acc]
+		} is err e {
+			err e
+		}
+	}
+}
+
+def decode-row :: fun bytes int -> result (row, int) string = fun b pos {
+	try header = read-len b pos
+	let (ncols, start) = header
+	try cells = decode-cells b start ncols []
+	let (pairs, next) = cells
+	ok (sql.row-of pairs, next)
+}
+
+# Decode `n` rows starting at `pos`, preserving order.
+def decode-rows-from :: fun bytes int int (list row) -> result (list row) string = fun b pos n acc {
+	if n == 0 {
+		ok (list.reverse acc)
+	} else {
+		try rowpair = decode-row b pos
+		let (r, next) = rowpair
+		decode-rows-from b next (n - 1) [r, ...acc]
+	}
+}
+
+def decode-rows :: fun bytes -> result (list row) string = fun b {
+	try header = read-len b 0
+	let (nrows, start) = header
+	decode-rows-from b start nrows []
+}

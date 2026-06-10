@@ -1,4 +1,4 @@
-# The BlockingPool offload subsystem, v0 (notes/IO.md). `offload-sleep` runs a sleep on a
+# The BlockingPool offload subsystem, v0. `offload-sleep` runs a sleep on a
 # host *worker thread* rather than the single scheduler thread, parking the fiber until
 # the worker completes and wakes it through the shared `io-poll` reactor step. This proves
 # the park/wake/settle path end to end — and that the scheduler keeps running other fibers

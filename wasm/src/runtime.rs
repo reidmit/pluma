@@ -47,22 +47,27 @@ pub(crate) mod task_kind {
 	// or parks (`wait::RPC`) until the host's async `fetch` delivers. The sys host
 	// lowers `web-fetch` to a blocking exchange instead (no task kind).
 	pub(crate) const WEB_FETCH: i32 = 17;
-	// BlockingPool offload ops (notes/IO.md): a non-pollable blocking call (`offload-sleep`
+	// BlockingPool offload ops (host/src/offload.rs): a non-pollable blocking call (`offload-sleep`
 	// in v0; async-fs read/write next) submitted to a host worker thread, parking the fiber
 	// on `wait::IO` and woken through `io-poll` — the completion analogue of the net read's
 	// readiness park. Settled by the same `io_settle` shape (`ok …`/`err …`).
 	pub(crate) const OFFLOAD_SLEEP: i32 = 18;
-	// std.sys.fs (notes/IO.md): one generic op (`fs-op`) for the whole async surface. The
+	// std.sys.fs (host/src/offload.rs): one generic op (`fs-op`) for the whole async surface. The
 	// op-code selects read/write/stat/remove/… host-side; the pump marshals op + path + data
 	// in and bytes out (with the `io-copyout` overflow path — payload size is unknown), and
 	// the Pluma wrapper interprets the bytes per op. Parks on `wait::IO` while a pool worker
 	// runs the blocking `std::fs` call.
 	pub(crate) const FILE_OP: i32 = 19;
 	// `net.connect`: dial a server, offloaded to a pool worker so the blocking DNS + TCP
-	// handshake don't stall the scheduler (notes/IO.md). Unlike accept/read/write (which
+	// handshake don't stall the scheduler (host/src/offload.rs). Unlike accept/read/write (which
 	// park on socket *readiness*), connect parks on offload *completion* — the worker hands
 	// back the connected socket, adopted into the table on collect. Settles `result conn`.
 	pub(crate) const NET_CONNECT: i32 = 20;
+	// std.sys.db (host/src/db.rs): one generic op (`db-op`) for open/execute/close, selected by
+	// an op-code, offloaded to the pinned SQLite worker. The pump marshals op-code + connection
+	// id + sql/path + the encoded params blob in and bytes out (rows, or a new connection id as
+	// text — `io-copyout` overflow path, payload size unknown). Parks on `wait::IO` like fs.
+	pub(crate) const DB_OP: i32 = 21;
 }
 
 /// The host-fed RPC stream channel (`std.web.stream`): a per-subscription mailbox
@@ -636,7 +641,7 @@ pub(crate) struct NetImports {
 	pub(crate) write: u32,
 }
 
-/// The shared offload-reactor controls (notes/IO.md), driven by the hand-emitted
+/// The shared offload-reactor controls (host/src/offload.rs), driven by the hand-emitted
 /// scheduler regardless of which async-I/O client is in play: `io-poll` is the block
 /// step (block until a socket is ready or a worker completion lands), `io-unwatch` drops
 /// a parked wait on reap. `Some` when the program reaches *any* async-I/O builtin
@@ -647,7 +652,7 @@ pub(crate) struct IoImports {
 	pub(crate) unwatch: u32,
 }
 
-/// The `BlockingPool` offload-client host import indices (notes/IO.md): non-pollable
+/// The `BlockingPool` offload-client host import indices (host/src/offload.rs): non-pollable
 /// blocking ops run on a worker thread, parked on `wait::IO` like the suspending net ops
 /// and woken through the same `io-poll`. `sleep` is the v0 proving op (`offload-sleep`);
 /// the async-fs ops land here next (v1). `Some` exactly when an offload builtin is reached.
@@ -656,6 +661,9 @@ pub(crate) struct OffloadImports {
 	pub(crate) sleep: u32,
 	/// `fs-op` — the generic `std.sys.fs` op (op-code in the payload selects which).
 	pub(crate) op: u32,
+	/// `db-op` — the generic `std.sys.db` op (open/execute/close by op-code), run on the
+	/// pinned SQLite worker rather than the general pool.
+	pub(crate) db: u32,
 }
 
 /// The marshalling helper/global indices the suspending net ops (`accept`/`read`/
@@ -683,11 +691,11 @@ pub(crate) fn is_net_builtin(tag: &str) -> bool {
 	is_net_sync(tag) || matches!(tag, "net-accept" | "net-read" | "net-write" | "net-connect")
 }
 
-/// Whether `tag` is a `BlockingPool` offload builtin (notes/IO.md) — a suspending `$task`
+/// Whether `tag` is a `BlockingPool` offload builtin (host/src/offload.rs) — a suspending `$task`
 /// kind whose blocking call the scheduler offloads to a host worker thread. Drives
 /// offload-import registration (`module.rs`), like `is_net_builtin` does for net.
 pub(crate) fn is_offload_builtin(tag: &str) -> bool {
-	matches!(tag, "offload-sleep" | "fs-op")
+	matches!(tag, "offload-sleep" | "fs-op" | "db-op")
 }
 
 /// Whether `tag` is a *synchronous* `std.sys.net` op — a host call shaped into a
@@ -1586,10 +1594,11 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		// `std.web.stream`: pull the next host-fed RPC stream event (a `$task` the
 		// scheduler drives — dequeue or park on `wait::RPC`).
 		"rpc-stream-next" => task_kind::RPC_NEXT,
-		// BlockingPool offload ops (notes/IO.md): a `$task` carrying the op's args; the
+		// BlockingPool offload ops (host/src/offload.rs): a `$task` carrying the op's args; the
 		// scheduler submits the blocking call to a worker thread + parks on `wait::IO`.
 		"offload-sleep" => task_kind::OFFLOAD_SLEEP,
 		"fs-op" => task_kind::FILE_OP,
+		"db-op" => task_kind::DB_OP,
 		_ => return None,
 	})
 }

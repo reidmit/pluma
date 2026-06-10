@@ -28,3 +28,7 @@ rand = "0.10"
 uuid = { version = "1", features = ["v4", "v7"] }
 # `std.time` clock imports (`time.now`/`monotonic`/`parse`) — wall-clock + strtime parsing.
 jiff = "0.2.25"
+# `std.sys.db` embedded SQLite (`bundled` = compile SQLite from source, no system lib).
+# Vendored per the stdlib heavy-lifting rule; `HostDb` stays crate-agnostic so a later
+# swap to a pure-Rust engine (turso) is a one-file change.
+rusqlite = { version = "0.31", features = ["bundled"] }

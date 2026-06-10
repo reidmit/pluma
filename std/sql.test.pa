@@ -1,0 +1,146 @@
+use std.assert
+use std.sql
+use std.string
+use std.test
+
+# Helper: compile a query and check both halves -- the SQL text and the bind list.
+def check :: fun query string (list value) -> result nothing string = fun q want-sql want-binds {
+	let (got-sql, got-binds) = sql.compile q
+	assert.all [assert.equals got-sql want-sql, assert.equals got-binds want-binds]
+}
+
+def tests :: test.suite = [
+	test.case "bool encodes as 1 / 0" fun {
+		# --- value constructors + bool encoding ---
+
+		assert.all [
+			assert.equals (sql.bool true) (sql.int 1),
+			assert.equals (sql.bool false) (sql.int 0),
+		]
+	},
+	test.case "decoders read each storage class" fun {
+		# --- cell + typed decoders, happy path ---
+
+		let r = sql.row-of [
+			("id", sql.int 7),
+			("name", sql.text "ada"),
+			("ratio", sql.float 1.5),
+			("flag", sql.int 1),
+			("raw", sql.blob (string.to-bytes "hi")),
+		]
+		assert.all [
+			assert.equals (sql.get-int r "id") (ok 7),
+			assert.equals (sql.get-text r "name") (ok "ada"),
+			assert.equals (sql.get-float r "ratio") (ok 1.5),
+			assert.equals (sql.get-bool r "flag") (ok true),
+			assert.equals (sql.get-bool r "id") (ok true),
+			assert.equals (sql.get-blob r "raw") (ok (string.to-bytes "hi")),
+		]
+	},
+	test.case "get-float promotes a stored int" fun {
+		let r = sql.row-of [("n", sql.int 3)]
+		assert.equals (sql.get-float r "n") (ok 3.0)
+	},
+	test.case "get-bool reads 0 as false, nonzero as true" fun {
+		let r = sql.row-of [("zero", sql.int 0), ("two", sql.int 2)]
+		assert.all [
+			assert.equals (sql.get-bool r "zero") (ok false),
+			assert.equals (sql.get-bool r "two") (ok true),
+		]
+	},
+	test.case "a missing column errs" fun {
+		# --- decoders, error path ---
+
+		let r = sql.row-of [("name", sql.text "ada")]
+		assert.is-err (sql.get-int r "missing")
+	},
+	test.case "a wrong storage class errs" fun {
+		let r = sql.row-of [("id", sql.text "nope")]
+		assert.is-err (sql.get-int r "id")
+	},
+	test.case "cell of a missing column is null" fun {
+		let r = sql.row-of [("name", sql.text "ada")]
+		assert.equals (sql.cell r "missing") sql.null
+	},
+	test.case "get-opt reads NULL as none" fun {
+		# --- get-opt: NULL vs present ---
+
+		let r = sql.row-of [("age", sql.null)]
+		assert.equals (sql.get-opt r "age" sql.get-int) (ok none)
+	},
+	test.case "get-opt reads a present value as some" fun {
+		let r = sql.row-of [("age", sql.int 30)]
+		assert.equals (sql.get-opt r "age" sql.get-int) (ok (some 30))
+	},
+	test.case "get-opt propagates the inner decoder's error" fun {
+		let r = sql.row-of [("age", sql.text "old")]
+		assert.is-err (sql.get-opt r "age" sql.get-int)
+	},
+	test.case "bare query is SELECT *" fun {
+		# --- compile: the shape of the SQL ---
+
+		check (sql.from "users") "SELECT * FROM \"users\"" []
+	},
+	test.case "select restricts (and quotes) the columns" fun {
+		let q = sql.from "users" | sql.select ["id", "name"]
+		check q "SELECT \"id\", \"name\" FROM \"users\"" []
+	},
+	test.case "filters AND-join with bound params in order" fun {
+		let q = sql.from "users" | sql.filter (sql.eq "active" (sql.bool true)) | sql.filter (sql.gt "age" (sql.int 17))
+		check q "SELECT * FROM \"users\" WHERE \"active\" = ? AND \"age\" > ?" [
+			sql.int 1,
+			sql.int 17,
+		]
+	},
+	test.case "all the comparison predicates lower" fun {
+		let q = sql.from "t" | sql.filter (sql.ne "a" (sql.int 1)) | sql.filter (sql.ge "b" (sql.int 2)) | sql.filter (sql.lt "c" (sql.int 3)) | sql.filter (sql.le "d" (sql.int 4)) | sql.filter (sql.like "e" "x%")
+		check q "SELECT * FROM \"t\" WHERE \"a\" <> ? AND \"b\" >= ? AND \"c\" < ? AND \"d\" <= ? AND \"e\" LIKE ?" [
+			sql.int 1,
+			sql.int 2,
+			sql.int 3,
+			sql.int 4,
+			sql.text "x%",
+		]
+	},
+	test.case "eq/ne on NULL become IS / IS NOT NULL with no bind" fun {
+		let q = sql.from "events" | sql.filter (sql.eq "deleted-at" sql.null) | sql.filter (sql.ne "kind" sql.null)
+		check q "SELECT * FROM \"events\" WHERE \"deleted-at\" IS NULL AND \"kind\" IS NOT NULL" []
+	},
+	test.case "one-of lowers to IN with one bind per element" fun {
+		let q = sql.from "events" | sql.filter (sql.one-of "kind" [
+			sql.text "click",
+			sql.text "view",
+		])
+		check q "SELECT * FROM \"events\" WHERE \"kind\" IN (?, ?)" [
+			sql.text "click",
+			sql.text "view",
+		]
+	},
+	test.case "an empty one-of matches nothing (literal 0)" fun {
+		let q = sql.from "t" | sql.filter (sql.one-of "k" [])
+		check q "SELECT * FROM \"t\" WHERE 0" []
+	},
+	test.case "order-by keeps insertion order and direction" fun {
+		let q = sql.from "t" | sql.order-by (sql.desc "age") | sql.order-by (sql.asc "name")
+		check q "SELECT * FROM \"t\" ORDER BY \"age\" DESC, \"name\" ASC" []
+	},
+	test.case "limit binds its value last" fun {
+		let q = sql.from "t" | sql.filter (sql.gt "age" (sql.int 17)) | sql.limit 50
+		check q "SELECT * FROM \"t\" WHERE \"age\" > ? LIMIT ?" [sql.int 17, sql.int 50]
+	},
+	test.case "a full query assembles every clause in order" fun {
+		let q = sql.from "users" | sql.select [
+			"id",
+			"name",
+			"age",
+		] | sql.filter (sql.eq "active" (sql.bool true)) | sql.filter (sql.gt "age" (sql.int 17)) | sql.order-by (sql.desc "age") | sql.limit 50
+		check q "SELECT \"id\", \"name\", \"age\" FROM \"users\" WHERE \"active\" = ? AND \"age\" > ? ORDER BY \"age\" DESC LIMIT ?" [
+			sql.int 1,
+			sql.int 17,
+			sql.int 50,
+		]
+	},
+	test.case "identifiers with embedded quotes are escaped, never injectable" fun {
+		check (sql.from "we\"ird") "SELECT * FROM \"we\"\"ird\"" []
+	},
+]

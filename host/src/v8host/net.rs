@@ -62,7 +62,7 @@ pub(super) fn cb_net_listen(
 
 /// `net-connect(i32 fid, i32 addr_ptr, i32 addr_len) -> (i32 status, i32 conn-id)`: dial a
 /// server, offloaded to a pool worker so the blocking DNS resolution + TCP handshake don't
-/// stall the scheduler thread (notes/IO.md). Submit-or-collect like the other offload ops:
+/// stall the scheduler thread (host/src/offload.rs). Submit-or-collect like the other offload ops:
 /// the first call submits the blocking `TcpStream::connect` and reports would-block (status
 /// 1); after the wake re-runs the parked task, the second call adopts the connected socket
 /// into the table and returns its id. status: 0 ok, 1 would-block, 2 error.

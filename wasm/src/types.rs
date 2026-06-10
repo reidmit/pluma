@@ -341,6 +341,10 @@ enum FuncKind {
 	/// The async `std.sys.fs` op `fs-op`: `(i32 fid, i32 op, i32 path_ptr, i32 path_len, i32
 	/// data_ptr, i32 data_len, i32 dst, i32 cap) -> (i32 status, i32 len)`.
 	OffloadOp,
+	/// The async `std.sys.db` op `db-op`: `(i32 fid, i32 op, i32 conn, i32 sql_ptr, i32
+	/// sql_len, i32 params_ptr, i32 params_len, i32 dst, i32 cap) -> (i32 status, i32 len)`.
+	/// Like `OffloadOp` plus the connection id (an i31-friendly i32 — conn ids are small).
+	DbOp,
 	/// The sync `std.sys.fs` op `fs-op-sync`: `(i32 op, i32 path_ptr, i32 path_len, i32
 	/// data_ptr, i32 data_len, i32 dst, i32 cap) -> i32 len`.
 	FsOpSync,
@@ -633,6 +637,12 @@ impl FuncTypes {
 	/// `fs-op-sync`: `(i32 op, i32 pp, i32 pl, i32 dp, i32 dl, i32 dst, i32 cap) -> i32 len`.
 	pub fn for_fs_op_sync(&mut self) -> u32 {
 		self.intern(FuncKind::FsOpSync)
+	}
+
+	/// `db-op`: `(i32 fid, i32 op, i32 conn, i32 sp, i32 sl, i32 pp, i32 pl, i32 dst, i32
+	/// cap) -> (i32 status, i32 len)`.
+	pub fn for_db_op(&mut self) -> u32 {
+		self.intern(FuncKind::DbOp)
 	}
 
 	/// The type index for a `wire` value mixer: `(i64, ref $value) -> i64`.
@@ -1141,6 +1151,12 @@ impl FuncTypes {
 					types
 						.ty()
 						.function([ValType::I32; 8], [ValType::I32, ValType::I32]);
+					continue;
+				}
+				FuncKind::DbOp => {
+					types
+						.ty()
+						.function([ValType::I32; 9], [ValType::I32, ValType::I32]);
 					continue;
 				}
 				FuncKind::FsOpSync => {

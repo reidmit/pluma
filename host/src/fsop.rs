@@ -1,5 +1,5 @@
 // Engine-independent filesystem ops for `std.sys.fs`. One `dispatch` over an op-code
-// covers the whole surface; both the async path (a pool worker — notes/IO.md) and the
+// covers the whole surface; both the async path (a pool worker — host/src/offload.rs) and the
 // synchronous `-sync` path run the same code, so behaviour can't drift between them. The
 // V8 glue (reading args out of scratch, delivering bytes back) lives in `v8host`; nothing
 // here touches V8. Results come back as an `OpResult` the callers shape into the `result`

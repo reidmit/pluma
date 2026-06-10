@@ -1295,7 +1295,7 @@ pub(crate) fn build_pump_fn(
 						});
 					});
 					// connect: (fid, addr-ptr, addr-len) -> (status, conn-id). The blocking
-					// DNS + handshake run on a pool worker (notes/IO.md); the fiber parks on
+					// DNS + handshake run on a pool worker (host/src/offload.rs); the fiber parks on
 					// offload completion (`wait::IO`) until the host hands back the socket id.
 					// ok = boxed conn-id, same settle as accept.
 					w.local_get(tk).i32(task_kind::NET_CONNECT).i32_eq();
@@ -1313,7 +1313,7 @@ pub(crate) fn build_pump_fn(
 					});
 				}
 
-				// BlockingPool offload ops (notes/IO.md): hand the blocking call to a host
+				// BlockingPool offload ops (host/src/offload.rs): hand the blocking call to a host
 				// worker thread and settle its `result`, or park on `wait::IO` until the
 				// worker completes (woken through `io-poll`, re-Started from `fiber::RETRY`
 				// by the block step). Same `(status, n)` host shape + settle path as the net
@@ -1333,7 +1333,7 @@ pub(crate) fn build_pump_fn(
 						});
 					});
 
-					// fs-op (notes/IO.md): the generic `std.sys.fs` op. Payload = [op-code $int,
+					// fs-op (host/src/offload.rs): the generic `std.sys.fs` op. Payload = [op-code $int,
 					// path $str, data $str]; marshal op + both strings into scratch, hand the
 					// worker a `dst` buffer, and settle the op's bytes. The payload size is
 					// unknown (a whole-file read), so on overflow (`n > cap`) re-`alloc` the true
@@ -1356,6 +1356,45 @@ pub(crate) fn build_pump_fn(
 						w.local_get(dp).local_get(dlen);
 						w.local_get(dst).i32(CAP);
 						w.call(offload.op);
+						net_settle(w, g, fid, fval, fkind, nm, move |w, n| {
+							if let Some(copyout) = nm.copyout {
+								w.local_get(n).i32(CAP).i32_gt_s();
+								w.if_(|w| {
+									w.local_get(n).call(nm.alloc).local_set(dst);
+									w.local_get(dst).call(copyout);
+								});
+							}
+							w.i32(types::TAG_BYTES);
+							w.local_get(dst).local_get(n).call(nm.load);
+							w.struct_new(types::T_STR);
+						});
+					});
+
+					// db-op (host/src/db.rs): the generic `std.sys.db` op. Payload = [op-code $int,
+					// conn-id $int, sql/path $str, params $str]; like fs-op plus the connection id,
+					// run on the pinned SQLite worker. Settles bytes (rows, or a new connection id
+					// as text) through the same `(dst, cap)` + `io-copyout` overflow path.
+					w.local_get(tk).i32(task_kind::DB_OP).i32_eq();
+					w.if_(|w| {
+						const CAP: i32 = 4096;
+						let opc = w.local(ValType::I32);
+						let conn = w.local(ValType::I32);
+						let dst = w.local(ValType::I32);
+						w.i32(0).global_set(nm.bump);
+						elem(w, tp, 0);
+						unbox_i_any(w); // op-code (small int — may be i31-packed)
+						w.local_set(opc);
+						elem(w, tp, 1);
+						unbox_i_any(w); // connection id (small int — may be i31-packed)
+						w.local_set(conn);
+						let (sp, slen) = marshal_str_arg(w, nm, tp, 2);
+						let (pp, plen) = marshal_str_arg(w, nm, tp, 3);
+						w.i32(CAP).call(nm.alloc).local_set(dst);
+						w.local_get(fid).local_get(opc).local_get(conn);
+						w.local_get(sp).local_get(slen);
+						w.local_get(pp).local_get(plen);
+						w.local_get(dst).i32(CAP);
+						w.call(offload.db);
 						net_settle(w, g, fid, fval, fkind, nm, move |w, n| {
 							if let Some(copyout) = nm.copyout {
 								w.local_get(n).i32(CAP).i32_gt_s();

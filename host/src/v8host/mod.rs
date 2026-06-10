@@ -15,10 +15,12 @@
 
 use std::sync::Once;
 
+use crate::db::HostDb;
 use crate::net::HostNet;
 use crate::offload::Reactor;
 use crate::{BufferedIo, CapturingIo, HostIo, HostState, RunCapture, RunResult, StdioIo};
 
+mod db;
 mod entropy;
 mod fs;
 mod marshal;
@@ -31,6 +33,7 @@ mod writers;
 use marshal::{get_prop, read_mem, register};
 // The native import callbacks, grouped by capability. Glob-imported so the registration
 // table below can name each `cb_*` bare (the table is the canonical `pluma.*` surface).
+use db::*;
 use entropy::*;
 use fs::*;
 use math::*;
@@ -126,6 +129,7 @@ fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunCapture {
 			read_stash: Vec::new(),
 			net: HostNet::default(),
 			reactor: Reactor::default(),
+			db: HostDb::default(),
 		},
 		memory: None,
 	};
@@ -229,18 +233,21 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "net-accept", cb_net_accept);
 	register(scope, pluma, data, "net-read", cb_net_read);
 	register(scope, pluma, data, "net-write", cb_net_write);
-	// Shared offload reactor controls (notes/IO.md): the block step + reap, driven by the
+	// Shared offload reactor controls (host/src/offload.rs): the block step + reap, driven by the
 	// in-wasm scheduler for net *and* every offload client (fs, db, …). `io-poll` blocks the
 	// thread synchronously (fine in a V8 callback) until a parked socket is ready or a worker
 	// completion lands. Plus the v0 `offload-sleep` proving op (sleep on a pool worker).
 	register(scope, pluma, data, "io-poll", cb_io_poll);
 	register(scope, pluma, data, "io-unwatch", cb_io_unwatch);
 	register(scope, pluma, data, "offload-sleep", cb_offload_sleep);
-	// std.sys.fs (notes/IO.md): one generic op-code dispatch — `fs-op` runs the op on a
+	// std.sys.fs (host/src/offload.rs): one generic op-code dispatch — `fs-op` runs the op on a
 	// pool worker (async, the default surface), `fs-op-sync` runs it inline (the `-sync`
 	// twin). Both shape `(dst, cap) -> bytes` like the other reads.
 	register(scope, pluma, data, "fs-op", cb_fs_op);
 	register(scope, pluma, data, "fs-op-sync", cb_fs_op_sync);
+	// std.sys.db (host/src/db.rs): one generic `db-op` (open/execute/close by op-code),
+	// offloaded to the pinned SQLite worker — async only, no `-sync` twin.
+	register(scope, pluma, data, "db-op", cb_db_op);
 	// std.web.fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
 	register(scope, pluma, data, "web-fetch", cb_web_fetch);
 	// std.event — SSR stubs (a server build constructs view handlers but never runs

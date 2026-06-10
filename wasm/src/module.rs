@@ -61,7 +61,7 @@ impl Module {
 		// constructors driven by the scheduler, and `poll`/`unwatch` are reached only
 		// from the emitted driver, so none surface as ordinary host calls here.
 		let mut uses_net = false;
-		// Whether the program reaches a `BlockingPool` offload builtin (notes/IO.md) — a
+		// Whether the program reaches a `BlockingPool` offload builtin (host/src/offload.rs) — a
 		// suspending op whose blocking call the scheduler offloads to a host worker thread
 		// (`offload-sleep` in v0; async fs next). Gates the offload imports + the shared
 		// reactor controls, like `uses_net` does for sockets.
@@ -147,7 +147,7 @@ impl Module {
 			read: imports.register("net-read"),
 			write: imports.register("net-write"),
 		});
-		// The shared offload reactor controls (`io-poll`/`io-unwatch`, notes/IO.md): the
+		// The shared offload reactor controls (`io-poll`/`io-unwatch`, host/src/offload.rs): the
 		// scheduler's block step + reap drive these for *any* async-I/O client — sockets
 		// (readiness) and offloaded blocking work (completion) feed one poll step. Present
 		// when either kind of builtin is reached.
@@ -161,6 +161,7 @@ impl Module {
 		let offload_imports = uses_offload.then(|| OffloadImports {
 			sleep: imports.register("offload-sleep"),
 			op: imports.register("fs-op"),
+			db: imports.register("db-op"),
 		});
 		// Both net and offload shape their results through `__io_result` (the same `ok`/`err`
 		// + `io-last-error` channel as `std.sys.io`) and marshal byte payloads through scratch

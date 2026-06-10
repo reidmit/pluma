@@ -412,6 +412,32 @@ public def flat-map :: fun (list a) (fun a -> list b) -> list b = fun xs f {
 	flatten (map xs f)
 }
 
+# Like `map`, but the mapping function can fail. Applies `f` to each element,
+# collecting the `ok` values into a list; the first `err` short-circuits and is
+# returned as-is (no further elements are tried). The fallible cousin of `map`,
+# handy for decoding a whole list where any element might be malformed.
+#
+#     list.try-map ["1", "2", "3"] string.to-int    # => ok [1, 2, 3]
+#     list.try-map ["1", "x", "3"] string.to-int    # => err "..."
+public def try-map :: fun (list a) (fun a -> result b e) -> result (list b) e = fun xs f {
+	let collected = fold xs (ok []) fun acc x {
+		when acc is ok ys {
+			when f x is ok y {
+				ok [y, ...ys]
+			} is err e {
+				err e
+			}
+		} is err e {
+			err e
+		}
+	}
+	when collected is ok ys {
+		ok (reverse ys)
+	} is err e {
+		err e
+	}
+}
+
 # Concatenates a list of lists into a single flat list, preserving
 # order. One level deep only -- `[[1, 2], [3], [4, 5]]` becomes
 # `[1, 2, 3, 4, 5]`.

@@ -1,4 +1,4 @@
-// Native import callbacks for the shared offload subsystem (notes/IO.md): the reactor
+// Native import callbacks for the shared offload subsystem (host/src/offload.rs): the reactor
 // controls (`io-poll`/`io-unwatch`, driven by the in-wasm scheduler's block step + reap),
 // shared by `std.sys.net` and every offload client, plus the v0 `offload-sleep` proving
 // op. They shape an offload `OpResult` into the same `(status, n)` marshalling ABI the net
@@ -91,7 +91,7 @@ pub(super) fn cb_offload_sleep(
 	}
 }
 
-// --- async fs (the BlockingPool's first real client, notes/IO.md v1) ---------------
+// --- async fs (the BlockingPool's first real client, host/src/offload.rs v1) ---------------
 //
 // Each op is called twice like the net/offload ops. The first call reads the path/data
 // out of scratch *on the scheduler thread* (only this thread may touch V8 memory), then

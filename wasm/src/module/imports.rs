@@ -338,6 +338,8 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 		ftypes.for_offload_sleep()
 	} else if tag == "fs-op" {
 		ftypes.for_offload_op()
+	} else if tag == "db-op" {
+		ftypes.for_db_op()
 	} else {
 		let sig = host_sig(tag).unwrap();
 		ftypes.for_host(sig.arity, sig.returns_value)

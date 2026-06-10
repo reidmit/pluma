@@ -1,4 +1,4 @@
-// The shared blocking-I/O offload subsystem (notes/IO.md): a `Reactor` unifying socket
+// The shared blocking-I/O offload subsystem: a `Reactor` unifying socket
 // *readiness* (`std.sys.net`) and *completion* of non-pollable blocking work — file I/O,
 // SQLite, name resolution — under one `polling::Poller`, plus the `BlockingPool` of
 // worker threads that run those blocking calls off the single scheduler thread.
@@ -45,6 +45,24 @@ pub(crate) enum OpResult {
 /// the completion can be routed back. The closure runs off the scheduler thread.
 type Submission = (i32, Box<dyn FnOnce() -> OpResult + Send>);
 
+/// A cloneable handle a pinned (non-pool) worker uses to report a finished op back to the
+/// scheduler: push `(fid, result)` onto the shared completion queue and wake the poller,
+/// just as `spawn_pool`'s workers do. The pinned `std.sys.db` worker holds one.
+#[derive(Clone)]
+pub(crate) struct CompletionSink {
+	completions: Arc<Mutex<VecDeque<(i32, OpResult)>>>,
+	poller: Arc<Poller>,
+}
+
+impl CompletionSink {
+	/// Hand a completed op's result back to fiber `fid` and wake the scheduler's `poll`.
+	pub(crate) fn complete(&self, fid: i32, res: OpResult) {
+		self.completions.lock().unwrap().push_back((fid, res));
+		// An error here only means the poller is gone (run tearing down); the result is moot.
+		let _ = self.poller.notify();
+	}
+}
+
 /// Read- vs write-readiness for a socket park. The reactor owns the poller registration,
 /// so this lives here; `net` passes it through when a socket op would block.
 #[derive(Clone, Copy)]
@@ -76,7 +94,7 @@ pub(crate) struct Reactor {
 	/// block-forever guard and scopes `discarded` to genuinely in-flight ops.
 	inflight: HashSet<i32>,
 	/// Fibers whose offload op was cancelled (scope reaped) while still in flight: drop the
-	/// worker's result on arrival instead of stashing it in `done`. (notes/IO.md cancellation.)
+	/// worker's result on arrival instead of stashing it in `done`. (cancellation handling below.)
 	discarded: HashSet<i32>,
 	/// The worker pool's job sender, spawned lazily on the first `submit` so a program that
 	/// never offloads spawns no threads.
@@ -140,6 +158,24 @@ impl Reactor {
 	/// op then submits and parks.
 	pub(crate) fn collect(&mut self, fid: i32) -> Option<OpResult> {
 		self.done.remove(&fid)
+	}
+
+	/// A handle for a *non-pool* worker — the pinned `std.sys.db` worker — to report its
+	/// completions through the same queue + poller the general pool feeds, so one `poll`
+	/// step drains both. The db worker owns a `rusqlite::Connection` (not `Sync`), so it
+	/// can't run on the shared pool; this sink is how it still wakes the scheduler.
+	pub(crate) fn completion_sink(&self) -> CompletionSink {
+		CompletionSink {
+			completions: self.completions.clone(),
+			poller: self.poller.clone(),
+		}
+	}
+
+	/// Mark `fid`'s op in flight without submitting to the pool — for an op a pinned worker
+	/// runs instead (db). Keeps `poll`'s block-forever guard honest and lets `unwatch`
+	/// (cancellation) discard the worker's result on arrival, exactly like a pool op.
+	pub(crate) fn mark_inflight(&mut self, fid: i32) {
+		self.inflight.insert(fid);
 	}
 
 	/// Block until a parked socket is ready or a worker completion lands (or `deadline`

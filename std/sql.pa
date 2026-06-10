@@ -1,0 +1,365 @@
+# Talking to an SQL database, the typed-Pluma way. This module is the *pure* half: it has
+# no idea how to reach a real database (that lives in `std.sys.db`). What it gives you is
+# the language for describing queries and reading rows back:
+#
+#   - `value` -- the five storage classes SQLite actually has, and nothing more. There is
+#     no boolean storage class, so a bool is just an integer you interpret (`sql.bool` to
+#     write one, `sql.get-bool` to read it back).
+#   - decoders (`get-int`, `get-text`, ...) that pull a typed Pluma value out of a row,
+#     handing back a `result` with a named error -- the same shape `core.json` uses, just
+#     typed and column-named. Thread several with `try` to decode a whole row into your own
+#     record.
+#   - a query builder you pipe together with `|`, and `compile`, which turns a query into
+#     parameterized SQL plus its bind list. `compile` is total: every value is *bound* (a
+#     `?` placeholder), never spliced into the text, and every identifier is quote-escaped,
+#     so a query can't be malformed by its inputs and SQL injection is impossible by
+#     construction.
+#
+# Everything here is pure data and total functions, so you can build (and even render) SQL
+# anywhere -- you just need `std.sys.db` to actually run it.
+use std.dict
+use std.list
+use std.math
+use std.string
+
+# --- the boundary: SQLite's five storage classes -------------------------------
+
+# A single cell's value. SQLite stores exactly five classes and decides a cell's class per
+# *value*, not per column, so this mirrors that reality verbatim. Note there is no `bool`:
+# SQLite has no boolean storage class. Booleans are an interpretation of `int` (see
+# `sql.bool` / `sql.get-bool`).
+public enum value {
+	null
+	int int
+	float float
+	text string
+	blob bytes
+}
+
+# Smart constructors so callers write `sql.int 5` rather than the qualified variant
+# `sql.value.int 5`. `sql.bool` encodes a boolean the way SQLite expects: 1 or 0.
+public def int :: fun int -> value = fun n {
+	value.int n
+}
+
+public def float :: fun float -> value = fun x {
+	value.float x
+}
+
+public def text :: fun string -> value = fun s {
+	value.text s
+}
+
+public def blob :: fun bytes -> value = fun b {
+	value.blob b
+}
+
+public def null :: value = value.null
+
+public def bool :: fun bool -> value = fun b {
+	if b {
+		value.int 1
+	} else {
+		value.int 0
+	}
+}
+
+# --- rows + typed decoders -----------------------------------------------------
+
+# One result row, addressed by column name. Opaque: `std.sys.db` builds these from a query
+# result (via `row-of`); you read them through `cell` or, better, the typed `get-*`
+# accessors below.
+opaque enum row {
+	row (dict string value)
+}
+
+# Builds a row from its `(name, value)` cells. Used by `std.sys.db` to lift a host result
+# across the boundary; rarely needed directly, but handy for testing a decoder.
+public def row-of :: fun (list (string, value)) -> row = fun cells {
+	row.row (dict.from-entries cells)
+}
+
+# The raw value in column `name`, or `value.null` if the row has no such column. Prefer the
+# `get-*` accessors, which also check the value's class.
+public def cell :: fun row string -> value = fun r name {
+	when r is row.row d {
+		dict.lookup d name ?? value.null
+	}
+}
+
+# Typed accessors. Each reads one column and checks its storage class, returning a named
+# `err` (not a bare `none`) when the column is missing or the wrong class -- so a decode
+# failure tells you *which* column and *what* was expected. Thread them with `try`:
+#
+#     def decode-user :: fun row -> result user string = fun r {
+#         try id   = sql.get-int r "id"
+#         try name = sql.get-text r "name"
+#         try age  = sql.get-opt r "age" sql.get-int
+#         ok {id, name, age}
+#     }
+public def get-int :: fun row string -> result int string = fun r name {
+	if cell r name is value.int n {
+		ok n
+	} else {
+		err "column '$(name)': expected int"
+	}
+}
+
+public def get-text :: fun row string -> result string string = fun r name {
+	if cell r name is value.text s {
+		ok s
+	} else {
+		err "column '$(name)': expected text"
+	}
+}
+
+# Accepts a stored `int` too, promoting it -- SQLite may hand back `3` where you expected
+# `3.0`, and refusing that is more annoying than useful.
+public def get-float :: fun row string -> result float string = fun r name {
+	when cell r name is value.float x {
+		ok x
+	} is value.int n {
+		ok (math.to-float n)
+	} else {
+		err "column '$(name)': expected float"
+	}
+}
+
+public def get-blob :: fun row string -> result bytes string = fun r name {
+	if cell r name is value.blob b {
+		ok b
+	} else {
+		err "column '$(name)': expected blob"
+	}
+}
+
+# Reads an INTEGER column as a boolean: 0 is false, anything else is true (SQLite's own
+# convention, since it has no boolean type).
+public def get-bool :: fun row string -> result bool string = fun r name {
+	if cell r name is value.int n {
+		ok (n != 0)
+	} else {
+		err "column '$(name)': expected int (bool)"
+	}
+}
+
+# Lifts any accessor over a nullable column: a NULL cell reads as `ok none`, otherwise the
+# inner accessor runs and its value is wrapped in `some`.
+#
+#     try age = sql.get-opt r "age" sql.get-int   # :: option int
+public def get-opt :: fun row string (fun row string -> result a string) -> result (option a) string = fun r name read {
+	if cell r name is value.null {
+		ok none
+	} else {
+		try v = read r name
+		ok (some v)
+	}
+}
+
+# --- the query builder ---------------------------------------------------------
+
+# A single WHERE condition. Built through the smart constructors below (`sql.eq`, ...) so
+# callers never write the qualified variant. `one-of` lowers to `IN (...)`; `like` takes a
+# SQL LIKE pattern. (The comparison variants are spelled out -- `equal`/`greater`/`less`
+# rather than `eq`/`gt`/`lt` -- so they don't clash with the built-in `ordering` enum's
+# `lt`/`eq`/`gt`, which the `compare` codegen resolves by variant name.)
+public enum predicate {
+	equal string value
+	not-equal string value
+	greater string value
+	greater-eq string value
+	less string value
+	less-eq string value
+	like string string
+	one-of string (list value)
+}
+
+public def eq :: fun string value -> predicate = fun c v {
+	predicate.equal c v
+}
+
+public def ne :: fun string value -> predicate = fun c v {
+	predicate.not-equal c v
+}
+
+public def gt :: fun string value -> predicate = fun c v {
+	predicate.greater c v
+}
+
+public def ge :: fun string value -> predicate = fun c v {
+	predicate.greater-eq c v
+}
+
+public def lt :: fun string value -> predicate = fun c v {
+	predicate.less c v
+}
+
+public def le :: fun string value -> predicate = fun c v {
+	predicate.less-eq c v
+}
+
+public def like :: fun string string -> predicate = fun c pat {
+	predicate.like c pat
+}
+
+public def one-of :: fun string (list value) -> predicate = fun c vs {
+	predicate.one-of c vs
+}
+
+# A single ORDER BY term: a column and a direction. (Named `sort`, not `ordering`, because
+# `ordering` is the built-in comparison-result enum.)
+public enum sort {
+	asc string
+	desc string
+}
+
+public def asc :: fun string -> sort = fun c {
+	sort.asc c
+}
+
+public def desc :: fun string -> sort = fun c {
+	sort.desc c
+}
+
+# A SELECT query as plain, inspectable data. You build one by piping the stages below with
+# `|` (each takes the query first, so it threads), then hand it to `std.sql.compile` or a
+# `std.sys.db` runner. An empty `select` means `SELECT *`; `filter` terms are AND-joined.
+public alias query {
+	from :: string,
+	select :: list string,
+	filter :: list predicate,
+	order :: list sort,
+	limit :: option int,
+}
+
+# Seeds a query against table `t`: all columns, no filter, no order, no limit.
+public def from :: fun string -> query = fun t {
+	{from: t, select: [], filter: [], order: [], limit: none}
+}
+
+# Restricts the columns returned. With no `select`, the query reads `SELECT *`.
+public def select :: fun query (list string) -> query = fun q cols {
+	{...q, select: cols}
+}
+
+# Adds a WHERE condition. Multiple `filter`s are joined with AND, in the order added. (The
+# stage is `filter`, not `where`, because `where` is a reserved word in Pluma.)
+#
+#     sql.from "users" | sql.filter (sql.gt "age" (sql.int 17))
+public def filter :: fun query predicate -> query = fun q p {
+	{...q, filter: [...q.filter, p]}
+}
+
+# Adds an ORDER BY term, in the order added (so the first `order-by` is the primary sort).
+public def order-by :: fun query sort -> query = fun q o {
+	{...q, order: [...q.order, o]}
+}
+
+# Caps the number of rows returned.
+public def limit :: fun query int -> query = fun q n {
+	{...q, limit: some n}
+}
+
+# --- compilation ---------------------------------------------------------------
+
+# Turns a query into `(sql-text, binds)`: parameterized SQL with `?` placeholders, plus the
+# values to bind in placeholder order. **Total** -- it never fails -- because of two
+# invariants it maintains:
+#
+#   1. Every `value` leaves only in the bind list; the SQL text holds a `?` for it. Nothing
+#      to escape, nothing that can break out into the query.
+#   2. Every identifier is quote-escaped (`quote-ident`), so any string is a single safe
+#      token -- a weird column name becomes a (nonexistent) quoted column, an execute-time
+#      "no such column" error, never injection.
+#
+#     sql.compile (sql.from "users" | sql.filter (sql.gt "age" (sql.int 17)))
+#     # => ("SELECT * FROM \"users\" WHERE \"age\" > ?", [value.int 17])
+public def compile :: fun query -> (string, list value) = fun q {
+	let cols = if list.length q.select == 0 {
+		"*"
+	} else {
+		string.join (list.map q.select quote-ident) ", "
+	}
+	let head = "SELECT " ++ cols ++ " FROM " ++ quote-ident q.from
+	# Lower each predicate to (fragment, params); AND-join the fragments, concat the params
+	# in fragment order so their positions line up with the `?`s.
+	let lowered = list.map q.filter lower-pred
+	let where-sql = if list.length lowered == 0 {
+		""
+	} else {
+		" WHERE " ++ string.join (list.map lowered fst) " AND "
+	}
+	let where-params = list.flat-map lowered snd
+	let order-sql = if list.length q.order == 0 {
+		""
+	} else {
+		" ORDER BY " ++ string.join (list.map q.order lower-ord) ", "
+	}
+	let (limit-sql, limit-params) = when q.limit is some n {
+		(" LIMIT ?", [value.int n])
+	} is none {
+		("", [])
+	}
+	(head ++ where-sql ++ order-sql ++ limit-sql, list.concat where-params limit-params)
+}
+
+# Wraps `s` in double quotes, doubling any embedded quote -- the SQL way to make any string
+# a single identifier token. `id` -> `"id"`; `a"b` -> `"a""b"`.
+def quote-ident :: fun string -> string = fun s {
+	"\"" ++ string.replace s "\"" "\"\"" ++ "\""
+}
+
+# Lowers one predicate to its SQL fragment and the values it binds. The `value.null`
+# special-cases on `eq`/`ne` are mandatory: SQL `= NULL` is never true, so a bound NULL
+# would silently match no rows -- it must become `IS NULL`. An empty `one-of` lowers to the
+# literal `0` (false), well-formed SQL that matches nothing rather than a syntax error.
+def lower-pred :: fun predicate -> (string, list value) = fun p {
+	when p is predicate.equal c v {
+		if v is value.null {
+			(quote-ident c ++ " IS NULL", [])
+		} else {
+			(quote-ident c ++ " = ?", [v])
+		}
+	} is predicate.not-equal c v {
+		if v is value.null {
+			(quote-ident c ++ " IS NOT NULL", [])
+		} else {
+			(quote-ident c ++ " <> ?", [v])
+		}
+	} is predicate.greater c v {
+		(quote-ident c ++ " > ?", [v])
+	} is predicate.greater-eq c v {
+		(quote-ident c ++ " >= ?", [v])
+	} is predicate.less c v {
+		(quote-ident c ++ " < ?", [v])
+	} is predicate.less-eq c v {
+		(quote-ident c ++ " <= ?", [v])
+	} is predicate.like c pat {
+		(quote-ident c ++ " LIKE ?", [value.text pat])
+	} is predicate.one-of c vs {
+		if list.length vs == 0 {
+			("0", [])
+		} else {
+			let holes = string.join (list.map vs fun _v { "?" }) ", "
+			(quote-ident c ++ " IN (" ++ holes ++ ")", vs)
+		}
+	}
+}
+
+def lower-ord :: fun sort -> string = fun o {
+	when o is sort.asc c {
+		quote-ident c ++ " ASC"
+	} is sort.desc c {
+		quote-ident c ++ " DESC"
+	}
+}
+
+def fst :: fun (string, list value) -> string = fun pair {
+	let (a, _) = pair
+	a
+}
+
+def snd :: fun (string, list value) -> list value = fun pair {
+	let (_, b) = pair
+	b
+}

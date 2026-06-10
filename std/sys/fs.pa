@@ -3,7 +3,8 @@
 #
 # Every operation is **asynchronous by default** -- it returns a `task`, run by the
 # scheduler, so a slow disk or network filesystem parks the calling fiber on a worker
-# thread (notes/IO.md) rather than freezing every other fiber. Each op has a synchronous
+# thread (the host BlockingPool, `host/src/offload.rs`) rather than freezing every other
+# fiber. Each op has a synchronous
 # `-sync` twin (e.g. `fs.read-text-sync`) that blocks the current thread instead; reach
 # for those only in one-shot scripts and build tools where there is no concurrency to
 # starve. Default is async; sync is the opt-in escape hatch.
@@ -35,7 +36,7 @@ public alias file-info {size :: int, kind :: file-kind, modified :: instant}
 
 # --- the host bridge -----------------------------------------------------------
 #
-# One generic op-code dispatch backs the whole surface (notes/IO.md): `fs-op` runs the op
+# One generic op-code dispatch backs the whole surface (`host/src/offload.rs`): `fs-op` runs the op
 # on a pool worker (the async default), `fs-op-sync` runs it inline (the `-sync` twin).
 # The op-code selects the operation host-side; the result comes back as `bytes` that the
 # wrappers below decode per op. Two arities each -- one for a `string` data arg
