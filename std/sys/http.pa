@@ -21,15 +21,15 @@
 # (`Connection: close`); keep-alive, chunked transfer, HTTP/2, and
 # WebSockets are not handled yet.
 
-use std.bytes
-use std.dict
-use std.hex
-use std.list
-use std.stream
-use std.string
-use std.task
-use std.sys.net
-use std.sys.process
+use std/bytes
+use std/dict
+use std/hex
+use std/list
+use std/stream
+use std/string
+use std/task
+use std/sys/net
+use std/sys/process
 
 # The HTTP method (verb). `other` carries any method name not listed
 # here, so unusual verbs still parse.

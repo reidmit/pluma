@@ -20,8 +20,8 @@ fn idempotent_simple() {
 
 #[test]
 fn imports_before_defs() {
-	let out = fmt("use std.list\n\ndef x = 1\n");
-	assert_eq!(out, "use std.list\n\ndef x = 1\n");
+	let out = fmt("use std/list\n\ndef x = 1\n");
+	assert_eq!(out, "use std/list\n\ndef x = 1\n");
 }
 
 #[test]

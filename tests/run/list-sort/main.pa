@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 def main = fun {
 	# `list.sort` takes a comparator returning an `ordering` variant.

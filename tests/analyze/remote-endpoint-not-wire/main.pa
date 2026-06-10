@@ -1,5 +1,5 @@
-use std.request
-use std.task
+use std/request
+use std/task
 
 # A function argument can't cross the wire, so this endpoint is rejected at
 # the boundary with attribution naming the offending parameter.

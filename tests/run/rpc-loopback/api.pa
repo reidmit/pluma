@@ -3,7 +3,7 @@
 # handler. These cover the three argument shapes the synthesized code handles:
 # zero, one, and several arguments (the contract is the pure logical signature,
 # no transport `request`).
-use std.task
+use std/task
 
 # Zero arguments.
 public remote def ping :: fun nothing -> task string = fun {

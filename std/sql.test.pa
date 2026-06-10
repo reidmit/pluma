@@ -1,7 +1,7 @@
-use std.assert
-use std.sql
-use std.string
-use std.test
+use std/assert
+use std/sql
+use std/string
+use std/test
 
 # Helper: compile a query and check both halves -- the SQL text and the bind list.
 def check :: fun query string (list value) -> result nothing string = fun q want-sql want-binds {

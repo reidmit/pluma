@@ -121,7 +121,7 @@ fn corpus() -> Vec<Case> {
 	add(
 		"clean-accumulator",
 		Fire::Yes,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) (i * i)) (i - 1) }
 }
@@ -142,7 +142,7 @@ def main = fun {
 	add(
 		"borrow-size-in-loop",
 		Fire::Yes,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 {
 		m
@@ -165,7 +165,7 @@ def main = fun {
 	add(
 		"lookup-in-loop",
 		Fire::Yes,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 {
 		m
@@ -188,7 +188,7 @@ def main = fun {
 	add(
 		"branching-value",
 		Fire::Yes,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 {
 		m
@@ -212,7 +212,7 @@ def main = fun {
 	add(
 		"two-separate-builds",
 		Fire::Yes,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) (i * 10)) (i - 1) }
 }
@@ -234,7 +234,7 @@ def main = fun {
 	add(
 		"deep-trie",
 		Fire::Yes,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) (i * 3)) (i - 1) }
 }
@@ -259,7 +259,7 @@ def main = fun {
 	add(
 		"build-on-existing-snapshot",
 		Fire::Yes,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) i) (i - 1) }
 }
@@ -282,7 +282,7 @@ def main = fun {
 	add(
 		"build-then-persistent-extend",
 		Fire::Yes,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 { m } else { build (dict.insert m (to-string i) i) (i - 1) }
 }
@@ -306,8 +306,8 @@ def main = fun {
 	add(
 		"snapshots-escape-into-list",
 		Fire::No,
-		r#"use std.dict
-use std.list
+		r#"use std/dict
+use std/list
 def snapshots = fun m acc i {
 	if i == 0 {
 		acc
@@ -337,7 +337,7 @@ def main = fun {
 	add(
 		"read-after-insert",
 		Fire::No,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m acc i {
 	if i == 0 {
 		acc
@@ -359,7 +359,7 @@ def main = fun {
 	add(
 		"escape-into-tuple",
 		Fire::No,
-		r#"use std.dict
+		r#"use std/dict
 def fst = fun p {
 	let (a, _) = p
 	a
@@ -387,7 +387,7 @@ def main = fun {
 	add(
 		"remove-in-chain",
 		Fire::No,
-		r#"use std.dict
+		r#"use std/dict
 def build = fun m i {
 	if i == 0 {
 		m

@@ -5,7 +5,7 @@
 # the handler bodies); the wire path (encode → dispatch → decode, fingerprint
 # guard) is exercised by `rpc-skew`, and the dual-build client/server split by
 # `examples/fullstack`.
-use std.task
+use std/task
 use api
 
 def main = fun {

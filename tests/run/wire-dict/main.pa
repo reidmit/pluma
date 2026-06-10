@@ -4,8 +4,8 @@
 # the hash buckets via the same primitive-key hashing `dict.lookup` uses, so
 # lookups on the decoded dict work. Compound keys are rejected at compile time.
 
-use std.dict
-use std.hex
+use std/dict
+use std/hex
 
 def main = fun {
 	let scores = dict.from-entries [("ada", 100), ("bob", 50), ("cy", 75)]

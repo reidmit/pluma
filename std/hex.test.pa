@@ -1,6 +1,6 @@
-use std.assert
-use std.hex
-use std.test
+use std/assert
+use std/hex
+use std/test
 
 def tests :: test.suite = [
 	test.case "encode of empty bytes" fun {

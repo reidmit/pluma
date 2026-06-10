@@ -5,7 +5,7 @@
 # Regression for the combination missing the async wrapper in
 # `compile_constrained_thunk`. Exercised at int and float (per-call-site dicts)
 # and with an ord dispatch.
-use std.task
+use std/task
 
 def add-tasks :: fun (task a) (task a) -> task a = fun x y {
 	try p = x

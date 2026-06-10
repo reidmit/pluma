@@ -17,12 +17,12 @@
 # or eval error is reported and the loop simply continues, so one bad
 # line never ends the session.
 
-use std.dict
-use std.list
-use std.math
-use std.string
-use std.sys.io
-use std.sys.process
+use std/dict
+use std/list
+use std/math
+use std/string
+use std/sys/io
+use std/sys/process
 use eval
 use parser
 use value

@@ -9,13 +9,13 @@
 # namespace, so the repeated `css.`/`view.` prefix drops away. Other namespaces
 # (`signal`, `task`, `list`, …) stay qualified — only the ambient one goes bare.
 
-use std.css
-use std.keyed
-use std.list
-use std.signal
-use std.string
-use std.task
-use std.view
+use std/css
+use std/keyed
+use std/list
+use std/signal
+use std/string
+use std/task
+use std/view
 use api
 
 # --- styling (extracted, content-hashed rules; emitted into <head> by SSR) ----

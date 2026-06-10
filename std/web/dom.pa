@@ -15,7 +15,7 @@
 # Most apps build their UI with `std.view` + `std.web.render` (the signals
 # frontend, see notes/FRONTEND.md) and never touch this module directly.
 
-use std.event
+use std/event
 
 # A live handle to one DOM node. Opaque: the browser owns it, you hold the
 # handle. (The runtime carrier is an engine `externref`, not the `int`

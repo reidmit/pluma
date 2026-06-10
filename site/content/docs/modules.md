@@ -6,12 +6,12 @@ weight = 10
 
 ## Imports
 
-`use` at the top of a module brings another module in as a namespace. Dotted paths resolve relative to the project root.
+`use` at the top of a module brings another module in as a namespace. Slash-separated paths resolve relative to the project root.
 
 ```pluma
 use math
-use sub.utils
-use other.utils as utils2   # avoids collision with `sub.utils` above
+use sub/utils
+use other/utils as utils2   # avoids collision with `sub/utils` above
 
 def four = math.add 2 2
 def value = utils.something
@@ -92,7 +92,7 @@ when c is colors.color.red {
 Qualification keeps provenance explicit, but in a block that leans hard on one module — a CSS ruleset, a view tree — the repeated prefix is noise. A `using <namespace> { … }` block makes that namespace *ambient*: inside it, a leading-dot `.member` resolves in the named module, so `css.color` becomes `.color`. It's the scoped, opt-in counterpart to `use` (which binds a namespace for the whole file).
 
 ```pluma
-use std.css
+use std/css
 
 def card :: css.ruleset = using css {
     .rule [.padding (.rem 1.0), .background (.hex "#0b1020")]
@@ -113,17 +113,17 @@ A leading `.member` outside any `using` block is an error (E0031) — write it q
 
 ## A module and its principal type
 
-It's common for a module to be named after the one type it's built around — `shapes.circle` exporting a `circle`, the way `std.task` is the home of `task`. To avoid `circle.circle` stutter, the **eponymous type** — an enum named like the module's last path segment — is brought into scope *bare* when you `use` the module:
+It's common for a module to be named after the one type it's built around — `shapes/circle` exporting a `circle`, the way `std/task` is the home of `task`. To avoid `circle.circle` stutter, the **eponymous type** — an enum named like the module's last path segment — is brought into scope *bare* when you `use` the module:
 
 ```pluma
-use shapes.circle
+use shapes/circle
 
 def grow :: fun circle -> circle = …   # bare `circle` in a type position
 let c = circle.radius 1.0              # `circle.variant` still constructs
 def a = circle.area c                  # `circle.fn` is still the module function
 ```
 
-The one name plays both roles, disambiguated by syntax: `circle` in a type position is the type; `circle.x` is a variant or a module member. Under an alias the type rides the alias (`use shapes.circle as disk` makes `disk` the bare type). A local declaration or a prelude type of the same name wins, so this never shadows a built-in. (The prelude's `option`/`result` are the same overlap — a bare type plus an auto-imported module of helpers.)
+The one name plays both roles, disambiguated by syntax: `circle` in a type position is the type; `circle.x` is a variant or a module member. Under an alias the type rides the alias (`use shapes/circle as disk` makes `disk` the bare type). A local declaration or a prelude type of the same name wins, so this never shadows a built-in. (The prelude's `option`/`result` are the same overlap — a bare type plus an auto-imported module of helpers.)
 
 ## Cycles
 

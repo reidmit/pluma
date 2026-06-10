@@ -2,7 +2,7 @@
 # sum the values. Exercises the pure-Pluma hash dict (string hashing, bucket
 # probing) on both insert and lookup paths.
 
-use std.dict
+use std/dict
 
 def fill = fun m n {
 	when n is 0 {

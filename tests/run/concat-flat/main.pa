@@ -1,7 +1,7 @@
 # Flat large concats (NOT the O(n^2) accumulate): concat two 5000-element lists
 # 1000 times. Isolates array.copy throughput from small-allocation churn.
 
-use std.list
+use std/list
 
 def loop = fun n a b acc {
 	when n is 0 {

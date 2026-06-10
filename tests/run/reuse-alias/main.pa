@@ -1,4 +1,4 @@
-use std.dict
+use std/dict
 
 # Soundness guard for the reuse pass. The accumulator `m` is a loop-carried dict (so
 # loopify + the reuse analysis run), but every intermediate version `m2` is also

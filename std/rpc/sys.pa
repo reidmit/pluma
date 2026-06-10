@@ -4,10 +4,10 @@
 # std.sys.http, mapping the HTTP outcome to reply bytes or a typed `rpc-error`.
 # This module imports `std.sys.*`, so it only enters a native build (the neutral
 # `std.rpc` never imports a target module). The mirror of `std.rpc.web`.
-use std.rpc
-use std.stream
-use std.task
-use std.sys.http
+use std/rpc
+use std/stream
+use std/task
+use std/sys/http
 
 # POST the encoded body and translate the reply: 200 → bytes; any other status →
 # the matching typed `rpc-error` (`rpc.status-error`); a transport-level failure →

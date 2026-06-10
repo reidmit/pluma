@@ -5,8 +5,8 @@
 # (variables and function names), and single-character operators are
 # the only three shapes; anything else is a lex error.
 
-use std.list
-use std.string
+use std/list
+use std/string
 use value
 
 public enum token {

@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 def main = fun {
 	let xs = [2, 3, 4]

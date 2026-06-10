@@ -3,8 +3,8 @@
 # Guards that the server-renderable view path links and renders: handlers are
 # dropped, text/attrs escaped, void elements self-close, properties become attrs.
 
-use std.view
-use std.sys.io
+use std/view
+use std/sys/io
 
 def field :: fun nothing -> view = fun {
 	view.form [view.on-submit fun { io.print "submit" }] [

@@ -2,7 +2,7 @@
 # and decode it back, repeatedly. Exercises auto-derived structural encode/decode
 # (varint, length-prefixed lists, tuples).
 
-use std.list
+use std/list
 
 def loop = fun data n acc {
 	when n is 0 {

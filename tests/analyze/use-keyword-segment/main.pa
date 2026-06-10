@@ -1,6 +1,6 @@
 # Previously swallowed: a keyword in the middle of a `use` path silently
 # stopped path parsing. Now reports an "expected an identifier"
 # diagnostic at the offending keyword.
-use std.let
+use std/let
 
 def main = fun { 0 }

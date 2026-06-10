@@ -10,12 +10,12 @@
 #   pluma run examples/jq '.users[].name'  examples/jq/team.json
 #   echo '{"a":[1,2,3]}' | pluma run examples/jq '.a[-1]'
 
-use std.json
-use std.list
-use std.string
-use std.sys.fs
-use std.sys.io
-use std.sys.process
+use std/json
+use std/list
+use std/string
+use std/sys/fs
+use std/sys/io
+use std/sys/process
 use query
 
 public def main = fun {

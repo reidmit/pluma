@@ -1375,7 +1375,7 @@ impl<'a> Lowerer<'a> {
 				// `Enum.variant` where `head` is an enum in scope unqualified: a
 				// local-module enum (`color.red`), a prelude enum (`ordering.gt`),
 				// or the eponymous enum of an imported module (`point.cartesian`,
-				// where `use geometry.point` binds `point` to `geometry.point.point`
+				// where `use geometry/point` binds `point` to `geometry.point.point`
 				// — named after the module's last segment, so an alias still works).
 				// Tried in the analyzer's type-scope precedence: a local or prelude
 				// declaration shadows the import. Each candidate falls through if it
@@ -2736,7 +2736,7 @@ impl<'a> Lowerer<'a> {
 		let run_all = self
 			.globals
 			.lookup("std.test", "run-all")
-			.ok_or("`std.test.run-all` was not compiled — does a `*.test.pa` file `use std.test`?")?;
+			.ok_or("`std.test.run-all` was not compiled — does a `*.test.pa` file `use std/test`?")?;
 
 		// One `{name, tests}` record per suite. Field order is name-sorted to
 		// match the record-shape layout the backends expect from `MakeRecord`.

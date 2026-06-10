@@ -1,4 +1,4 @@
-use std.json
+use std/json
 
 # Malformed input — error record carries 1-indexed line/col plus a
 # serde-style message from the pure-Pluma parser.

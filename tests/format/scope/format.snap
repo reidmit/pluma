@@ -2,7 +2,7 @@
 source: tests/format.rs
 expression: once
 ---
-use std.task
+use std/task
 
 def demo = fun {
 	scope as s {

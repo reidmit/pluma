@@ -1,4 +1,4 @@
-use std.request
+use std/request
 
 # A `remote def` must return a `task` — the call is async, so `try` over it
 # reads like a local await. A plain `int` return is rejected.

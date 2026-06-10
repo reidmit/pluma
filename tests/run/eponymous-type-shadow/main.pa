@@ -1,4 +1,4 @@
-use shapes.circle
+use shapes/circle
 
 # A local enum named `circle` shadows the imported eponymous type. The local
 # declaration wins (it's seeded after the import), so `circle` is the local

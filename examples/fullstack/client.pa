@@ -12,8 +12,8 @@
 # under `pluma dev`, which proxies `/rpc/*` to the server); no transport plumbing
 # appears in the code.
 
-use std.web.dom
-use std.web.render
+use std/web/dom
+use std/web/render
 use ui
 
 def main = fun {

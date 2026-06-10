@@ -1,4 +1,4 @@
-use std.regex as re
+use std/regex as re
 
 # `named-capture` is the shortcut for "first match → group by name".
 # Skips materializing the whole match record.

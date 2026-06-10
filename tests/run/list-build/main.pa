@@ -1,7 +1,7 @@
 # Pure O(n) list building: tabulate, map, fold. One allocation each for build
 # and map; no repeated concat. Isolates the steady-state list allocation path.
 
-use std.list
+use std/list
 
 def main = fun {
 	let xs = list.build 20000 fun i {

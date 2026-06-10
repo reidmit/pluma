@@ -4,10 +4,10 @@
 # BEGIN/COMMIT bracket the body's writes. Exercises: a committed transaction whose return
 # value threads out, and a rolled-back one (body returns err) whose write is undone. In-memory
 # database, one connection.
-use std.list
-use std.sql
-use std.task
-use std.sys.db
+use std/list
+use std/sql
+use std/task
+use std/sys/db
 
 # Number of rows currently in `acct` (proves what committed vs rolled back).
 def count-acct :: fun connection -> task (result int string) = fun conn {

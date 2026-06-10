@@ -1,8 +1,8 @@
-use std.assert
-use std.dict
-use std.list
-use std.regex as re
-use std.test
+use std/assert
+use std/dict
+use std/list
+use std/regex as re
+use std/test
 
 def tests :: test.suite = [
 	test.case "matches finds a substring" fun {

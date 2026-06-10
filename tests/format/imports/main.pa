@@ -1,12 +1,12 @@
-use myapp.helpers
-use std.sys.io
-use pkg.json
-use std.task
-use std.assert
-use std.bytes
-use pkg.http.client
-use myapp.utils as u
-use std.regex as re
+use myapp/helpers
+use std/sys/io
+use pkg/json
+use std/task
+use std/assert
+use std/bytes
+use pkg/http/client
+use myapp/utils as u
+use std/regex as re
 
 def main = fun {
 	print "ok"

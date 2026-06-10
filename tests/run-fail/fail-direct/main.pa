@@ -1,7 +1,7 @@
 # `process.fail` stops the program directly: its message goes to stderr and the
 # exit code is nonzero. It's the primitive `expect` is built on. `after`
 # never prints.
-use std.sys.process
+use std/sys/process
 
 def main = fun {
 	print "before"

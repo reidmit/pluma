@@ -1,8 +1,8 @@
 # A `using <namespace> { ... }` block: inside, a leading-dot `.member` resolves in
 # that namespace, so the repeated prefix drops away. Nested blocks switch the
 # ambient (innermost wins); other namespaces stay qualified.
-use std.list
-use std.math
+use std/list
+use std/math
 
 def main = fun {
 	# Outer ambient `list`; the inner `using math` makes `.abs` resolve in `math`.

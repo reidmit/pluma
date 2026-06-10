@@ -1,8 +1,8 @@
 # String round-trip: build many parts, join them, split back, uppercase — text
 # throughput across concat, join, split, and case mapping.
 
-use std.list
-use std.string
+use std/list
+use std/string
 
 def main = fun {
 	let parts = list.build 50000 fun i {

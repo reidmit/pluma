@@ -17,9 +17,9 @@
 # On the client artifact every `remote def` body is a transport stub, so these
 # reads are unreachable there and DCE drops the module -- reading context can't
 # pull server-only deps into the bundle.
-use std.dict
-use std.local
-use std.sys.http
+use std/dict
+use std/local
+use std/sys/http
 
 # The inbound request for the handler running on this branch of the task tree.
 # `none` outside a dispatch (a handler called in-process, or a client read).

@@ -10,12 +10,12 @@
 # `route-fp` is the fingerprint for `fun int -> stream int` (shared by both
 # endpoints -- it's per-shape, not per-name). If the fingerprint algorithm
 # changes, update it here and re-accept the snapshot.
-use std.dict
-use std.rpc
-use std.stream
-use std.task
-use std.sys.http
-use std.sys.net
+use std/dict
+use std/rpc
+use std/stream
+use std/task
+use std/sys/http
+use std/sys/net
 use api
 
 def route-fp :: string = "3785672902669336212"

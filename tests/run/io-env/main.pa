@@ -1,4 +1,4 @@
-use std.sys.process
+use std/sys/process
 
 # `process.env` returns `some value` for a set variable, `none` for an unset one.
 # The snapshot must be portable (no machine-specific values), so this fixture only

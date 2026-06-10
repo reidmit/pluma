@@ -20,7 +20,7 @@
 # index to track — the remaining `list token` *is* the position, and
 # list patterns (`[t-op op, ...rest]`) read it directly.
 
-use std.list
+use std/list
 use lexer
 use value
 

@@ -14,10 +14,10 @@
 # the stream; a missing field or out-of-range index drops the value
 # silently, so a path that matches nothing yields no output.
 
-use std.dict
-use std.json
-use std.list
-use std.string
+use std/dict
+use std/json
+use std/list
+use std/string
 
 # One navigation step.
 public enum step {

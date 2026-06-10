@@ -1,6 +1,6 @@
 # A single endpoint, enough to synthesize a dispatcher whose per-route
 # fingerprint guard we can probe.
-use std.task
+use std/task
 
 public remote def add :: fun int int -> task int = fun a b {
 	task.return (a + b)

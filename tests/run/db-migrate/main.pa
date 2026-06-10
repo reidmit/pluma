@@ -5,10 +5,10 @@
 # leave neither the table nor a recorded version behind, which we prove by re-applying a
 # fixed v3 (it succeeds and creates the table, which would error if the rollback had leaked).
 # In-memory database, one connection, so the tracking table persists across calls.
-use std.list
-use std.sql
-use std.task
-use std.sys.db
+use std/list
+use std/sql
+use std/task
+use std/sys/db
 
 def migrations :: list migration = [
 	{version: 1, up: "create table users (id integer primary key, name text)"},

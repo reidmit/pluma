@@ -2,11 +2,11 @@
 # adopted (wrapper spans + rows), with per-row local signals wired onto the
 # existing nodes. Toggling/adding then drives the live reconciler.
 
-use std.list
-use std.signal
-use std.view
-use std.web.dom
-use std.web.render
+use std/list
+use std/signal
+use std/view
+use std/web/dom
+use std/web/render
 
 public def page :: fun nothing -> view = fun {
 	let items = signal.new ["a", "b", "c"]

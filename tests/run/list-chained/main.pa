@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 # A small pipeline: take numbers 1..5, square them, keep odd squares, sum.
 

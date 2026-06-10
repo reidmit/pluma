@@ -12,15 +12,15 @@
 # endpoints). The concrete transports live in `std.rpc.http-sys` /
 # `std.rpc.http-web` -- one per deploy target -- so this core never imports a
 # target-specific module.
-use std.dict
-use std.list
-use std.local
-use std.router
-use std.stream
-use std.string
-use std.task
-use std.rpc.context
-use std.sys.http
+use std/dict
+use std/list
+use std/local
+use std/router
+use std/stream
+use std/string
+use std/task
+use std/rpc/context
+use std/sys/http
 
 # Infrastructure failures of a remote call, carried on the (erased) task-failure
 # channel and recovered typed via `task.attempt`. Domain errors stay inside the

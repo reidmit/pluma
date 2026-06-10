@@ -1,4 +1,4 @@
-use std.bytes
+use std/bytes
 
 def main = fun {
 	print (bytes.contains 'hello world' 'world')

@@ -30,10 +30,10 @@
 # with a 404. It's a dispatch list, not a framework: there are no path
 # parameters (`/users/:id`), no middleware chains, and no 405 handling yet —
 # match the path yourself inside a handler when you need more.
-use std.list
-use std.string
-use std.task
-use std.sys.http
+use std/list
+use std/string
+use std/task
+use std/sys/http
 
 # One endpoint: a rule for which requests it answers, paired with the handler
 # that answers them. Opaque — build one with `get` / `post` / `prefix` and feed

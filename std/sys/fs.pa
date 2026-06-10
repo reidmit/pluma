@@ -13,13 +13,13 @@
 # might not be readable -- so those operations hand back a `result`, with a message from
 # the OS on the `err` side. The plain `exists`/`is-file`/`is-dir` queries answer with a
 # `bool` instead, since "no" is an ordinary answer rather than an error.
-use std.bytes
-use std.list
-use std.path
-use std.string
-use std.task
-use std.time
-use std.sys.process
+use std/bytes
+use std/list
+use std/path
+use std/string
+use std/task
+use std/time
+use std/sys/process
 
 # What a path points at, as reported by `fs.stat`. A symlink reports `symlink` (its own
 # type), not the type of whatever it points to.

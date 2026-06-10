@@ -2,12 +2,12 @@
 # routes and feed it hand-made requests, so the routing logic (method + path
 # matching, first-match-wins ordering, the 404 fallback) is exercised without a
 # socket. `serve` over a real connection is covered separately by `router-serve`.
-use std.bytes
-use std.dict
-use std.router
-use std.string
-use std.task
-use std.sys.http
+use std/bytes
+use std/dict
+use std/router
+use std/string
+use std/task
+use std/sys/http
 
 # A bare request with the given method and path.
 def req :: fun http.method string -> http.request = fun m p {

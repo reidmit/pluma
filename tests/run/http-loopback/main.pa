@@ -3,12 +3,12 @@
 # hand-written client that sends a raw GET and reads the raw reply. The
 # server runs under a scope that's cancelled once the exchange is done.
 # Output is the (deterministic) status line and body the client received.
-use std.bytes
-use std.list
-use std.string
-use std.task
-use std.sys.http
-use std.sys.net
+use std/bytes
+use std/list
+use std/string
+use std/task
+use std/sys/http
+use std/sys/net
 
 def handler :: fun http.request -> task http.response = fun req {
 	task.return (http.text 200 ("you asked for " ++ req.path))

@@ -1,4 +1,4 @@
-use shapes.circle
+use shapes/circle
 
 # `circle` used bare in type positions — no `circle.circle` stutter.
 def describe :: fun circle -> string = fun c {

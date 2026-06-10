@@ -5,7 +5,7 @@
 # while a blocking call is in flight: two children nap concurrently inside a `scope`, so
 # the scheduler drives both (it never blocks on a worker), and awaiting their handles makes
 # the result deterministic regardless of which worker finishes first.
-use std.task
+use std/task
 
 # A worker-thread sleep — the v0 proving op for the offload subsystem.
 def offload-sleep :: fun duration -> task nothing = built-in "offload-sleep"

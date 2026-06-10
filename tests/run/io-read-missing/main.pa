@@ -1,4 +1,4 @@
-use std.sys.fs
+use std/sys/fs
 
 def main = fun {
 	let missing = "target/pluma-this-file-does-not-exist.txt"

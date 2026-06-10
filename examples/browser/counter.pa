@@ -7,7 +7,7 @@
 #
 # then open http://localhost:2222/ . Clicking the button increments the label.
 
-use std.web.dom
+use std/web/dom
 
 def main = fun {
 	let root = dom.body ()

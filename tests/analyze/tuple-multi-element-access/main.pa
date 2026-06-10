@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 # Accessing more than one index of the same tuple whose type isn't yet known
 # used to fail to type-check: each `e.N` produced an independent `PartialTuple`

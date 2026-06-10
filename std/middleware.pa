@@ -24,9 +24,9 @@
 # or response around it, or skip it entirely to short-circuit (reply 401 without
 # ever calling it). It's deliberately nothing more than function composition;
 # there's no registration, ordering magic, or framework here.
-use std.list
-use std.task
-use std.sys.http
+use std/list
+use std/task
+use std/sys/http
 
 # A request handler: the shape `http.serve` and `router.handler` consume.
 public alias handler fun http.request -> task http.response

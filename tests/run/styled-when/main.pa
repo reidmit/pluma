@@ -1,8 +1,8 @@
 # `view.styled-when rule cond` applies a rule's hashed class reactively. Several
 # class contributions on one node (a base `styled` + any `styled-when`s) merge
 # into one `class`; `view.to-string` evaluates each condition once.
-use std.css
-use std.view
+use std/css
+use std/view
 
 def base :: css.ruleset = css.rule [css.padding (css.rem 1.0)]
 

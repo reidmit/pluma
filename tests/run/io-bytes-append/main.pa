@@ -1,5 +1,5 @@
-use std.bytes
-use std.sys.fs
+use std/bytes
+use std/sys/fs
 
 def show-write = fun r {
 	when r is ok _ {

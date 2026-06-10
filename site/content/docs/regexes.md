@@ -180,7 +180,7 @@ The literal `` `…` `` produces a value of the primitive type `regex`. Compilat
 The standard library:
 
 ```pluma
-use std.regex
+use std/regex
 
 regex.matches        :: fun regex string -> bool
 regex.find           :: fun regex string -> option regex.match
@@ -207,7 +207,7 @@ A named group that's in the pattern but didn't match in this instance — e.g. o
 Worked example — boolean matching:
 
 ```pluma
-use std.regex
+use std/regex
 
 def hello = `"hello"`
 
@@ -220,8 +220,8 @@ def main = fun {
 Worked example — extracting structure:
 
 ```pluma
-use std.regex as re
-use std.dict
+use std/regex as re
+use std/dict
 
 def pair = `<key: letter+> "=" <val: digit+>`
 
@@ -239,7 +239,7 @@ def main = fun {
 Replacement strings support `${name}` to interpolate a named capture; `$$` is a literal `$`. Splits discard the matched text:
 
 ```pluma
-use std.regex as re
+use std/regex as re
 
 def main = fun {
     print (re.replace `digit+` "n=42 m=7" "X")         # n=X m=X

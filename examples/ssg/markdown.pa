@@ -8,9 +8,9 @@
 # The public entry point is `render :: fun string -> string`, taking a
 # Markdown body and returning an HTML fragment.
 
-use std.string
-use std.bytes
-use std.list
+use std/string
+use std/bytes
+use std/list
 
 # ---------------------------------------------------------------------
 # AST

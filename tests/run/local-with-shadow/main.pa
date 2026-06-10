@@ -2,8 +2,8 @@
 # `with` shadows it within its own subtree. Each binding is restored on the way
 # out — by the `defer`'d teardown — so reads before/inside/after see default,
 # bound, shadowed, bound-again, default. Reads survive the `try` suspensions.
-use std.local
-use std.task
+use std/local
+use std/task
 
 def trace :: local string = local.new "-"
 

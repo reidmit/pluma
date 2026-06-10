@@ -37,7 +37,7 @@ is 'POST' { ... }
 A parallel surface to `std.string`:
 
 ```pluma
-use std.bytes
+use std/bytes
 
 bytes.length b              # int — byte count
 bytes.is-empty b            # bool

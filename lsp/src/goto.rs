@@ -867,9 +867,9 @@ mod tests {
 
 	#[test]
 	fn use_import_namespace() {
-		let src = "use std.math\n\ndef x = math.pi\n";
+		let src = "use std/math\n\ndef x = math.pi\n";
 		// `math` in `math.pi` jumps to the import's local name on line 0.
-		// `use std.math` — `math` starts at col 8.
+		// `use std/math` — `math` starts at col 8.
 		assert_eq!(goto(src, 2, 8), Some((0, 8)));
 	}
 
@@ -963,7 +963,7 @@ mod tests {
 	fn stdlib_value_resolves_to_baked_module() {
 		// `list.reverse` resolves into the baked `std.list` source — no file
 		// on disk, no materialization (resolve is pure).
-		let main = "use std.list\n\ndef x = list.reverse [1]\n";
+		let main = "use std/list\n\ndef x = list.reverse [1]\n";
 		// `reverse` in `list.reverse` is at line 2, col 13.
 		match resolve(main.as_bytes(), &PathBuf::from("/proj/main.pa"), 2, 15) {
 			Some(Resolved::OtherModule {
@@ -997,7 +997,7 @@ mod tests {
 		let cache = std::env::temp_dir().join(format!("pluma-cache-{}", std::process::id()));
 		let _ = std::fs::remove_dir_all(&cache);
 
-		let main = "use std.list\n\ndef x = list.reverse [1]\n";
+		let main = "use std/list\n\ndef x = list.reverse [1]\n";
 		match goto_definition_in(
 			main.as_bytes(),
 			&PathBuf::from("/proj/main.pa"),

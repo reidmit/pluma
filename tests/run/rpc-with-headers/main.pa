@@ -6,10 +6,10 @@
 # scopes merge with the inner key winning; and once the scope ends the header is
 # gone again. The header travels through a task-local, so it survives the `try`
 # inside the call without threading through any signature.
-use std.dict
-use std.rpc
-use std.string
-use std.task
+use std/dict
+use std/rpc
+use std/string
+use std/task
 
 # Records the headers of the most recent call; echoes the body back unchanged.
 def captured :: ref (dict string string) = ref.new (dict.empty ())

@@ -10,9 +10,9 @@
 #     print (terminal.bold-green "passed")
 #     print (terminal.styled [1, 31] "bold red")
 
-use std.bytes
-use std.list
-use std.string
+use std/bytes
+use std/list
+use std/string
 
 # ESC (0x1b) as a one-character string. Built from a byte since string literals
 # don't carry a `\x` escape; `build`/`to-string` for code 27 never fails.

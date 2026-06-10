@@ -7,10 +7,10 @@
 #
 # then open http://localhost:8000/ .
 
-use std.signal
-use std.view
-use std.web.dom
-use std.web.render
+use std/signal
+use std/view
+use std/web/dom
+use std/web/render
 
 def counter :: fun int -> view = fun start {
 	let n = signal.new start

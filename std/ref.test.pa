@@ -1,5 +1,5 @@
-use std.assert
-use std.test
+use std/assert
+use std/test
 
 # `ref` is auto-imported in every module — no `use std.ref` needed.
 

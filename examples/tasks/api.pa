@@ -8,9 +8,9 @@
 # server process). On the client these refs still exist but are dead: the handler
 # bodies are replaced by transport stubs, so nothing reads them.
 
-use std.list
-use std.ref
-use std.task
+use std/list
+use std/ref
+use std/task
 
 # A task record. Records cross the RPC wire by value — exercises the wire codec for
 # compound types (record-of-{int,string,bool} and list-of-record).

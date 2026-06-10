@@ -1,4 +1,4 @@
-use std.list # list helpers
+use std/list # list helpers
 
 # A leading comment stays on its own line above the def.
 def xs = [1, 2, 3] # and a trailing one stays inline

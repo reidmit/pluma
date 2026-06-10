@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 def main = fun {
 	# head / tail return option

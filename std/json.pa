@@ -8,11 +8,11 @@
 # to a float, which would lose precision on large whole numbers. The
 # `get-number` helper smooths over the distinction when you don't care.
 
-use std.bytes
-use std.dict
-use std.list
-use std.math
-use std.string
+use std/bytes
+use std/dict
+use std/list
+use std/math
+use std/string
 
 # A parsed JSON value. JSON has a handful of shapes -- null, a boolean,
 # a number, a string, an array, or an object -- and a `value` is exactly

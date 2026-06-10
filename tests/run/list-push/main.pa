@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 # `list.push` grows an empty list in place (amortized O(1)); after the grows
 # the backing array's capacity exceeds the logical length, so every list op

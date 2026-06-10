@@ -1,4 +1,4 @@
-use std.dict
+use std/dict
 
 # A dict is an immutable value: insert/remove return a new dict and leave
 # the original untouched, so two bindings never interfere (the opposite of a

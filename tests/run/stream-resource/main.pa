@@ -3,8 +3,8 @@
 # `take`), faulted (a producer failure), and cancelled (a `with-timeout` deadline
 # fires mid-consumption). The cancelled close rides the awaited-`defer` shielded
 # teardown; it runs even as the consuming task is being torn down.
-use std.stream
-use std.task
+use std/stream
+use std/task
 
 # A fake resource over 0..limit-1 with a mutable cursor. It prints open/close so
 # the lifecycle is observable; `fail-at` makes `next` fault at that index.

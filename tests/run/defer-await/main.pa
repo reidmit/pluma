@@ -6,8 +6,8 @@
 #   3. it also runs on the `try`-failure path (here recovered with `attempt`), and
 #   4. a task-local bound around the work is readable inside the async cleanup
 #      (the cleanup drive inherits the binding — capture-at-drive).
-use std.local
-use std.task
+use std/local
+use std/task
 
 def tag :: local string = local.new "-"
 

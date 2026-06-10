@@ -17,10 +17,10 @@
 #
 # Everything here is pure data and total functions, so you can build (and even render) SQL
 # anywhere -- you just need `std.sys.db` to actually run it.
-use std.dict
-use std.list
-use std.math
-use std.string
+use std/dict
+use std/list
+use std/math
+use std/string
 
 # --- the boundary: SQLite's five storage classes -------------------------------
 

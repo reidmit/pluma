@@ -2,7 +2,7 @@
 # program `is_async`, but `main` is sync — it returns `nothing`, not a task. The
 # generated entry wrapper checks the result's runtime tag and only drives it when
 # it's actually a `$task`, so this exits cleanly with no `task.return ()` ceremony.
-use std.local
+use std/local
 
 def color :: local string = local.new "blue"
 

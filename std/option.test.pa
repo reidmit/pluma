@@ -1,6 +1,6 @@
-use std.assert
-use std.option as opt
-use std.test
+use std/assert
+use std/option as opt
+use std/test
 
 # Helpers that wrap an int or return none, so `then` has something
 # to do.

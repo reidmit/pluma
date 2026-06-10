@@ -11,7 +11,7 @@
 # `authorization` header or a cookie the transport attaches); the server
 # derives and validates the authenticated user with a server-only query.
 
-use std.dict
+use std/dict
 
 # A fresh request with no extra metadata. The common authenticated call
 # needs nothing more -- the transport attaches cookies on its own.

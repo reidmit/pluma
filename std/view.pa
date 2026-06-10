@@ -24,11 +24,11 @@
 # `std.web.dom`), so `std.view` builds on the server profile too -- the only DOM
 # the server ever needs is the handler *type*, never the DOM itself.
 
-use std.css
-use std.event
-use std.list
-use std.signal
-use std.string
+use std/css
+use std/event
+use std/list
+use std/signal
+use std/string
 
 # An attribute, property, reactive attribute, or event handler on an element.
 # `static`/`dynamic` set HTML attributes; `prop-str`/`prop-bool` set live DOM

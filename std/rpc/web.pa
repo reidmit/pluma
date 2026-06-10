@@ -5,10 +5,10 @@
 # typed `rpc-error`. The build auto-installs this on a web client, so application
 # code configures nothing. This module imports `std.web.*`, so it only enters a web
 # build (the neutral `std.rpc` never imports a target module).
-use std.rpc
-use std.stream
-use std.task
-use std.web.fetch
+use std/rpc
+use std/stream
+use std/task
+use std/web/fetch
 
 # POST the encoded body and translate the reply: 200 → bytes; any other status →
 # the matching typed `rpc-error` (`rpc.status-error`); a transport-level failure →

@@ -5,7 +5,7 @@ expression: once
 # The formatter preserves the surface the user wrote: bindingless `try Expr`
 # stays bindingless, and an explicit `try _ = Expr` keeps its wildcard binding —
 # the two equivalent forms are not canonicalized into one another.
-use std.task
+use std/task
 
 def steps :: fun int -> (result int string) = fun n {
 	if n > 0 {

@@ -2,7 +2,7 @@
 source: tests/format.rs
 expression: once
 ---
-use std.list
+use std/list
 
 # A `fun` literal in argument position needs no wrapping parens: its `{...}`
 # body delimits where the lambda ends, so the formatter strips them. The

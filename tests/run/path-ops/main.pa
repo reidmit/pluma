@@ -2,8 +2,8 @@
 # find-up roundtrip over a real directory tree to exercise the project-root walk (the
 # relative result keeps the snapshot stable; project-root itself starts from the absolute
 # cwd, so it's exercised by hand, not here).
-use std.path
-use std.sys.fs
+use std/path
+use std/sys/fs
 
 def main = fun {
 	# join / join-all

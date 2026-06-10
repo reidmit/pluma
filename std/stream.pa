@@ -26,7 +26,7 @@
 # `take-while`), not breaking a loop: the bound terminates the upstream and its
 # release still runs. The raw `next` is the escape hatch for hand-looping, and
 # then teardown is yours to run.
-use std.task
+use std/task
 
 # A pull-based stream of `a`s. Opaque: make one with `from-seed` / `from-resource`
 # and consume it with `for-each` / `fold` / `drain`.

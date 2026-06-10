@@ -36,7 +36,7 @@ fn run(src: &str, hmr: bool) -> String {
 // A `using css { ... }` block, a bare `css.rule`, and a `css.compose` — the three
 // shapes the wrapper recognizes — each printing its `class-of`.
 const SRC: &str = r##"
-use std.css
+use std/css
 
 def card :: css.ruleset = using css {
 	.rule [

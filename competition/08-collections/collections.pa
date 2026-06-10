@@ -1,7 +1,7 @@
 # Functional collection pipeline: range → map → filter → fold, materializing
 # each intermediate list.
 
-use std.list
+use std/list
 
 def main = fun {
 	let nums = list.range 1 1000001

@@ -15,11 +15,11 @@
 #
 # Values cross to the host as a small length-prefixed binary blob and rows come back the
 # same way; the codec here mirrors the host side (`host/src/db.rs`).
-use std.bytes
-use std.list
-use std.sql
-use std.string
-use std.task
+use std/bytes
+use std/list
+use std/sql
+use std/string
+use std/task
 
 # A handle to an open database. Opaque -- you get one from `db.open` and pass it to the
 # runners; the wrapped int is the host-side connection id.

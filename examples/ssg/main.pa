@@ -7,10 +7,10 @@
 # styled page template, and writes the result to the output directory.
 # An index page linking every document is generated too.
 
-use std.list
-use std.string
-use std.sys.fs
-use std.sys.process
+use std/list
+use std/string
+use std/sys/fs
+use std/sys/process
 use markdown
 use page
 

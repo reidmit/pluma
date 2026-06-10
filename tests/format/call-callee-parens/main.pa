@@ -1,4 +1,4 @@
-use std.ref
+use std/ref
 
 # The callee of a call is uncurried application's head, which the parser
 # requires to be a primary. When the callee is itself a call — e.g. invoking

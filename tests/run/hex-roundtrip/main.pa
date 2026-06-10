@@ -1,4 +1,4 @@
-use std.hex
+use std/hex
 
 def show = fun r {
 	when r is ok b {

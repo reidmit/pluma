@@ -22,15 +22,15 @@
 # so an ancestor unmount tears the dynamic content down too). v1 uses a wrapper
 # host rather than Solid-style comment anchors -- a later refinement.
 
-use std.css
-use std.dict
-use std.hex
-use std.list
-use std.signal
-use std.string
-use std.task
-use std.view
-use std.web.dom
+use std/css
+use std/dict
+use std/hex
+use std/list
+use std/signal
+use std/string
+use std/task
+use std/view
+use std/web/dom
 
 # Build the real DOM node for a view, wiring each reactive part to an effect.
 def build :: fun view -> dom.node = fun v {

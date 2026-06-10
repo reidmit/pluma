@@ -2,8 +2,8 @@
 # `render.hydrate` walks `ui.page` alongside the existing DOM, attaching listeners
 # and reactive effects to the server's nodes instead of rebuilding them.
 
-use std.web.dom
-use std.web.render
+use std/web/dom
+use std/web/render
 use ui
 
 def main = fun {

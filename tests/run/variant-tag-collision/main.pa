@@ -5,7 +5,7 @@
 # tag from the subject's enum type, so the emitter compares discriminants
 # directly and never confuses the two.
 
-use std.task
+use std/task
 
 enum status {
 	idle

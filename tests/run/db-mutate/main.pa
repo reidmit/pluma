@@ -3,10 +3,10 @@
 # Exercises: an update that changes a subset (count + persisted effect), a delete of a subset
 # (count + the rows are gone), and the schema validation rejecting an unknown column before
 # SQLite. In-memory database; reads the results back through the typed pipeline.
-use std.list
-use std.sql
-use std.task
-use std.sys.db
+use std/list
+use std/sql
+use std/task
+use std/sys/db
 
 alias todo {id :: int, title :: string, done :: bool}
 

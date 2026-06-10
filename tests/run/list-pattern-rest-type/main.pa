@@ -1,7 +1,7 @@
 # `[...rest]` and `[a, ...rest]` rest bindings preserve the element type.
 # `let [...all]` works in `let` because there are no required items.
 
-use std.list
+use std/list
 
 def main = fun {
 	# `let [...all] = xs` is irrefutable

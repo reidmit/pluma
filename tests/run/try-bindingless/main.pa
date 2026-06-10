@@ -3,7 +3,7 @@
 # the payload. Exercised here against both the task carrier (in `main`) and the
 # result carrier (in `steps`), interleaved with binding `try`s to confirm the
 # two surfaces compose in one block.
-use std.task
+use std/task
 
 def beat :: fun string -> (task int) = fun label {
 	print label

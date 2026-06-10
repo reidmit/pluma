@@ -1,7 +1,7 @@
 # Structural, order-independent dict equality: same key/value set compares
 # equal regardless of insertion order; value/key/size differences do not.
 
-use std.dict
+use std/dict
 
 def main = fun {
 	let a = dict.from-entries [("x", 1), ("y", 2)]

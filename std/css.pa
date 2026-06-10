@@ -18,12 +18,12 @@
 # Pair it with `std.view`'s `style-of` (a declaration list as a `style` attribute)
 # and `classes` (a conditional class list); both lower to plain string attributes.
 
-use std.bit
-use std.bytes
-use std.dict
-use std.list
-use std.math
-use std.string
+use std/bit
+use std/bytes
+use std/dict
+use std/list
+use std/math
+use std/string
 
 # A CSS color value. Build with `hex`/`rgb`/`rgba`/`named` rather than naming the
 # constructors; public (not opaque) only so it can appear in signatures. (Named

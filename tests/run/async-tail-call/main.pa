@@ -5,7 +5,7 @@
 # the result is wrapped in a `ready`/`pending` variant, so the `return_call` skipped
 # the wrapping and handed the callee's raw task to the driver (which trapped casting
 # it). The CPS pass now downgrades tail calls in poll fns to ordinary calls.
-use std.task
+use std/task
 
 def helper :: fun int -> task int = fun n {
 	task.return (n * 10)

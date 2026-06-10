@@ -22,7 +22,7 @@ Pluma's syntax has some unique quirks. When in doubt, mirror a fixture in `tests
 - **`??` unwraps an `option`/`result` to a default:** `(dict.lookup m k) ?? 0`. Lazy, right-associative; the recovering dual of `try` (which propagates failure).
 - **String interpolation `"$(expr)"`** needs explicit `to-string` for non-strings: `"n = $(to-string n)"`.
 - **`def` is top-level, `let` is local;** `let` patterns must be irrefutable. Top-level defs are **private by default** — prefix `public` to export (`opaque` exports an enum's type but hides its constructors).
-- **Imports: `use core.foo`.** `ref`/`option`/`result` are auto-imported; `std.task` is **not** — `use std.task` to name any `task.*` function.
+- **Imports: `use core/foo`** (path segments separated by `/`, not `.`). `ref`/`option`/`result` are auto-imported; `std.task` is **not** — `use std/task` to name any `task.*` function.
 - **Tests are a library, not syntax.** A `*.test.pa` file exports `def tests :: test.suite = [ test.case "name" (fun { ... }), ... ]` built from `std.test`, with assertions from `std.assert`. `pluma test` discovers and runs them under V8.
 
 Also in the surface (see fixtures/docs): list & record spread (`[1, ...xs]`, `{ ...base, field: v }`), duration literals (`2m20s`), enums, `defer` cleanup, async (`task`/`scope`/`try`, no `async`/`await` keyword), and arithmetic overloaded over int/float with **no implicit promotion** (`2 + 3.5` is a type error).

@@ -1,7 +1,7 @@
 # to-string / print / interpolation over a `dict` — `{k: v, ...}` in
 # insertion order, keys and values formatted recursively.
 
-use std.dict
+use std/dict
 
 def main = fun {
 	let m = dict.from-entries [("a", 1), ("b", 2), ("c", 3)]

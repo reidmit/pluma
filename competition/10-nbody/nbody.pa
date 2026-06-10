@@ -5,8 +5,8 @@
 # (IEEE-754 +,-,*,/,sqrt are identical everywhere; floor rounds toward -inf
 # in all of them).
 
-use std.list
-use std.math
+use std/list
+use std/math
 
 def dt = 0.01
 

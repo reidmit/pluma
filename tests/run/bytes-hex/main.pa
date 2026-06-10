@@ -2,8 +2,8 @@
 # back, repeatedly. Exercises the bytes value substrate and the pure-Pluma hex
 # codec (codepoint walks, byte building).
 
-use std.bytes
-use std.hex
+use std/bytes
+use std/hex
 
 def loop = fun data n acc {
 	when n is 0 {

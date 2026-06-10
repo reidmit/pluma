@@ -1,8 +1,8 @@
 # JSON stress: parse a small document and stringify it back, repeatedly.
 # Exercises the std.json recursive-descent parser and serializer.
 
-use std.json
-use std.string
+use std/json
+use std/string
 
 def loop = fun doc n acc {
 	when n is 0 {

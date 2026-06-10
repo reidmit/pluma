@@ -3,5 +3,5 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Unexpected token (keyword `let`). Expected an identifier.
-> 4 | use std.let
+> 4 | use std/let
               ^^^

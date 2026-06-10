@@ -1,5 +1,5 @@
-use a.b.utils
-use c.d.utils as utils2
+use a/b/utils
+use c/d/utils as utils2
 
 def first = utils.value
 

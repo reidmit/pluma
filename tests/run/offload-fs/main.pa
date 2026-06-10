@@ -4,8 +4,8 @@
 # read roundtrip exercises the bytes-through-scratch offload path end to end, `stat` and
 # `is-file` the metadata/query path, and a read of a missing file the error path (the OS
 # message arrives on the `err` side).
-use std.task
-use std.sys.fs
+use std/task
+use std/sys/fs
 
 def main = fun {
 	let path = "target/pluma-offload-fs-test.txt"

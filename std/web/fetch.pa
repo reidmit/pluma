@@ -18,12 +18,12 @@
 # `http.fetch`'s so a generated RPC stub reads `.status` and `.body` the same way
 # on both targets.
 
-use std.dict
-use std.hex
-use std.list
-use std.stream
-use std.string
-use std.task
+use std/dict
+use std/hex
+use std/list
+use std/stream
+use std/string
+use std/task
 
 # A reply from the server: the HTTP status code and the raw response body.
 # (Same structural shape as `http.response`; headers aren't surfaced -- an

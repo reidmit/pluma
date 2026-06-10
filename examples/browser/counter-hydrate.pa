@@ -8,10 +8,10 @@
 # button becomes live (clicking it updates the count) without a second tree being
 # created. The app state lives inside `page` (the root thunk), as with `mount`.
 
-use std.signal
-use std.view
-use std.web.dom
-use std.web.render
+use std/signal
+use std/view
+use std/web/dom
+use std/web/render
 
 public def page :: fun nothing -> view = fun {
 	let n = signal.new 0

@@ -9,12 +9,12 @@
 # `api` is the contract: on the server its `remote def`s are the real handlers, on
 # the client they are transport stubs — same call sites, the artifact decides.
 
-use std.css
-use std.list
-use std.signal
-use std.stream
-use std.task
-use std.view
+use std/css
+use std/list
+use std/signal
+use std/stream
+use std/task
+use std/view
 use api
 
 # --- styling (notes/CSS.md tiers 2/3) ---------------------------------------

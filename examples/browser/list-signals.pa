@@ -6,11 +6,11 @@
 #     pluma build --web examples/browser/list-signals.pa -o /tmp/list-signals
 #     python3 -m http.server --directory /tmp/list-signals
 
-use std.list
-use std.signal
-use std.view
-use std.web.dom
-use std.web.render
+use std/list
+use std/signal
+use std/view
+use std/web/dom
+use std/web/render
 
 # A row with its own local counter, keyed by `id`.
 def row :: fun int -> view = fun id {

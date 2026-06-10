@@ -24,7 +24,7 @@ pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 	// (`try`/`??` over a task, `scope`, `defer`, duration literals) needs no
 	// import — it's type-driven and lowers to fully-qualified globals — but
 	// every *named* task function (`task.return`, `task.sleep`, `task.both`,
-	// the kernel behind `s.spawn`/`s.next`, …) lives behind `use std.task`.
+	// the kernel behind `s.spawn`/`s.next`, …) lives behind `use std/task`.
 	// Since you can't build a task without `task.return`/`task.fail`, async
 	// code imports `std.task` anyway; keeping it explicit avoids pulling the
 	// whole combinator surface into every module's namespace.
@@ -58,7 +58,7 @@ pub struct Compiler {
 	// Pre-registered native modules (stdlib). Resolved without parsing any
 	// `.pa` file — the compiler hands the analyzer their exports directly.
 	pub native_modules: HashMap<String, ModuleExports>,
-	// The deploy target whose tier gates module availability (a `use std.web.dom`
+	// The deploy target whose tier gates module availability (a `use std/web/dom`
 	// on the `sys` target is an error). `None` is the ungated frontend/analysis
 	// mode — nothing is gated — so existing flows are unchanged.
 	pub target: Option<Target>,
@@ -404,8 +404,8 @@ impl Compiler {
 
 		// Collect (fully-qualified-name, local-namespace-name, alias-range,
 		// use-statement-range) for each import. Local namespace name is the alias
-		// if present, otherwise the last dotted segment — so `use sub.utils` binds
-		// `utils` and `use sub.utils as u` binds `u`. The use-statement range spans
+		// if present, otherwise the last dotted segment — so `use sub/utils` binds
+		// `utils` and `use sub/utils as u` binds `u`. The use-statement range spans
 		// the whole `use …` line (a better caret target for platform gating than
 		// the alias).
 		let imports: Vec<(String, String, Range, Range)> = self
@@ -701,14 +701,14 @@ mod platform_gating_tests {
 
 	#[test]
 	fn sys_io_allowed_ungated_and_on_sys() {
-		let src = "use std.sys.io\n\ndef main = fun { io.print \"hi\" }\n";
+		let src = "use std/sys/io\n\ndef main = fun { io.print \"hi\" }\n";
 		assert!(check_with(None, src).is_empty());
 		assert!(check_with(Some(Target::Sys), src).is_empty());
 	}
 
 	#[test]
 	fn sys_io_rejected_on_web() {
-		let src = "use std.sys.io\n\ndef main = fun { io.print \"hi\" }\n";
+		let src = "use std/sys/io\n\ndef main = fun { io.print \"hi\" }\n";
 		let diags = check_with(Some(Target::Web), src);
 		assert!(
 			diags
@@ -721,7 +721,7 @@ mod platform_gating_tests {
 
 	#[test]
 	fn ungated_module_available_everywhere() {
-		let src = "use std.list\n\ndef main = fun { list.length [1] }\n";
+		let src = "use std/list\n\ndef main = fun { list.length [1] }\n";
 		for t in [None, Some(Target::Sys), Some(Target::Web)] {
 			assert!(
 				check_with(t, src).is_empty(),
@@ -749,7 +749,7 @@ mod platform_gating_tests {
 		// `api` touches std.sys.io only inside a `remote def` body — a server
 		// island. A web client reaching `api`'s non-remote surface must not be
 		// barred by that server-only import (it never enters the client closure).
-		let api = "use std.task\nuse std.request\nuse std.sys.io\n\n\
+		let api = "use std/task\nuse std/request\nuse std/sys/io\n\n\
 			public def label :: fun nothing -> string = fun {\n\t\"api\"\n}\n\n\
 			public remote def shout :: fun request string -> task string = fun _req msg {\n\
 			\tlet _ = io.print msg\n\ttask.return msg\n}\n";
@@ -766,7 +766,7 @@ mod platform_gating_tests {
 	fn client_reachable_sys_import_is_rejected_on_web() {
 		// The control: when std.sys.io is reached through ordinary (non-remote)
 		// code across a module boundary, it is correctly barred on web.
-		let api = "use std.sys.io\n\n\
+		let api = "use std/sys/io\n\n\
 			public def announce :: fun nothing -> nothing = fun {\n\tio.print \"hi\"\n}\n";
 		let main = "use api\n\ndef main = fun {\n\tapi.announce ()\n}\n";
 		let diags = check_multi(Some(Target::Web), &[("api", api), ("main", main)], "main");
@@ -799,8 +799,8 @@ mod platform_gating_tests {
 	fn fullstack_gate_allows_each_tier_on_its_own_side() {
 		// The server half reaches `std.sys.*`, the client half `std.web.*` — each
 		// legal on its own artifact. A single gating profile couldn't admit both.
-		let server = "use std.sys.io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
-		let client = "use std.web.dom\n\ndef main = fun {\n\tlet _ = dom.body ()\n\t()\n}\n";
+		let server = "use std/sys/io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
+		let client = "use std/web/dom\n\ndef main = fun {\n\tlet _ = dom.body ()\n\t()\n}\n";
 		let diags = gate_fullstack_multi(
 			&[("server", server), ("client", client)],
 			"server",
@@ -817,8 +817,8 @@ mod platform_gating_tests {
 	fn fullstack_gate_bars_a_sys_leak_into_the_client() {
 		// The same `std.sys.io` import: fine reached from the server root, barred
 		// from the client root — the per-artifact split in action.
-		let server = "use std.sys.io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
-		let client = "use std.sys.io\n\ndef main = fun {\n\tio.print \"c\"\n}\n";
+		let server = "use std/sys/io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
+		let client = "use std/sys/io\n\ndef main = fun {\n\tio.print \"c\"\n}\n";
 		let diags = gate_fullstack_multi(
 			&[("server", server), ("client", client)],
 			"server",

@@ -35,8 +35,8 @@
 # writes back an unchanged value settles rather than looping. (A cycle that writes a
 # genuinely *changing* value each pass still loops -- that's a real cycle.)
 
-use std.dict
-use std.list
+use std/dict
+use std/list
 
 # An observer is something that runs and tracks what it reads: an effect or a
 # computed. Monomorphic (it never carries the observed value's type) so it can

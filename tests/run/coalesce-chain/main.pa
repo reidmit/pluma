@@ -2,7 +2,7 @@
 # and the first non-empty option wins. The default is lazy — evaluated
 # only on the failure arm.
 
-use std.dict
+use std/dict
 
 # Records whether it ran, so we can prove laziness.
 def loud = fun {

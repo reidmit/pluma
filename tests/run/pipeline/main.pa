@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 def double = fun n {
 	n * 2

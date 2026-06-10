@@ -1,4 +1,4 @@
-use std.math
+use std/math
 
 def main = fun {
 	print (math.to-float 5)

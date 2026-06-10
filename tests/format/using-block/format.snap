@@ -2,7 +2,7 @@
 source: tests/format.rs
 expression: once
 ---
-use std.list
+use std/list
 
 # `using <namespace> { ... }` and its leading-dot `.member` accesses round-trip
 # through the formatter unchanged; a line that starts with `.` is its own

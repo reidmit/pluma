@@ -153,7 +153,15 @@ impl<'a> Formatter<'a> {
 	// --- use ----------------------------------------------------------
 
 	fn format_use(&self, u: &UseNode) -> Doc {
-		let mut parts: Vec<Doc> = vec![text("use "), text(u.module_name())];
+		// Surface syntax separates path segments with `/` (the internal
+		// module name from `module_name()` joins them with `.`).
+		let path = u
+			.path
+			.iter()
+			.map(|p| p.name.clone())
+			.collect::<Vec<_>>()
+			.join("/");
+		let mut parts: Vec<Doc> = vec![text("use "), text(path)];
 		if let Some(alias) = &u.alias {
 			parts.push(text(" as "));
 			parts.push(text(alias.name.clone()));

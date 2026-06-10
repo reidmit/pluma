@@ -1,4 +1,4 @@
-use std.json
+use std/json
 
 # Parse a handful of primitives, then a small object. Verifies the
 # int/float split and stringify round-trip preserves insertion order.

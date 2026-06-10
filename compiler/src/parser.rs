@@ -230,7 +230,10 @@ impl<'a> Parser<'a> {
 		let mut path = Vec::new();
 		path.push(self.expect_identifier()?);
 
-		while matches!(self.current_token, Some(Token::Dot(..))) {
+		// Module path segments are separated by `/` (e.g. `use sub/utils`).
+		// The internal module name still joins segments with `.` — only the
+		// surface separator is a slash.
+		while matches!(self.current_token, Some(Token::ForwardSlash(..))) {
 			self.advance();
 			path.push(self.expect_identifier()?);
 		}

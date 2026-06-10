@@ -1,8 +1,8 @@
 # A binding set by `local.with` survives an arbitrary chain of `try` suspensions
 # inside the body: the value is re-read correctly after each `task.sleep`, since
 # it rides the fiber across every park/resume.
-use std.local
-use std.task
+use std/local
+use std/task
 
 def stage :: local string = local.new "?"
 

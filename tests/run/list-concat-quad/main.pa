@@ -1,7 +1,7 @@
 # The O(n^2) accumulate-by-concat anti-pattern in isolation: each step copies
 # the whole accumulator. This is what map-filter-fold's `range` does.
 
-use std.list
+use std/list
 
 def build-up = fun n acc {
 	when n is 0 {

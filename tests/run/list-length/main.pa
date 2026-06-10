@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 def main = fun {
 	print (list.length [1, 2, 3])

@@ -3,12 +3,12 @@
 # declaration joining -- plus the `std.view` integration helpers (`style-of`,
 # `classes`) via `view.to-string`. All pure, so they run headless under V8.
 
-use std.assert
-use std.css
-use std.list
-use std.string
-use std.test
-use std.view
+use std/assert
+use std/css
+use std/list
+use std/string
+use std/test
+use std/view
 
 def tests :: test.suite = [
 	test.case "hex color keeps an existing leading hash" fun {

@@ -59,7 +59,7 @@ let list-across-lines = [
 Mutable, insertion-ordered hash dicts (key/value tables). `insert` and `remove` change the dict in place (and hand it back, for chaining), so two bindings to one dict are two views of the same table — like a `ref`. There's no dict literal syntax — construct one through `std.dict`:
 
 ```pluma
-use std.dict
+use std/dict
 
 let m = dict.empty ()
 let _ = dict.insert m "alice" 30
@@ -76,7 +76,7 @@ See `std.dict` for the full surface: `empty`, `insert`, `lookup`, `remove`, `con
 
 ## Refs
 
-A `ref` is a mutable cell — the simplest way to hold state that outlives a single expression. Most values are immutable; the deliberate exceptions are `ref`, a `dict` (which `insert`/`remove` mutate in place), and the in-place `list.set`/`list.push`. The `ref` module is auto-imported in every module; you don't write `use std.ref`.
+A `ref` is a mutable cell — the simplest way to hold state that outlives a single expression. Most values are immutable; the deliberate exceptions are `ref`, a `dict` (which `insert`/`remove` mutate in place), and the in-place `list.set`/`list.push`. The `ref` module is auto-imported in every module; you don't write `use std/ref`.
 
 ```pluma
 let counter = ref.new 0

@@ -5,7 +5,7 @@
 # named prelude enum, not by scanning every enum for the variant name. Before the fix, this
 # program failed to compile with "`compare` needs the `ordering` enum" because the lt/eq/gt
 # scan was ambiguous across `ordering` and `token`.
-use std.dict
+use std/dict
 
 # `eq`/`gt`/`lt` at tags 1/2/3 — the prelude `ordering` has lt/eq/gt at 0/1/2.
 enum token {

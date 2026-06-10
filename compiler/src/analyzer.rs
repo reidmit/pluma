@@ -61,10 +61,10 @@ pub struct Analyzer<'compiler> {
 	// here only to produce a precise "qualify it" diagnostic (E0135).
 	variant_constructors: HashMap<String, Vec<(String, String)>>,
 	// Imports: local namespace name (e.g. `math` from `use math` or `utils`
-	// from `use sub.utils`) -> that module's full exports.
+	// from `use sub/utils`) -> that module's full exports.
 	imports: HashMap<String, ModuleExports>,
 	// The fully-qualified name of each imported module, keyed by the local
-	// namespace name. `use a.b.utils as u` produces `u -> a.b.utils`.
+	// namespace name. `use a/b/utils as u` produces `u -> a.b.utils`.
 	import_qualified: HashMap<String, String>,
 	// `pluma dev` hot-reload mode: redirect `app.sandbox`/`app.element` to their
 	// model-persisting `-hmr` variants (see `constrain_expr`'s namespace access).
@@ -643,7 +643,7 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 			// Eponymous-type rule: when an enum is its module's principal type
 			// — named like the module's last path segment — bind it bare under
-			// the local import name, so `use geometry.point` lets you write
+			// the local import name, so `use geometry/point` lets you write
 			// `point` in a type position instead of `point.point`. Variant and
 			// method access (`point.cartesian`, `point.distance`) still go
 			// through the module via the existing module/enum overlap path. A
@@ -3605,7 +3605,7 @@ impl<'compiler> Analyzer<'compiler> {
 				// enum, fall through to the local variant-access case below.
 				// This is the general module/type-name overlap: any name that's
 				// both an imported module and an in-scope enum — the eponymous
-				// type of an imported module (`use shapes.circle` → `circle`),
+				// type of an imported module (`use shapes/circle` → `circle`),
 				// or the auto-imported `option`/`result` modules over the prelude
 				// `option`/`result` enums.
 				if let ExprKind::Identifier(ident) = &receiver.kind {
@@ -4492,7 +4492,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// in nullary position (`when … is x`) IS a valid binding — treat it as one rather
 		// than reach across imports to reinterpret it as some unrelated enum's nullary
 		// variant. That import-wide reinterpretation was the wart where a stray
-		// `use std.sys.fs` made `is ok dir` resolve `dir` to `file-kind.dir` instead of
+		// `use std/sys/fs` made `is ok dir` resolve `dir` to `file-kind.dir` instead of
 		// binding it. Matching a user variant in pattern position is done by qualifying
 		// (`color.red`) or, when the subject type is a known enum, via the branch above.
 		if nullary_only {

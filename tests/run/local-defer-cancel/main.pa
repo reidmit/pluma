@@ -2,8 +2,8 @@
 # under `local.with` parks on a long sleep; the scope cancels it, and the child's
 # `defer` — which runs on the cancellation path — reads `local.get` and still sees
 # the value bound when it was spawned. The child's own work never completes.
-use std.local
-use std.task
+use std/local
+use std/task
 
 def label :: local string = local.new "?"
 

@@ -4,13 +4,13 @@
 # end-to-end over the wire — a matching GET, a matching POST, and a path with no
 # route (the 404 fallback). The in-process matching detail lives in
 # `router-dispatch`; this is the integration check.
-use std.bytes
-use std.list
-use std.router
-use std.string
-use std.task
-use std.sys.http
-use std.sys.net
+use std/bytes
+use std/list
+use std/router
+use std/string
+use std/task
+use std/sys/http
+use std/sys/net
 
 # Read from the connection until the server closes it (Connection: close).
 def drain :: fun net.connection bytes -> task (result bytes string) = fun conn acc {

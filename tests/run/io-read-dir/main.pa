@@ -1,6 +1,6 @@
-use std.list
-use std.string
-use std.sys.fs
+use std/list
+use std/string
+use std/sys/fs
 
 # Write a couple of temp files into `target/`, list the directory back
 # (filtered to our prefix so other build artifacts don't perturb the

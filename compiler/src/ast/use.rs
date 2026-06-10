@@ -3,7 +3,8 @@ use crate::location::Range;
 
 pub struct UseNode {
 	pub range: Range,
-	// dotted module path; e.g. `use sub.utils` produces [sub, utils]
+	// module path segments; e.g. `use sub/utils` produces [sub, utils].
+	// `module_name()` joins them with `.` for the internal name.
 	pub path: Vec<IdentifierNode>,
 	// optional `as <ident>` alias; if None, the local name is the last
 	// path segment.

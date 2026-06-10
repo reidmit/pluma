@@ -1,4 +1,4 @@
-use std.list
+use std/list
 
 def main = fun {
 	list.each [1, 2, 3] fun n {

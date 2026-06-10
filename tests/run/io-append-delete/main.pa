@@ -1,5 +1,5 @@
-use std.sys.fs
-use std.sys.io
+use std/sys/fs
+use std/sys/io
 
 def show-result = fun r {
 	when r is ok _ {

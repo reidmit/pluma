@@ -3,8 +3,8 @@
 # `local.with` bindings; each sees its own value even though both run after the
 # `with` blocks have exited, and the parent still sees the default. This is the
 # property a shared `ref` can't give (siblings would clobber one cell).
-use std.local
-use std.task
+use std/local
+use std/task
 
 def tenant :: local string = local.new "none"
 

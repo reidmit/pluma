@@ -1,7 +1,7 @@
 # Sort stress: build a scrambled list with a cheap index hash, then sort it
 # with the pure-Pluma stable merge sort via `ord.compare`.
 
-use std.list
+use std/list
 
 def main = fun {
 	let xs = list.build 1000 fun i {

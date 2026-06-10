@@ -3,8 +3,8 @@
 # digits, so the text is always twice as long as the bytes it came from.
 # Output is lowercase; the decoder accepts either case.
 
-use std.bytes
-use std.string
+use std/bytes
+use std/string
 
 # Encodes bytes as a lowercase hex string -- two digits per byte.
 #

@@ -1,8 +1,8 @@
 # Type-level inference checks for `std.local`. `local.new` returns `local a`
 # with `a` from the argument; `local.get` returns the inner type; `local.with`
 # returns the body task's result type, and binds a value of the cell's type.
-use std.local
-use std.task
+use std/local
+use std/task
 
 def trace :: local string = local.new "-"
 

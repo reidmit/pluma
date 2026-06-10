@@ -5,12 +5,12 @@
 # Exercises: open, a DDL + parameterized inserts (covering all five storage classes,
 # including NULL and a binary blob), a `|`-built typed query through `db.fetch` + a decoder,
 # the raw `db.execute` escape hatch, and the error path (a bad statement → `err`).
-use std.bytes
-use std.list
-use std.sql
-use std.string
-use std.task
-use std.sys.db
+use std/bytes
+use std/list
+use std/sql
+use std/string
+use std/task
+use std/sys/db
 
 alias item {id :: int, name :: string, qty :: option int, price :: float}
 

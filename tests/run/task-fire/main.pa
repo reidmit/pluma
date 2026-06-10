@@ -1,6 +1,6 @@
 # `task.fire t f` = `spawn (map t f)`: run `t` detached, hand its result to `f`.
 # Fire two tasks into a ref, yield so the detached fibers settle, then read it.
-use std.task
+use std/task
 
 def main = fun {
 	let log = ref.new []

@@ -3,7 +3,7 @@
 # to the explicit-wildcard form across all three carriers (task here, result in
 # `compute`), so it stays exhaustiveness/type-checked and the task-carrier `try`
 # is still left intact for CPS lowering.
-use std.task
+use std/task
 
 def beat = fun {
 	try task.return 0

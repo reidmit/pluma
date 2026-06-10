@@ -4,10 +4,10 @@
 # `db.from | db.filter | db.order-by | db.run` pipeline (decoder threaded; SELECT fixed to
 # the schema columns), `db.all`, and the pre-flight schema validation (an unknown column is
 # caught before SQLite sees it). In-memory database so the fixture is hermetic.
-use std.list
-use std.sql
-use std.task
-use std.sys.db
+use std/list
+use std/sql
+use std/task
+use std/sys/db
 
 alias todo {id :: int, title :: string, done :: bool, priority :: option int}
 

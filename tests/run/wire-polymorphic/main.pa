@@ -2,7 +2,7 @@
 # the synthesized schema as a hidden dict parameter.
 # The caller resolves the concrete schema at each call site.
 
-use std.hex
+use std/hex
 
 # Constraint inferred from the `encode` use — no explicit `where`.
 def dump = fun x {

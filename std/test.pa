@@ -23,9 +23,9 @@
 # `pluma test` synthesizes the call. There is no registrar and no mutation — a
 # suite is a plain value you can build, map over, and pass around.
 
-use std.bytes
-use std.list
-use std.string
+use std/bytes
+use std/list
+use std/string
 
 # --- inlined ANSI styling --------------------------------------------------
 # `std.test` is a shared module (it runs under V8 on both the `sys` and `web`

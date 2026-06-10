@@ -13,7 +13,7 @@
 # (`task.all`, `task.race`, `task.with-timeout`, …) compose tasks that run
 # concurrently; `scope` (a keyword) is the structured-concurrency block
 # they're built on.
-use std.list
+use std/list
 
 # Lifts a plain value into a task that is already finished. `task.return
 # 5` is the task that immediately produces `5`. It's how an async function
