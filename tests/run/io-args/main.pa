@@ -1,5 +1,5 @@
-use std.sys.process
 use std.list
+use std.sys.process
 
 # `process.args` returns the program's argv as a `list string`. The snapshot harness
 # invokes fixtures with no extra arguments, so argv is empty here — exercising the

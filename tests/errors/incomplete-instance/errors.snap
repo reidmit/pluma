@@ -3,7 +3,7 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0116]: Instance for trait `greet` is missing method `bye`.
-  │
-6 │ implement greet int {
-  │ ^^^^^^^^^^^^^^^^^^^^^
-  ╰─𜱶 tests/errors/incomplete-instance/main.pa:6:1
+   │
+ 7 │ implement greet int {
+   │ ^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/errors/incomplete-instance/main.pa:7:1

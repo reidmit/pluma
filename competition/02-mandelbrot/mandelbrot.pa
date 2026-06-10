@@ -9,35 +9,35 @@ def in-set = fun zr zi cr ci n {
 	} else {
 		let zr2 = zr * zr
 		let zi2 = zi * zi
-		if (zr2 + zi2) > 4.0 is true {
+		if zr2 + zi2 > 4.0 {
 			0
 		} else {
-			in-set ((zr2 - zi2) + cr) (((2.0 * zr) * zi) + ci) cr ci (n - 1)
+			in-set (zr2 - zi2 + cr) (2.0 * zr * zi + ci) cr ci (n - 1)
 		}
 	}
 }
 
 def row = fun py px width dx dy count {
-	if px == width is true {
+	if px == width {
 		count
 	} else {
-		let cr = (0.0 - 2.0) + ((math.to-float px) * dx)
-		let ci = (0.0 - 1.25) + ((math.to-float py) * dy)
-		row py (px + 1) width dx dy (count + (in-set 0.0 0.0 cr ci 1000))
+		let cr = 0.0 - 2.0 + math.to-float px * dx
+		let ci = 0.0 - 1.25 + math.to-float py * dy
+		row py (px + 1) width dx dy (count + in-set 0.0 0.0 cr ci 1000)
 	}
 }
 
 def grid = fun py width dx dy count {
-	if py == width is true {
+	if py == width {
 		count
 	} else {
-		grid (py + 1) width dx dy (count + (row py 0 width dx dy 0))
+		grid (py + 1) width dx dy (count + row py 0 width dx dy 0)
 	}
 }
 
 def main = fun {
 	let width = 150
-	let dx = 2.5 / (math.to-float width)
-	let dy = 2.5 / (math.to-float width)
+	let dx = 2.5 / math.to-float width
+	let dy = 2.5 / math.to-float width
 	print (to-string (grid 0 width dx dy 0))
 }

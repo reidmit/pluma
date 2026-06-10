@@ -8,9 +8,7 @@ def main = fun {
 	# Outer ambient `list`; the inner `using math` makes `.abs` resolve in `math`.
 	let xs = using list {
 		.map [-2, 5, -8] fun n {
-			using math {
-				.abs n
-			}
+			using math { .abs n }
 		}
 	}
 	# `list.length` written qualified still works alongside the block above.

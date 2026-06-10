@@ -42,7 +42,6 @@ def main = fun {
 					print "tick $(to-string n)"
 					task.return ()
 				}
-
 				let boom = decode-ints (rpc.call-stream "api.boom" route-fp (wire.encode 2))
 				try outcome = task.attempt (stream.for-each boom fun n {
 					print "boom $(to-string n)"
@@ -53,7 +52,6 @@ def main = fun {
 				} is err _ {
 					print "boom: faulted as expected"
 				}
-
 				s.cancel ()
 				task.return 0
 			}

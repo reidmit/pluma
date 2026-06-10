@@ -3,16 +3,16 @@
 # A document may begin with a `---`-delimited header of `key: value`
 # lines; everything after the closing `---` is the Markdown body.
 
-use std.string
-use std.list
 use std.dict
+use std.list
+use std.string
 
 # Split a document into its metadata dict and Markdown body. With no
 # header, the metadata is empty and the body is the whole input.
 public def parse-doc = fun content {
 	let lines = string.split content "\n"
 	when lines is [first, ...rest] {
-		if string.trim first == "---" is true {
+		if string.trim first == "---" {
 			let (meta-lines, body-lines) = split-header rest
 			(parse-meta meta-lines, string.join body-lines "\n")
 		} else {
@@ -29,7 +29,7 @@ public def split-header = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if string.trim l == "---" is true {
+		if string.trim l == "---" {
 			([], rest)
 		} else {
 			let (header, body) = split-header rest

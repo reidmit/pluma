@@ -4,8 +4,8 @@
 # it to completion — in an isolated drive that the outer cancel can't interrupt —
 # and it still reads the task-local bound when the child was spawned. The child's
 # own body never resumes past the cancelled sleep.
-use std.task
 use std.local
+use std.task
 
 def tag :: local string = local.new "-"
 

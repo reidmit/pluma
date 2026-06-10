@@ -1,4 +1,4 @@
 def go = fun {
-  try x = 5
-  ok x
+	try x = 5
+	ok x
 }

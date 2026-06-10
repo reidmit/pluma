@@ -4,15 +4,23 @@
 # the mismatch.
 
 def safe-head = fun xs {
-	when xs is [first, ...] { some first } else { none }
+	when xs is [first, ...] {
+		some first
+	} else {
+		none
+	}
 }
 
 def lookup = fun id {
-	if id > 0 is true { ok [id, id + 1] } else { err "bad id" }
+	if id > 0 {
+		ok [id, id + 1]
+	} else {
+		err "bad id"
+	}
 }
 
 def go = fun id {
-	try ids = lookup id     # result (list int) string
-	try first = safe-head ids  # option int — wrong carrier
+	try ids = lookup id # result (list int) string
+	try first = safe-head ids # option int — wrong carrier
 	ok first
 }

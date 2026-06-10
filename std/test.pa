@@ -23,9 +23,9 @@
 # `pluma test` synthesizes the call. There is no registrar and no mutation — a
 # suite is a plain value you can build, map over, and pass around.
 
+use std.bytes
 use std.list
 use std.string
-use std.bytes
 
 # --- inlined ANSI styling --------------------------------------------------
 # `std.test` is a shared module (it runs under V8 on both the `sys` and `web`
@@ -44,12 +44,29 @@ def styled :: fun (list int) string -> string = fun codes s {
 	"$(esc)[$(nums)m$(s)$(esc)[0m"
 }
 
-def bold :: fun string -> string = fun s { styled [1] s }
-def dim :: fun string -> string = fun s { styled [2] s }
-def bold-red :: fun string -> string = fun s { styled [1, 31] s }
-def bold-green :: fun string -> string = fun s { styled [1, 32] s }
-def bold-yellow :: fun string -> string = fun s { styled [1, 33] s }
-def bold-dim :: fun string -> string = fun s { styled [2, 1] s }
+def bold :: fun string -> string = fun s {
+	styled [1] s
+}
+
+def dim :: fun string -> string = fun s {
+	styled [2] s
+}
+
+def bold-red :: fun string -> string = fun s {
+	styled [1, 31] s
+}
+
+def bold-green :: fun string -> string = fun s {
+	styled [1, 32] s
+}
+
+def bold-yellow :: fun string -> string = fun s {
+	styled [1, 33] s
+}
+
+def bold-dim :: fun string -> string = fun s {
+	styled [2, 1] s
+}
 
 # A node in a test tree. Opaque: build one only through the constructors below
 # (`test.case`, `test.group`, `test.skip`, `test.focus`, `test.todo`) — a suite

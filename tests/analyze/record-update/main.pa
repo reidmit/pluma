@@ -2,12 +2,12 @@
 # a polymorphic function parameter (row-polymorphic base).
 
 def with-name = fun r name {
-	{ ...r, name }
+	{...r, name}
 }
 
 def main = fun {
-	let a = { name: "Reid", age: 32 }
-	let b = { ...a, name: "Other" }
+	let a = {name: "Reid", age: 32}
+	let b = {...a, name: "Other"}
 	let c = with-name a "Third"
 	print b.name
 	print c.name

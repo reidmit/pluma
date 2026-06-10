@@ -1,2 +1,4 @@
 # Self-application forces an infinite (recursive) type.
-def main = fun x { x x }
+def main = fun x {
+	x x
+}

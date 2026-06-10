@@ -14,8 +14,8 @@
 # no byte under 128 -- so character-level work reduces to byte-level work
 # without any Unicode tables.
 
-use std.list
 use std.bytes
+use std.list
 use std.math
 
 # Reinterpret bytes as a string with no copy and no UTF-8 check -- the

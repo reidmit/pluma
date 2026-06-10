@@ -1,7 +1,7 @@
 # `manual scope` + `s.next`: spawn everything, take the first to settle, cancel
 # the losers. The 2ms sleeper wins; the loser's `defer` runs on cancellation.
-use std.task
 use std.list
+use std.task
 
 def sleeper = fun ms n {
 	try _ = task.sleep ms

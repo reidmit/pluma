@@ -15,10 +15,15 @@ enum status {
 }
 
 def describe = fun s {
-	when s is status.idle { "idle" }
-	is status.busy { "busy" }
-	is status.done { "done" }
-	is status.pending { "pending" }
+	when s is status.idle {
+		"idle"
+	} is status.busy {
+		"busy"
+	} is status.done {
+		"done"
+	} is status.pending {
+		"pending"
+	}
 }
 
 def main = fun {

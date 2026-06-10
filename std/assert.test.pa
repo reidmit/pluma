@@ -1,5 +1,5 @@
-use std.test
 use std.assert
+use std.test
 
 # `none` and bare `err "..."` need pinning so the assertion sees a
 # concrete option/result type at the call site.

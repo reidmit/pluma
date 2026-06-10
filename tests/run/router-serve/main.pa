@@ -4,13 +4,13 @@
 # end-to-end over the wire — a matching GET, a matching POST, and a path with no
 # route (the 404 fallback). The in-process matching detail lives in
 # `router-dispatch`; this is the integration check.
-use std.sys.net
-use std.sys.http
-use std.router
-use std.task
-use std.string
 use std.bytes
 use std.list
+use std.router
+use std.string
+use std.task
+use std.sys.http
+use std.sys.net
 
 # Read from the connection until the server closes it (Connection: close).
 def drain :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
@@ -50,18 +50,16 @@ def call :: fun string string string -> task string = fun addr verb path {
 
 def main = fun {
 	let app = router.handler [
-		router.get "/health" (fun _rq { task.return (http.text 200 "ok") }),
-		router.post "/echo" (fun rq {
-			task.return (http.text 200 ("you posted to " ++ rq.path))
-		}),
+		router.get "/health" fun _rq { task.return (http.text 200 "ok") },
+		router.post "/echo" fun rq { task.return (http.text 200 ("you posted to " ++ rq.path)) },
 	]
 	if net.listen "127.0.0.1:0" is ok server {
 		if net.local-addr server is ok addr {
 			scope as s {
 				let _ = s.spawn (http.serve-on server app)
-				try a = call addr "GET" "/health"   # 200, "ok"
-				try b = call addr "POST" "/echo"     # 200, posted
-				try c = call addr "GET" "/missing"   # 404 fallback
+				try a = call addr "GET" "/health" # 200, "ok"
+				try b = call addr "POST" "/echo" # 200, posted
+				try c = call addr "GET" "/missing" # 404 fallback
 				print a
 				print b
 				print c

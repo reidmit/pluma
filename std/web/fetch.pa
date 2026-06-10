@@ -18,12 +18,12 @@
 # `http.fetch`'s so a generated RPC stub reads `.status` and `.body` the same way
 # on both targets.
 
-use std.task
-use std.stream
-use std.string
-use std.list
 use std.dict
 use std.hex
+use std.list
+use std.stream
+use std.string
+use std.task
 
 # A reply from the server: the HTTP status code and the raw response body.
 # (Same structural shape as `http.response`; headers aren't surfaced -- an
@@ -66,9 +66,11 @@ public def post :: fun string (dict string string) bytes -> task (result respons
 
 # Start a subscription: hand the host the marshalled request, get a channel token.
 def stream-open :: fun string -> task int = built-in "rpc-stream-open"
+
 # Pull the next event off the channel: `some bytes` (an element), `none` (clean end),
 # or a task failure (the stream faulted). Parks until the host pushes one.
 def stream-next :: fun int -> task (option bytes) = built-in "rpc-stream-next"
+
 # Abort the subscription's reader (the stream's `close`, run on any terminus).
 def stream-close :: fun int -> task nothing = built-in "rpc-stream-close"
 
@@ -82,15 +84,9 @@ def stream-close :: fun int -> task nothing = built-in "rpc-stream-close"
 public def fetch-stream :: fun string (dict string string) bytes -> stream bytes = fun url headers body {
 	let req = string.join ["POST", url, render-headers headers, hex.encode body] "\t"
 	stream.from-resource {
-		open: fun {
-			stream-open req
-		},
-		next: fun token {
-			stream-next token
-		},
-		close: fun token {
-			stream-close token
-		},
+		open: fun { stream-open req },
+		next: fun token { stream-next token },
+		close: fun token { stream-close token },
 	}
 }
 

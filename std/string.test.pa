@@ -1,7 +1,7 @@
-use std.test
-use std.string
-use std.bytes
 use std.assert
+use std.bytes
+use std.string
+use std.test
 
 def tests :: test.suite = [
 	test.case "length of empty string" fun {

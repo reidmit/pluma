@@ -2,6 +2,7 @@
 # the chain's carrier (here `result`), so a following `task` `try` can't
 # unify (`task _` vs `result _`).
 use std.task
+
 def bad = fun {
 	try x = ok 1
 	try y = task.return 2

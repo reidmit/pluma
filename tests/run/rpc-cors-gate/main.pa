@@ -36,7 +36,7 @@ def req :: fun http.method (list (string, string)) -> http.request = fun m hs {
 
 # Status code plus the echoed Allow-Origin (or `-` when none), one line.
 def report :: fun string http.response -> nothing = fun label resp {
-	let acao = (dict.lookup resp.headers "access-control-allow-origin") ?? "-"
+	let acao = dict.lookup resp.headers "access-control-allow-origin" ?? "-"
 	print "$(label) -> $(to-string resp.status) acao=$(acao)"
 }
 
@@ -49,11 +49,20 @@ def main = fun {
 
 	try a = same (req http.method.post [("sec-fetch-site", "same-origin")])
 	report "same-origin" a
-	try b = same (req http.method.post [("sec-fetch-site", "cross-site"), ("origin", "https://evil.example")])
+	try b = same (req http.method.post [
+		("sec-fetch-site", "cross-site"),
+		("origin", "https://evil.example"),
+	])
 	report "cross-site (default)" b
-	try c = cross (req http.method.options [("origin", "https://app.example.com"), ("sec-fetch-site", "cross-site")])
+	try c = cross (req http.method.options [
+		("origin", "https://app.example.com"),
+		("sec-fetch-site", "cross-site"),
+	])
 	report "preflight (allowed)" c
-	try d = cross (req http.method.post [("origin", "https://app.example.com"), ("sec-fetch-site", "cross-site")])
+	try d = cross (req http.method.post [
+		("origin", "https://app.example.com"),
+		("sec-fetch-site", "cross-site"),
+	])
 	report "cross-origin (allowed)" d
 	try e = same (req http.method.post [])
 	report "no-origin (curl)" e

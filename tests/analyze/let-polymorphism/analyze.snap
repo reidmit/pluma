@@ -5,52 +5,52 @@ expression: output
 module `main` (tests/analyze/let-polymorphism/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-4:1) [
-            def(0:0-4:1) :: nothing {
+        module(0:0-6:1) [
+            def(0:0-6:1) :: nothing {
                 name: ident(0:4-0:8) `main`,
-                kind: expr(0:11-4:1) :: nothing -> int {
-                    kind: fun(0:11-4:1) {
+                kind: expr(0:11-6:1) :: nothing -> int {
+                    kind: fun(0:11-6:1) {
                         params: [],
                         body: [
-                            expr(1:1-1:27) :: nothing {
-                                kind: let(1:1-1:27) {
+                            expr(1:1-3:2) :: nothing {
+                                kind: let(1:1-3:2) {
                                     pattern: pattern(1:5-1:13) Identifier(
                                         ident(1:5-1:13) `identity`,
                                     ),
-                                    value: expr(1:16-1:27) :: 'a -> 'a {
-                                        kind: fun(1:16-1:27) {
+                                    value: expr(1:16-3:2) :: 'a -> 'a {
+                                        kind: fun(1:16-3:2) {
                                             params: [
                                                 ident(1:20-1:21) `x` :: 'a,
                                             ],
                                             body: [
-                                                expr(1:24-1:25) :: 'a {
-                                                    kind: ident(1:24-1:25) `x`,
+                                                expr(2:2-2:3) :: 'a {
+                                                    kind: ident(2:2-2:3) `x`,
                                                 },
                                             ],
                                         },
                                     },
                                 },
                             },
-                            expr(2:1-2:15) :: string {
-                                kind: call(2:1-2:15) {
-                                    callee: expr(2:1-2:9) :: string -> string {
-                                        kind: ident(2:1-2:9) `identity`,
+                            expr(4:1-4:15) :: string {
+                                kind: call(4:1-4:15) {
+                                    callee: expr(4:1-4:9) :: string -> string {
+                                        kind: ident(4:1-4:9) `identity`,
                                     },
                                     args: [
-                                        expr(2:11-2:15) :: string {
-                                            kind: literal(2:11-2:15) string "wow",
+                                        expr(4:11-4:15) :: string {
+                                            kind: literal(4:11-4:15) string "wow",
                                         },
                                     ],
                                 },
                             },
-                            expr(3:1-3:12) :: int {
-                                kind: call(3:1-3:12) {
-                                    callee: expr(3:1-3:9) :: int -> int {
-                                        kind: ident(3:1-3:9) `identity`,
+                            expr(5:1-5:12) :: int {
+                                kind: call(5:1-5:12) {
+                                    callee: expr(5:1-5:9) :: int -> int {
+                                        kind: ident(5:1-5:9) `identity`,
                                     },
                                     args: [
-                                        expr(3:10-3:12) :: int {
-                                            kind: literal(3:10-3:12) int 47,
+                                        expr(5:10-5:12) :: int {
+                                            kind: literal(5:10-5:12) int 47,
                                         },
                                     ],
                                 },

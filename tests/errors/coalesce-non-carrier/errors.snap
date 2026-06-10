@@ -4,6 +4,6 @@ expression: output
 ---
 error[E0127]: `??` only works on `option` or `result`; this left-hand side has type `int`.
   │
-2 │   5 ?? 0
-  │   ^^^^^^
-  ╰─𜱶 tests/errors/coalesce-non-carrier/main.pa:2:3
+2 │  5 ?? 0
+  │  ^^^^^^
+  ╰─𜱶 tests/errors/coalesce-non-carrier/main.pa:2:2

@@ -14,9 +14,9 @@
 # the stream; a missing field or out-of-range index drops the value
 # silently, so a path that matches nothing yields no output.
 
+use std.dict
 use std.json
 use std.list
-use std.dict
 use std.string
 
 # One navigation step.
@@ -33,7 +33,7 @@ public enum step {
 # End index of the run of characters from `i` for which `pred` holds.
 public def span = fun s i pred {
 	when string.char-at s i is some c {
-		if pred c is true {
+		if pred c {
 			span s (i + 1) pred
 		} else {
 			i
@@ -57,17 +57,19 @@ public def parse-steps = fun s i acc {
 	when string.char-at s i is none {
 		ok (list.reverse acc)
 	} is some c {
-		if c == "." is true {
+		if c == "." {
 			# A bare `.` (identity, or the dot before a `[`) adds no step.
 			let j = span s (i + 1) ident-char
-			if j == i + 1 is true {
+			if j == i + 1 {
 				parse-steps s (i + 1) acc
 			} else {
 				parse-steps s j [field (string.slice s (i + 1) j), ...acc]
 			}
-		} else if c == "[" is true {
-			let j = span s (i + 1) fun ch { ch != "]" }
-			if j >= string.length s is true {
+		} else if c == "[" {
+			let j = span s (i + 1) fun ch {
+				ch != "]"
+			}
+			if j >= string.length s {
 				err "unterminated '[' in path"
 			} else {
 				when parse-bracket (string.slice s (i + 1) j) is ok st {
@@ -85,10 +87,10 @@ public def parse-steps = fun s i acc {
 # Classify the text between a `[` and its `]`.
 public def parse-bracket = fun inner {
 	let t = string.trim inner
-	if t == "" is true {
+	if t == "" {
 		ok iterate
-	} else if string.starts-with t "\"" is true {
-		if string.ends-with t "\"" && string.length t >= 2 is true {
+	} else if string.starts-with t "\"" {
+		if string.ends-with t "\"" && string.length t >= 2 {
 			ok (field (string.slice t 1 (string.length t - 1)))
 		} else {
 			err "unterminated string key: [$(inner)]"
@@ -120,12 +122,12 @@ public def step-eval = fun stream st {
 		list.fold stream [] fun acc v {
 			when json.get-array v is some xs {
 				let len = list.length xs
-				let idx = if n < 0 is true {
+				let idx = if n < 0 {
 					len + n
 				} else {
 					n
 				}
-				if idx < 0 is true {
+				if idx < 0 {
 					acc
 				} else {
 					when list.head (list.drop xs idx) is some r {

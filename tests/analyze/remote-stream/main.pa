@@ -1,5 +1,5 @@
-use std.task
 use std.stream
+use std.task
 
 # A `remote def` may return a `stream R` -- a server->client subscription -- as
 # well as a `task R`. The result type and every argument must still be

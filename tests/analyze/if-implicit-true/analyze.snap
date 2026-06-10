@@ -1,6 +1,5 @@
 ---
 source: tests/analyze.rs
-assertion_line: 41
 expression: output
 ---
 module `main` (tests/analyze/if-implicit-true/main.pa) {
@@ -10,7 +9,7 @@ module `main` (tests/analyze/if-implicit-true/main.pa) {
         2: " subject.",
     },
     ast: Some(
-        module(4:0-19:1) [
+        module(4:0-17:1) [
             def(4:0-12:1) :: nothing {
                 name: ident(4:4-4:9) `grade`,
                 kind: expr(4:12-12:1) :: int -> string {
@@ -64,10 +63,10 @@ module `main` (tests/analyze/if-implicit-true/main.pa) {
                     },
                 },
             },
-            def(14:0-19:1) :: nothing {
+            def(14:0-17:1) :: nothing {
                 name: ident(14:4-14:8) `spin`,
-                kind: expr(14:11-19:1) :: nothing -> nothing {
-                    kind: fun(14:11-19:1) {
+                kind: expr(14:11-17:1) :: nothing -> nothing {
+                    kind: fun(14:11-17:1) {
                         params: [],
                         body: [
                             expr(15:1-15:18) :: nothing {
@@ -89,8 +88,8 @@ module `main` (tests/analyze/if-implicit-true/main.pa) {
                                     },
                                 },
                             },
-                            expr(16:1-18:2) :: nothing {
-                                kind: while(16:1-18:2) expr(16:7-16:20) :: bool {
+                            expr(16:1-16:50) :: nothing {
+                                kind: while(16:1-16:50) expr(16:7-16:20) :: bool {
                                     kind: binary op(16:17-16:18) `>` {
                                         left: expr(16:7-16:16) :: int {
                                             kind: call(16:7-16:16) {
@@ -111,34 +110,32 @@ module `main` (tests/analyze/if-implicit-true/main.pa) {
                                 } is pattern(16:7-16:20) Literal(
                                     literal(16:7-16:20) bool true,
                                 ) [
-                                    expr(17:2-17:29) :: nothing {
-                                        kind: call(17:2-17:29) {
-                                            callee: expr(17:2-17:9) :: (ref 'a) 'a -> nothing {
+                                    expr(16:23-16:48) :: nothing {
+                                        kind: call(16:23-16:48) {
+                                            callee: expr(16:23-16:30) :: (ref 'a) 'a -> nothing {
                                                 kind: namespace-access `ref.set`,
                                             },
                                             args: [
-                                                expr(17:10-17:11) :: ref int {
-                                                    kind: ident(17:10-17:11) `r`,
+                                                expr(16:31-16:32) :: ref int {
+                                                    kind: ident(16:31-16:32) `r`,
                                                 },
-                                                expr(17:12-17:29) :: int {
-                                                    kind: expr(17:13-17:28) :: int {
-                                                        kind: binary op(17:25-17:26) `-` {
-                                                            left: expr(17:13-17:24) :: int {
-                                                                kind: expr(17:14-17:23) :: int {
-                                                                    kind: call(17:14-17:23) {
-                                                                        callee: expr(17:14-17:21) :: (ref 'a) -> 'a {
-                                                                            kind: namespace-access `ref.get`,
-                                                                        },
-                                                                        args: [
-                                                                            expr(17:22-17:23) :: ref int {
-                                                                                kind: ident(17:22-17:23) `r`,
-                                                                            },
-                                                                        ],
+                                                expr(16:33-16:48) :: int {
+                                                    kind: expr(16:34-16:47) :: int {
+                                                        kind: binary op(16:44-16:45) `-` {
+                                                            left: expr(16:34-16:43) :: int {
+                                                                kind: call(16:34-16:43) {
+                                                                    callee: expr(16:34-16:41) :: (ref 'a) -> 'a {
+                                                                        kind: namespace-access `ref.get`,
                                                                     },
+                                                                    args: [
+                                                                        expr(16:42-16:43) :: ref int {
+                                                                            kind: ident(16:42-16:43) `r`,
+                                                                        },
+                                                                    ],
                                                                 },
                                                             },
-                                                            right: expr(17:27-17:28) :: int {
-                                                                kind: literal(17:27-17:28) int 1,
+                                                            right: expr(16:46-16:47) :: int {
+                                                                kind: literal(16:46-16:47) int 1,
                                                             },
                                                         },
                                                     },

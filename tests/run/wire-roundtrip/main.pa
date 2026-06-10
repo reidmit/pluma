@@ -3,8 +3,8 @@
 # primitives, records, options, lists, tuples, user enums, nesting, and the
 # `wire-error` decode-failure channel.
 
-use std.list
 use std.hex
+use std.list
 
 enum shape {
 	circle float

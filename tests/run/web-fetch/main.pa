@@ -12,9 +12,9 @@
 # deadlock (the server can't accept while the thread is parked in the fetch).
 # The happy path is the browser example driven under `pluma dev` (Phase 8); the
 # full RPC round-trip over the sys transport is `rpc-loopback`.
-use std.task
 use std.dict
 use std.string
+use std.task
 use std.web.fetch
 
 def main = fun {

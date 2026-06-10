@@ -6,12 +6,12 @@ error[E0115]: Instance head `(int, int)` is not supported.
   │
   ├─𜱶 help: use a concrete type or a generic type constructor.
   │
-3 │ implement greet (int, int) { def hello = fun x { "a" } }
+6 │ implement greet (int, int) {
   │                 ^^^^^^^^^^
-  ╰─𜱶 tests/errors/unsupported-instance-head/main.pa:3:17
+  ╰─𜱶 tests/errors/unsupported-instance-head/main.pa:6:17
 
 warning[E0101]: Name `x` is never used.
   │
-3 │ implement greet (int, int) { def hello = fun x { "a" } }
-  │                                              ^
-  ╰─𜱶 tests/errors/unsupported-instance-head/main.pa:3:46
+7 │  def hello = fun x {
+  │                  ^
+  ╰─𜱶 tests/errors/unsupported-instance-head/main.pa:7:18

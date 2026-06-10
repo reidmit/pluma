@@ -15,7 +15,9 @@ def write-int = fun {
 }
 
 def bump-int = fun {
-	ref.update int-cell fun n { n + 1 }
+	ref.update int-cell fun n {
+		n + 1
+	}
 }
 
 alias counter ref int

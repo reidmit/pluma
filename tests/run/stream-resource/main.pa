@@ -3,8 +3,8 @@
 # `take`), faulted (a producer failure), and cancelled (a `with-timeout` deadline
 # fires mid-consumption). The cancelled close rides the awaited-`defer` shielded
 # teardown; it runs even as the consuming task is being torn down.
-use std.task
 use std.stream
+use std.task
 
 # A fake resource over 0..limit-1 with a mutable cursor. It prints open/close so
 # the lifecycle is observable; `fail-at` makes `next` fault at that index.
@@ -46,11 +46,9 @@ def slowly :: fun int -> task nothing = fun n {
 
 def main = fun {
 	print "drained:"
-	try _ = stream.for-each (res "drain" 3 -1) show
-
+	try _ = stream.for-each (res "drain" 3 (-1)) show
 	print "bounded:"
-	try _ = stream.for-each (stream.take (res "bound" 10 -1) 2) show
-
+	try _ = stream.for-each (stream.take (res "bound" 10 (-1)) 2) show
 	print "faulted:"
 	try r = task.attempt (stream.for-each (res "fault" 5 1) show)
 	when r is ok _u {
@@ -58,9 +56,8 @@ def main = fun {
 	} is err _e {
 		print "  recovered"
 	}
-
 	print "cancelled:"
-	try t = task.attempt (task.with-timeout 12ms (stream.for-each (res "cancel" 1000000 -1) slowly))
+	try t = task.attempt (task.with-timeout 12ms (stream.for-each (res "cancel" 1000000 (-1)) slowly))
 	when t is ok _u {
 		print "  (completed?!)"
 	} is err _e {

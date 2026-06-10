@@ -4,6 +4,6 @@ expression: output
 ---
 error[E0113]: No instance of trait `numeric` for type `string`.
   │
-2 │   n + n
-  │   ^^^^^
-  ╰─𜱶 tests/errors/no-instance/main.pa:2:3
+2 │  n + n
+  │  ^^^^^
+  ╰─𜱶 tests/errors/no-instance/main.pa:2:2

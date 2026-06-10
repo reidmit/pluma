@@ -1,6 +1,6 @@
-use std.test
-use std.math
 use std.assert
+use std.math
+use std.test
 
 def tests :: test.suite = [
 	test.case "to-float promotes ints" fun {

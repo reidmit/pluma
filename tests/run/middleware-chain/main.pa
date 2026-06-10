@@ -13,7 +13,13 @@ use std.sys.http
 
 # A bare GET request for the given path, with the given headers.
 def req :: fun string (list (string, string)) -> http.request = fun p hs {
-	{method: http.method.get, path: p, query: "", headers: dict.from-entries hs, body: string.to-bytes ""}
+	{
+		method: http.method.get,
+		path: p,
+		query: "",
+		headers: dict.from-entries hs,
+		body: string.to-bytes "",
+	}
 }
 
 # Run one request through the handler and print "<status> <body>".

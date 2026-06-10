@@ -1,5 +1,10 @@
 # Two traits declare a `hello` method; a bare call cannot choose.
-trait greet a { hello :: fun a -> string }
-trait salute a { hello :: fun a -> string }
+trait greet a {
+	hello :: fun a -> string
+}
+
+trait salute a {
+	hello :: fun a -> string
+}
 
 def main = print (hello 5)

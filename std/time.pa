@@ -17,9 +17,9 @@
 # Everything here works in UTC. Named time zones and local-time conversion
 # aren't available yet.
 
-use std.string
 use std.bytes
 use std.list
+use std.string
 
 # A calendar date broken into its pieces, as seen in UTC. You get one from
 # `time.parts`; `weekday` runs 1 (Monday) through 7 (Sunday). `nanosecond` is

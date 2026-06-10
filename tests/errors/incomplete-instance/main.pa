@@ -3,8 +3,11 @@ trait greet a {
 	hello :: fun a -> string
 	bye :: fun a -> string
 }
+
 implement greet int {
-	def hello = fun x { to-string x }
+	def hello = fun x {
+		to-string x
+	}
 }
 
 def main = print "x"

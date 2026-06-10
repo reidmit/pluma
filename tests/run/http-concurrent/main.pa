@@ -11,12 +11,12 @@
 # regression to sequential serving still terminates the run -- with a
 # different but equally deterministic snapshot ("alone ...") instead of
 # hanging.
-use std.sys.net
-use std.sys.http
-use std.task
-use std.string
 use std.bytes
 use std.list
+use std.string
+use std.task
+use std.sys.http
+use std.sys.net
 
 # Spin until a second handler is also in flight (`gate` has reached 2).
 # `fuel` bounds the wait so a sequential server -- where the second handler

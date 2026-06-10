@@ -17,15 +17,15 @@
 # or eval error is reported and the loop simply continues, so one bad
 # line never ends the session.
 
-use std.sys.io
-use std.sys.process
-use std.list
 use std.dict
+use std.list
 use std.math
 use std.string
-use value
-use parser
+use std.sys.io
+use std.sys.process
 use eval
+use parser
+use value
 
 public def main = fun {
 	let env = ref.new (seed-env ())
@@ -56,9 +56,9 @@ public def repl = fun env {
 }
 
 public def handle = fun env line {
-	if line == "" is true {
+	if line == "" {
 		()
-	} else if string.starts-with line ":" is true {
+	} else if string.starts-with line ":" {
 		run-command env line
 	} else {
 		run-line env line
@@ -70,11 +70,11 @@ public def handle = fun env line {
 # ---------------------------------------------------------------------
 
 public def run-command = fun env cmd {
-	if cmd == ":q" || cmd == ":quit" is true {
+	if cmd == ":q" || cmd == ":quit" {
 		process.exit 0
-	} else if cmd == ":help" is true {
+	} else if cmd == ":help" {
 		print-help ()
-	} else if cmd == ":vars" is true {
+	} else if cmd == ":vars" {
 		print-vars env
 	} else {
 		io.print "unknown command '$(cmd)' — try :help"

@@ -359,7 +359,7 @@ def with-cors :: fun policy http.request http.response -> http.response = fun po
 # the browser checks before letting the real POST (with its custom fingerprint
 # header) go through. Reached only after `admits`, so echoing Origin is safe.
 def preflight :: fun http.request -> http.response = fun req {
-	let origin = (dict.lookup req.headers "origin") ?? ""
+	let origin = dict.lookup req.headers "origin" ?? ""
 	{
 		status: 204,
 		headers: dict.from-entries [

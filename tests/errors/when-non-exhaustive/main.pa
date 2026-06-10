@@ -1,10 +1,10 @@
 enum tree {
-  empty
-  node int tree tree
+	empty
+	node int tree tree
 }
 
 def size = fun t {
-  when t is tree.empty {
-    0
-  }
+	when t is tree.empty {
+		0
+	}
 }

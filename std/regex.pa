@@ -23,9 +23,9 @@
 # identically on every backend -- no native regex engine, no host call.
 
 use std.bytes
-use std.string
-use std.list
 use std.dict
+use std.list
+use std.string
 
 # A single match. `text` is the piece of the input that matched; `start`
 # and `end` mark where it sat (as byte offsets). `groups` maps each named

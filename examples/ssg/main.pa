@@ -7,10 +7,10 @@
 # styled page template, and writes the result to the output directory.
 # An index page linking every document is generated too.
 
-use std.sys.fs
-use std.sys.process
 use std.list
 use std.string
+use std.sys.fs
+use std.sys.process
 use markdown
 use page
 
@@ -68,8 +68,12 @@ public def main = fun {
 	}
 
 	when fs.read-dir-sync content-dir is ok entries {
-		let md-files = list.filter entries fun n { string.ends-with n ".md" }
-		let _ = list.each md-files fun name { build-page content-dir out-dir name }
+		let md-files = list.filter entries fun n {
+			string.ends-with n ".md"
+		}
+		let _ = list.each md-files fun name {
+			build-page content-dir out-dir name
+		}
 		let _ = build-index out-dir md-files
 		print "done: $(to-string (list.length md-files)) page(s)"
 	} is err msg {

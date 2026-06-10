@@ -9,64 +9,64 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
         2: " left intact by the analyzer (task_carrier) for the backend's CPS lowering.",
     },
     ast: Some(
-        module(3:0-13:1) [
+        module(3:0-14:1) [
             use(3:0-3:12) `std.task`,
         ] [
-            def(4:0-8:1) :: nothing {
-                name: ident(4:4-4:9) `steps`,
-                kind: expr(4:12-8:1) :: nothing -> task ((nothing, nothing)) {
-                    kind: fun(4:12-8:1) {
+            def(5:0-9:1) :: nothing {
+                name: ident(5:4-5:9) `steps`,
+                kind: expr(5:12-9:1) :: nothing -> task ((nothing, nothing)) {
+                    kind: fun(5:12-9:1) {
                         params: [],
                         body: [
-                            expr(5:1-7:19) :: task ((nothing, nothing)) {
-                                kind: try(5:1-7:19) {
-                                    pattern: pattern(5:5-5:6) Identifier(
-                                        ident(5:5-5:6) `a`,
+                            expr(6:1-8:19) :: task ((nothing, nothing)) {
+                                kind: try(6:1-8:19) {
+                                    pattern: pattern(6:5-6:6) Identifier(
+                                        ident(6:5-6:6) `a`,
                                     ),
-                                    value: expr(5:9-5:22) :: task nothing {
-                                        kind: call(5:9-5:22) {
-                                            callee: expr(5:9-5:19) :: duration -> task nothing {
+                                    value: expr(6:9-6:22) :: task nothing {
+                                        kind: call(6:9-6:22) {
+                                            callee: expr(6:9-6:19) :: duration -> task nothing {
                                                 kind: namespace-access `task.sleep`,
                                             },
                                             args: [
-                                                expr(5:20-5:22) :: duration {
-                                                    kind: literal(5:20-5:22) duration 1000000000ns,
+                                                expr(6:20-6:22) :: duration {
+                                                    kind: literal(6:20-6:22) duration 1000000000ns,
                                                 },
                                             ],
                                         },
                                     },
                                     rest: [
-                                        expr(6:1-7:19) :: task ((nothing, nothing)) {
-                                            kind: try(6:1-7:19) {
-                                                pattern: pattern(6:5-6:6) Identifier(
-                                                    ident(6:5-6:6) `b`,
+                                        expr(7:1-8:19) :: task ((nothing, nothing)) {
+                                            kind: try(7:1-8:19) {
+                                                pattern: pattern(7:5-7:6) Identifier(
+                                                    ident(7:5-7:6) `b`,
                                                 ),
-                                                value: expr(6:9-6:22) :: task nothing {
-                                                    kind: call(6:9-6:22) {
-                                                        callee: expr(6:9-6:19) :: duration -> task nothing {
+                                                value: expr(7:9-7:22) :: task nothing {
+                                                    kind: call(7:9-7:22) {
+                                                        callee: expr(7:9-7:19) :: duration -> task nothing {
                                                             kind: namespace-access `task.sleep`,
                                                         },
                                                         args: [
-                                                            expr(6:20-6:22) :: duration {
-                                                                kind: literal(6:20-6:22) duration 2000000000ns,
+                                                            expr(7:20-7:22) :: duration {
+                                                                kind: literal(7:20-7:22) duration 2000000000ns,
                                                             },
                                                         ],
                                                     },
                                                 },
                                                 rest: [
-                                                    expr(7:1-7:19) :: task ((nothing, nothing)) {
-                                                        kind: call(7:1-7:19) {
-                                                            callee: expr(7:1-7:12) :: 'a -> task 'a {
+                                                    expr(8:1-8:19) :: task ((nothing, nothing)) {
+                                                        kind: call(8:1-8:19) {
+                                                            callee: expr(8:1-8:12) :: 'a -> task 'a {
                                                                 kind: namespace-access `task.return`,
                                                             },
                                                             args: [
-                                                                expr(7:13-7:19) :: (nothing, nothing) {
+                                                                expr(8:13-8:19) :: (nothing, nothing) {
                                                                     kind: tuple [
-                                                                        expr(7:14-7:15) :: nothing {
-                                                                            kind: ident(7:14-7:15) `a`,
+                                                                        expr(8:14-8:15) :: nothing {
+                                                                            kind: ident(8:14-8:15) `a`,
                                                                         },
-                                                                        expr(7:17-7:18) :: nothing {
-                                                                            kind: ident(7:17-7:18) `b`,
+                                                                        expr(8:17-8:18) :: nothing {
+                                                                            kind: ident(8:17-8:18) `b`,
                                                                         },
                                                                     ],
                                                                 },
@@ -83,38 +83,38 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
                     },
                 },
             },
-            def(10:0-13:1) :: nothing {
-                name: ident(10:4-10:13) `use-steps`,
-                kind: expr(10:16-13:1) :: nothing -> task ((nothing, nothing)) {
-                    kind: fun(10:16-13:1) {
+            def(11:0-14:1) :: nothing {
+                name: ident(11:4-11:13) `use-steps`,
+                kind: expr(11:16-14:1) :: nothing -> task ((nothing, nothing)) {
+                    kind: fun(11:16-14:1) {
                         params: [],
                         body: [
-                            expr(11:1-12:17) :: task ((nothing, nothing)) {
-                                kind: try(11:1-12:17) {
-                                    pattern: pattern(11:5-11:9) Identifier(
-                                        ident(11:5-11:9) `pair`,
+                            expr(12:1-13:17) :: task ((nothing, nothing)) {
+                                kind: try(12:1-13:17) {
+                                    pattern: pattern(12:5-12:9) Identifier(
+                                        ident(12:5-12:9) `pair`,
                                     ),
-                                    value: expr(11:12-11:20) :: task ((nothing, nothing)) {
-                                        kind: call(11:12-11:20) {
-                                            callee: expr(11:12-11:17) :: nothing -> task ((nothing, nothing)) {
-                                                kind: ident(11:12-11:17) `steps`,
+                                    value: expr(12:12-12:20) :: task ((nothing, nothing)) {
+                                        kind: call(12:12-12:20) {
+                                            callee: expr(12:12-12:17) :: nothing -> task ((nothing, nothing)) {
+                                                kind: ident(12:12-12:17) `steps`,
                                             },
                                             args: [
-                                                expr(11:18-11:20) :: nothing {
+                                                expr(12:18-12:20) :: nothing {
                                                     kind: (),
                                                 },
                                             ],
                                         },
                                     },
                                     rest: [
-                                        expr(12:1-12:17) :: task ((nothing, nothing)) {
-                                            kind: call(12:1-12:17) {
-                                                callee: expr(12:1-12:12) :: 'a -> task 'a {
+                                        expr(13:1-13:17) :: task ((nothing, nothing)) {
+                                            kind: call(13:1-13:17) {
+                                                callee: expr(13:1-13:12) :: 'a -> task 'a {
                                                     kind: namespace-access `task.return`,
                                                 },
                                                 args: [
-                                                    expr(12:13-12:17) :: (nothing, nothing) {
-                                                        kind: ident(12:13-12:17) `pair`,
+                                                    expr(13:13-13:17) :: (nothing, nothing) {
+                                                        kind: ident(13:13-13:17) `pair`,
                                                     },
                                                 ],
                                             },

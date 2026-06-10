@@ -14,11 +14,7 @@ use std.task
 
 # A task record. Records cross the RPC wire by value — exercises the wire codec for
 # compound types (record-of-{int,string,bool} and list-of-record).
-public alias todo {
-	id :: int,
-	text :: string,
-	done :: bool,
-}
+public alias todo {id :: int, text :: string, done :: bool}
 
 # The server's "database": a mutable list of todos plus a monotonic id counter.
 def store :: ref (list todo) = ref.new []
@@ -34,7 +30,7 @@ public remote def list-todos :: fun nothing -> task (list todo) = fun {
 public remote def add-todo :: fun string -> task todo = fun text {
 	let id = ref.get next-id
 	ref.set next-id (id + 1)
-	let item = { id: id, text: text, done: false }
+	let item = {id, text, done: false}
 	# `list.push` mutates the stored list in place; no `ref.set` needed.
 	list.push (ref.get store) item
 	task.return item
@@ -44,7 +40,14 @@ public remote def add-todo :: fun string -> task todo = fun text {
 public remote def toggle-todo :: fun int -> task (list todo) = fun id {
 	ref.set store (list.map (ref.get store) fun t {
 		if t.id == id {
-			{ ...t, done: (if t.done { false } else { true }) }
+			{
+				...t,
+				done: if t.done {
+					false
+				} else {
+					true
+				},
+			}
 		} else {
 			t
 		}
@@ -55,7 +58,11 @@ public remote def toggle-todo :: fun int -> task (list todo) = fun id {
 # Drop every completed todo and return the remaining board.
 public remote def clear-done :: fun nothing -> task (list todo) = fun {
 	ref.set store (list.filter (ref.get store) fun t {
-		if t.done { false } else { true }
+		if t.done {
+			false
+		} else {
+			true
+		}
 	})
 	task.return (ref.get store)
 }

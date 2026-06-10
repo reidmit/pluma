@@ -1,6 +1,18 @@
 # Two instances of the same trait for the same head type.
-trait greet a { hello :: fun a -> string }
-implement greet int { def hello = fun x { to-string x } }
-implement greet int { def hello = fun x { to-string x } }
+trait greet a {
+	hello :: fun a -> string
+}
+
+implement greet int {
+	def hello = fun x {
+		to-string x
+	}
+}
+
+implement greet int {
+	def hello = fun x {
+		to-string x
+	}
+}
 
 def main = print "x"

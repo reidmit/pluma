@@ -2,9 +2,9 @@
 # and a tight tail-recursive inner loop.
 
 def prime = fun n d {
-	if (d * d) > n is true {
+	if d * d > n {
 		true
-	} else if (n % d) == 0 is true {
+	} else if n % d == 0 {
 		false
 	} else {
 		prime n (d + 1)
@@ -12,9 +12,9 @@ def prime = fun n d {
 }
 
 def count = fun n limit acc {
-	if n == limit is true {
+	if n == limit {
 		acc
-	} else if prime n 2 is true {
+	} else if prime n 2 {
 		count (n + 1) limit (acc + 1)
 	} else {
 		count (n + 1) limit acc

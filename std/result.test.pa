@@ -1,6 +1,6 @@
-use std.test
-use std.result as res
 use std.assert
+use std.result as res
+use std.test
 
 # Helpers. `checked` returns ok for positives, err for non-positives.
 def checked = fun n {

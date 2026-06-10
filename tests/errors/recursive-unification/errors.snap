@@ -4,6 +4,6 @@ expression: output
 ---
 error[E0103]: Failed to unify recursive type `'a -> 'b`.
   │
-2 │ def main = fun x { x x }
-  │                    ^^^
-  ╰─𜱶 tests/errors/recursive-unification/main.pa:2:20
+3 │  x x
+  │  ^^^
+  ╰─𜱶 tests/errors/recursive-unification/main.pa:3:2

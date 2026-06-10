@@ -3,5 +3,5 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Parameter count mismatch: expected 2, but found 3.
-> 11 | 	let max = list.fold xs 0
+> 15 | 	let max = list.fold xs 0
                   ^^^^^^^^^^^^^^

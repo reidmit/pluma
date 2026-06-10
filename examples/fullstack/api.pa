@@ -9,8 +9,8 @@
 # the arguments, calls over the wire, and decodes the reply — so `api.add` reads
 # like a local async call (and `api.ticks` like a local stream) on both ends.
 
-use std.task
 use std.stream
+use std.task
 use std.time
 
 # Adds two numbers, on the server. (A toy stand-in for real server work — a

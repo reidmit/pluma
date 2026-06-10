@@ -5,23 +5,23 @@ expression: output
 module `main` (tests/analyze/def-annotation-fun/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-0:49) [
-            def(0:0-0:49) :: nothing {
+        module(0:0-2:1) [
+            def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:7) `add`,
-                kind: expr(0:32-0:49) :: int int -> int {
-                    kind: fun(0:32-0:49) {
+                kind: expr(0:32-2:1) :: int int -> int {
+                    kind: fun(0:32-2:1) {
                         params: [
                             ident(0:36-0:37) `x` :: int,
                             ident(0:38-0:39) `y` :: int,
                         ],
                         body: [
-                            expr(0:42-0:47) :: int {
-                                kind: binary op(0:44-0:45) `+` {
-                                    left: expr(0:42-0:43) :: int {
-                                        kind: ident(0:42-0:43) `x`,
+                            expr(1:1-1:6) :: int {
+                                kind: binary op(1:3-1:4) `+` {
+                                    left: expr(1:1-1:2) :: int {
+                                        kind: ident(1:1-1:2) `x`,
                                     },
-                                    right: expr(0:46-0:47) :: int {
-                                        kind: ident(0:46-0:47) `y`,
+                                    right: expr(1:5-1:6) :: int {
+                                        kind: ident(1:5-1:6) `y`,
                                     },
                                 },
                             },

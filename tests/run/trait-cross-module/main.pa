@@ -8,7 +8,9 @@ enum square {
 # so it inherits the imported trait's default method.
 implement drawable square {
 	def draw = fun s {
-		when s is square.square w { "square w=$(to-string w)" }
+		when s is square.square w {
+			"square w=$(to-string w)"
+		}
 	}
 }
 

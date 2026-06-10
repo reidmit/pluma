@@ -1,5 +1,7 @@
 def main = fun {
-	let add = fun x y { x + y }
+	let add = fun x y {
+		x + y
+	}
 
 	add (add 1 2) 3
 }

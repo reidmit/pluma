@@ -5,47 +5,47 @@ expression: output
 module `main` (tests/analyze/def-annotation-polymorphic/main.pa) {
     comments: {},
     ast: Some(
-        module(0:0-3:18) [
-            def(0:0-0:34) :: nothing {
+        module(0:0-6:18) [
+            def(0:0-2:1) :: nothing {
                 name: ident(0:4-0:6) `id`,
-                kind: expr(0:23-0:34) :: 'a -> 'a {
-                    kind: fun(0:23-0:34) {
+                kind: expr(0:23-2:1) :: 'a -> 'a {
+                    kind: fun(0:23-2:1) {
                         params: [
                             ident(0:27-0:28) `x` :: 'a,
                         ],
                         body: [
-                            expr(0:31-0:32) :: 'a {
-                                kind: ident(0:31-0:32) `x`,
+                            expr(1:1-1:2) :: 'a {
+                                kind: ident(1:1-1:2) `x`,
                             },
                         ],
                     },
                 },
             },
-            def(2:0-2:12) :: nothing {
-                name: ident(2:4-2:5) `i`,
-                kind: expr(2:8-2:12) :: int {
-                    kind: call(2:8-2:12) {
-                        callee: expr(2:8-2:10) :: int -> int {
-                            kind: ident(2:8-2:10) `id`,
+            def(4:0-4:12) :: nothing {
+                name: ident(4:4-4:5) `i`,
+                kind: expr(4:8-4:12) :: int {
+                    kind: call(4:8-4:12) {
+                        callee: expr(4:8-4:10) :: int -> int {
+                            kind: ident(4:8-4:10) `id`,
                         },
                         args: [
-                            expr(2:11-2:12) :: int {
-                                kind: literal(2:11-2:12) int 5,
+                            expr(4:11-4:12) :: int {
+                                kind: literal(4:11-4:12) int 5,
                             },
                         ],
                     },
                 },
             },
-            def(3:0-3:18) :: nothing {
-                name: ident(3:4-3:5) `s`,
-                kind: expr(3:8-3:18) :: string {
-                    kind: call(3:8-3:18) {
-                        callee: expr(3:8-3:10) :: string -> string {
-                            kind: ident(3:8-3:10) `id`,
+            def(6:0-6:18) :: nothing {
+                name: ident(6:4-6:5) `s`,
+                kind: expr(6:8-6:18) :: string {
+                    kind: call(6:8-6:18) {
+                        callee: expr(6:8-6:10) :: string -> string {
+                            kind: ident(6:8-6:10) `id`,
                         },
                         args: [
-                            expr(3:12-3:18) :: string {
-                                kind: literal(3:12-3:18) string "hello",
+                            expr(6:12-6:18) :: string {
+                                kind: literal(6:12-6:18) string "hello",
                             },
                         ],
                     },

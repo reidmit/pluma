@@ -60,7 +60,7 @@ public def parse = fun src {
 # other shape is a bare expression — including `pi` or `x` on its own.
 public def parse-stmt = fun toks {
 	when toks is [t-name name, t-op eqtok, ...rest] {
-		if eqtok == "=" is true {
+		if eqtok == "=" {
 			finish fun e { assign name e } (parse-expr rest)
 		} else {
 			finish-bare toks
@@ -103,7 +103,7 @@ public def parse-expr = fun toks {
 
 public def expr-rest = fun left toks {
 	when toks is [t-op op, ...rest] {
-		if op == "+" || op == "-" is true {
+		if op == "+" || op == "-" {
 			when parse-term rest is ok-at right rest2 {
 				expr-rest (bin op left right) rest2
 			} is perr m {
@@ -127,7 +127,7 @@ public def parse-term = fun toks {
 
 public def term-rest = fun left toks {
 	when toks is [t-op op, ...rest] {
-		if op == "*" || op == "/" || op == "%" is true {
+		if op == "*" || op == "/" || op == "%" {
 			when parse-power rest is ok-at right rest2 {
 				term-rest (bin op left right) rest2
 			} is perr m {
@@ -146,7 +146,7 @@ public def term-rest = fun left toks {
 public def parse-power = fun toks {
 	when parse-unary toks is ok-at base rest {
 		when rest is [t-op op, ...rest2] {
-			if op == "^" is true {
+			if op == "^" {
 				when parse-power rest2 is ok-at exp rest3 {
 					ok-at (bin "^" base exp) rest3
 				} is perr m {
@@ -165,13 +165,13 @@ public def parse-power = fun toks {
 
 public def parse-unary = fun toks {
 	when toks is [t-op op, ...rest] {
-		if op == "-" is true {
+		if op == "-" {
 			when parse-unary rest is ok-at e rest2 {
 				ok-at (neg e) rest2
 			} is perr m {
 				perr m
 			}
-		} else if op == "+" is true {
+		} else if op == "+" {
 			parse-unary rest
 		} else {
 			parse-atom toks
@@ -191,7 +191,7 @@ public def parse-atom = fun toks {
 			ok-at (lit n) rest
 		} is t-name name {
 			when rest is [t-op p, ...rest2] {
-				if p == "(" is true {
+				if p == "(" {
 					parse-call name rest2
 				} else {
 					ok-at (var name) rest
@@ -200,7 +200,7 @@ public def parse-atom = fun toks {
 				ok-at (var name) rest
 			}
 		} is t-op p {
-			if p == "(" is true {
+			if p == "(" {
 				parse-paren rest
 			} else {
 				perr "unexpected operator '$(p)'"
@@ -213,7 +213,7 @@ public def parse-atom = fun toks {
 public def parse-paren = fun toks {
 	when parse-expr toks is ok-at e rest {
 		when rest is [t-op q, ...rest2] {
-			if q == ")" is true {
+			if q == ")" {
 				ok-at e rest2
 			} else {
 				perr "expected ')'"
@@ -230,7 +230,7 @@ public def parse-paren = fun toks {
 # the closing `)`. Handles the empty list (`now()`-style) up front.
 public def parse-call = fun name toks {
 	when toks is [t-op p, ...rest] {
-		if p == ")" is true {
+		if p == ")" {
 			ok-at (call name []) rest
 		} else {
 			parse-args name toks []
@@ -243,9 +243,9 @@ public def parse-call = fun name toks {
 public def parse-args = fun name toks acc {
 	when parse-expr toks is ok-at arg rest {
 		when rest is [t-op p, ...rest2] {
-			if p == "," is true {
+			if p == "," {
 				parse-args name rest2 [arg, ...acc]
-			} else if p == ")" is true {
+			} else if p == ")" {
 				ok-at (call name (list.reverse [arg, ...acc])) rest2
 			} else {
 				perr "expected ',' or ')' in arguments"

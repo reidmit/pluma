@@ -3,5 +3,7 @@ trait secret a {
 }
 
 implement secret int {
-	def reveal = fun n { to-string n }
+	def reveal = fun n {
+		to-string n
+	}
 }

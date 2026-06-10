@@ -3,5 +3,7 @@ public trait labeled a {
 }
 
 implement labeled int {
-	def tag = fun n { "labeled:$(to-string n)" }
+	def tag = fun n {
+		"labeled:$(to-string n)"
+	}
 }

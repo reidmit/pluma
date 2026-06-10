@@ -8,9 +8,9 @@
 # an inline compute builtin (`math.sqrt`, `bytes.length`), and a host-import
 # writer (`print`).
 
+use std.bytes
 use std.list
 use std.math
-use std.bytes
 
 def main = fun {
 	# `to-string` (polymorphic prelude builtin) as a value, across element types.

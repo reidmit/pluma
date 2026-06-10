@@ -67,15 +67,21 @@ public def lift = fun a b int-op float-op {
 }
 
 public def num-add = fun a b {
-	lift a b fun x y { int-val (x + y) } fun x y { float-val (x + y) }
+	lift a b fun x y { int-val (x + y) } fun x y {
+		float-val (x + y)
+	}
 }
 
 public def num-sub = fun a b {
-	lift a b fun x y { int-val (x - y) } fun x y { float-val (x - y) }
+	lift a b fun x y { int-val (x - y) } fun x y {
+		float-val (x - y)
+	}
 }
 
 public def num-mul = fun a b {
-	lift a b fun x y { int-val (x * y) } fun x y { float-val (x * y) }
+	lift a b fun x y { int-val (x * y) } fun x y {
+		float-val (x * y)
+	}
 }
 
 # Modulo keeps the tower too, but it can't ride `lift`: `%` isn't one
@@ -120,7 +126,7 @@ public def num-neg = fun a {
 # negative exponent or a float exponent forces a float result.
 public def num-pow = fun base exp {
 	when exp is int-val e {
-		if e < 0 is true {
+		if e < 0 {
 			num-div (int-val 1) (ipow base (negate e))
 		} else {
 			ipow base e
@@ -132,7 +138,7 @@ public def num-pow = fun base exp {
 
 # `base ^ e` for a non-negative int `e`, by repeated multiplication.
 public def ipow = fun base e {
-	if e <= 0 is true {
+	if e <= 0 {
 		one-like base
 	} else {
 		num-mul base (ipow base (e - 1))

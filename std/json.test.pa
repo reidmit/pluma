@@ -1,8 +1,8 @@
-use std.test
+use std.assert
+use std.dict
 use std.json
 use std.list
-use std.dict
-use std.assert
+use std.test
 
 def tests :: test.suite = [
 	test.case "parse null" fun {

@@ -3,5 +3,7 @@ public trait marked a {
 }
 
 implement marked int {
-	def tag = fun n { "marked:$(to-string n)" }
+	def tag = fun n {
+		"marked:$(to-string n)"
+	}
 }

@@ -10,8 +10,8 @@ module `main` (tests/analyze/remote-stream/main.pa) {
     },
     ast: Some(
         module(0:0-14:1) [
-            use(0:0-0:12) `std.task`,
-            use(1:0-1:14) `std.stream`,
+            use(0:0-0:14) `std.stream`,
+            use(1:0-1:12) `std.task`,
         ] [
             public remote def(6:0-14:1) :: nothing {
                 name: ident(6:18-6:23) `ticks`,

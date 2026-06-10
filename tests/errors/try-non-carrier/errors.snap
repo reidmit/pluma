@@ -4,6 +4,6 @@ expression: output
 ---
 error[E0123]: `try` only works on `option`, `result`, or `task`; this right-hand side has type `int`.
   │
-2 │   try x = 5
-  │   ^^^^^^^^^
-  ╰─𜱶 tests/errors/try-non-carrier/main.pa:2:3
+2 │  try x = 5
+  │  ^^^^^^^^^
+  ╰─𜱶 tests/errors/try-non-carrier/main.pa:2:2

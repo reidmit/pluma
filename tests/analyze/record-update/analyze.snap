@@ -18,16 +18,16 @@ module `main` (tests/analyze/record-update/main.pa) {
                             ident(3:22-3:26) `name` :: 'a,
                         ],
                         body: [
-                            expr(4:1-4:15) :: {name: 'a, ...} {
+                            expr(4:1-4:13) :: {name: 'a, ...} {
                                 kind: record-update {
-                                    base: expr(4:6-4:7) :: {name: 'a, ...} {
-                                        kind: ident(4:6-4:7) `r`,
+                                    base: expr(4:5-4:6) :: {name: 'a, ...} {
+                                        kind: ident(4:5-4:6) `r`,
                                     },
                                     fields: [
                                         (
-                                            ident(4:9-4:13) `name`,
-                                            expr(4:9-4:13) :: 'a {
-                                                kind: ident(4:9-4:13) `name`,
+                                            ident(4:8-4:12) `name`,
+                                            expr(4:8-4:12) :: 'a {
+                                                kind: ident(4:8-4:12) `name`,
                                             },
                                         ),
                                     ],
@@ -43,44 +43,44 @@ module `main` (tests/analyze/record-update/main.pa) {
                     kind: fun(7:11-13:1) {
                         params: [],
                         body: [
-                            expr(8:1-8:34) :: nothing {
-                                kind: let(8:1-8:34) {
+                            expr(8:1-8:32) :: nothing {
+                                kind: let(8:1-8:32) {
                                     pattern: pattern(8:5-8:6) Identifier(
                                         ident(8:5-8:6) `a`,
                                     ),
-                                    value: expr(8:9-8:34) :: {age: int, name: string} {
+                                    value: expr(8:9-8:32) :: {age: int, name: string} {
                                         kind: record [
                                             (
-                                                ident(8:11-8:15) `name`,
-                                                expr(8:18-8:23) :: string {
-                                                    kind: literal(8:18-8:23) string "Reid",
+                                                ident(8:10-8:14) `name`,
+                                                expr(8:17-8:22) :: string {
+                                                    kind: literal(8:17-8:22) string "Reid",
                                                 },
                                             ),
                                             (
-                                                ident(8:25-8:28) `age`,
-                                                expr(8:30-8:32) :: int {
-                                                    kind: literal(8:30-8:32) int 32,
+                                                ident(8:24-8:27) `age`,
+                                                expr(8:29-8:31) :: int {
+                                                    kind: literal(8:29-8:31) int 32,
                                                 },
                                             ),
                                         ],
                                     },
                                 },
                             },
-                            expr(9:1-9:32) :: nothing {
-                                kind: let(9:1-9:32) {
+                            expr(9:1-9:30) :: nothing {
+                                kind: let(9:1-9:30) {
                                     pattern: pattern(9:5-9:6) Identifier(
                                         ident(9:5-9:6) `b`,
                                     ),
-                                    value: expr(9:9-9:32) :: {age: int, name: string} {
+                                    value: expr(9:9-9:30) :: {age: int, name: string} {
                                         kind: record-update {
-                                            base: expr(9:14-9:15) :: {age: int, name: string} {
-                                                kind: ident(9:14-9:15) `a`,
+                                            base: expr(9:13-9:14) :: {age: int, name: string} {
+                                                kind: ident(9:13-9:14) `a`,
                                             },
                                             fields: [
                                                 (
-                                                    ident(9:17-9:21) `name`,
-                                                    expr(9:24-9:30) :: string {
-                                                        kind: literal(9:24-9:30) string "Other",
+                                                    ident(9:16-9:20) `name`,
+                                                    expr(9:23-9:29) :: string {
+                                                        kind: literal(9:23-9:29) string "Other",
                                                     },
                                                 ),
                                             ],

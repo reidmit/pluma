@@ -37,7 +37,7 @@ public def is-op = fun c {
 # End index of the run of characters from `i` for which `pred` holds.
 public def span = fun s i pred {
 	when string.char-at s i is some c {
-		if pred c is true {
+		if pred c {
 			span s (i + 1) pred
 		} else {
 			i
@@ -66,13 +66,13 @@ public def scan = fun s i acc {
 	when string.char-at s i is none {
 		ok (list.reverse acc)
 	} is some c {
-		if c == " " is true {
+		if c == " " {
 			scan s (i + 1) acc
-		} else if is-digit c is true {
+		} else if is-digit c {
 			lex-number s i acc
-		} else if is-name-start c is true {
+		} else if is-name-start c {
 			lex-name s i acc
-		} else if is-op c is true {
+		} else if is-op c {
 			scan s (i + 1) [t-op c, ...acc]
 		} else {
 			err "unexpected character '$(c)' at column $(to-string (i + 1))"
@@ -85,7 +85,7 @@ public def scan = fun s i acc {
 # as `3` then `.` (which is then a lex error, since `.` is no operator).
 public def lex-number = fun s i acc {
 	let j = span s i is-digit
-	if char-is s j fun c { c == "." } && char-is s (j + 1) is-digit is true {
+	if char-is s j fun c { c == "." } && char-is s (j + 1) is-digit {
 		let k = span s (j + 1) is-digit
 		let text = string.slice s i k
 		when string.to-float text is ok f {

@@ -1,5 +1,5 @@
-use std.sys.io
 use std.time
+use std.sys.io
 
 # The `std.time` clock builtins (Clock capability): wall clock, monotonic clock,
 # blocking sleep, and strtime parse. `time.now`/`time.monotonic` are nondeterministic,

@@ -6,6 +6,6 @@ error[E0117]: Can't resolve trait `showable` dispatch on type `option 'a`: the t
   │
   ├─𜱶 help: add a type annotation to disambiguate.
   │
-4 │ def main = print (show none)
+6 │ def main = print (show none)
   │                   ^^^^
-  ╰─𜱶 tests/errors/ambiguous-trait-method/main.pa:4:19
+  ╰─𜱶 tests/errors/ambiguous-trait-method/main.pa:6:19

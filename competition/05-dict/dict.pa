@@ -4,7 +4,7 @@
 use std.dict
 
 def tally = fun m i limit buckets {
-	if i == limit is true {
+	if i == limit {
 		m
 	} else {
 		let key = to-string (i % buckets)

@@ -18,7 +18,7 @@ def sum = fun t {
 	when t is leaf v {
 		v
 	} is node l r {
-		(sum l) + (sum r)
+		sum l + sum r
 	}
 }
 

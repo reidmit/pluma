@@ -3,13 +3,13 @@ source: tests/errors.rs
 expression: output
 ---
 error[E0111]: Method `hello` is ambiguous: qualify it as `greet.hello` or `salute.hello`.
-  │
-5 │ def main = print (hello 5)
-  │                   ^^^^^
-  ╰─𜱶 tests/errors/ambiguous-bare-method/main.pa:5:19
+   │
+10 │ def main = print (hello 5)
+   │                   ^^^^^
+   ╰─𜱶 tests/errors/ambiguous-bare-method/main.pa:10:19
 
 error[E0102]: Type mismatch: expected `int -> 'a`, but found `?`.
-  │
-5 │ def main = print (hello 5)
-  │                   ^^^^^^^
-  ╰─𜱶 tests/errors/ambiguous-bare-method/main.pa:5:19
+   │
+10 │ def main = print (hello 5)
+   │                   ^^^^^^^
+   ╰─𜱶 tests/errors/ambiguous-bare-method/main.pa:10:19

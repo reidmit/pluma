@@ -3,10 +3,9 @@ source: tests/analyze.rs
 expression: output
 ---
 error: Field `nickname` does not exist in record of type `{age: int, name: string}`.
-> 8 | 	let bad-new-field = { ...a, nickname: "R" }
-                                ^
+> 8 | 	let bad-new-field = {...a, nickname: "R"}
+                               ^
 
 error: Type mismatch: expected `int`, but found `string`.
-> 11 | 	let bad-type-change = { ...a, age: "thirty" }
-                                   ^
-
+> 11 | 	let bad-type-change = {...a, age: "thirty"}
+                                  ^
