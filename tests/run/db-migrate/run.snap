@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+applied: 2
+reapplied: 0
+email: ada@x.io
+failed migration: err
+retry applied: 1
+== stderr ==

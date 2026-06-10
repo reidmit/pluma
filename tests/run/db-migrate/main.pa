@@ -1,0 +1,67 @@
+# Schema migrations (std.sys.db, built on the atomic `batch` primitive). Exercises a fresh
+# apply (two migrations run), an idempotent re-run (already-applied versions skipped -> 0),
+# that the migrated schema is actually usable, and -- the important one -- that a *failing*
+# migration rolls back atomically: a bad v3 that creates a table then hits invalid SQL must
+# leave neither the table nor a recorded version behind, which we prove by re-applying a
+# fixed v3 (it succeeds and creates the table, which would error if the rollback had leaked).
+# In-memory database, one connection, so the tracking table persists across calls.
+use std.list
+use std.sql
+use std.task
+use std.sys.db
+
+def migrations :: list migration = [
+	{version: 1, up: "create table users (id integer primary key, name text)"},
+	{version: 2, up: "alter table users add column email text"},
+]
+
+def main = fun {
+	try opened = db.open ":memory:"
+	when opened is ok conn {
+		try first = db.migrate conn migrations
+		when first is ok n {
+			print "applied: $(to-string n)"
+		} is err e {
+			print "migrate err: $(e)"
+		}
+		try again = db.migrate conn migrations
+		when again is ok n {
+			print "reapplied: $(to-string n)"
+		} is err e {
+			print "migrate err: $(e)"
+		}
+		try _ins = db.execute conn "insert into users (id, name, email) values (?, ?, ?)" [
+			sql.int 1,
+			sql.text "ada",
+			sql.text "ada@x.io",
+		]
+		try rows = db.execute conn "select email from users" []
+		when rows is ok rs {
+			when list.head rs is some r {
+				print "email: $(sql.get-text r "email" ?? "?")"
+			} is none {
+				print "no rows"
+			}
+		} is err e {
+			print "select err: $(e)"
+		}
+		try bad = db.migrate conn [
+			{version: 3, up: "create table temp_t (x integer); this is not valid sql"},
+		]
+		when bad is ok _ {
+			print "unexpected ok"
+		} is err _ {
+			print "failed migration: err"
+		}
+		try after = db.migrate conn [{version: 3, up: "create table temp_t (x integer)"}]
+		when after is ok n {
+			print "retry applied: $(to-string n)"
+		} is err e {
+			print "retry err: $(e)"
+		}
+		task.return 0
+	} is err e {
+		print "open err: $(e)"
+		task.return 0
+	}
+}

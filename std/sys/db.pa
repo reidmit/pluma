@@ -31,15 +31,17 @@ opaque enum connection {
 #
 # One generic op (`db-op`) backs the whole surface, selected by an op-code, all offloaded
 # to the pinned SQLite worker (host/src/db.rs). Args: the op-code, the connection id (0 for
-# `open`), a string (the path for `open`, the SQL for `execute`), and a bytes payload (the
-# encoded bind list for `execute`, empty otherwise). The result is raw bytes: the encoded
-# rows for `execute`, the new connection id as text for `open`, empty for `close`.
+# `open`), a string (the path for `open`, the SQL for `execute`/`batch`), and a bytes payload
+# (the encoded bind list for `execute`, empty otherwise). The result is raw bytes: the encoded
+# rows for `execute`, the new connection id as text for `open`, empty for `close`/`batch`.
 
 def op-open = 0
 
 def op-execute = 1
 
 def op-close = 2
+
+def op-batch = 3
 
 def db-op :: fun int int string bytes -> task (result bytes string) = built-in "db-op"
 
@@ -94,6 +96,23 @@ public def execute :: fun connection string (list value) -> task (result (list r
 		try r = db-op op-execute id sql (encode-params params)
 		task.return when r is ok raw {
 			decode-rows raw
+		} is err e {
+			err e
+		}
+	}
+}
+
+# Runs a multi-statement SQL script as one atomic transaction: every statement commits
+# together, or -- if any fails -- the whole script rolls back and you get the `err`. No
+# parameters and no result rows (use `execute` for those); this is for DDL scripts and setup.
+# `db.migrate` is built on it.
+#
+#     try _ = db.batch conn "create table a (x integer); create table b (y text)"
+public def batch :: fun connection string -> task (result nothing string) = fun conn script {
+	when conn is connection.handle id {
+		try r = db-op op-batch id script no-bytes
+		task.return when r is ok _ {
+			ok ()
 		} is err e {
 			err e
 		}
@@ -195,6 +214,76 @@ public def insert :: fun connection (table a) a -> task (result nothing string) 
 	} is err e {
 		err e
 	}
+}
+
+# --- migrations ----------------------------------------------------------------
+#
+# Track and apply schema changes over time. Each `migration` has a `version` (a number you
+# assign -- unique and increasing) and an `up` SQL script (one or more statements). `migrate`
+# records applied versions in an internal `_pluma_migrations` table, then applies every
+# not-yet-applied migration in ascending version order -- each atomically, via `batch`, so a
+# failing migration rolls back and leaves nothing behind -- and returns how many it ran.
+# Re-running is a no-op (applied versions are skipped), so it's safe to call on every startup.
+#
+#     try n = db.migrate conn [
+#         {version: 1, up: "create table users (id integer primary key, name text)"},
+#         {version: 2, up: "alter table users add column email text"},
+#     ]
+public alias migration {version :: int, up :: string}
+
+public def migrate :: fun connection (list migration) -> task (result int string) = fun conn migrations {
+	try ensured = batch conn "create table if not exists \"_pluma_migrations\" (version integer primary key)"
+	when ensured is ok _ {
+		try got = applied-versions conn
+		when got is ok applied {
+			let ordered = list.sort-by migrations fun m {
+				m.version
+			}
+			let pending = list.filter ordered fun m {
+				list.contains applied m.version == false
+			}
+			apply-pending conn pending 0
+		} is err e {
+			task.return (err e)
+		}
+	} is err e {
+		task.return (err e)
+	}
+}
+
+# The versions already recorded in the tracking table.
+def applied-versions :: fun connection -> task (result (list int) string) = fun conn {
+	try rows = execute conn "select version from \"_pluma_migrations\"" []
+	task.return when rows is ok rs {
+		list.try-map rs fun r {
+			sql.get-int r "version"
+		}
+	} is err e {
+		err e
+	}
+}
+
+# Apply each pending migration in order, counting successes; stop and report on the first
+# failure. The failing migration's transaction already rolled back, so its version isn't
+# recorded and a later re-run retries it.
+def apply-pending :: fun connection (list migration) int -> task (result int string) = fun conn pending count {
+	when pending is [] {
+		task.return (ok count)
+	} is [m, ...rest] {
+		try r = batch conn (migration-script m)
+		when r is ok _ {
+			apply-pending conn rest (count + 1)
+		} is err e {
+			task.return (err "migration $(to-string m.version): $(e)")
+		}
+	}
+}
+
+# A migration's atomic script: its `up`, then the row recording its version. `batch` wraps the
+# whole thing in one transaction, so the version is recorded only if the `up` succeeded. The
+# version is an `int` (spliced safely -- no string input); the `up` is the author's own SQL.
+def migration-script :: fun migration -> string = fun m {
+	m.up ++ ";\nINSERT INTO \"_pluma_migrations\" (version) VALUES (" ++ to-string m.version ++ ");"
 }
 
 # --- the wire codec (mirrors the host side in host/src/db.rs) ------------------

@@ -46,6 +46,11 @@ enum DbJob {
 		sql: String,
 		params: Vec<u8>,
 	},
+	Batch {
+		fid: i32,
+		conn: i64,
+		sql: String,
+	},
 	Close {
 		fid: i32,
 		conn: i64,
@@ -85,6 +90,13 @@ impl HostDb {
 				params,
 			},
 		);
+	}
+
+	/// Run `sql` as a multi-statement script against connection `conn` for fiber `fid`,
+	/// wrapped in one transaction (all-or-nothing). No params, no rows; the ok result is
+	/// `Nothing`. Used by `db.migrate` (and the `db.batch` escape hatch) for DDL scripts.
+	pub(crate) fn batch(&mut self, sink: CompletionSink, fid: i32, conn: i64, sql: String) {
+		self.send(sink, DbJob::Batch { fid, conn, sql });
 	}
 
 	/// Tear down `conn` for fiber `fid`: the worker drops the connection when it reaches
@@ -138,6 +150,13 @@ fn spawn_worker(sink: CompletionSink) -> Sender<DbJob> {
 					};
 					sink.complete(fid, res);
 				}
+				DbJob::Batch { fid, conn, sql } => {
+					let res = match conns.get_mut(&conn) {
+						Some(c) => run_batch(c, &sql),
+						None => OpResult::Err(format!("db.batch: unknown connection {conn}")),
+					};
+					sink.complete(fid, res);
+				}
 				DbJob::Close { fid, conn } => {
 					conns.remove(&conn);
 					sink.complete(fid, OpResult::Nothing);
@@ -186,6 +205,25 @@ fn run_execute(conn: &mut Connection, sql: &str, params: &[u8]) -> OpResult {
 		}
 	}
 	OpResult::Bytes(encode_rows(&out))
+}
+
+/// Run `sql` as a multi-statement script inside one transaction: commit on success, and on
+/// any error let the `Transaction` drop uncommitted (rusqlite rolls back automatically), so a
+/// failed migration leaves the database untouched. No params, no rows — `execute_batch` drives
+/// DDL and DML but discards results, which is exactly what migrations want.
+fn run_batch(conn: &mut Connection, sql: &str) -> OpResult {
+	let tx = match conn.transaction() {
+		Ok(t) => t,
+		Err(e) => return OpResult::Err(format!("db.batch: {e}")),
+	};
+	if let Err(e) = tx.execute_batch(sql) {
+		// `tx` drops here without a commit -> automatic rollback.
+		return OpResult::Err(format!("db.batch: {e}"));
+	}
+	match tx.commit() {
+		Ok(()) => OpResult::Nothing,
+		Err(e) => OpResult::Err(format!("db.batch: {e}")),
+	}
 }
 
 fn cell_to_sqlite(c: Cell) -> SqliteValue {
