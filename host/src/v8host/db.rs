@@ -14,6 +14,7 @@ const OP_OPEN: i32 = 0;
 const OP_EXECUTE: i32 = 1;
 const OP_CLOSE: i32 = 2;
 const OP_BATCH: i32 = 3;
+const OP_EXEC_COUNT: i32 = 4;
 
 /// Deliver a db `OpResult` into the caller's `(dst, cap)` buffer + a `(status, len)` pair.
 /// `Bytes` is the encoded rows (execute); `Count` is the new connection id (open), handed
@@ -74,6 +75,7 @@ pub(super) fn cb_db_op(
 				OP_OPEN => ctx.state.db.open(sink, fid, text),
 				OP_CLOSE => ctx.state.db.close(sink, fid, conn),
 				OP_BATCH => ctx.state.db.batch(sink, fid, conn, text),
+				OP_EXEC_COUNT => ctx.state.db.execute_count(sink, fid, conn, text, params),
 				OP_EXECUTE => ctx.state.db.execute(sink, fid, conn, text, params),
 				_ => ctx.state.db.execute(sink, fid, conn, text, params),
 			}

@@ -207,4 +207,32 @@ def tests :: test.suite = [
 		let q = sql.from "people" | sql.filter (sql.gt "nope" (sql.int 0))
 		assert.is-err (sql.validate-columns ["id", "name"] q)
 	},
+	test.case "compile-delete is parameterized with a WHERE" fun {
+		# --- v2: mutations ---
+
+		let (text, binds) = sql.compile-delete "people" [sql.eq "id" (sql.int 1)]
+		assert.all [
+			assert.equals text "DELETE FROM \"people\" WHERE \"id\" = ?",
+			assert.equals binds [sql.int 1],
+		]
+	},
+	test.case "compile-delete with no filters deletes every row" fun {
+		let (text, binds) = sql.compile-delete "people" []
+		assert.all [assert.equals text "DELETE FROM \"people\"", assert.equals binds []]
+	},
+	test.case "compile-update binds SET values before WHERE values" fun {
+		let (text, binds) = sql.compile-update "people" [("name", sql.text "ada")] [
+			sql.eq "id" (sql.int 1),
+		]
+		assert.all [
+			assert.equals text "UPDATE \"people\" SET \"name\" = ? WHERE \"id\" = ?",
+			assert.equals binds [sql.text "ada", sql.int 1],
+		]
+	},
+	test.case "validate-column-names rejects an unknown name" fun {
+		assert.all [
+			assert.equals (sql.validate-column-names ["id", "name"] ["name"]) (ok ()),
+			assert.is-err (sql.validate-column-names ["id", "name"] ["nope"]),
+		]
+	},
 ]

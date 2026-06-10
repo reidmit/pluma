@@ -281,15 +281,7 @@ public def compile :: fun query -> (string, list value) = fun q {
 		string.join (list.map q.select quote-ident) ", "
 	}
 	let head = "SELECT " ++ cols ++ " FROM " ++ quote-ident q.from
-	# Lower each predicate to (fragment, params); AND-join the fragments, concat the params
-	# in fragment order so their positions line up with the `?`s.
-	let lowered = list.map q.filter lower-pred
-	let where-sql = if list.length lowered == 0 {
-		""
-	} else {
-		" WHERE " ++ string.join (list.map lowered fst) " AND "
-	}
-	let where-params = list.flat-map lowered snd
+	let (where-sql, where-params) = where-clause q.filter
 	let order-sql = if list.length q.order == 0 {
 		""
 	} else {
@@ -301,6 +293,50 @@ public def compile :: fun query -> (string, list value) = fun q {
 		("", [])
 	}
 	(head ++ where-sql ++ order-sql ++ limit-sql, list.concat where-params limit-params)
+}
+
+# Lowers an AND-list of predicates to a WHERE clause: `(" WHERE …", params)`, or `("", [])`
+# when empty. Shared by `compile`, `compile-delete`, and `compile-update` so the predicate
+# lowering (incl. the NULL and empty-`IN` special cases) is written once.
+def where-clause :: fun (list predicate) -> (string, list value) = fun filters {
+	let lowered = list.map filters lower-pred
+	if list.length lowered == 0 {
+		("", [])
+	} else {
+		(" WHERE " ++ string.join (list.map lowered fst) " AND ", list.flat-map lowered snd)
+	}
+}
+
+# Builds a `DELETE` for a table name and an AND-list of predicates: parameterized,
+# identifiers quote-escaped, values bound. An empty `filters` deletes every row (bare
+# `DELETE FROM "t"`) -- the same footgun SQL has, surfaced honestly. Total, like `compile`.
+#
+#     sql.compile-delete "users" [sql.eq "id" (sql.int 1)]
+#     # => ("DELETE FROM \"users\" WHERE \"id\" = ?", [value.int 1])
+public def compile-delete :: fun string (list predicate) -> (string, list value) = fun name filters {
+	let (where-sql, where-params) = where-clause filters
+	("DELETE FROM " ++ quote-ident name ++ where-sql, where-params)
+}
+
+# Builds an `UPDATE` for a table name, a list of `(column, new-value)` assignments, and an
+# AND-list of predicates. The SET values bind first, then the WHERE values, so positions line
+# up. Like `compile-delete`, an empty `filters` updates every row. (An empty `sets` produces a
+# malformed `SET ` that SQLite rejects at execute time -- a caller mistake, not injection.)
+#
+#     sql.compile-update "users" [("name", sql.text "ada")] [sql.eq "id" (sql.int 1)]
+#     # => ("UPDATE \"users\" SET \"name\" = ? WHERE \"id\" = ?", [value.text "ada", value.int 1])
+public def compile-update :: fun string (list (string, value)) (list predicate) -> (string, list value) = fun name sets filters {
+	let assigns = list.map sets fun pair {
+		let (c, _) = pair
+		quote-ident c ++ " = ?"
+	}
+	let set-params = list.map sets fun pair {
+		let (_, v) = pair
+		v
+	}
+	let (where-sql, where-params) = where-clause filters
+	let text = "UPDATE " ++ quote-ident name ++ " SET " ++ string.join assigns ", " ++ where-sql
+	(text, list.concat set-params where-params)
 }
 
 # Wraps `s` in double quotes, doubling any embedded quote -- the SQL way to make any string
@@ -507,16 +543,25 @@ public def compile-insert :: fun string (list (string, value)) -> (string, list 
 # than SQLite's runtime "no such column". The typed `db.run` calls this before compiling;
 # the SELECT list isn't checked (the typed path sets it from the schema). Pure.
 public def validate-columns :: fun (list string) query -> result nothing string = fun allowed q {
-	let used = list.concat (list.map q.filter pred-column) (list.map q.order sort-column)
-	check-columns allowed used
+	let used = list.concat (predicate-columns q.filter) (list.map q.order sort-column)
+	validate-column-names allowed used
 }
 
-def check-columns :: fun (list string) (list string) -> result nothing string = fun allowed used {
+# The columns a list of predicates references, in order -- so a mutation runner can validate a
+# WHERE clause (and SET columns) against a table's schema.
+public def predicate-columns :: fun (list predicate) -> list string = fun ps {
+	list.map ps pred-column
+}
+
+# Checks that every name in `used` appears in `allowed`, returning `err` naming the first one
+# that doesn't. The column-name primitive `validate-columns` (and the mutation runners) build
+# on it.
+public def validate-column-names :: fun (list string) (list string) -> result nothing string = fun allowed used {
 	when used is [] {
 		ok ()
 	} is [c, ...rest] {
 		if list.contains allowed c {
-			check-columns allowed rest
+			validate-column-names allowed rest
 		} else {
 			err "no such column '$(c)'"
 		}

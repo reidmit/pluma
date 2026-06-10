@@ -46,6 +46,12 @@ enum DbJob {
 		sql: String,
 		params: Vec<u8>,
 	},
+	ExecuteCount {
+		fid: i32,
+		conn: i64,
+		sql: String,
+		params: Vec<u8>,
+	},
 	Batch {
 		fid: i32,
 		conn: i64,
@@ -84,6 +90,28 @@ impl HostDb {
 		self.send(
 			sink,
 			DbJob::Execute {
+				fid,
+				conn,
+				sql,
+				params,
+			},
+		);
+	}
+
+	/// Run a single DML statement (`sql` + `params`) against `conn` for fiber `fid`, returning
+	/// the number of rows it changed (an `OpResult::Count`) rather than result rows. Backs
+	/// `db.update`/`db.delete`.
+	pub(crate) fn execute_count(
+		&mut self,
+		sink: CompletionSink,
+		fid: i32,
+		conn: i64,
+		sql: String,
+		params: Vec<u8>,
+	) {
+		self.send(
+			sink,
+			DbJob::ExecuteCount {
 				fid,
 				conn,
 				sql,
@@ -150,6 +178,18 @@ fn spawn_worker(sink: CompletionSink) -> Sender<DbJob> {
 					};
 					sink.complete(fid, res);
 				}
+				DbJob::ExecuteCount {
+					fid,
+					conn,
+					sql,
+					params,
+				} => {
+					let res = match conns.get_mut(&conn) {
+						Some(c) => run_exec_count(c, &sql, &params),
+						None => OpResult::Err(format!("db.execute: unknown connection {conn}")),
+					};
+					sink.complete(fid, res);
+				}
 				DbJob::Batch { fid, conn, sql } => {
 					let res = match conns.get_mut(&conn) {
 						Some(c) => run_batch(c, &sql),
@@ -205,6 +245,26 @@ fn run_execute(conn: &mut Connection, sql: &str, params: &[u8]) -> OpResult {
 		}
 	}
 	OpResult::Bytes(encode_rows(&out))
+}
+
+/// Run a single non-query statement (`sql` + `params`) and return the number of rows it
+/// changed. `Statement::execute` is the non-SELECT path — it runs the statement and reports
+/// rows affected directly (it errors if handed a row-returning query, which `db.update`/
+/// `db.delete` never do).
+fn run_exec_count(conn: &mut Connection, sql: &str, params: &[u8]) -> OpResult {
+	let binds = match decode_values(params) {
+		Ok(v) => v,
+		Err(e) => return OpResult::Err(format!("db.execute: bad params: {e}")),
+	};
+	let mut stmt = match conn.prepare(sql) {
+		Ok(s) => s,
+		Err(e) => return OpResult::Err(format!("db.execute: {e}")),
+	};
+	let bound: Vec<SqliteValue> = binds.into_iter().map(cell_to_sqlite).collect();
+	match stmt.execute(rusqlite::params_from_iter(bound)) {
+		Ok(n) => OpResult::Count(n as i64),
+		Err(e) => OpResult::Err(format!("db.execute: {e}")),
+	}
 }
 
 /// Run `sql` as a multi-statement script inside one transaction: commit on success, and on

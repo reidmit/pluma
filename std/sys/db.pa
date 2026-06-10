@@ -43,6 +43,8 @@ def op-close = 2
 
 def op-batch = 3
 
+def op-exec-count = 4
+
 def db-op :: fun int int string bytes -> task (result bytes string) = built-in "db-op"
 
 def no-bytes :: bytes = string.to-bytes ""
@@ -96,6 +98,24 @@ public def execute :: fun connection string (list value) -> task (result (list r
 		try r = db-op op-execute id sql (encode-params params)
 		task.return when r is ok raw {
 			decode-rows raw
+		} is err e {
+			err e
+		}
+	}
+}
+
+# Runs a single DML statement (binding `params`) and returns the number of rows it changed,
+# rather than result rows. Backs the typed `db.update`/`db.delete`; for raw row results use
+# `execute`. Errors if handed a row-returning query.
+def execute-count :: fun connection string (list value) -> task (result int string) = fun conn sql params {
+	when conn is connection.handle id {
+		try r = db-op op-exec-count id sql (encode-params params)
+		task.return when r is ok raw {
+			when bytes.to-string raw is ok text {
+				string.to-int text
+			} is err e {
+				err e
+			}
 		} is err e {
 			err e
 		}
@@ -250,6 +270,39 @@ public def insert :: fun connection (table a) a -> task (result nothing string) 
 		ok ()
 	} is err e {
 		err e
+	}
+}
+
+# Deletes the rows of `t` matching `filters` (AND-joined; an empty `filters` deletes every
+# row), returning how many were removed. Filter columns are validated against the schema
+# first, so a typo'd column is a crisp error before SQLite.
+#
+#     try removed = db.delete conn todos [sql.eq "done" (sql.bool true)]
+public def delete :: fun connection (table a) (list predicate) -> task (result int string) = fun conn t filters {
+	when sql.validate-column-names (sql.table-column-names t) (sql.predicate-columns filters) is ok _ {
+		let (text, binds) = sql.compile-delete (sql.table-name t) filters
+		execute-count conn text binds
+	} is err e {
+		task.return (err e)
+	}
+}
+
+# Updates the rows of `t` matching `filters` (an empty `filters` updates every row), setting
+# each `(column, new-value)` in `sets`, and returns how many rows changed. Both the SET
+# columns and the filter columns are validated against the schema first.
+#
+#     try changed = db.update conn todos [("done", sql.bool true)] [sql.lt "priority" (sql.int 3)]
+public def update :: fun connection (table a) (list (string, value)) (list predicate) -> task (result int string) = fun conn t sets filters {
+	let set-cols = list.map sets fun pair {
+		let (c, _) = pair
+		c
+	}
+	let used = list.concat set-cols (sql.predicate-columns filters)
+	when sql.validate-column-names (sql.table-column-names t) used is ok _ {
+		let (text, binds) = sql.compile-update (sql.table-name t) sets filters
+		execute-count conn text binds
+	} is err e {
+		task.return (err e)
 	}
 }
 
