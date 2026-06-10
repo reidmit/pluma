@@ -363,3 +363,190 @@ def snd :: fun (string, list value) -> list value = fun pair {
 	let (_, b) = pair
 	b
 }
+
+# --- typed tables: define the decoder once ------------------------------------
+#
+# Everything above lets you build and decode a query. A `table` ties those together for one
+# row type: its name, its columns in declared order, and the decode/encode pair. Define one
+# with `sql.table` and the `std.sys.db` runners thread the decoder through a whole query for
+# you, so you never restate it -- and the SELECT list is always the schema's columns in
+# declared order, so the decoder always sees every column it reads.
+
+# A column's declared storage affinity. SQLite types each *value*, so this is advisory --
+# it only sets the column's declared affinity in generated `create table` DDL (`c-bool` is
+# stored as INTEGER, since SQLite has no boolean type) -- but it documents the schema and
+# drives `sql.create-table`.
+public enum col-type {
+	c-int
+	c-text
+	c-float
+	c-bool
+	c-blob
+}
+
+# A named column with its declared affinity. Build with `sql.col`.
+public enum column {
+	column string col-type
+}
+
+public def col :: fun string col-type -> column = fun name ty {
+	column.column name ty
+}
+
+public def col-name :: fun column -> string = fun c {
+	when c is column.column n _ {
+		n
+	}
+}
+
+public def col-affinity :: fun column -> col-type = fun c {
+	when c is column.column _ ty {
+		ty
+	}
+}
+
+# A typed table: its name, its columns in declared order, and the pair of functions tying a
+# result `row` to your own record type `a` (`decode`) and a value of `a` back to its bound
+# cells (`encode`, used by `db.insert`). `a` is the row's record type. Opaque: build one
+# with `sql.table` and read its parts through the accessors below.
+opaque enum table a {
+	table string (list column) (fun row -> result a string) (fun a -> list (string, value))
+}
+
+# Defines a table (named `table-of`, not `table`, since `table` is the type). `decode` is your
+# row decoder (the `try`-threaded one from above); `encode` is its reverse, mapping a value of
+# `a` to `(column, value)` cells for `db.insert`.
+#
+#     def users :: table user = sql.table-of "users"
+#         [sql.col "id" sql.col-type.c-int, sql.col "name" sql.col-type.c-text]
+#         decode-user encode-user
+public def table-of :: fun string (list column) (fun row -> result a string) (fun a -> list (string, value)) -> table a = fun name cols decode encode {
+	table.table name cols decode encode
+}
+
+public def table-name :: fun (table a) -> string = fun t {
+	when t is table.table n _ _ _ {
+		n
+	}
+}
+
+public def table-columns :: fun (table a) -> list column = fun t {
+	when t is table.table _ cols _ _ {
+		cols
+	}
+}
+
+# The column names in declared order: the canonical SELECT list and INSERT column order.
+public def table-column-names :: fun (table a) -> list string = fun t {
+	list.map (table-columns t) col-name
+}
+
+public def table-decode :: fun (table a) -> (fun row -> result a string) = fun t {
+	when t is table.table _ _ decode _ {
+		decode
+	}
+}
+
+public def table-encode :: fun (table a) -> (fun a -> list (string, value)) = fun t {
+	when t is table.table _ _ _ encode {
+		encode
+	}
+}
+
+# Generates a `CREATE TABLE` statement from a table's schema, every identifier quote-escaped.
+# Handy for setting up a fresh database. It is not idempotent -- prepend your own
+# `if not exists` handling, or just let a second run error.
+#
+#     sql.create-table users
+#     # => CREATE TABLE "users" ("id" INTEGER, "name" TEXT)
+public def create-table :: fun (table a) -> string = fun t {
+	let defs = list.map (table-columns t) fun c {
+		quote-ident (col-name c) ++ " " ++ affinity-sql (col-affinity c)
+	}
+	"CREATE TABLE " ++ quote-ident (table-name t) ++ " (" ++ string.join defs ", " ++ ")"
+}
+
+def affinity-sql :: fun col-type -> string = fun ty {
+	when ty is col-type.c-int {
+		"INTEGER"
+	} is col-type.c-text {
+		"TEXT"
+	} is col-type.c-float {
+		"REAL"
+	} is col-type.c-bool {
+		"INTEGER"
+	} is col-type.c-blob {
+		"BLOB"
+	}
+}
+
+# Builds an `INSERT` for a table name and a list of `(column, value)` cells (as produced by a
+# table's `encode`): fully parameterized, every identifier quote-escaped, values bound in
+# column order. Like `compile`, total and injection-free by construction.
+#
+#     sql.compile-insert "users" [("id", sql.int 1), ("name", sql.text "ada")]
+#     # => ("INSERT INTO \"users\" (\"id\", \"name\") VALUES (?, ?)", [value.int 1, value.text "ada"])
+public def compile-insert :: fun string (list (string, value)) -> (string, list value) = fun name cells {
+	let names = list.map cells fun cell {
+		let (c, _) = cell
+		quote-ident c
+	}
+	let holes = list.map cells fun _cell {
+		"?"
+	}
+	let binds = list.map cells fun cell {
+		let (_, v) = cell
+		v
+	}
+	let text = "INSERT INTO " ++ quote-ident name ++ " (" ++ string.join names ", " ++ ") VALUES (" ++ string.join holes ", " ++ ")"
+	(text, binds)
+}
+
+# Checks that every column a query filters or orders by appears in `allowed` (a table's
+# column names), returning `err` naming the first unknown one -- a crisper, earlier error
+# than SQLite's runtime "no such column". The typed `db.run` calls this before compiling;
+# the SELECT list isn't checked (the typed path sets it from the schema). Pure.
+public def validate-columns :: fun (list string) query -> result nothing string = fun allowed q {
+	let used = list.concat (list.map q.filter pred-column) (list.map q.order sort-column)
+	check-columns allowed used
+}
+
+def check-columns :: fun (list string) (list string) -> result nothing string = fun allowed used {
+	when used is [] {
+		ok ()
+	} is [c, ...rest] {
+		if list.contains allowed c {
+			check-columns allowed rest
+		} else {
+			err "no such column '$(c)'"
+		}
+	}
+}
+
+def pred-column :: fun predicate -> string = fun p {
+	when p is predicate.equal c _ {
+		c
+	} is predicate.not-equal c _ {
+		c
+	} is predicate.greater c _ {
+		c
+	} is predicate.greater-eq c _ {
+		c
+	} is predicate.less c _ {
+		c
+	} is predicate.less-eq c _ {
+		c
+	} is predicate.like c _ {
+		c
+	} is predicate.one-of c _ {
+		c
+	}
+}
+
+def sort-column :: fun sort -> string = fun s {
+	when s is sort.asc c {
+		c
+	} is sort.desc c {
+		c
+	}
+}

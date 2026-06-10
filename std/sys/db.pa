@@ -115,6 +115,88 @@ public def fetch :: fun query connection (fun row -> result a string) -> task (r
 	}
 }
 
+# --- typed tables: thread the decoder through a whole query --------------------
+#
+# `db.fetch` above already runs a query and decodes its rows, but you hand it the decoder
+# every call. A `table a` (from `std.sql`) bundles the schema with its decode/encode pair
+# once; the stages here thread that decoder for you. Seed with `db.from`, add `std.sql`
+# predicates and ordering, and finish with `db.run` -- the row type flows the whole way and
+# the SELECT list is always the schema's columns, so the decoder always matches:
+#
+#     db.from users | db.filter (sql.gt "age" (sql.int 17)) | db.order-by (sql.desc "age") | db.run conn
+#     # :: task (result (list user) string)
+
+# A query against a typed table: the table (schema + decoder) plus the accumulating
+# `std.sql` clauses. Opaque -- build it with `db.from` and the stages below, run it with
+# `db.run`.
+# (The payload types are written qualified -- `sql.table`/`sql.query` -- because an enum
+# payload's types resolve against the prelude and this module, not bare imports, unlike a
+# function signature.)
+opaque enum table-query a {
+	tq (sql.table a) sql.query
+}
+
+# Seeds a typed query over every row of `t`. The SELECT list is fixed to the schema's
+# columns in declared order.
+public def from :: fun (table a) -> table-query a = fun t {
+	table-query.tq t (sql.select (sql.from (sql.table-name t)) (sql.table-column-names t))
+}
+
+# Adds a WHERE condition (AND-joined, in order), built with the `std.sql` constructors
+# (`sql.eq`, `sql.gt`, ...).
+public def filter :: fun (table-query a) predicate -> table-query a = fun q p {
+	when q is table-query.tq t inner {
+		table-query.tq t (sql.filter inner p)
+	}
+}
+
+# Adds an ORDER BY term (built with `sql.asc` / `sql.desc`).
+public def order-by :: fun (table-query a) sort -> table-query a = fun q o {
+	when q is table-query.tq t inner {
+		table-query.tq t (sql.order-by inner o)
+	}
+}
+
+# Caps the number of rows returned.
+public def limit :: fun (table-query a) int -> table-query a = fun q n {
+	when q is table-query.tq t inner {
+		table-query.tq t (sql.limit inner n)
+	}
+}
+
+# Runs a typed query: first validates that every filtered/ordered column exists in the
+# schema (a crisp error returned *before* hitting SQLite), then runs and decodes each row
+# with the table's own decoder.
+public def run :: fun (table-query a) connection -> task (result (list a) string) = fun q conn {
+	when q is table-query.tq t inner {
+		when sql.validate-columns (sql.table-column-names t) inner is ok _ {
+			fetch inner conn (sql.table-decode t)
+		} is err e {
+			task.return (err e)
+		}
+	}
+}
+
+# Every row of a table, decoded -- `db.from t | db.run conn` with no clauses.
+public def all :: fun connection (table a) -> task (result (list a) string) = fun conn t {
+	run (from t) conn
+}
+
+# Inserts one row, encoding it with the table's `encode`. The statement is fully
+# parameterized and quote-escaped (via `sql.compile-insert`), so a value can't break out.
+#
+#     try _ = db.insert conn users {id: 1, name: "ada", age: some 30, active: true}
+public def insert :: fun connection (table a) a -> task (result nothing string) = fun conn t value {
+	let cells = (sql.table-encode t) value
+	let (text, binds) = sql.compile-insert (sql.table-name t) cells
+	try r = execute conn text binds
+	task.return when r is ok _ {
+		ok ()
+	} is err e {
+		err e
+	}
+}
+
 # --- the wire codec (mirrors the host side in host/src/db.rs) ------------------
 #
 # A value encodes as a tag byte then its payload: ints/floats as decimal text terminated

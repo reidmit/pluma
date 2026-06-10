@@ -9,6 +9,24 @@ def check :: fun query string (list value) -> result nothing string = fun q want
 	assert.all [assert.equals got-sql want-sql, assert.equals got-binds want-binds]
 }
 
+# A small typed table to exercise the v2 schema layer.
+alias person {id :: int, name :: string}
+
+def decode-person :: fun row -> result person string = fun r {
+	try id = sql.get-int r "id"
+	try name = sql.get-text r "name"
+	ok {id, name}
+}
+
+def encode-person :: fun person -> list (string, value) = fun p {
+	[("id", sql.int p.id), ("name", sql.text p.name)]
+}
+
+def people :: table person = sql.table-of "people" [
+	sql.col "id" sql.col-type.c-int,
+	sql.col "name" sql.col-type.c-text,
+] decode-person encode-person
+
 def tests :: test.suite = [
 	test.case "bool encodes as 1 / 0" fun {
 		# --- value constructors + bool encoding ---
@@ -142,5 +160,51 @@ def tests :: test.suite = [
 	},
 	test.case "identifiers with embedded quotes are escaped, never injectable" fun {
 		check (sql.from "we\"ird") "SELECT * FROM \"we\"\"ird\"" []
+	},
+	test.case "col exposes its name and affinity" fun {
+		# --- v2: typed tables ---
+
+		let c = sql.col "age" sql.col-type.c-int
+		assert.all [
+			assert.equals (sql.col-name c) "age",
+			assert.equals (sql.col-affinity c) sql.col-type.c-int,
+		]
+	},
+	test.case "a table exposes its name and column order" fun {
+		assert.all [
+			assert.equals (sql.table-name people) "people",
+			assert.equals (sql.table-column-names people) ["id", "name"],
+		]
+	},
+	test.case "the table's decoder reads a row into the record type" fun {
+		let r = sql.row-of [("id", sql.int 1), ("name", sql.text "ada")]
+		assert.equals ((sql.table-decode people) r) (ok {id: 1, name: "ada"})
+	},
+	test.case "the table's encoder maps a record back to cells" fun {
+		assert.equals ((sql.table-encode people) {id: 1, name: "ada"}) [
+			("id", sql.int 1),
+			("name", sql.text "ada"),
+		]
+	},
+	test.case "create-table renders DDL from the schema" fun {
+		assert.equals (sql.create-table people) "CREATE TABLE \"people\" (\"id\" INTEGER, \"name\" TEXT)"
+	},
+	test.case "compile-insert is parameterized and quote-escaped" fun {
+		let (text, binds) = sql.compile-insert "people" [
+			("id", sql.int 1),
+			("name", sql.text "ada"),
+		]
+		assert.all [
+			assert.equals text "INSERT INTO \"people\" (\"id\", \"name\") VALUES (?, ?)",
+			assert.equals binds [sql.int 1, sql.text "ada"],
+		]
+	},
+	test.case "validate-columns accepts known filter/order columns" fun {
+		let q = sql.from "people" | sql.filter (sql.gt "id" (sql.int 0)) | sql.order-by (sql.asc "name")
+		assert.equals (sql.validate-columns ["id", "name"] q) (ok ())
+	},
+	test.case "validate-columns rejects an unknown column" fun {
+		let q = sql.from "people" | sql.filter (sql.gt "nope" (sql.int 0))
+		assert.is-err (sql.validate-columns ["id", "name"] q)
 	},
 ]
