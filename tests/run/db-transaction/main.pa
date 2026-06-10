@@ -1,0 +1,72 @@
+# User-facing transactions (std.sys.db). `db.transaction` brackets a Pluma callback with
+# BEGIN/COMMIT (or ROLLBACK if the body returns `err`), so several db ops are atomic. Built
+# purely on `execute` -- the pinned worker serializes a connection's ops, so the raw
+# BEGIN/COMMIT bracket the body's writes. Exercises: a committed transaction whose return
+# value threads out, and a rolled-back one (body returns err) whose write is undone. In-memory
+# database, one connection.
+use std.list
+use std.sql
+use std.task
+use std.sys.db
+
+# Number of rows currently in `acct` (proves what committed vs rolled back).
+def count-acct :: fun connection -> task (result int string) = fun conn {
+	try rows = db.execute conn "select count(*) as n from acct" []
+	task.return when rows is ok rs {
+		when list.head rs is some r {
+			sql.get-int r "n"
+		} is none {
+			err "no count row"
+		}
+	} is err e {
+		err e
+	}
+}
+
+def report-count :: fun connection string -> task nothing = fun conn label {
+	try c = count-acct conn
+	task.return when c is ok n {
+		print "$(label): count=$(to-string n)"
+	} is err e {
+		print "$(label): count err: $(e)"
+	}
+}
+
+def main = fun {
+	try opened = db.open ":memory:"
+	when opened is ok conn {
+		try _ddl = db.execute conn "create table acct (name text, balance integer)" []
+		try _seed = db.execute conn "insert into acct values (?, ?)" [sql.text "a", sql.int 100]
+		try done = db.transaction conn fun {
+			# a committed transaction: two writes land together, and the body's value threads out
+
+			try _u = db.execute conn "update acct set balance = balance - 10 where name = ?" [
+				sql.text "a",
+			]
+			try _i = db.execute conn "insert into acct values (?, ?)" [sql.text "b", sql.int 10]
+			task.return (ok 42)
+		}
+		when done is ok v {
+			print "tx1 committed, body returned $(to-string v)"
+		} is err e {
+			print "tx1 err: $(e)"
+		}
+		try _c1 = report-count conn "after commit"
+		try aborted = db.transaction conn fun {
+			# a rolled-back transaction: the insert is undone when the body returns err
+
+			try _i = db.execute conn "insert into acct values (?, ?)" [sql.text "c", sql.int 999]
+			task.return (err "abort on purpose")
+		}
+		when aborted is ok _ {
+			print "tx2 unexpected ok"
+		} is err e {
+			print "tx2 rolled back: $(e)"
+		}
+		try _c2 = report-count conn "after rollback"
+		task.return 0
+	} is err e {
+		print "open err: $(e)"
+		task.return 0
+	}
+}

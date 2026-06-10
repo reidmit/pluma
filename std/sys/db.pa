@@ -119,6 +119,43 @@ public def batch :: fun connection string -> task (result nothing string) = fun 
 	}
 }
 
+# Runs `body` inside a transaction: `BEGIN` first, then -- if `body` returns `ok v` -- `COMMIT`
+# and `ok v`; if it returns `err e`, `ROLLBACK` and `err e`, so every write `body` made is
+# undone together. Use it to make several `execute`/`insert` calls atomic. Unlike `batch`,
+# `body` is real Pluma code (loops, decode-and-decide, any db op), not a fixed SQL string.
+#
+#     try moved = db.transaction conn (fun {
+#         try _ = db.execute conn "update acct set bal = bal - 10 where id = ?" [sql.int 1]
+#         try _ = db.execute conn "update acct set bal = bal + 10 where id = ?" [sql.int 2]
+#         task.return (ok ())
+#     })
+#
+# All of `body`'s ops must use this same `conn`: the transaction is connection state, and the
+# pinned worker serializes the connection's ops, so `BEGIN`/`COMMIT` correctly bracket them.
+# (Don't share one connection across fibers mid-transaction -- their ops would interleave, the
+# usual single-connection-transaction caveat.) A *fault* inside `body` (cancellation, not an
+# `err`) abandons the open transaction; SQLite rolls it back when the connection is dropped.
+public def transaction :: fun connection (fun nothing -> task (result a string)) -> task (result a string) = fun conn body {
+	try began = execute conn "BEGIN" []
+	when began is ok _ {
+		try outcome = body ()
+		when outcome is ok v {
+			try committed = execute conn "COMMIT" []
+			task.return when committed is ok _ {
+				ok v
+			} is err e {
+				err e
+			}
+		} is err e {
+			# Surface the body's error; the rollback's own result is best-effort.
+			try _rolled = execute conn "ROLLBACK" []
+			task.return (err e)
+		}
+	} is err e {
+		task.return (err e)
+	}
+}
+
 # Compiles a `std.sql` query, runs it, and decodes each row with `decode`. The terminal
 # stage of a `|`-built query pipeline: total, injection-free SQL in, typed rows out.
 #

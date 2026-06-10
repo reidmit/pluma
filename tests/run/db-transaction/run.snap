@@ -1,0 +1,12 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+tx1 committed, body returned 42
+after commit: count=2
+tx2 rolled back: abort on purpose
+after rollback: count=2
+== stderr ==
