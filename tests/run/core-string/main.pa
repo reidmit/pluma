@@ -9,7 +9,7 @@ def main = fun {
 	# byte-length vs length: "é" is one character, two bytes
 	print (string.byte-length "héllo")
 	print (string.length "héllo")
-	"héllo" | string.chars | print
+	"héllo" |> string.chars |> print
 
 	print (string.to-upper "Hello, World!")
 	print (string.to-lower "Hello, World!")
@@ -21,11 +21,11 @@ def main = fun {
 	print (string.ends-with "hello world" "world")
 
 	# join + split, pipeline-friendly
-	["a", "b", "c"] | string.join "," | print
-	"a,b,c" | string.split "," | print
+	["a", "b", "c"] |> string.join "," |> print
+	"a,b,c" |> string.split "," |> print
 
 	# split with empty separator → individual chars
-	"abc" | string.split "" | print
+	"abc" |> string.split "" |> print
 
 	print (string.replace "hello world" "world" "there")
 

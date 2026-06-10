@@ -53,7 +53,9 @@ impl Operator {
 			// no whitespace between subject and `[`).
 			Token::Minus(..) => Some(Operator::SubtractionOrNegation),
 			Token::Percent(..) => Some(Operator::Remainder),
-			Token::Pipe(..) => Some(Operator::Chain),
+			// The pipe operator is `|>`. Bare `|` is not an infix operator — it
+			// survives only as regex alternation inside backtick literals.
+			Token::PipeArrow(..) => Some(Operator::Chain),
 			Token::Plus(..) => Some(Operator::Addition),
 			Token::RightAngle(..) => Some(Operator::GreaterThan),
 			Token::RightAngleEqual(..) => Some(Operator::GreaterThanEquals),
@@ -117,7 +119,7 @@ impl std::fmt::Display for Operator {
 
 		match &self {
 			Addition => write!(f, "+"),
-			Chain => write!(f, "|"),
+			Chain => write!(f, "|>"),
 			Concat => write!(f, "++"),
 			Division => write!(f, "/"),
 			Equality => write!(f, "=="),

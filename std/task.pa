@@ -318,7 +318,7 @@ public def retry :: fun int (task a) -> task a = fun n t {
 # first wins. If the timer wins, `t` is cancelled and the task fails with
 # "timeout".
 public def with-timeout :: fun duration (task a) -> task a = fun d t {
-	race [t, sleep d | then fun _slept { fail "timeout" }]
+	race [t, sleep d |> then fun _slept { fail "timeout" }]
 }
 
 # Drives `pool`: each time a child settles, re-raise a failure (fail-fast) or

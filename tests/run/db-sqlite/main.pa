@@ -49,7 +49,7 @@ def main = fun {
 			sql.float 9.99,
 			sql.null,
 		]
-		try found = sql.from "items" | sql.filter (sql.ge "price" (sql.float 2.0)) | sql.order-by (sql.desc "id") | db.fetch conn decode-item
+		try found = sql.from "items" |> sql.filter (sql.ge "price" (sql.float 2.0)) |> sql.order-by (sql.desc "id") |> db.fetch conn decode-item
 		when found is ok items {
 			# typed query through the builder + decoder
 

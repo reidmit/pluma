@@ -155,6 +155,7 @@ fn lexer_kind(t: &Token) -> Option<u32> {
 		| UnaryMinus(..)
 		| Percent(..)
 		| Pipe(..)
+		| PipeArrow(..)
 		| Plus(..)
 		| Question(..)
 		| RightAngle(..)

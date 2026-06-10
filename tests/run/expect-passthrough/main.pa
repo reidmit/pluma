@@ -5,8 +5,8 @@ use std.string
 
 def main = fun {
 	# result.expect: ok -> the value
-	print (string.to-int "42" | result.expect "parsing")
+	print (string.to-int "42" |> result.expect "parsing")
 
 	# option.expect: some -> the value
-	print (list.head [10, 20, 30] | option.expect "empty list")
+	print (list.head [10, 20, 30] |> option.expect "empty list")
 }

@@ -1579,7 +1579,7 @@ impl<'a> Lowerer<'a> {
 				_ => return Err("unsupported dispatched operator".to_string()),
 			}
 		}
-		// `x | f a b` pipes `x` in as `f`'s first argument.
+		// `x |> f a b` pipes `x` in as `f`'s first argument.
 		if let Operator::Chain = op {
 			return self.lower_chain(left, right, range);
 		}

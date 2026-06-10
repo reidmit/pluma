@@ -248,6 +248,9 @@ pub enum Token {
 	/// `|` token
 	Pipe(usize, usize),
 
+	/// `|>` token (pipe / chain operator)
+	PipeArrow(usize, usize),
+
 	/// `+` token
 	Plus(usize, usize),
 
@@ -382,6 +385,7 @@ impl Token {
 			| Path(start, end)
 			| Percent(start, end)
 			| Pipe(start, end)
+			| PipeArrow(start, end)
 			| Plus(start, end)
 			| Question(start, end)
 			| RightAngle(start, end)
@@ -492,6 +496,7 @@ impl fmt::Display for Token {
 			&Path(..) => "a path to a module or imported identifier (e.g. 'path/to/module')",
 			&Percent(..) => "a '%'",
 			&Pipe(..) => "a '|'",
+			&PipeArrow(..) => "a '|>'",
 			&Plus(..) => "a '+'",
 			&Question(..) => "a '?'",
 			&RightAngle(..) => "a '>'",

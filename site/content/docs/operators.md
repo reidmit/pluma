@@ -52,6 +52,21 @@ an `ord` instance (`int`, `float`, `string`, and parametrically `option`/`result
 | - | - | - |
 | `++` | `string string -> string` | Concatenation |
 
+## Pipe
+
+`|>` threads its left operand in as the **first** argument of the call on its
+right, so `x |> f` is `f x` and `x |> f a b` is `f x a b`. It binds looser than
+every other operator and is left-associative, so a chain reads top-to-bottom:
+
+```pluma
+[1, 2, 3, 4, 5]
+	|> list.filter fun n { n > 2 }
+	|> list.map fun n { n * 10 }
+	|> print
+```
+
+is `print (list.map (list.filter [1, 2, 3, 4, 5] (fun n { n > 2 })) (fun n { n * 10 }))`.
+
 ## Coalesce
 
 | Operator | Signature | Meaning |

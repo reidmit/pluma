@@ -493,6 +493,11 @@ impl<'a> Iterator for Tokenizer<'a> {
 						return Some(DoublePipe(start_index, self.index));
 					}
 
+					if self.peek_byte() == Some(b'>') {
+						self.index += 1;
+						return Some(PipeArrow(start_index, self.index));
+					}
+
 					return Some(Pipe(start_index, self.index));
 				}
 

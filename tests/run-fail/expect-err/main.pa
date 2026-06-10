@@ -5,6 +5,6 @@ use std.string
 
 def main = fun {
 	print "before"
-	print (string.to-int "abc" | result.expect "parsing the count")
+	print (string.to-int "abc" |> result.expect "parsing the count")
 	print "after"
 }

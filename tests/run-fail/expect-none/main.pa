@@ -6,6 +6,6 @@ def empty :: list int = []
 
 def main = fun {
 	print "before"
-	print (list.head empty | option.expect "the list was empty")
+	print (list.head empty |> option.expect "the list was empty")
 	print "after"
 }

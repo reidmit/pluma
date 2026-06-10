@@ -120,9 +120,9 @@ def to-bool :: fun (result bytes string) -> bool = fun r {
 # decode each (a non-UTF-8 name reads as "" and is dropped).
 def to-names :: fun (result bytes string) -> result (list string) string = fun r {
 	when r is ok raw {
-		ok (bytes.split raw '\x00' | list.map fun b {
+		ok (bytes.split raw '\x00' |> list.map fun b {
 			bytes.to-string b ?? ""
-		} | list.filter fun s { string.length s > 0 })
+		} |> list.filter fun s { string.length s > 0 })
 	} is err e {
 		err e
 	}

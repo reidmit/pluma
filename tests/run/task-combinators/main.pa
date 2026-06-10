@@ -3,13 +3,13 @@
 use std.task
 
 def main = fun {
-	try a = task.return 21 | task.map fun n { n + n }
+	try a = task.return 21 |> task.map fun n { n + n }
 	print (to-string a)
 	try b = task.then (task.return 10) fun n {
 		task.return (n + 5)
 	}
 	print (to-string b)
-	try c = task.fail "down" | task.or-else fun { task.return 100 }
+	try c = task.fail "down" |> task.or-else fun { task.return 100 }
 	print (to-string c)
 	try d = task.fail "nope" ?? task.return 7
 	print (to-string d)

@@ -3015,7 +3015,7 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 
 			ExprKind::BinaryOperation { left, right, op } => {
-				// `x | f a b` pipes `x` as the first arg of the RHS call: `f x a b`.
+				// `x |> f a b` pipes `x` as the first arg of the RHS call: `f x a b`.
 				// We don't visit `right` as a normal expression because its standalone
 				// type (a Call's return type with the wrong arity) would conflict with
 				// the prepended-arg signature we want.

@@ -30,7 +30,7 @@ def todo-cols :: list column = [
 def todos :: table todo = sql.table-of "todos" todo-cols decode-todo encode-todo
 
 def dump :: fun connection string -> task nothing = fun conn label {
-	try rows = db.from todos | db.order-by (sql.asc "id") | db.run conn
+	try rows = db.from todos |> db.order-by (sql.asc "id") |> db.run conn
 	task.return when rows is ok items {
 		print "$(label): $(to-string (list.length items)) rows"
 		list.each items fun it {

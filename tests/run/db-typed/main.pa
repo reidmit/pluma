@@ -61,7 +61,7 @@ def main = fun {
 		try _1 = db.insert conn todos {id: 1, title: "wash", done: false, priority: some 2}
 		try _2 = db.insert conn todos {id: 2, title: "cook", done: true, priority: none}
 		try _3 = db.insert conn todos {id: 3, title: "read", done: false, priority: some 1}
-		try found = db.from todos | db.filter (sql.eq "done" (sql.bool false)) | db.order-by (sql.asc "priority") | db.run conn
+		try found = db.from todos |> db.filter (sql.eq "done" (sql.bool false)) |> db.order-by (sql.asc "priority") |> db.run conn
 		when found is ok items {
 			# encoder-driven inserts (incl. a NULL via `none`)
 
@@ -82,7 +82,7 @@ def main = fun {
 		} is err e {
 			print "all err: $(e)"
 		}
-		try bad = db.from todos | db.filter (sql.gt "nope" (sql.int 0)) | db.run conn
+		try bad = db.from todos |> db.filter (sql.gt "nope" (sql.int 0)) |> db.run conn
 		when bad is ok _ {
 			# schema validation: an unknown column is caught before SQLite
 

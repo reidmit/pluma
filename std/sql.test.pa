@@ -100,18 +100,18 @@ def tests :: test.suite = [
 		check (sql.from "users") "SELECT * FROM \"users\"" []
 	},
 	test.case "select restricts (and quotes) the columns" fun {
-		let q = sql.from "users" | sql.select ["id", "name"]
+		let q = sql.from "users" |> sql.select ["id", "name"]
 		check q "SELECT \"id\", \"name\" FROM \"users\"" []
 	},
 	test.case "filters AND-join with bound params in order" fun {
-		let q = sql.from "users" | sql.filter (sql.eq "active" (sql.bool true)) | sql.filter (sql.gt "age" (sql.int 17))
+		let q = sql.from "users" |> sql.filter (sql.eq "active" (sql.bool true)) |> sql.filter (sql.gt "age" (sql.int 17))
 		check q "SELECT * FROM \"users\" WHERE \"active\" = ? AND \"age\" > ?" [
 			sql.int 1,
 			sql.int 17,
 		]
 	},
 	test.case "all the comparison predicates lower" fun {
-		let q = sql.from "t" | sql.filter (sql.ne "a" (sql.int 1)) | sql.filter (sql.ge "b" (sql.int 2)) | sql.filter (sql.lt "c" (sql.int 3)) | sql.filter (sql.le "d" (sql.int 4)) | sql.filter (sql.like "e" "x%")
+		let q = sql.from "t" |> sql.filter (sql.ne "a" (sql.int 1)) |> sql.filter (sql.ge "b" (sql.int 2)) |> sql.filter (sql.lt "c" (sql.int 3)) |> sql.filter (sql.le "d" (sql.int 4)) |> sql.filter (sql.like "e" "x%")
 		check q "SELECT * FROM \"t\" WHERE \"a\" <> ? AND \"b\" >= ? AND \"c\" < ? AND \"d\" <= ? AND \"e\" LIKE ?" [
 			sql.int 1,
 			sql.int 2,
@@ -121,11 +121,11 @@ def tests :: test.suite = [
 		]
 	},
 	test.case "eq/ne on NULL become IS / IS NOT NULL with no bind" fun {
-		let q = sql.from "events" | sql.filter (sql.eq "deleted-at" sql.null) | sql.filter (sql.ne "kind" sql.null)
+		let q = sql.from "events" |> sql.filter (sql.eq "deleted-at" sql.null) |> sql.filter (sql.ne "kind" sql.null)
 		check q "SELECT * FROM \"events\" WHERE \"deleted-at\" IS NULL AND \"kind\" IS NOT NULL" []
 	},
 	test.case "one-of lowers to IN with one bind per element" fun {
-		let q = sql.from "events" | sql.filter (sql.one-of "kind" [
+		let q = sql.from "events" |> sql.filter (sql.one-of "kind" [
 			sql.text "click",
 			sql.text "view",
 		])
@@ -135,23 +135,23 @@ def tests :: test.suite = [
 		]
 	},
 	test.case "an empty one-of matches nothing (literal 0)" fun {
-		let q = sql.from "t" | sql.filter (sql.one-of "k" [])
+		let q = sql.from "t" |> sql.filter (sql.one-of "k" [])
 		check q "SELECT * FROM \"t\" WHERE 0" []
 	},
 	test.case "order-by keeps insertion order and direction" fun {
-		let q = sql.from "t" | sql.order-by (sql.desc "age") | sql.order-by (sql.asc "name")
+		let q = sql.from "t" |> sql.order-by (sql.desc "age") |> sql.order-by (sql.asc "name")
 		check q "SELECT * FROM \"t\" ORDER BY \"age\" DESC, \"name\" ASC" []
 	},
 	test.case "limit binds its value last" fun {
-		let q = sql.from "t" | sql.filter (sql.gt "age" (sql.int 17)) | sql.limit 50
+		let q = sql.from "t" |> sql.filter (sql.gt "age" (sql.int 17)) |> sql.limit 50
 		check q "SELECT * FROM \"t\" WHERE \"age\" > ? LIMIT ?" [sql.int 17, sql.int 50]
 	},
 	test.case "a full query assembles every clause in order" fun {
-		let q = sql.from "users" | sql.select [
+		let q = sql.from "users" |> sql.select [
 			"id",
 			"name",
 			"age",
-		] | sql.filter (sql.eq "active" (sql.bool true)) | sql.filter (sql.gt "age" (sql.int 17)) | sql.order-by (sql.desc "age") | sql.limit 50
+		] |> sql.filter (sql.eq "active" (sql.bool true)) |> sql.filter (sql.gt "age" (sql.int 17)) |> sql.order-by (sql.desc "age") |> sql.limit 50
 		check q "SELECT \"id\", \"name\", \"age\" FROM \"users\" WHERE \"active\" = ? AND \"age\" > ? ORDER BY \"age\" DESC LIMIT ?" [
 			sql.int 1,
 			sql.int 17,
@@ -200,11 +200,11 @@ def tests :: test.suite = [
 		]
 	},
 	test.case "validate-columns accepts known filter/order columns" fun {
-		let q = sql.from "people" | sql.filter (sql.gt "id" (sql.int 0)) | sql.order-by (sql.asc "name")
+		let q = sql.from "people" |> sql.filter (sql.gt "id" (sql.int 0)) |> sql.order-by (sql.asc "name")
 		assert.equals (sql.validate-columns ["id", "name"] q) (ok ())
 	},
 	test.case "validate-columns rejects an unknown column" fun {
-		let q = sql.from "people" | sql.filter (sql.gt "nope" (sql.int 0))
+		let q = sql.from "people" |> sql.filter (sql.gt "nope" (sql.int 0))
 		assert.is-err (sql.validate-columns ["id", "name"] q)
 	},
 	test.case "compile-delete is parameterized with a WHERE" fun {
