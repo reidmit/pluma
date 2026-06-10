@@ -43,8 +43,9 @@ pub(crate) fn build_command(
 		}
 	};
 	if let Err(diagnostics) = compiler.check() {
-		print_diagnostics(diagnostics);
-		std::process::exit(1);
+		if print_diagnostics_is_fatal(diagnostics) {
+			std::process::exit(1);
+		}
 	}
 
 	let program = match ir::lower(&compiler) {
@@ -119,8 +120,9 @@ fn build_fullstack(entry_path: String, out_base: Option<String>, server_url: Str
 		}
 	};
 	if let Err(diagnostics) = compiler.check() {
-		print_diagnostics(diagnostics);
-		std::process::exit(1);
+		if print_diagnostics_is_fatal(diagnostics) {
+			std::process::exit(1);
+		}
 	}
 	// Per-artifact gating: server reachability as `sys`, client reachability as `web`.
 	if let Err(diagnostics) = compiler.gate_fullstack() {

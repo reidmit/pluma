@@ -34,8 +34,9 @@ pub(crate) fn run_command(hmr: bool, entry_path: String, program_args: Vec<Strin
 	};
 
 	if let Err(diagnostics) = compiler.check() {
-		print_diagnostics(diagnostics);
-		std::process::exit(1);
+		if print_diagnostics_is_fatal(diagnostics) {
+			std::process::exit(1);
+		}
 	}
 
 	// Compile to a WasmGC artifact and run it under V8 — the deploy engine, the exact

@@ -107,8 +107,9 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 	let t_setup = std::time::Instant::now();
 
 	if let Err(diagnostics) = compiler.check() {
-		print_diagnostics(diagnostics);
-		std::process::exit(1);
+		if print_diagnostics_is_fatal(diagnostics) {
+			std::process::exit(1);
+		}
 	}
 
 	let t_check = std::time::Instant::now();

@@ -14,6 +14,17 @@ pub fn print_diagnostics(diagnostics: Vec<Diagnostic>) {
 	eprint!("{}", render_diagnostics_string(&diagnostics));
 }
 
+/// Print diagnostics, then report whether any was fatal (error-severity). Warnings
+/// (e.g. an unused binding) print but don't abort — a `run`/`build`/`test` proceeds
+/// past warning-only diagnostics rather than failing the whole compile. `check()`
+/// returns *every* diagnostic in its `Err` (the LSP and `analyze` rely on that), so
+/// the fatal/non-fatal split lives here, at the execution boundary.
+pub fn print_diagnostics_is_fatal(diagnostics: Vec<Diagnostic>) -> bool {
+	let fatal = diagnostics.iter().any(Diagnostic::is_error);
+	print_diagnostics(diagnostics);
+	fatal
+}
+
 /// Render diagnostics to a (possibly colorized) string, instead of printing them.
 /// The `pluma dev` dashboard embeds this in its status panel; `print_diagnostics`
 /// is the same thing piped to stderr.

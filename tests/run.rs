@@ -30,17 +30,25 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 	// program's stdin. Otherwise stdin is empty (any read returns EOF).
 	let stdin_bytes = std::fs::read(fixture_dir.join("stdin.txt")).unwrap_or_default();
 
-	let result = (|| -> Result<host::RunCapture, RunError> {
+	let result = (|| -> Result<(host::RunCapture, Vec<Diagnostic>), RunError> {
 		// Ungated, exactly like `pluma run`: the fixtures compile to wasm and run
 		// under V8 with full host capabilities, so no deploy target is selected.
 		let mut compiler = Compiler::from_entry_path(relative.to_str().unwrap().to_string())
 			.map_err(RunError::Diagnostics)?;
-		compiler.check().map_err(RunError::Diagnostics)?;
+		// Like `pluma run`: an error aborts; warning-only diagnostics print but don't
+		// block the run, so they ride along to be surfaced in the snapshot's stderr.
+		let warnings = match compiler.check() {
+			Ok(()) => Vec::new(),
+			Err(diags) if diags.iter().any(Diagnostic::is_error) => {
+				return Err(RunError::Diagnostics(diags));
+			}
+			Err(diags) => diags,
+		};
 		// Raw lowered IR — the wasm backend runs its own internal pipeline,
 		// exactly as `pluma run` / `pluma build` drive it.
 		let ir_program = ir::lower(&compiler).map_err(RunError::Lower)?;
 		let bytes = wasm::emit(&ir_program).map_err(RunError::WasmEmit)?;
-		Ok(host::run_wasm_v8_captured(&bytes, &stdin_bytes))
+		Ok((host::run_wasm_v8_captured(&bytes, &stdin_bytes), warnings))
 	})();
 
 	// Reassemble the status / stdout / stderr snapshot block. The V8 runner folds a
@@ -49,16 +57,23 @@ fn run_fixture(path: &Path) -> datatest_stable::Result<()> {
 	// stderr (after any stderr the program itself produced), matching the shape the
 	// suite has always pinned.
 	let (status, stdout, stderr) = match result {
-		Ok(cap) => {
+		Ok((cap, warnings)) => {
+			// Non-fatal warnings print before the program runs (as `pluma run` does),
+			// so they lead the stderr block. Empty when there are none — existing
+			// snapshots are unchanged.
+			let lead = format_diagnostics(&warnings);
 			if let Some(msg) = cap.status.strip_prefix("runtime error: ") {
-				let mut stderr = cap.stderr;
+				let mut stderr = lead;
+				stderr.push_str(&cap.stderr);
 				stderr.push_str(msg);
 				stderr.push('\n');
 				("runtime error".to_string(), cap.stdout, stderr)
 			} else {
 				// "ok" (any other status would be a host/module-level error, which
 				// we surface verbatim so it can't masquerade as a clean run).
-				(cap.status, cap.stdout, cap.stderr)
+				let mut stderr = lead;
+				stderr.push_str(&cap.stderr);
+				(cap.status, cap.stdout, stderr)
 			}
 		}
 		Err(RunError::Diagnostics(d)) => (

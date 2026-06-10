@@ -329,7 +329,10 @@ fn build_web(entry_path: &str, hmr: bool) -> Result<Vec<u8>, Vec<Diagnostic>> {
 		Err(diagnostics) => return Err(diagnostics),
 	};
 	if let Err(diagnostics) = compiler.check() {
-		return Err(diagnostics);
+		// Errors fail the build (red panel); warning-only diagnostics don't block dev.
+		if diagnostics.iter().any(Diagnostic::is_error) {
+			return Err(diagnostics);
+		}
 	}
 	let program = match ir::lower(&compiler) {
 		Ok(p) => p,
@@ -597,7 +600,12 @@ fn build_fullstack_with_hmr(
 	let mut compiler = Compiler::from_fullstack_dir(entry_path.to_string())?
 		.with_rpc_base_url(server_url.to_string())
 		.with_hmr(hmr);
-	compiler.check()?;
+	if let Err(diagnostics) = compiler.check() {
+		// Errors fail the build (red panel); warning-only diagnostics don't block dev.
+		if diagnostics.iter().any(Diagnostic::is_error) {
+			return Err(diagnostics);
+		}
+	}
 	compiler.gate_fullstack()?;
 	let server = compiler.entry_modules[0].clone();
 	let client = compiler.entry_modules[1].clone();

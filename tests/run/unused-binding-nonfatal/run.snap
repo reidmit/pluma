@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+wrapped
+5
+== stderr ==
+warning: Name `n` is never used.
+warning: Name `ignored` is never used.
+warning: Name `unused` is never used.

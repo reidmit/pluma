@@ -1,0 +1,30 @@
+# Regression: an *unused* binding is a warning, not a hard error -- the program must
+# still compile and run. (It used to abort the whole build: `check()` returned every
+# diagnostic as `Err`, and the run/build path treated any diagnostic as fatal, so an
+# unused binding silently exited 1 with no output. Warnings now print but don't block.)
+#
+# Exercises the three binding forms that warn when unused: a `let`, a function
+# parameter, and -- the original repro -- a payload binding in a match arm.
+enum box {
+	wrap int
+}
+
+# An unused payload binding in a match arm. `n` here is never used; the arm still runs.
+def kind-of = fun b {
+	when b is box.wrap n {
+		"wrapped"
+	} else {
+		"other"
+	}
+}
+
+# An unused function parameter.
+def const-five = fun ignored {
+	5
+}
+
+def main = fun {
+	let unused = 99
+	print (kind-of (box.wrap 7))
+	print (to-string (const-five "anything"))
+}
