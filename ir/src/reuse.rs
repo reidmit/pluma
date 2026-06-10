@@ -23,23 +23,16 @@
 // `Loop`), and before the repr pass (so the minted token gets a repr).
 
 use crate::types::*;
-use compiler::Range;
 use std::collections::HashSet;
 
-/// One `dict.insert` site and the reuse pass's verdict on it — the basis for the
-/// `pluma reuse` lint, so a refactor that silently breaks linearity (and drops a
-/// loop back to per-iteration copying) is observable rather than a silent perf cliff.
+/// The reuse pass's verdict on one `dict.insert` site — what `report` yields so the
+/// soundness test can assert the pass mutates in place exactly where it's safe to
+/// (and copies otherwise), without inspecting the rewritten IR.
 pub struct ReuseNote {
-	/// Source range of the `dict.insert` call.
-	pub range: Range,
 	/// The enclosing function's module (e.g. `main`, `std.dict`).
 	pub module: String,
-	/// The enclosing function's name.
-	pub func: String,
 	/// True when the insert was rewritten to the in-place transient.
 	pub reused: bool,
-	/// When not reused, the reason it stays a persistent copy.
-	pub reason: &'static str,
 }
 
 /// Analyze (without rewriting) every `dict.insert` site and report whether the reuse
@@ -56,46 +49,38 @@ pub fn report(program: &IrProgram) -> Vec<ReuseNote> {
 
 fn report_fn(f: &Function, notes: &mut Vec<ReuseNote>) {
 	// The loopify shape `Loop { … } ; Return(result)` is the only one the analysis
-	// can reuse; classify each insert against it (or note why the function disqualifies).
+	// can reuse; classify each insert against it.
 	let shape = (f.body.0.len() == 2)
 		.then(|| match (&f.body.0[0].kind, &f.body.0[1].kind) {
 			(StmtKind::Loop(l), StmtKind::Return(Atom::Var(r))) => Some((l, r.0)),
 			_ => None,
 		})
 		.flatten();
-	for (range, d) in insert_sites(&f.body) {
-		let (reused, reason) = match shape {
-			None => (false, "not a tail-recursive `dict.insert` accumulator loop"),
-			Some((loop_body, result)) => {
-				if !assigned_in_block(loop_body).contains(&d) || !f.params.iter().any(|p| p.0 == d) {
-					(false, "the dict is not the loop's carried accumulator")
-				} else {
-					match eligibility(f, d, result, loop_body) {
-						Ok(()) => (true, ""),
-						Err(why) => (false, why),
-					}
-				}
+	for d in insert_sites(&f.body) {
+		let reused = match shape {
+			Some((loop_body, result))
+				if assigned_in_block(loop_body).contains(&d) && f.params.iter().any(|p| p.0 == d) =>
+			{
+				is_eligible(f, d, result, loop_body)
 			}
+			_ => false,
 		};
 		notes.push(ReuseNote {
-			range,
 			module: f.module.clone(),
-			func: f.name.clone(),
 			reused,
-			reason,
 		});
 	}
 }
 
-/// Every `dict.insert` consume site in `b`: its source range and the dict var.
-fn insert_sites(b: &Block) -> Vec<(Range, u32)> {
+/// Every `dict.insert` consume site in `b`: the dict var it consumes.
+fn insert_sites(b: &Block) -> Vec<u32> {
 	let mut out = Vec::new();
-	fn walk(b: &Block, out: &mut Vec<(Range, u32)>) {
+	fn walk(b: &Block, out: &mut Vec<u32>) {
 		for s in &b.0 {
 			if let StmtKind::Let(_, Rvalue::Call(Callee::Builtin(tag, _), args)) = &s.kind {
 				if tag == "dict-insert" {
 					if let Some(Atom::Var(v)) = args.get(1) {
-						out.push((s.range, v.0));
+						out.push(v.0);
 					}
 				}
 			}
@@ -822,6 +807,7 @@ fn pattern_binds(p: &Pattern, bump: &mut impl FnMut(u32)) {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use compiler::Range;
 
 	fn syn() -> Range {
 		Range::collapsed(0, 0)
