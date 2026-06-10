@@ -59,6 +59,15 @@ pub(crate) fn binop_instr(op: ir::BinOp) -> Option<Instruction<'static>> {
 		// Strict logical and/or over i32 booleans (both operands evaluated).
 		And => Instruction::I32And,
 		Or => Instruction::I32Or,
+		// Bitwise ops over i64. `ShiftRight` is arithmetic (`I64ShrS`),
+		// `ShiftRightUnsigned` is logical (`I64ShrU`). WASM takes the shift count
+		// modulo 64, matching the `bit.shift-*` builtins.
+		BitAnd => Instruction::I64And,
+		BitOr => Instruction::I64Or,
+		BitXor => Instruction::I64Xor,
+		ShiftLeft => Instruction::I64Shl,
+		ShiftRight => Instruction::I64ShrS,
+		ShiftRightUnsigned => Instruction::I64ShrU,
 		// Concrete numeric equality compares unboxed registers directly. Float
 		// `==`/`!=` is IEEE (`nan != nan`), matching structural `==`/`!=` on floats.
 		EqI64 => Instruction::I64Eq,

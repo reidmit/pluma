@@ -3,8 +3,12 @@
 # of 64 bits -- handy for flags, masks, packing several small values into
 # one number, and low-level byte twiddling.
 #
-# There's no operator syntax for these; they're plain functions, so
-# `bit.or (bit.and x mask) flag` reads left to right like any other call.
+# Each function also has operator syntax: `&` (and), `|` (or), `^` (xor),
+# `<<` (shift-left), `>>` (shift-right), `>>>` (shift-right-unsigned), and the
+# prefix `~` (not). So `x & mask | flag` is `bit.or (bit.and x mask) flag`. The
+# operators bind tighter than comparison (so `x & mask == 0` means
+# `(x & mask) == 0`); the functions stay useful for `|>` chains and passing a
+# bit op as a value.
 
 # Bitwise AND: a 1 in the result wherever *both* inputs have a 1. The
 # usual tool for masking -- keeping only the bits a mask selects.

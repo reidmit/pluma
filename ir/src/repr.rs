@@ -275,6 +275,7 @@ fn binop_result_repr(op: BinOp) -> Repr {
 	use BinOp::*;
 	match op {
 		AddInt | SubInt | MulInt | DivInt | RemInt => Repr::I64,
+		BitAnd | BitOr | BitXor | ShiftLeft | ShiftRight | ShiftRightUnsigned => Repr::I64,
 		AddFloat | SubFloat | MulFloat | DivFloat | RemFloat => Repr::F64,
 		Concat => Repr::Boxed,
 		// All relations and logical ops produce a `bool`.
@@ -290,6 +291,7 @@ fn binop_operand_repr(op: BinOp) -> Repr {
 		AddInt | SubInt | MulInt | DivInt | RemInt | EqI64 | NeI64 | LtI64 | LeI64 | GtI64 | GeI64 => {
 			Repr::I64
 		}
+		BitAnd | BitOr | BitXor | ShiftLeft | ShiftRight | ShiftRightUnsigned => Repr::I64,
 		AddFloat | SubFloat | MulFloat | DivFloat | RemFloat | EqF64 | NeF64 | LtF64 | LeF64
 		| GtF64 | GeF64 => Repr::F64,
 		And | Or => Repr::I32,

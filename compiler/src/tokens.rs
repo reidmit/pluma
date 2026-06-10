@@ -91,6 +91,9 @@ pub enum Token {
 	/// `>>` token
 	DoubleRightAngle(usize, usize),
 
+	/// `>>>` token
+	TripleRightAngle(usize, usize),
+
 	/// `**` token
 	DoubleStar(usize, usize),
 
@@ -337,6 +340,7 @@ impl Token {
 			| DoublePlus(start, end)
 			| DoubleQuestion(start, end)
 			| DoubleRightAngle(start, end)
+			| TripleRightAngle(start, end)
 			| DoubleStar(start, end)
 			| Equal(start, end)
 			| ForwardSlash(start, end)
@@ -448,6 +452,7 @@ impl fmt::Display for Token {
 			&DoublePlus(..) => "a '++'",
 			&DoubleQuestion(..) => "a '??'",
 			&DoubleRightAngle(..) => "a '>>'",
+			&TripleRightAngle(..) => "a '>>>'",
 			&DoubleStar(..) => "a '**'",
 			&Equal(..) => "a '='",
 			&ForwardSlash(..) => "a '/'",

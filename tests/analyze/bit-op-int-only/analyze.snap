@@ -1,0 +1,15 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Type mismatch: expected `int`, but found `float`.
+> 2 | def bad-and = 1.5 & 2
+                    ^^^
+
+error: Type mismatch: expected `int`, but found `float`.
+> 3 | def bad-shift = 8 >> 1.0
+                           ^^^
+
+error: Type mismatch: expected `int`, but found `float`.
+> 4 | def bad-not = ~3.5
+                     ^^^

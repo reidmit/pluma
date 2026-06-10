@@ -1004,7 +1004,10 @@ impl<'a> Parser<'a> {
 				dispatch_sink: None,
 			}),
 			Some(
-				t @ Token::Minus(start, ..) | t @ Token::UnaryMinus(start, ..) | t @ Token::Bang(start, ..),
+				t @ Token::Minus(start, ..)
+				| t @ Token::UnaryMinus(start, ..)
+				| t @ Token::Bang(start, ..)
+				| t @ Token::Tilde(start, ..),
 			) => {
 				// these are prefix unary operators!
 				let operator = match t {
@@ -1013,6 +1016,10 @@ impl<'a> Parser<'a> {
 					// the infix operators (it has no row for `Bang`), so handle it
 					// here alongside the other prefixes rather than unwrapping `None`.
 					Token::Bang(..) => Operator::LogicalNot,
+					// `~` is bitwise-not (prefix). Like `Bang`, `from_token` has no
+					// row for it (bare `~` is only infix-mapped as nothing), so map
+					// it here.
+					Token::Tilde(..) => Operator::BitNot,
 					_ => Operator::from_token(t).unwrap(),
 				};
 				// Baseline before the advance: that advance lexes the operand

@@ -488,6 +488,15 @@ pub enum BinOp {
 	Concat,
 	And,
 	Or,
+	/// Bitwise operators over `i64` operands (`&`, `|`, `^`, `<<`, `>>`, `>>>`).
+	/// `ShiftRight` is arithmetic (sign-preserving); `ShiftRightUnsigned` is
+	/// logical (zero-fill). Result and operands are all `I64`.
+	BitAnd,
+	BitOr,
+	BitXor,
+	ShiftLeft,
+	ShiftRight,
+	ShiftRightUnsigned,
 	/// Structural equality / inequality — operands are `Boxed` (works on any
 	/// value: ints, strings, records, …; compared structurally).
 	Eq,

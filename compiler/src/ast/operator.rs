@@ -9,6 +9,10 @@ pub struct OperatorNode {
 #[derive(Clone)]
 pub enum Operator {
 	Addition,
+	BitAnd,
+	BitNot,
+	BitOr,
+	BitXor,
 	Chain,
 	Concat,
 	Division,
@@ -29,20 +33,31 @@ pub enum Operator {
 	NullCoalescing,
 	Range,
 	Remainder,
+	ShiftLeft,
+	ShiftRight,
+	ShiftRightUnsigned,
 	SubtractionOrNegation,
 }
 
 impl Operator {
 	pub fn from_token(token: Token) -> Option<Operator> {
 		match token {
+			// Bare `&` is bitwise AND (infix). `&&` is `DoubleAnd` (logical and).
+			Token::And(..) => Some(Operator::BitAnd),
 			Token::BangEqual(..) => Some(Operator::Inequality),
+			// `^` is bitwise XOR in expression position (it also anchors regex
+			// literals, parsed in a separate context).
+			Token::Caret(..) => Some(Operator::BitXor),
 			Token::Dot(..) => Some(Operator::FieldAccess),
 			Token::DoubleAnd(..) => Some(Operator::LogicalAnd),
 			Token::DoubleDot(..) => Some(Operator::Range),
 			Token::DoubleEqual(..) => Some(Operator::Equality),
+			// `<<`/`>>`/`>>>` are the bit-shift operators.
+			Token::DoubleLeftAngle(..) => Some(Operator::ShiftLeft),
 			Token::DoublePipe(..) => Some(Operator::LogicalOr),
 			Token::DoublePlus(..) => Some(Operator::Concat),
 			Token::DoubleQuestion(..) => Some(Operator::NullCoalescing),
+			Token::DoubleRightAngle(..) => Some(Operator::ShiftRight),
 			Token::DoubleStar(..) => Some(Operator::Exponentiation),
 			Token::ForwardSlash(..) => Some(Operator::Division),
 			Token::LeftAngle(..) => Some(Operator::LessThan),
@@ -53,9 +68,12 @@ impl Operator {
 			// no whitespace between subject and `[`).
 			Token::Minus(..) => Some(Operator::SubtractionOrNegation),
 			Token::Percent(..) => Some(Operator::Remainder),
-			// The pipe operator is `|>`. Bare `|` is not an infix operator — it
-			// survives only as regex alternation inside backtick literals.
+			// Bare `|` is bitwise OR. The pipe/chain operator is `|>` (`PipeArrow`).
+			// Inside backtick literals `|` still means regex alternation, parsed
+			// in a separate context.
+			Token::Pipe(..) => Some(Operator::BitOr),
 			Token::PipeArrow(..) => Some(Operator::Chain),
+			Token::TripleRightAngle(..) => Some(Operator::ShiftRightUnsigned),
 			Token::Plus(..) => Some(Operator::Addition),
 			Token::RightAngle(..) => Some(Operator::GreaterThan),
 			Token::RightAngleEqual(..) => Some(Operator::GreaterThanEquals),
@@ -81,6 +99,14 @@ impl Operator {
 			LogicalAnd => Some((30, 31)),
 			Equality | Inequality => Some((40, 41)),
 			LessThan | LessThanEquals | GreaterThan | GreaterThanEquals => Some((50, 51)),
+			// Bitwise operators bind tighter than comparison (so `x & m == 0` is
+			// `(x & m) == 0`, not C's footgun) but looser than `+`/`-`. Among
+			// themselves: shifts tightest, then `&`, `^`, `|` — matching the C
+			// family's relative order.
+			BitOr => Some((52, 53)),
+			BitXor => Some((54, 55)),
+			BitAnd => Some((56, 57)),
+			ShiftLeft | ShiftRight | ShiftRightUnsigned => Some((58, 59)),
 			Addition | SubtractionOrNegation => Some((60, 61)),
 			// `++` (string concat) binds like addition: left-associative and
 			// tighter than comparisons, so `a ++ b == c ++ d` groups as
@@ -100,6 +126,7 @@ impl Operator {
 		// these numbers are relative to those above (see infix_binding_power);
 		match &self {
 			SubtractionOrNegation => ((), 75),
+			BitNot => ((), 75),
 			LogicalNot => ((), 35),
 			_ => unreachable!(),
 		}
@@ -119,6 +146,10 @@ impl std::fmt::Display for Operator {
 
 		match &self {
 			Addition => write!(f, "+"),
+			BitAnd => write!(f, "&"),
+			BitNot => write!(f, "~"),
+			BitOr => write!(f, "|"),
+			BitXor => write!(f, "^"),
 			Chain => write!(f, "|>"),
 			Concat => write!(f, "++"),
 			Division => write!(f, "/"),
@@ -139,6 +170,9 @@ impl std::fmt::Display for Operator {
 			NullCoalescing => write!(f, "??"),
 			Range => write!(f, ".."),
 			Remainder => write!(f, "%"),
+			ShiftLeft => write!(f, "<<"),
+			ShiftRight => write!(f, ">>"),
+			ShiftRightUnsigned => write!(f, ">>>"),
 			SubtractionOrNegation => write!(f, "-"),
 		}
 	}

@@ -3008,6 +3008,11 @@ impl<'compiler> Analyzer<'compiler> {
 						expr.ty = Type::Bool;
 						constraints.push(eq_constraint(right.ty.clone(), Type::Bool).at(right.range));
 					}
+					Operator::BitNot => {
+						// `~n` flips every bit; int-only, no dispatch.
+						expr.ty = Type::Int;
+						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.range));
+					}
 					_ => {
 						// Other prefix ops not supported yet.
 					}
@@ -3093,6 +3098,20 @@ impl<'compiler> Analyzer<'compiler> {
 						expr.ty = ty.clone();
 						constraints.push(eq_constraint(left.ty.clone(), ty.clone()).at(left.range));
 						constraints.push(eq_constraint(right.ty.clone(), ty).at(right.range));
+					}
+
+					// Bitwise operators treat an `int` as a flat row of 64 bits;
+					// both operands and the result are pinned to `int` (no float
+					// overload, no trait dispatch). They lower to a direct `BinOp`.
+					Operator::BitAnd
+					| Operator::BitOr
+					| Operator::BitXor
+					| Operator::ShiftLeft
+					| Operator::ShiftRight
+					| Operator::ShiftRightUnsigned => {
+						expr.ty = Type::Int;
+						constraints.push(eq_constraint(left.ty.clone(), Type::Int).at(left.range));
+						constraints.push(eq_constraint(right.ty.clone(), Type::Int).at(right.range));
 					}
 
 					Operator::LogicalAnd | Operator::LogicalOr => {

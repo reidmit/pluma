@@ -52,6 +52,29 @@ an `ord` instance (`int`, `float`, `string`, and parametrically `option`/`result
 | - | - | - |
 | `++` | `string string -> string` | Concatenation |
 
+## Bitwise
+
+These treat an `int` as a flat row of 64 bits (two's complement). They are
+`int`-only — there is no `float` overload and no trait dispatch — and each is
+also available as a function in `std.bit` for use in `|>` chains or as a
+first-class value.
+
+| Operator | Signature | Meaning |
+| - | - | - |
+| `&` | `int int -> int` | Bitwise and |
+| `\|` | `int int -> int` | Bitwise or |
+| `^` | `int int -> int` | Bitwise xor |
+| `<<` | `int int -> int` | Shift left (zero-fill) |
+| `>>` | `int int -> int` | Shift right, arithmetic (sign-preserving) |
+| `>>>` | `int int -> int` | Shift right, logical (zero-fill) |
+| `~` | `int -> int` (prefix) | Bitwise not (flip every bit) |
+
+Unlike C, the bitwise operators all bind **tighter than comparison**, so the
+common idiom `x & mask == 0` parses as `(x & mask) == 0` rather than the
+surprising `x & (mask == 0)`. Among themselves they follow the familiar order:
+shifts tightest, then `&`, then `^`, then `|` — and all of them looser than
+`+`/`-`.
+
 ## Pipe
 
 `|>` threads its left operand in as the **first** argument of the call on its

@@ -538,6 +538,12 @@ impl<'a> Iterator for Tokenizer<'a> {
 
 					if self.peek_byte() == Some(b'>') {
 						self.index += 1;
+
+						if self.peek_byte() == Some(b'>') {
+							self.index += 1;
+							return Some(TripleRightAngle(start_index, self.index));
+						}
+
 						return Some(DoubleRightAngle(start_index, self.index));
 					}
 

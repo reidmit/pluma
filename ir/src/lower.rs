@@ -1616,6 +1616,15 @@ impl<'a> Lowerer<'a> {
 				let r = self.lower_expr(right)?;
 				Ok(self.emit_let(Rvalue::Not(r), range))
 			}
+			// `~n` flips every bit. Two's-complement identity `~n == n ^ -1`
+			// lets us reuse the `BitXor` opcode instead of a dedicated unary op.
+			Operator::BitNot => {
+				let r = self.lower_expr(right)?;
+				Ok(self.emit_let(
+					Rvalue::Bin(BinOp::BitXor, r, Atom::Const(Const::Int(-1))),
+					range,
+				))
+			}
 			_ => Err("unsupported unary operator".to_string()),
 		}
 	}
@@ -2981,6 +2990,13 @@ fn binop_for(op: &Operator, is_float: bool) -> Option<BinOp> {
 		(Operator::Division, true) => BinOp::DivFloat,
 		(Operator::Remainder, false) => BinOp::RemInt,
 		(Operator::Remainder, true) => BinOp::RemFloat,
+		// Bitwise operators are int-only (`is_float` is always false here).
+		(Operator::BitAnd, _) => BinOp::BitAnd,
+		(Operator::BitOr, _) => BinOp::BitOr,
+		(Operator::BitXor, _) => BinOp::BitXor,
+		(Operator::ShiftLeft, _) => BinOp::ShiftLeft,
+		(Operator::ShiftRight, _) => BinOp::ShiftRight,
+		(Operator::ShiftRightUnsigned, _) => BinOp::ShiftRightUnsigned,
 		(Operator::Concat, _) => BinOp::Concat,
 		(Operator::LogicalAnd, _) => BinOp::And,
 		(Operator::LogicalOr, _) => BinOp::Or,

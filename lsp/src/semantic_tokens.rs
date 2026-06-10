@@ -146,6 +146,7 @@ fn lexer_kind(t: &Token) -> Option<u32> {
 		| DoublePlus(..)
 		| DoubleQuestion(..)
 		| DoubleRightAngle(..)
+		| TripleRightAngle(..)
 		| DoubleStar(..)
 		| Equal(..)
 		| ForwardSlash(..)

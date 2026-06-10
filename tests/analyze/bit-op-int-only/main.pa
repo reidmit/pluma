@@ -1,0 +1,4 @@
+# Bitwise operators are int-only: a float operand is a type error.
+def bad-and = 1.5 & 2
+def bad-shift = 8 >> 1.0
+def bad-not = ~3.5
