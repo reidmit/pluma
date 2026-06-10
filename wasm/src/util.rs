@@ -23,22 +23,6 @@ pub(crate) fn variant_display(enum_name: &str, tag: u32, enums: &EnumTable) -> S
 	format!("{bare}.{variant}")
 }
 
-/// Resolve a variant name to its within-enum tag across all enums (unique-name or
-/// shared-tag assumption, as in `FnEmitter::variant_tag`).
-pub(crate) fn variant_tag_in(enums: &EnumTable, name: &str) -> Option<u32> {
-	let mut found = None;
-	for vs in enums.values() {
-		if let Some(i) = vs.iter().position(|(n, _)| n == name) {
-			match found {
-				None => found = Some(i as u32),
-				Some(t) if t == i as u32 => {}
-				Some(_) => return None,
-			}
-		}
-	}
-	found
-}
-
 pub(crate) fn repr_valtype(r: Repr) -> ValType {
 	match r {
 		Repr::Boxed => types::value_ref(),

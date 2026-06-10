@@ -1,0 +1,60 @@
+# Regression: a user enum whose variants collide by name with the prelude `ordering`
+# (`lt`/`eq`/`gt`) or `option` (`some`/`none`) -- at *different* tag positions -- must not
+# break the runtime-literal resolution those builtins depend on. The `compare` codegen
+# (driving `<`, `>`, `sort`, …) and `dict.lookup` resolve their variant tags *within* the
+# named prelude enum, not by scanning every enum for the variant name. Before the fix, this
+# program failed to compile with "`compare` needs the `ordering` enum" because the lt/eq/gt
+# scan was ambiguous across `ordering` and `token`.
+use std.dict
+
+# `eq`/`gt`/`lt` at tags 1/2/3 — the prelude `ordering` has lt/eq/gt at 0/1/2.
+enum token {
+	plus
+	eq
+	gt
+	lt
+}
+
+# `some`/`none` at tags 0/1 inside a *payloadless* enum unrelated to `option`.
+enum slot {
+	some
+	none
+	any
+}
+
+def describe :: fun token -> string = fun t {
+	when t is token.plus {
+		"plus"
+	} is token.eq {
+		"eq"
+	} is token.gt {
+		"gt"
+	} is token.lt {
+		"lt"
+	}
+}
+
+def main = fun {
+	# `<` lowers to compare -> the prelude `ordering`; before the fix the lt/eq/gt scan was
+	# ambiguous across `ordering` and `token` and this failed to compile.
+	if 3 < 5 {
+		print "less"
+	} else {
+		print "not-less"
+	}
+	# the colliding `token` enum still matches by its own tags
+	print (describe token.lt)
+	# `dict.lookup` builds the prelude `option`'s some/none; the `slot` enum must not interfere
+	let d = dict.from-entries [("a", 1), ("b", 2)]
+	when dict.lookup d "b" is some v {
+		print "b=$(to-string v)"
+	} is none {
+		print "missing"
+	}
+	# and a `slot.some` value, so the colliding enum isn't dead-code-eliminated
+	when slot.some is slot.some {
+		print "slot-some"
+	} else {
+		print "?"
+	}
+}

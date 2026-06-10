@@ -12,7 +12,7 @@ use crate::runtime::{
 	WireResultLits, WireTags,
 };
 use crate::scan::StrPool;
-use crate::util::{variant_display, variant_tag_in};
+use crate::util::variant_display;
 use ir::IrProgram;
 
 /// The within-enum tag of variant `name` in the qualified enum `qual` (declaration
@@ -59,49 +59,52 @@ pub(super) fn resolve_literals(
 	// and resolve their within-enum tags (the `option` enum). `io.env` (`emit_env`)
 	// builds the same `some`/`none` variants inline, so it needs them populated too.
 	if requested.contains(&Helper::DictLookup) || imports.contains("io-env") {
-		let opt_enum = p
-			.enums
-			.iter()
-			.find(|(_, vs)| vs.iter().any(|(n, _)| n == "some"))
-			.map(|(name, _)| name.clone());
-		match (
-			opt_enum,
-			variant_tag_in(&p.enums, "some"),
-			variant_tag_in(&p.enums, "none"),
-		) {
-			(Some(en), Some(some_tag), Some(none_tag)) => {
+		// Resolve `some`/`none` *within* the prelude `option` enum by its qualified name,
+		// not by scanning every enum for those variant names — a user enum that happens to
+		// declare a `some`/`none` variant must not steal (or, at a different tag position,
+		// break) this resolution.
+		let en = "__prelude__.option";
+		let tag = |name: &str| {
+			p.enums
+				.get(en)
+				.and_then(|vs| vs.iter().position(|(n, _)| n == name))
+				.map(|i| i as u32)
+		};
+		match (tag("some"), tag("none")) {
+			(Some(some_tag), Some(none_tag)) => {
 				runtime.opt = OptionLits {
 					some_tag,
 					none_tag,
-					some_name: strpool.intern(&variant_display(&en, some_tag, &p.enums)),
-					none_name: strpool.intern(&variant_display(&en, none_tag, &p.enums)),
+					some_name: strpool.intern(&variant_display(en, some_tag, &p.enums)),
+					none_name: strpool.intern(&variant_display(en, none_tag, &p.enums)),
 				};
 			}
 			_ => diags.push("dict.lookup needs the `option` enum".to_string()),
 		}
 	}
 	// The `*-compare` wrappers build an `ordering` variant; intern its `lt`/`eq`/`gt`
-	// display names and resolve their within-enum tags.
+	// display names and resolve their tags *within* the prelude `ordering` enum by its
+	// qualified name. Resolving by qualified name (not a global scan for an enum with an
+	// `lt` variant) is mandatory: a user/stdlib enum whose variants include `lt`/`eq`/`gt`
+	// at other positions would otherwise make `variant_tag_in` ambiguous and break every
+	// `compare` in the build (`std.sql`'s predicate enum hit exactly this).
 	if wrapper_order.iter().any(|t| t.ends_with("-compare")) {
-		let ord_enum = p
-			.enums
-			.iter()
-			.find(|(_, vs)| vs.iter().any(|(n, _)| n == "lt"))
-			.map(|(name, _)| name.clone());
-		match (
-			ord_enum,
-			variant_tag_in(&p.enums, "lt"),
-			variant_tag_in(&p.enums, "eq"),
-			variant_tag_in(&p.enums, "gt"),
-		) {
-			(Some(en), Some(lt_tag), Some(eq_tag), Some(gt_tag)) => {
+		let en = "__prelude__.ordering";
+		let tag = |name: &str| {
+			p.enums
+				.get(en)
+				.and_then(|vs| vs.iter().position(|(n, _)| n == name))
+				.map(|i| i as u32)
+		};
+		match (tag("lt"), tag("eq"), tag("gt")) {
+			(Some(lt_tag), Some(eq_tag), Some(gt_tag)) => {
 				runtime.ord = OrderingLits {
 					lt_tag,
 					eq_tag,
 					gt_tag,
-					lt_name: strpool.intern(&variant_display(&en, lt_tag, &p.enums)),
-					eq_name: strpool.intern(&variant_display(&en, eq_tag, &p.enums)),
-					gt_name: strpool.intern(&variant_display(&en, gt_tag, &p.enums)),
+					lt_name: strpool.intern(&variant_display(en, lt_tag, &p.enums)),
+					eq_name: strpool.intern(&variant_display(en, eq_tag, &p.enums)),
+					gt_name: strpool.intern(&variant_display(en, gt_tag, &p.enums)),
 				};
 			}
 			_ => diags.push("`compare` needs the `ordering` enum".to_string()),
