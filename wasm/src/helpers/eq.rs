@@ -199,8 +199,8 @@ pub(crate) fn build_eq_fn(self_idx: u32, dict_eq_idx: u32) -> Function {
 		w.local_get(a).local_get(b).call(dict_eq_idx).ret();
 	});
 	// EXTERN: reference identity (`ref.eq` on the wrapper struct, like `$ref`) — a
-	// host handle is equal only to itself. No Phase-1 value reaches this; it's the
-	// `==` arm DOM/fetch handles (Phase 3) need.
+	// host handle is equal only to itself. This is the `==` arm that the Web
+	// target's DOM/fetch handles need.
 	w.local_get(ta).i32(types::TAG_EXTERN).i32_eq();
 	w.if_(|w| {
 		w.local_get(a).local_get(b).ref_eq().ret();

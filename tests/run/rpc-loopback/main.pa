@@ -1,4 +1,4 @@
-# In-process endpoint test (RPC.md §7a). In a server-context build (`pluma run`/
+# In-process endpoint test. In a server-context build (`pluma run`/
 # `test`), a `remote def` has its *real* body — so calling `api.add 2 3` runs the
 # handler directly, in process, with no socket, transport, or fingerprint. This
 # is the regression guard for the contract surface (drop-the-`request`-param and

@@ -1,4 +1,4 @@
-# The streaming RPC wire path, end to end in one process -- the §7 stream slice's
+# The streaming RPC wire path, end to end in one process -- the streaming
 # regression guard, mirroring rpc-skew for unary. A real `rpc.dispatch` server
 # runs over a loopback socket; a loopback streaming transport is installed, then
 # `rpc.call-stream` opens each subscription through the whole path -- the

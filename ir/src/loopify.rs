@@ -10,7 +10,7 @@
 // returned afterward.
 //
 // Why: it is independently a small win (no per-iteration call), but the real
-// motivation is downstream reuse analysis (see `notes/REUSE.md`). After
+// motivation is downstream reuse analysis. After
 // loopification a tail-recursive accumulator like `tally m … = … tally (insert m …)`
 // becomes an *intra-function* loop carrying `m`, where the uniqueness analysis can
 // prove `m` is single-threaded and thread a transient token through the inserts.

@@ -2,7 +2,7 @@ use std/stream
 use std/task
 
 # A streaming *argument* (a `stream A` parameter) needs a duplex transport, which
-# isn't built yet (RPC.md slice 9). The contract grammar rejects it with a clear
+# isn't built yet. The contract grammar rejects it with a clear
 # message rather than leaving the door silently ajar -- only `stream R` *results*
 # are supported.
 public remote def feed :: fun (stream int) -> task int = fun _s {

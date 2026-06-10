@@ -44,3 +44,4 @@ Tests are insta snapshots under `tests/<suite>/<name>/`: `analyze/` pins the fro
 - **Tabs**, not spaces (`cargo fmt`; config in `rustfmt.toml`).
 - Diagnostics are **accumulated, not raised** — thread `&mut Vec<Diagnostic>` rather than returning `Result` for non-fatal issues.
 - The analyzer **mutates the AST in place** to attach inferred types — don't clone it out.
+- **No ephemeral references in code comments.** Never cite internal docs (`notes/X.md`, `RPC.md §7`), phase/slice/milestone labels ("Phase 3", "Layer 2", "slice 9"), or section pointers. Those are meaningful only during the initial implementation; the code is the long-lived source of truth. Describe what the code does and why, self-contained — inline the one-sentence rationale instead of pointing at a doc.

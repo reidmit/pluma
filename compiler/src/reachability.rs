@@ -1,4 +1,4 @@
-// FULLSTACK Layer 2 — def-level reachability for target gating.
+// Def-level reachability for target gating.
 //
 // Coarse module-import gating (`platform::gate` at the `use` site) is too
 // blunt for fullstack: a shared module's `remote def` body may legitimately

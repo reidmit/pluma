@@ -2,13 +2,13 @@
 // `remove`/`update` path-copy the nodes on the root→leaf path and return a *new*
 // `$dict`; every untouched subtree is shared by reference, so `dict` has value
 // semantics like a record (and two consecutive versions can be diffed cheaply —
-// shared subtrees are `ref.eq`). See `notes/DICT.md`.
+// shared subtrees are `ref.eq`).
 //
 // Layout (see `types.rs`):
 //   * `$dict` is `{ tag, root, size }` — `root` is the top `$cnode` (or null when
 //     empty), `size` caches the live entry count for O(1) `dict.size`.
 //   * `$cnode` is `{ tag(=TAG_CNODE), dataMap, nodeMap, entries, children, edit }`.
-//     This is the **HAMT phase** (notes/DICT.md): an *uncompressed* `WIDTH`-wide
+//     This is the **HAMT** layout: an *uncompressed* `WIDTH`-wide
 //     node — `entries` is a 32-slot `$valarray` indexed directly by the 5-bit hash
 //     chunk; a slot is null (empty), a `$dentry` leaf, or a child `$cnode`, told
 //     apart by reading field 0 (`TAG_CNODE` vs `$dentry`'s sentinel). `dataMap` is
@@ -856,7 +856,7 @@ pub(crate) fn build_cnode_merge_fn(self_idx: u32) -> Function {
 
 /// Build `__cnode_remove(node, key, hash, shift) -> node`: a path-copied node with
 /// `key` cleared (unchanged when absent — returns `node` as-is, sharing it). No
-/// canonical re-compaction in the HAMT phase: an emptied slot is left null.
+/// canonical re-compaction in the uncompressed HAMT layout: an emptied slot is left null.
 /// `eq_idx` = `__eq`.
 pub(crate) fn build_cnode_remove_fn(self_idx: u32, eq_idx: u32) -> Function {
 	let mut w = Wat::new(4);
@@ -1550,7 +1550,7 @@ pub(crate) fn build_dict_insert_fn(
 
 /// Build `__dict_mint_token(unit?) -> $value`: a fresh transient owner token (a
 /// bare `$value`, compared only by `ref.eq`). Minted once at the start of a linear
-/// dict region by the reuse pass (see `notes/REUSE.md`) and threaded into every
+/// dict region by the reuse pass and threaded into every
 /// `__dict_insert_into` in that region.
 pub(crate) fn build_dict_mint_token_fn() -> Function {
 	let mut w = Wat::new(0);

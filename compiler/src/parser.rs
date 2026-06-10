@@ -2643,8 +2643,8 @@ impl<'a> Parser<'a> {
 		};
 
 		// Optional `remote` modifier, after any visibility and before `def`:
-		// `public remote def`. Marks the def as an RPC endpoint (FULLSTACK.md
-		// Layer 2). Only valid on a `def` — rejected below otherwise.
+		// `public remote def`. Marks the def as an RPC endpoint. Only valid on a
+		// `def` — rejected below otherwise.
 		let (is_remote, remote_span) = match self.current_token {
 			Some(Token::KeywordRemote(s, e)) => {
 				self.advance();
@@ -2946,9 +2946,9 @@ impl<'a> Parser<'a> {
 	fn parse_instance_after_implement(&mut self, start: Point) -> Option<DefinitionNode> {
 		let trait_name = self.expect_identifier()?;
 
-		// Head is a type expression so phase 3 can accept `(option a)` without
-		// changing this slot's shape. Phase 1 only takes simple type names.
-		// Use the non-greedy variant so the `{` that starts the body isn't
+		// Head is a type expression so a future generalization can accept
+		// `(option a)` without changing this slot's shape; currently only simple
+		// type names are taken. Use the non-greedy variant so the `{` that starts the body isn't
 		// mistaken for a record-type generic arg.
 		let head = self.parse_type_expression()?;
 

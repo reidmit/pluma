@@ -1227,7 +1227,7 @@ pub(crate) fn build_pump_fn(
 					);
 				});
 
-				// std.sys.net suspending ops (ABI.md Phase 1): marshal byte payloads through
+				// std.sys.net suspending ops: marshal byte payloads through
 				// scratch, do the non-blocking host call, then settle the produced
 				// `result` value — or, on would-block, park on socket readiness
 				// (`wait::IO`, re-Started from `fiber::RETRY` by the block step). token =

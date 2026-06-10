@@ -25,7 +25,7 @@ pub enum Resolved {
 	// Polymorphic forwarding: the dict comes from the enclosing function's
 	// own dict parameter (`param_idx` is the local slot index).
 	Forwarded(u16),
-	// Phase 3: parametric instance applied to inner dispatches.
+	// Parametric instance applied to inner dispatches.
 	// `ctor_slot` is the named global slot holding the instance
 	// constructor (a closure that takes N inner dicts and returns a
 	// `Value::MethodDict`). `inner` gives one resolution per `where`-clause

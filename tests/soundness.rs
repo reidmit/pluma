@@ -1,5 +1,5 @@
 // Reuse-soundness harness — the gate that earns trust in the in-place reuse pass
-// (`ir::reuse`, see `notes/REUSE.md` §8 "Not optional").
+// (`ir::reuse`).
 //
 // The pass mutates a `dict.insert` accumulator in place when it can prove the dict is
 // uniquely owned and dead-after. Getting that wrong is not a slow path — it is silent

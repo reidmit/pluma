@@ -1,7 +1,7 @@
 // The WasmGC runtime host. Instantiates an emitted module under V8, supplies the
 // `pluma.*` host imports (print/io/net/float_to_str/math), and runs `_entry`.
 //
-// Per ABI.md, the host imports traffic only **bytes + scalars + handles** across the
+// The host imports traffic only **bytes + scalars + handles** across the
 // boundary — byte payloads cross through the module's exported scratch `"memory"`; the
 // host never reads or builds a GC `$value` field. That engine-neutral marshalling ABI
 // is what lets a stock JS engine like V8 — which cannot reflect WasmGC structs — run
@@ -44,7 +44,7 @@ mod fsop;
 // `rusqlite::Connection`s + the value/row wire codec, an offload client of `offload.rs`.
 mod db;
 
-// The V8 backend (ABI.md Phase 2): instantiates the WasmGC artifact under V8 over the
+// The V8 backend: instantiates the WasmGC artifact under V8 over the
 // marshalling ABI. Reuses this crate's engine-independent core (`HostState`/`HostNet`/
 // `NetRet`/`BufferedIo`/`read_line_from`) — a descendant module sees its ancestors'
 // private items, so nothing here needs `pub`.
@@ -175,8 +175,8 @@ impl HostIo for CapturingIo {
 }
 
 /// Streams stdout/stderr live to the process and reads stdin from it. Each write
-/// flushes so output appears promptly (Phase 1 artifacts are short-lived; a
-/// long-running net server in a later phase will revisit buffering).
+/// flushes so output appears promptly (current artifacts are short-lived; a
+/// long-running net server may revisit buffering).
 struct StdioIo {
 	stdin_buf: Vec<u8>,
 	stdin_pos: usize,
@@ -191,8 +191,8 @@ impl StdioIo {
 			stdin_eof: false,
 		}
 	}
-	/// Pull all of process stdin into the buffer once, on first read. (Phase 1
-	/// reads are whole-input oriented; live line streaming is a later concern.)
+	/// Pull all of process stdin into the buffer once, on first read. (Reads are
+	/// whole-input oriented; live line streaming is a later concern.)
 	fn fill_stdin(&mut self) {
 		if !self.stdin_eof {
 			let _ = std::io::stdin().read_to_end(&mut self.stdin_buf);
@@ -260,7 +260,7 @@ struct HostState {
 	last_error: String,
 	/// Bytes a read op produced that didn't fit the caller's first `dst` buffer; the
 	/// wasm side then reserves the true size and drains this via `__io_copyout`. Empty
-	/// on the common (fits-first-try) path. (ABI.md Phase 1, the read overflow path.)
+	/// on the common (fits-first-try) path. (The read overflow path.)
 	read_stash: Vec<u8>,
 	/// `std.sys.net` runtime state: the socket table.
 	net: HostNet,

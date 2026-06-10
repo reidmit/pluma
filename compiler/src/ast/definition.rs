@@ -23,7 +23,7 @@ pub struct DefinitionNode {
 	// Whether this def is an RPC endpoint, marked with the `remote` modifier
 	// (`public remote def`). A `remote def` is a server-target island: its
 	// signature is the client/server contract, its body is compiled only for
-	// the server, and the client closure stops at it (FULLSTACK.md Layer 2).
+	// the server, and the client closure stops at it.
 	// Only valid on value defs; the parser rejects it elsewhere.
 	pub is_remote: bool,
 	pub ty: Type,

@@ -13,7 +13,7 @@
 # opaque -- you hold the handle and pass it along, but can't look inside.
 #
 # Most apps build their UI with `std.view` + `std.web.render` (the signals
-# frontend, see notes/FRONTEND.md) and never touch this module directly.
+# frontend) and never touch this module directly.
 
 use std/event
 

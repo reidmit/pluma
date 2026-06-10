@@ -363,7 +363,7 @@ impl<'a> Lowerer<'a> {
 	/// swapped for a transport stub. A fullstack build picks the side by entry
 	/// (`entry_modules` is `[server, client]`); a single build keys on the Web
 	/// target; `pluma run`/`test` are server context (real handler bodies, so an
-	/// in-process endpoint test calls the handler directly — RPC.md §7a).
+	/// in-process endpoint test calls the handler directly).
 	fn is_client_emit(&self) -> bool {
 		if self.compiler.fullstack {
 			matches!(

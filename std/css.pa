@@ -1,7 +1,7 @@
 # std.css -- typed CSS values and declarations.
 #
-# Phase 1 of the styling story (see notes/CSS.md): the pure, tier-neutral value
-# layer. You build typed colors and lengths (`css.hex`, `css.rem`, `css.px`) and
+# The pure, tier-neutral value layer of the styling story. You build typed
+# colors and lengths (`css.hex`, `css.rem`, `css.px`) and
 # combine them into declarations (`css.color`, `css.padding`), then serialize a
 # list of declarations to an inline `style` string with `css.inline`. The win over
 # a hand-written `view.style "color: red; padding: 1rem"` is type-safety and units
@@ -13,7 +13,7 @@
 # This module is `std.*` (tier-neutral, no host capabilities), so it produces the
 # same strings on the server (SSR, via `view.to-string`) and in the browser. The
 # higher tiers -- extracted `css.rule` stylesheets and reactive custom properties --
-# build on these same value types in a later phase; nothing here touches the DOM.
+# build on these same value types later; nothing here touches the DOM.
 #
 # Pair it with `std.view`'s `style-of` (a declaration list as a `style` attribute)
 # and `classes` (a conditional class list); both lower to plain string attributes.
@@ -81,7 +81,7 @@ public def named :: fun string -> color-value = fun s {
 
 # A reference to a CSS custom property (`var(--accent)`) -- the bridge for
 # model-driven values into an otherwise-static extracted rule. The live value is
-# supplied separately (a later phase's `view.vars`); here a rule just names it:
+# supplied separately (by `view.vars`); here a rule just names it:
 # `css.background (css.var "accent")` => `background: var(--accent)`.
 public def var :: fun string -> color-value = fun name {
 	color-value.var name
@@ -210,7 +210,7 @@ public def line-height :: fun float -> decl = fun n {
 
 # --- declarations: keyword-valued properties --------------------------------
 #
-# Phase 1 takes keyword values as plain strings (`display "flex"`); the property
+# This layer takes keyword values as plain strings (`display "flex"`); the property
 # name is still checked, so it's a step up from a fully hand-rolled style string. A
 # typed keyword layer can come later.
 

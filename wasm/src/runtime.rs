@@ -280,7 +280,7 @@ pub(crate) enum Helper {
 	CnodeMerge,
 	/// `__cnode_remove(node, key, hash, shift) -> node` — persistent remove: a
 	/// path-copied node with `key` cleared (unchanged when absent). No canonical
-	/// re-compaction in the HAMT phase — emptied slots are left null.
+	/// re-compaction in the uncompressed HAMT layout — emptied slots are left null.
 	CnodeRemove,
 	/// `__cnode_collect(node, list) -> nothing` — append every `(key, value)` tuple
 	/// under `node` to `list` (in-place `__list_push`), recursing into sub-nodes.
@@ -298,7 +298,7 @@ pub(crate) enum Helper {
 	DictFromEntries,
 	/// `__dict_mint_token() -> $value` — a fresh transient owner token. Minted once
 	/// at the head of a linear dict region by the reuse pass (`ir::reuse`), then
-	/// threaded into every `__dict_insert_into` in that region. See `notes/REUSE.md`.
+	/// threaded into every `__dict_insert_into` in that region.
 	DictMintToken,
 	/// `__dict_insert_into(dict, key, val, token) -> $dict` — the transient analogue
 	/// of `__dict_insert`: in-place when the touched nodes are owned by `token`,
@@ -1094,7 +1094,7 @@ pub(crate) struct HostSig {
 }
 
 /// The host signature for a builtin tag, or `None` if this backend doesn't yet
-/// import it. Grows with milestone coverage (M7 brings the rest).
+/// import it.
 pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 	match tag {
 		// stdout/stderr writers + the program-controlled abort. All take one

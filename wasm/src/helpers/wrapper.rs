@@ -8,7 +8,7 @@ use crate::types;
 use wasm_encoder::{Function, ValType};
 
 /// The arity of a pure-compute builtin we can emit a wasm wrapper for, or `None`
-/// if unsupported (string/bytes compare, hashes, … — later milestones).
+/// if unsupported (string/bytes compare, hashes, …).
 pub(crate) fn builtin_arity(tag: &str) -> Option<usize> {
 	Some(match tag {
 		"int-add" | "int-sub" | "int-mul" | "int-div" | "float-add" | "float-sub" | "float-mul"

@@ -2,7 +2,7 @@
 # logical signature `fun A.. -> task R` (or `fun A.. -> stream R` for a
 # subscription), no transport `request`. The compiler supplies each endpoint's
 # body per target — the written handler on the server, a transport stub on the
-# client — so the two agree by construction (see notes/RPC.md).
+# client — so the two agree by construction.
 #
 # This module is compiled into BOTH artifacts. On the server the body below is
 # the real handler; on the client the body is replaced by a stub that encodes

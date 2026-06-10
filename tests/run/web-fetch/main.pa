@@ -1,4 +1,4 @@
-# FULLSTACK Layer 2 — the browser HTTP transport (`std.web.fetch`). A web
+# The browser HTTP transport (`std.web.fetch`). A web
 # client can't open raw sockets, so its RPC stubs ride the host `fetch`
 # (`fetch.post`) instead of `std.sys.net`. This exercises that transport's
 # plumbing end-to-end under V8: marshal a request, hand it to the `web-fetch`
@@ -10,7 +10,7 @@
 # decode). A *successful* round-trip can't be an in-process loopback: a
 # blocking `fetch` and a co-resident async server on the one wasm thread would
 # deadlock (the server can't accept while the thread is parked in the fetch).
-# The happy path is the browser example driven under `pluma dev` (Phase 8); the
+# The happy path is the browser example driven under `pluma dev`; the
 # full RPC round-trip over the sys transport is `rpc-loopback`.
 use std/dict
 use std/string

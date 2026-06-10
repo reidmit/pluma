@@ -17,7 +17,7 @@ use std/task
 use std/view
 use api
 
-# --- styling (notes/CSS.md tiers 2/3) ---------------------------------------
+# --- styling ----------------------------------------------------------------
 #
 # Top-level `css.rule`s are extracted, content-hashed classes. They are emitted
 # once into the server document's `<head>` by `css.style-tag` (in `document`), so

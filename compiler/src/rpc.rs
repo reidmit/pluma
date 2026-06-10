@@ -1,4 +1,4 @@
-// FULLSTACK Layer 2 — RPC endpoint metadata.
+// RPC endpoint metadata.
 //
 // A `public remote def` is the contract for a remote call. The contract is the
 // pure logical signature `fun A.. -> task R` (no transport `request`): the

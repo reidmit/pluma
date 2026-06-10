@@ -76,8 +76,8 @@ pub struct Analyzer<'compiler> {
 	// inherit it.
 	fun_param_hints: Option<Vec<Type>>,
 	next_type_var_id: usize,
-	// Typeclass declarations visible during analysis. Phase 2 seeds
-	// `numeric` here directly from the prelude.
+	// Typeclass declarations visible during analysis. `numeric` is seeded
+	// here directly from the prelude.
 	traits: HashMap<String, TraitDecl>,
 	// Typeclass instances. Keyed by `(trait_name, head_key)` for fast
 	// lookup during discharge. `head_key` is a stable string for the
@@ -510,9 +510,8 @@ pub fn type_defining_module(ty: &Type) -> Option<String> {
 }
 
 // Stable key for instance lookup. Concrete primitives map to their own
-// names; enums use their qualified name. Phase 3 will need to extend
-// this for parametric heads, but for phase 2 we only see fully concrete
-// dispatch types.
+// names; enums use their qualified name. Currently we only see fully
+// concrete dispatch types; parametric heads would need to extend this.
 pub fn type_to_head_key(ty: &Type) -> Option<String> {
 	match ty {
 		Type::Int => Some("int".into()),
@@ -885,7 +884,7 @@ impl<'compiler> Analyzer<'compiler> {
 			_t_discharge = _d0.elapsed();
 
 			// 4. apply the solution to the AST, filling in type variables
-			//    that we generated in phase 1
+			//    that we generated in step 1
 			let _a0 = std::time::Instant::now();
 			self.annotate(ast, &substitution);
 			_t_annotate = _a0.elapsed();
@@ -5488,7 +5487,7 @@ impl<'compiler> Analyzer<'compiler> {
 	//   - concrete `ty` + no instance → diagnostic.
 	//   - `ty` still a type var → leave the constraint alone. Generalization
 	//     will push it into the surrounding scheme, or (if it escapes any
-	//     enclosing def boundary) phase 4 will flag the ambiguity.
+	//     enclosing def boundary) the ambiguity is flagged later.
 	fn discharge(&mut self, class_constraints: &[ClassConstraint]) {
 		for c in class_constraints {
 			// Skip unresolved tyvar dispatches — those flow into
@@ -5543,7 +5542,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// `wire` is auto-derived: there are no registered instances. Resolve it
 		// by synthesizing a schema shape from `ty`'s structure.
 		// `None` means non-derivable → discharge reports it as a missing
-		// instance (attribution refined in M4).
+		// instance.
 		if trait_name == "wire" {
 			return self
 				.build_wire_shape(ty, &mut Vec::new())
@@ -7161,7 +7160,7 @@ impl<'compiler> Analyzer<'compiler> {
 		};
 
 		// Streaming *arguments* (a `stream A` parameter) aren't supported yet —
-		// they need a duplex transport (RPC.md §8). Reject with a clear message so
+		// they need a duplex transport. Reject with a clear message so
 		// the door is labelled rather than silently ajar.
 		for p in params.iter() {
 			if let Type::Enum(n, _) = p {
@@ -7235,7 +7234,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// enums, open records, free type vars, or — for now — recursive enums).
 	// This is both the derivability check (`is_some`) and the shape builder.
 	// `visiting` holds the enum names currently being expanded, to break
-	// recursive-type cycles (deferred; see M4).
+	// recursive-type cycles.
 	fn build_wire_shape(&self, ty: &Type, visiting: &mut Vec<String>) -> Option<WireShape> {
 		match ty {
 			Type::Int => Some(WireShape::Int),
@@ -7308,7 +7307,7 @@ impl<'compiler> Analyzer<'compiler> {
 				Box::new(self.build_wire_shape(k, visiting)?),
 				Box::new(self.build_wire_shape(v, visiting)?),
 			)),
-			// Free type vars are handled by the forwarded-dict path (M3), not
+			// Free type vars are handled by the forwarded-dict path, not
 			// here; everything else (Fun, Ref, Regex, dict-with-compound-key,
 			// Instant, open record, PartialTuple/Record, Unknown) is
 			// non-derivable.

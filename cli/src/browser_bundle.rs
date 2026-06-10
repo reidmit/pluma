@@ -113,7 +113,7 @@ const pluma = {
   // event we call the module's exported dispatcher with the token + the event object.
   "dom-add-listener": (n, np, nl, token) =>
     n.addEventListener(readStr(np, nl), (e) => exports.__dom_dispatch(token, e)),
-  // Real-timer source for the browser command runtime (Phase 2).
+  // Real-timer source for the browser command runtime.
   "dom-set-timeout": (delayMs, token) =>
     setTimeout(() => exports.__browser_resume(token), delayMs),
   // Dev-only key/value store (backed by localStorage): `pluma dev`'s HMR persists
@@ -130,7 +130,7 @@ const pluma = {
   // std.sys.io error/overflow channels, shared by std.web.fetch's marshalled read.
   "io-last-error": (dst, cap) => writeStr(dst, cap, lastError),
   "io-copyout": (dst) => { u8().set(readStash, dst); readStash = new Uint8Array(0); },
-  // std.web.fetch — the browser HTTP transport (the web arm of FULLSTACK Layer 2).
+  // std.web.fetch — the browser HTTP transport for RPC.
   // The request is "POST\t<url>\t<headers>\t<hex-body>"; the reply pushed back onto the
   // channel `token` is one `next` event of "<status>\t<hex-body>" bytes, then `done`
   // (or `fault` on a network error). An *async* `fetch` (not the old blocking XHR):

@@ -428,8 +428,8 @@ public def mount-dev :: fun dom.node (fun nothing -> view) -> task nothing = fun
 # the SSR'd DOM are 1:1 in document order, so children line up by index.
 #
 # `mount` appends the root view as `parent`'s single child, so the server's first
-# child of `parent` is the root view's node. (Slice C threads the server's initial
-# signal state in so client and server agree before `v ()` runs.)
+# child of `parent` is the root view's node. (The server's initial signal state is
+# threaded in so client and server agree before `v ()` runs.)
 #
 # v1 limit: two adjacent `view.text`/`text-of` siblings collapse into one DOM text
 # node when the HTML is parsed, breaking the 1:1 index alignment -- wrap reactive

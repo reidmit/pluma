@@ -526,7 +526,7 @@ pub(crate) fn build_tostring_fn(
 	});
 
 	// EXTERN -> the opaque "<extern>" (a host handle is never structurally printed).
-	// No Phase-1 value reaches this; mirrors `host::format_value`'s extern arm.
+	// Only Web-target handles reach this; mirrors `host::format_value`'s extern arm.
 	w.local_get(ta).i32(types::TAG_EXTERN).i32_eq();
 	w.if_(|w| {
 		w.i32(types::TAG_STR);

@@ -7,7 +7,7 @@
 // compared by `ref.eq`) can mutate nodes in place *when the input dict is uniquely
 // owned and dead afterward* — then the mutation is unobservable and value semantics
 // are preserved. This pass proves that condition statically (Pluma runs on a tracing
-// GC, so the refcount trick Koka/Roc use is unavailable — see `notes/REUSE.md`) and
+// GC, so the refcount trick Koka/Roc use is unavailable) and
 // rewrites the proven-safe `dict.insert`s to the transient `dict-insert-into`,
 // threading one fresh owner token through the region.
 //

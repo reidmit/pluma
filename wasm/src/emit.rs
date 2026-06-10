@@ -1298,7 +1298,7 @@ impl<'a> FnEmitter<'a> {
 	/// Box an i64 (on the stack) into a value: a signed-31-bit-representable int
 	/// becomes an `i31ref` immediate (no heap allocation, not refcounted by the DRC
 	/// collector), else a heap `$int`. The `eqref`-rooted value type makes the i31
-	/// a valid value everywhere a box flows. See `notes/I31.md`.
+	/// a valid value everywhere a box flows.
 	fn box_int(&mut self) {
 		let t = self.fresh_local(ValType::I64);
 		self.ins(Instruction::LocalSet(t));
@@ -2244,7 +2244,7 @@ impl<'a> FnEmitter<'a> {
 
 	/// `dom.get-value node`: `(externref, dst, cap) -> len` — the host writes the node's
 	/// `.value` into scratch at `dst`; build a `$str` from `(dst, len)`. A fixed `CAP`,
-	/// no overflow drain (M1: input values are short; a longer value clamps to `CAP`).
+	/// no overflow drain (input values are short; a longer value clamps to `CAP`).
 	fn emit_dom_get_value(&mut self, idx: u32, node: &Atom, alloc: u32, load: u32) {
 		const CAP: i32 = 4096;
 		self.reset_bump();
@@ -3386,8 +3386,7 @@ impl<'a> FnEmitter<'a> {
 
 	fn push_nothing(&mut self) {
 		// `nothing` is a null reference — no allocation. `value_tag` and the host map a
-		// null value back to `()`; produced on essentially every statement. See
-		// notes/I31.md.
+		// null value back to `()`; produced on essentially every statement.
 		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
 	}
 

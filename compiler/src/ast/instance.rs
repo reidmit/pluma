@@ -3,15 +3,15 @@ use crate::location::Range;
 
 // A typeclass instance declaration: `for TRAIT on TYPE { defs }`. Each
 // inner def is a regular `def NAME fun ARGS { BODY }` providing one of the
-// trait's methods. In phase 1 the head is a plain type name; phase 3
-// extends it to generic application heads (`option a`) and `where`
-// clauses.
+// trait's methods. Currently the head is a plain type name; generic
+// application heads (`option a`) and `where` clauses are a future
+// generalization.
 pub struct InstanceNode {
 	pub range: Range,
 	pub trait_name: IdentifierNode,
-	// The type the instance is declared on. For phase 1 this is a simple
-	// type name (TypeExprNode lets phase 3 reuse the slot for generic
-	// application heads without reshaping the AST).
+	// The type the instance is declared on. Currently this is a simple
+	// type name (TypeExprNode lets a future generalization reuse the slot for
+	// generic application heads without reshaping the AST).
 	pub head: TypeExprNode,
 	// `where (constraint, ...)` clause for parametric instances. Each
 	// constraint is `TRAIT_NAME TYPE_PARAM` — the type param must be one

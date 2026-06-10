@@ -1,4 +1,4 @@
-// The V8 backend (ABI.md Phase 2). Instantiates the WasmGC artifact under V8 — whose
+// The V8 backend. Instantiates the WasmGC artifact under V8 — whose
 // generational GC is what makes the boxed-value IR fast — driving the marshalled
 // `pluma.*` imports as native V8 callbacks over the exported `"memory"` ArrayBuffer.
 // Because the marshalling ABI makes every import scalar + scratch-memory bytes (no GC

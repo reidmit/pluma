@@ -393,7 +393,7 @@ impl Wat {
 		self.push(I::RefNull(HeapType::Concrete(ty)))
 	}
 
-	// ---- value discriminant / scalar boxing (i31-aware; see `notes/I31.md`) -----
+	// ---- value discriminant / scalar boxing (i31-aware) -----
 
 	/// Read the runtime discriminant tag of a boxed value (`eqref` on the stack ->
 	/// i32 tag). A small int is an `i31ref` immediate carrying no tag struct, so its

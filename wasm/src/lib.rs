@@ -90,7 +90,7 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 	async_lower::lower(&mut p);
 	ir::resolve::resolve_direct_calls(&mut p);
 	// Turn self-tail-recursion into a `Loop` over the params. Behavior-neutral; the
-	// enabler for intra-function reuse analysis (see `notes/REUSE.md`). Needs
+	// enabler for intra-function reuse analysis. Needs
 	// `TailCallDirect` (so after direct-call resolution) and must precede the repr
 	// pass (so reassigned-param / result locals get reprs).
 	ir::loopify::loopify(&mut p);
@@ -101,7 +101,7 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 	// Opportunistic in-place reuse: rewrite a proven-unique `dict.insert` accumulator
 	// (the `loopify`'d loop carry) to the transient in-place insert. Sound-only; sees
 	// the resolved `dict-insert` builtin call, so it runs after `resolve_builtins`, and
-	// mints a token local, so before the repr pass. See `notes/REUSE.md`. Gated so the
+	// mints a token local, so before the repr pass. Gated so the
 	// soundness harness can emit the persistent baseline (reuse off) for its differential.
 	if opts.reuse {
 		ir::reuse::reuse(&mut p);

@@ -64,7 +64,7 @@ public def status-error :: fun string int -> rpc-error = fun route status {
 # the encoded reply bytes, or fails the task with an `rpc-error`. One transport
 # per deploy target lives in its own module (`std.rpc.http-sys` / `std.rpc.http-web`)
 # and installs itself as the ambient sender at startup (the build injects the
-# call). Streaming is a later slice. (Cross-module `trait`/`implement` isn't
+# call). Streaming is not covered here yet. (Cross-module `trait`/`implement` isn't
 # supported, so the contract is a plain function type rather than a typeclass --
 # the transports are still ordinary hand-written Pluma, not compiler-synthesized.)
 public alias sender fun string bytes (dict string string) -> task bytes

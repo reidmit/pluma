@@ -6,7 +6,7 @@ use crate::printing::*;
 /// `pluma build [--web] <file> [-o out]` — compile a module to a deploy artifact.
 /// By default this lowers the shared IR for a machine/OS host through the WasmGC
 /// backend and writes `<out>.wasm`, run with `pluma run <out>.wasm`. `--web` instead
-/// lowers for the web/DOM sandbox and writes a browser bundle (see notes/DEPLOY.md).
+/// lowers for the web/DOM sandbox and writes a browser bundle.
 pub(crate) fn build_command(
 	web: bool,
 	out_base: Option<String>,
@@ -178,7 +178,7 @@ fn build_fullstack(entry_path: String, out_base: Option<String>, server_url: Str
 		dir.display()
 	);
 
-	// Build-time CSS extraction (notes/CSS.md "CSR + build extraction"): lift the
+	// Build-time CSS extraction: lift the
 	// SSR stylesheet into a cacheable `app.css` linked from the static client shell.
 	extract_css_to_bundle(&dir, &server_path);
 }

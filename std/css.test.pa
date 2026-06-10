@@ -1,4 +1,4 @@
-# Phase 1 of styling (notes/CSS.md): the pure value layer. These pin the
+# The pure value layer of styling. These pin the
 # serialization -- color/length rendering, the `.0`-stripping number format, inline
 # declaration joining -- plus the `std.view` integration helpers (`style-of`,
 # `classes`) via `view.to-string`. All pure, so they run headless under V8.

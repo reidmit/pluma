@@ -163,7 +163,7 @@ public enum regex-pattern {
 	p-capture string regex-pattern
 }
 
-# Transport metadata for a `remote` call (FULLSTACK Layer 2): the headers a
+# Transport metadata for a `remote` call: the headers a
 # client attaches and the server reads. It is symmetric -- client and server
 # share the one type. Identity is never a field here: a client presents
 # credentials (a header/cookie), and the server validates them via a

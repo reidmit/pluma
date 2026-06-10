@@ -89,8 +89,8 @@ pub const TAG_SCOPE_HANDLE: i32 = 18;
 /// boxing an engine-managed `externref` (a DOM node, a `fetch` response, …) so it can
 /// flow through Pluma code as an ordinary value. Compared by reference identity
 /// (`ref.eq` on the wrapper, like `$ref`); Display is the opaque `<extern>`; never
-/// structurally serialized (a handle must not cross the `wire`). No Phase-1 host
-/// import produces one — the `the Web target` DOM/fetch imports (Phase 3) do.
+/// structurally serialized (a handle must not cross the `wire`). Only the Web
+/// target's DOM/fetch imports produce one.
 pub const TAG_EXTERN: i32 = 19;
 /// A persistent-`$dict` trie node (`$cnode`): a `$value` subtype carrying a
 /// bitmap + a `$valarray` of slots (each a `$dentry` leaf or a child `$cnode`).
@@ -125,8 +125,8 @@ pub fn valarray_ref_null() -> ValType {
 /// `(ref null eq)` — the uniform boxed-value type used for params, results,
 /// captures, and every `Boxed` local. Re-rooted from the concrete `$value` struct
 /// to the abstract `eq` top so a value can be EITHER a heap `$value` subtype (as
-/// before) OR an `i31ref` immediate (a small int — no allocation; see
-/// `notes/I31.md`). Every heap subtype and the typed null `ref.null $value` remain
+/// before) OR an `i31ref` immediate (a small int — no allocation). Every heap
+/// subtype and the typed null `ref.null $value` remain
 /// valid `eqref`s by subtyping, so this single change re-types every value slot
 /// (params, `$valarray` elements, value-holding fields, locals) at once; only a
 /// bare `struct.get $value 0` tag-read needs an explicit `ref.cast $value` first
@@ -162,7 +162,7 @@ pub fn dentry_ref() -> ValType {
 /// `(ref $cnode)` — a non-null reference to a persistent-dict trie node. Used for
 /// locals holding a `ref.cast`-to-`$cnode` so a later `struct.get` reads its
 /// bitmap/slots.
-#[allow(dead_code)] // referenced once the persistent-dict rewrite (notes/DICT.md) lands
+#[allow(dead_code)] // referenced by the persistent-dict trie walk
 pub fn cnode_ref() -> ValType {
 	ValType::Ref(RefType {
 		nullable: false,
@@ -181,7 +181,7 @@ pub fn bytes_ref() -> ValType {
 /// `(ref null extern)` — an engine-managed host resource reference. Not an `eqref`,
 /// so it can't sit in a value slot directly; it rides inside a `$extern` wrapper
 /// struct (`T_EXTERN`) whose reference *is* an `eqref`. Used only as that wrapper's
-/// field type today (no Phase-1 import traffics one).
+/// field type today (only the Web target's imports traffic one).
 pub fn extern_ref() -> ValType {
 	ValType::Ref(RefType {
 		nullable: true,
@@ -934,7 +934,7 @@ impl FuncTypes {
 		// so a handle flows through Pluma code like any value. The field is an
 		// `externref` (not an `eqref`), but the wrapper struct *is* an `eqref`, so it
 		// boxes/stores/pattern-matches normally; identity is the struct reference
-		// (`ref.eq`, like `$ref`). No Phase-1 import builds one.
+		// (`ref.eq`, like `$ref`). Only the Web target's imports build one.
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
@@ -1106,7 +1106,7 @@ impl FuncTypes {
 					types.ty().function([value_ref()], [ValType::I32]);
 					continue;
 				}
-				// std.sys.net host imports (ABI.md Phase 1). Each fallible op returns a
+				// std.sys.net host imports. Each fallible op returns a
 				// `(status:i32, n:i32)` pair — `n` is a socket id / byte count / read
 				// length; byte payloads (addr, data, the read result) cross via scratch.
 				FuncKind::NetListen => {
@@ -1197,7 +1197,7 @@ impl FuncTypes {
 				}
 				// std.web.dom host imports (the Web target) — node handles cross as
 				// `externref`, strings as scratch `(ptr, len)`. The one externref-
-				// returning shape (the gap this milestone closes) is `DomMake`/`DomBody`.
+				// returning shape is `DomMake`/`DomBody`.
 				FuncKind::DomMake => {
 					types
 						.ty()

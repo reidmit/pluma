@@ -247,7 +247,7 @@ impl Compiler {
 		}
 	}
 
-	// FULLSTACK Layer 2: enforce deploy-target tier gating by def-level
+	// Enforce deploy-target tier gating by def-level
 	// reachability. A forbidden-tier module (`std.sys.*` on `web`, `std.web.*`
 	// on `sys`) is rejected only when reachable from an entry through
 	// *non-`remote def`* code — a server island's server-only imports never
