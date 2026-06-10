@@ -1,0 +1,27 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0008]: This binding is returned immediately, so the `let` is unnecessary.
+  │
+  ├─𜱶 help: drop the `let` and end the block with the expression directly.
+  │
+9 │  let kept = io.print "named — left alone"
+  │  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-let-underscore/main.pa:9:2
+
+warning[L0001]: `let _ =` binds nothing, so the `let _ =` is redundant.
+  │
+  ├─𜱶 help: drop the `let _ = ` and keep just the expression.
+  │
+2 │  let _ = io.print "top-level binds nothing"
+  │  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-let-underscore/main.pa:2:2
+
+warning[L0001]: `let _ =` binds nothing, so the `let _ =` is redundant.
+  │
+  ├─𜱶 help: drop the `let _ = ` and keep just the expression.
+  │
+4 │   let _ = io.print "so does this nested one"
+  │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-let-underscore/main.pa:4:3

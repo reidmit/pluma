@@ -1,0 +1,11 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0008]: This binding is returned immediately, so the `let` is unnecessary.
+  │
+  ├─𜱶 help: drop the `let` and end the block with the expression directly.
+  │
+2 │  let total = sum entries
+  │  ^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/bind-then-return/main.pa:2:2

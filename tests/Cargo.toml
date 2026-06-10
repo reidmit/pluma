@@ -12,6 +12,7 @@ compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
 host = { path = "../host" }
 ir = { path = "../ir" }
+linter = { path = "../linter" }
 wasm = { path = "../wasm" }
 
 [dev-dependencies]
@@ -34,6 +35,14 @@ harness = false
 [[test]]
 name = "format"
 path = "format.rs"
+harness = false
+
+# The lint suite. One fixture per `tests/lint/<name>/main.pa`; renders the lint
+# warnings exactly as the CLI does and snapshots them, so the corpus is a direct
+# audit of which lints fire (and where) on which sources. See lint.rs.
+[[test]]
+name = "lint"
+path = "lint.rs"
 harness = false
 
 [[test]]

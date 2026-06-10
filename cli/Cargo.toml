@@ -19,5 +19,6 @@ formatter = { path = "../formatter" }
 # emit is a hard error.
 host = { path = "../host" }
 ir = { path = "../ir" }
+linter = { path = "../linter" }
 lsp = { path = "../lsp" }
 wasm = { path = "../wasm" }

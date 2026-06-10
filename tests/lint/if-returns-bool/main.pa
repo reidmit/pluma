@@ -1,0 +1,6 @@
+def main = fun {
+	let positive = if ready { true } else { false }
+	let inverted = if ready { false } else { true }
+	let matched = if value is some inner { inner } else { 0 }
+	[positive, inverted, matched]
+}

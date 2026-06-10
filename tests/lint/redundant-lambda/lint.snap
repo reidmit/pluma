@@ -1,0 +1,19 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0006]: This function only forwards its arguments to another call.
+  │
+  ├─𜱶 help: replace the wrapper with `handle` directly.
+  │
+1 │ def forward = fun item { handle item }
+  │               ^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-lambda/main.pa:1:15
+
+warning[L0006]: This function only forwards its arguments to another call.
+  │
+  ├─𜱶 help: replace the wrapper with the function it forwards to.
+  │
+2 │ def with-namespace = fun a b { math.combine a b }
+  │                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-lambda/main.pa:2:22

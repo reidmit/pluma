@@ -6,6 +6,7 @@ members = [
   "formatter",
   "host",
   "ir",
+  "linter",
   "lsp",
   "tests",
   "wasm",

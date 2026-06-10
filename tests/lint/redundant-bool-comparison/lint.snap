@@ -1,0 +1,27 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0003]: Comparing to a boolean literal is redundant.
+  │
+  ├─𜱶 help: drop the comparison and use the expression directly.
+  │
+2 │  let direct = ready == true
+  │               ^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-bool-comparison/main.pa:2:15
+
+warning[L0003]: Comparing to a boolean literal is redundant.
+  │
+  ├─𜱶 help: drop the comparison and use `not <expression>` instead.
+  │
+3 │  let negated = ready == false
+  │                ^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-bool-comparison/main.pa:3:16
+
+warning[L0003]: Comparing to a boolean literal is redundant.
+  │
+  ├─𜱶 help: drop the comparison and use `not <expression>` instead.
+  │
+4 │  let also = ready != true
+  │             ^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-bool-comparison/main.pa:4:13

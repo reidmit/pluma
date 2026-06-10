@@ -134,3 +134,25 @@ The authoritative source for these codes is the `code()` method on `ParseError`
 and `AnalysisError` in the `compiler` crate; this table mirrors it. The
 `tests/errors/` snapshot suite exercises one fixture per error path and pins the
 exact rendered output, so the messages here stay honest.
+
+## Lints (`L0xxx`)
+
+Lints are advisory warnings from `pluma lint`, a separate parse-based pass over
+your source — they flag stylistic and correctness smells the type-checker
+tolerates. `pluma lint <paths…>` reports them (and exits non-zero if any fire, so
+it can gate CI); your editor surfaces them inline through the language server.
+Lints never stop a `run`/`build`/`test`.
+
+| Code | Meaning |
+|------|---------|
+| L0001 | `let _ = expr` binds nothing — drop the `let _ =` |
+| L0002 | `try _ = expr` binds nothing — write just `try expr` |
+| L0003 | Comparing to a boolean literal (`x == true`) is redundant |
+| L0004 | `if c { true } else { false }` is just the condition |
+| L0005 | Boolean-literal operand of `&&`/`||` is redundant |
+| L0006 | Function only forwards its arguments (`fun x { f x }` is `f`) |
+| L0007 | Both branches of an `if` are identical |
+| L0008 | A binding returned immediately doesn't need the `let` |
+
+The `tests/lint/` snapshot suite pins one fixture per lint, the same way
+`tests/errors/` does for compiler diagnostics.

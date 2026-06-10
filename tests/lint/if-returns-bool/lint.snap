@@ -1,0 +1,19 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0004]: This `if` just returns a boolean — use the condition itself.
+  │
+  ├─𜱶 help: replace the whole `if` with its condition.
+  │
+2 │  let positive = if ready { true } else { false }
+  │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/if-returns-bool/main.pa:2:17
+
+warning[L0004]: This `if` just returns a boolean — use the condition itself.
+  │
+  ├─𜱶 help: replace the whole `if` with `not <condition>`.
+  │
+3 │  let inverted = if ready { false } else { true }
+  │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/if-returns-bool/main.pa:3:17

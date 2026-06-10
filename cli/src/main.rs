@@ -35,6 +35,8 @@ fn main() {
 
 		Command::Format { check, paths } => commands::format::format_command(check, paths),
 
+		Command::Lint { paths } => commands::lint::lint_command(paths),
+
 		Command::Test { filters, dir } => commands::test::test_command(filters, dir),
 
 		Command::LanguageServer => lsp::run(),

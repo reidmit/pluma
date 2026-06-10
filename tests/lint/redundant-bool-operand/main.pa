@@ -1,0 +1,6 @@
+def main = fun {
+	let identity = enabled && true
+	let constant = enabled || true
+	let kept = enabled && allowed
+	[identity, constant, kept]
+}

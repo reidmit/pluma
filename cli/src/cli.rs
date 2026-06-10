@@ -114,6 +114,19 @@ pub(crate) enum Command {
 		paths: Vec<String>,
 	},
 
+	/// Report lint warnings for one or more modules.
+	///
+	/// Parses each file and flags stylistic and correctness smells (e.g. a
+	/// `let _ = expr` that binds nothing). Reports only — never rewrites. Exits
+	/// non-zero if any lint fires, so it can gate CI.
+	///
+	/// Pass `-` to read a single module from stdin.
+	Lint {
+		/// Files to lint; `-` reads stdin.
+		#[arg(value_name = "PATH")]
+		paths: Vec<String>,
+	},
+
 	/// Discover and run tests from `*.test.pa` files.
 	///
 	/// Walks up from the given directory (or cwd) to the nearest `pluma.pa`

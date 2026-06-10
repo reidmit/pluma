@@ -5,6 +5,7 @@
 pub(crate) mod build;
 pub(crate) mod dev;
 pub(crate) mod format;
+pub(crate) mod lint;
 pub(crate) mod run;
 pub(crate) mod test;
 

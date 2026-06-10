@@ -1,0 +1,11 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0002]: `try _ =` binds nothing, so the `_ =` is redundant.
+  │
+  ├─𜱶 help: drop the `_ = ` and write just `try <expression>`.
+  │
+2 │  try _ = do-the-effect
+  │  ^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-try-underscore/main.pa:2:2

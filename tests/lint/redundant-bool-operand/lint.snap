@@ -1,0 +1,19 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0005]: Boolean literal operand makes this `&&`/`||` redundant.
+  │
+  ├─𜱶 help: the literal has no effect — drop it and keep the other operand.
+  │
+2 │  let identity = enabled && true
+  │                 ^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-bool-operand/main.pa:2:17
+
+warning[L0005]: Boolean literal operand makes this `&&`/`||` redundant.
+  │
+  ├─𜱶 help: the whole expression is always `true`, regardless of the other operand.
+  │
+3 │  let constant = enabled || true
+  │                 ^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/redundant-bool-operand/main.pa:3:17

@@ -282,8 +282,9 @@ impl Backend {
 		// cells, so it isn't `Send` and can't be held across the publish
 		// await. We extract everything we need (the hover index + a
 		// pre-converted LSP diagnostic list) into Send-only values.
+		let source = text.into_bytes();
 		let lsp_diags: Vec<Diagnostic> = {
-			let result = analysis::analyze_document(&path, text.into_bytes());
+			let result = analysis::analyze_document(&path, source.clone());
 
 			let module_name = result.module.as_ref().map(|m| m.module_name.clone());
 			if let Some(module) = result.module.as_ref() {
@@ -292,12 +293,22 @@ impl Backend {
 					.insert(uri_str.clone(), Arc::new(hover::build_index(module)));
 			}
 
-			result
+			let mut diags: Vec<Diagnostic> = result
 				.diagnostics
 				.iter()
 				.filter(|d| diagnostic_belongs_to(d, module_name.as_deref()))
 				.map(|d| pluma_diagnostic_to_lsp(d, &uri))
-				.collect()
+				.collect();
+
+			// Lint warnings are computed from the same in-memory text. They only
+			// exist when the module parses; on a parse error the linter returns
+			// `Err`, and the analysis diagnostics above already carry the parse
+			// errors, so we just skip linting.
+			if let Ok(warnings) = linter::lint_source(&source) {
+				diags.extend(warnings.iter().map(|d| pluma_diagnostic_to_lsp(d, &uri)));
+			}
+
+			diags
 		};
 
 		self.client.publish_diagnostics(uri, lsp_diags, None).await;

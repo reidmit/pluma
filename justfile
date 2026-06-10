@@ -14,6 +14,10 @@ run path:
 build-server path:
   @ cargo run --bin pluma --quiet -- build {{path}}
 
+# lint a .pa file (report warnings; exits non-zero if any fire)
+lint path:
+  @ cargo run --bin pluma --quiet -- lint {{path}}
+
 # format everything: Rust sources (cargo fmt) + the baked-in stdlib/prelude .pa sources
 format: format-stdlib
   @ cargo fmt

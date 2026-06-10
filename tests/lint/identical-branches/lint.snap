@@ -1,0 +1,11 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0007]: Both branches of this `if` are identical.
+  │
+  ├─𜱶 help: both arms run the same code; keep one branch (check the condition has no side effects).
+  │
+2 │  let dup = if flag { render row } else { render row }
+  │            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/identical-branches/main.pa:2:12

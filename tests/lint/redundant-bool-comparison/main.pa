@@ -1,0 +1,7 @@
+def main = fun {
+	let direct = ready == true
+	let negated = ready == false
+	let also = ready != true
+	let kept = count == limit
+	[direct, negated, also, kept]
+}

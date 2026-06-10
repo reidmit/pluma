@@ -1,0 +1,11 @@
+def main = fun {
+	let _ = io.print "top-level binds nothing"
+	if true {
+		let _ = io.print "so does this nested one"
+	} else {
+		io.print "no lint here"
+	}
+	let _ :: nothing = io.print "annotated — left alone"
+	let kept = io.print "named — left alone"
+	kept
+}

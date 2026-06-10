@@ -1,0 +1,4 @@
+def main = fun {
+	let total = sum entries
+	total
+}

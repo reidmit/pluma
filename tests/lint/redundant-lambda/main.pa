@@ -1,0 +1,4 @@
+def forward = fun item { handle item }
+def with-namespace = fun a b { math.combine a b }
+def kept = fun n { add 5 n }
+def main = forward

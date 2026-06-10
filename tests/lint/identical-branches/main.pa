@@ -1,0 +1,5 @@
+def main = fun {
+	let dup = if flag { render row } else { render row }
+	let distinct = if flag { render row } else { render other }
+	[dup, distinct]
+}

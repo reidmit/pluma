@@ -1,0 +1,6 @@
+def main = fun {
+	try _ = do-the-effect
+	try value = fetch-something
+	try already-bindingless
+	value
+}
