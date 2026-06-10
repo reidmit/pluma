@@ -29,54 +29,32 @@ def todo-cols :: list column = [
 
 def todos :: table todo = sql.table-of "todos" todo-cols decode-todo encode-todo
 
-def dump :: fun connection string -> task nothing = fun conn label {
-	try rows = db.from todos |> db.order-by (sql.asc "id") |> db.run conn
-	task.return when rows is ok items {
-		print "$(label): $(to-string (list.length items)) rows"
-		list.each items fun it {
-			print "  #$(to-string it.id) $(it.title) done=$(to-string it.done)"
-		}
-	} is err e {
-		print "$(label): err $(e)"
+def dump :: fun connection string -> task nothing string = fun conn label {
+	try items = db.from todos |> db.order-by (sql.asc "id") |> db.run conn
+	print "$(label): $(to-string (list.length items)) rows"
+	list.each items fun it {
+		print "  #$(to-string it.id) $(it.title) done=$(to-string it.done)"
 	}
+	task.return ()
 }
 
 def main = fun {
-	try opened = db.open ":memory:"
-	when opened is ok conn {
-		try _ddl = db.execute conn (sql.create-table todos) []
-		try _1 = db.insert conn todos {id: 1, title: "wash", done: false}
-		try _2 = db.insert conn todos {id: 2, title: "cook", done: false}
-		try _3 = db.insert conn todos {id: 3, title: "read", done: false}
-		try changed = db.update conn todos [("done", sql.bool true)] [sql.lt "id" (sql.int 3)]
-		when changed is ok n {
-			# update a subset: mark ids < 3 done; expect 2 rows changed
-
-			print "updated: $(to-string n)"
-		} is err e {
-			print "update err: $(e)"
-		}
-		try _d1 = dump conn "after update"
-		try removed = db.delete conn todos [sql.eq "done" (sql.bool false)]
-		when removed is ok n {
-			# delete the still-undone rows; expect 1 removed
-
-			print "deleted: $(to-string n)"
-		} is err e {
-			print "delete err: $(e)"
-		}
-		try _d2 = dump conn "after delete"
-		try bad = db.update conn todos [("nope", sql.int 0)] []
-		when bad is ok _ {
-			# schema validation: an unknown SET column is caught before SQLite
-
-			print "unexpected ok"
-		} is err e {
-			print "validate: $(e)"
-		}
-		task.return 0
+	try conn = db.open ":memory:"
+	try _ddl = db.execute conn (sql.create-table todos) []
+	try _1 = db.insert conn todos {id: 1, title: "wash", done: false}
+	try _2 = db.insert conn todos {id: 2, title: "cook", done: false}
+	try _3 = db.insert conn todos {id: 3, title: "read", done: false}
+	try changed = db.update conn todos [("done", sql.bool true)] [sql.lt "id" (sql.int 3)]
+	print "updated: $(to-string changed)"
+	try _d1 = dump conn "after update"
+	try removed = db.delete conn todos [sql.eq "done" (sql.bool false)]
+	print "deleted: $(to-string removed)"
+	try _d2 = dump conn "after delete"
+	try bad = task.attempt (db.update conn todos [("nope", sql.int 0)] [])
+	when bad is ok _ {
+		print "unexpected ok"
 	} is err e {
-		print "open err: $(e)"
-		task.return 0
+		print "validate: $(e)"
 	}
+	task.return 0
 }

@@ -7,7 +7,7 @@
 # thread so the single scheduler thread never blocks waiting on the disk, and other fibers
 # keep running. You await a result with `try`, exactly like `std.sys.fs`:
 #
-#     def adults :: fun connection -> task (result (list user) string) = fun conn {
+#     def adults :: fun connection -> task (list user) string = fun conn {
 #         sql.from "users"
 #         | sql.filter (sql.gt "age" (sql.int 17))
 #         | db.fetch conn decode-user
@@ -49,39 +49,32 @@ def db-op :: fun int int string bytes -> task (result bytes string) = built-in "
 
 def no-bytes :: bytes = string.to-bytes ""
 
+# Runs one host op and lifts its `result` envelope onto the task's own failure
+# channel, so callers get a `task bytes string` -- a host-side error fails the
+# task rather than surfacing as an `err` value to re-match.
+def run-op :: fun int int string bytes -> task bytes string = fun op id sql payload {
+	task.unwrap (db-op op id sql payload)
+}
+
 # --- opening & closing ---------------------------------------------------------
 
 # Opens (creating if necessary) the SQLite database at `path`. Use `":memory:"` for a
 # private in-memory database. `err` if the file can't be opened.
 #
 #     try conn = db.open "app.db"
-public def open :: fun string -> task (result connection string) = fun path {
-	try r = db-op op-open 0 path no-bytes
-	task.return when r is ok raw {
-		when bytes.to-string raw is ok text {
-			when string.to-int text is ok id {
-				ok (connection.handle id)
-			} is err e {
-				err e
-			}
-		} is err e {
-			err e
-		}
-	} is err e {
-		err e
-	}
+public def open :: fun string -> task connection string = fun path {
+	try raw = run-op op-open 0 path no-bytes
+	try text = task.lift (bytes.to-string raw)
+	try id = task.lift (string.to-int text)
+	task.return (connection.handle id)
 }
 
 # Closes a connection, releasing its database file. After this the handle is dead. Awaiting
 # it confirms teardown finished; a connection is also dropped when the program exits.
-public def close :: fun connection -> task (result nothing string) = fun conn {
+public def close :: fun connection -> task nothing string = fun conn {
 	when conn is connection.handle id {
-		try r = db-op op-close id "" no-bytes
-		task.return when r is ok _ {
-			ok ()
-		} is err e {
-			err e
-		}
+		try _ = run-op op-close id "" no-bytes
+		task.return ()
 	}
 }
 
@@ -93,32 +86,21 @@ public def close :: fun connection -> task (result nothing string) = fun conn {
 #
 #     try _ = db.execute conn "create table users (id integer, name text)" []
 #     try _ = db.execute conn "insert into users values (?, ?)" [sql.int 1, sql.text "ada"]
-public def execute :: fun connection string (list value) -> task (result (list row) string) = fun conn sql params {
+public def execute :: fun connection string (list value) -> task (list row) string = fun conn sql params {
 	when conn is connection.handle id {
-		try r = db-op op-execute id sql (encode-params params)
-		task.return when r is ok raw {
-			decode-rows raw
-		} is err e {
-			err e
-		}
+		try raw = run-op op-execute id sql (encode-params params)
+		task.lift (decode-rows raw)
 	}
 }
 
 # Runs a single DML statement (binding `params`) and returns the number of rows it changed,
 # rather than result rows. Backs the typed `db.update`/`db.delete`; for raw row results use
 # `execute`. Errors if handed a row-returning query.
-def execute-count :: fun connection string (list value) -> task (result int string) = fun conn sql params {
+def execute-count :: fun connection string (list value) -> task int string = fun conn sql params {
 	when conn is connection.handle id {
-		try r = db-op op-exec-count id sql (encode-params params)
-		task.return when r is ok raw {
-			when bytes.to-string raw is ok text {
-				string.to-int text
-			} is err e {
-				err e
-			}
-		} is err e {
-			err e
-		}
+		try raw = run-op op-exec-count id sql (encode-params params)
+		try text = task.lift (bytes.to-string raw)
+		task.lift (string.to-int text)
 	}
 }
 
@@ -128,51 +110,41 @@ def execute-count :: fun connection string (list value) -> task (result int stri
 # `db.migrate` is built on it.
 #
 #     try _ = db.batch conn "create table a (x integer); create table b (y text)"
-public def batch :: fun connection string -> task (result nothing string) = fun conn script {
+public def batch :: fun connection string -> task nothing string = fun conn script {
 	when conn is connection.handle id {
-		try r = db-op op-batch id script no-bytes
-		task.return when r is ok _ {
-			ok ()
-		} is err e {
-			err e
-		}
+		try _ = run-op op-batch id script no-bytes
+		task.return ()
 	}
 }
 
-# Runs `body` inside a transaction: `BEGIN` first, then -- if `body` returns `ok v` -- `COMMIT`
-# and `ok v`; if it returns `err e`, `ROLLBACK` and `err e`, so every write `body` made is
-# undone together. Use it to make several `execute`/`insert` calls atomic. Unlike `batch`,
-# `body` is real Pluma code (loops, decode-and-decide, any db op), not a fixed SQL string.
+# Runs `body` inside a transaction: `BEGIN` first, then -- if `body` succeeds with `v` --
+# `COMMIT` and `v`; if `body` *fails*, `ROLLBACK` and re-raise the failure, so every write
+# `body` made is undone together. Use it to make several `execute`/`insert` calls atomic.
+# Unlike `batch`, `body` is real Pluma code (loops, decode-and-decide, any db op), not a
+# fixed SQL string. (`body`'s outcome is reified with `task.attempt` so the COMMIT/ROLLBACK
+# runs before any failure propagates.)
 #
 #     try moved = db.transaction conn (fun {
 #         try _ = db.execute conn "update acct set bal = bal - 10 where id = ?" [sql.int 1]
 #         try _ = db.execute conn "update acct set bal = bal + 10 where id = ?" [sql.int 2]
-#         task.return (ok ())
+#         task.return ()
 #     })
 #
 # All of `body`'s ops must use this same `conn`: the transaction is connection state, and the
 # pinned worker serializes the connection's ops, so `BEGIN`/`COMMIT` correctly bracket them.
 # (Don't share one connection across fibers mid-transaction -- their ops would interleave, the
-# usual single-connection-transaction caveat.) A *fault* inside `body` (cancellation, not an
-# `err`) abandons the open transaction; SQLite rolls it back when the connection is dropped.
-public def transaction :: fun connection (fun nothing -> task (result a string)) -> task (result a string) = fun conn body {
-	try began = execute conn "BEGIN" []
-	when began is ok _ {
-		try outcome = body ()
-		when outcome is ok v {
-			try committed = execute conn "COMMIT" []
-			task.return when committed is ok _ {
-				ok v
-			} is err e {
-				err e
-			}
-		} is err e {
-			# Surface the body's error; the rollback's own result is best-effort.
-			try _rolled = execute conn "ROLLBACK" []
-			task.return (err e)
-		}
+# usual single-connection-transaction caveat.) A *fault* inside `body` (cancellation, not a
+# failure) abandons the open transaction; SQLite rolls it back when the connection is dropped.
+public def transaction :: fun connection (fun nothing -> task a string) -> task a string = fun conn body {
+	try _ = execute conn "BEGIN" []
+	try outcome = task.attempt (body ())
+	when outcome is ok v {
+		try _ = execute conn "COMMIT" []
+		task.return v
 	} is err e {
-		task.return (err e)
+		# Surface the body's failure; the rollback's own outcome is best-effort.
+		try _rolled = task.attempt (execute conn "ROLLBACK" [])
+		task.fail e
 	}
 }
 
@@ -180,15 +152,11 @@ public def transaction :: fun connection (fun nothing -> task (result a string))
 # stage of a `|`-built query pipeline: total, injection-free SQL in, typed rows out.
 #
 #     sql.from "users" | sql.filter (sql.gt "age" (sql.int 17)) | db.fetch conn decode-user
-public def fetch :: fun query connection (fun row -> result a string) -> task (result (list a) string) = fun q conn decode {
+public def fetch :: fun query connection (fun row -> result a string) -> task (list a) string = fun q conn decode {
 	let compiled = sql.compile q
 	let (text, binds) = compiled
 	try rows = execute conn text binds
-	task.return when rows is ok rs {
-		list.try-map rs decode
-	} is err e {
-		err e
-	}
+	task.lift (list.try-map rows decode)
 }
 
 # --- typed tables: thread the decoder through a whole query --------------------
@@ -200,7 +168,7 @@ public def fetch :: fun query connection (fun row -> result a string) -> task (r
 # the SELECT list is always the schema's columns, so the decoder always matches:
 #
 #     db.from users | db.filter (sql.gt "age" (sql.int 17)) | db.order-by (sql.desc "age") | db.run conn
-#     # :: task (result (list user) string)
+#     # :: task (list user) string
 
 # A query against a typed table: the table (schema + decoder) plus the accumulating
 # `std.sql` clauses. Opaque -- build it with `db.from` and the stages below, run it with
@@ -243,18 +211,15 @@ public def limit :: fun (table-query a) int -> table-query a = fun q n {
 # Runs a typed query: first validates that every filtered/ordered column exists in the
 # schema (a crisp error returned *before* hitting SQLite), then runs and decodes each row
 # with the table's own decoder.
-public def run :: fun (table-query a) connection -> task (result (list a) string) = fun q conn {
+public def run :: fun (table-query a) connection -> task (list a) string = fun q conn {
 	when q is table-query.tq t inner {
-		when sql.validate-columns (sql.table-column-names t) inner is ok _ {
-			fetch inner conn (sql.table-decode t)
-		} is err e {
-			task.return (err e)
-		}
+		try _ = task.lift (sql.validate-columns (sql.table-column-names t) inner)
+		fetch inner conn (sql.table-decode t)
 	}
 }
 
 # Every row of a table, decoded -- `db.from t | db.run conn` with no clauses.
-public def all :: fun connection (table a) -> task (result (list a) string) = fun conn t {
+public def all :: fun connection (table a) -> task (list a) string = fun conn t {
 	run (from t) conn
 }
 
@@ -262,15 +227,11 @@ public def all :: fun connection (table a) -> task (result (list a) string) = fu
 # parameterized and quote-escaped (via `sql.compile-insert`), so a value can't break out.
 #
 #     try _ = db.insert conn users {id: 1, name: "ada", age: some 30, active: true}
-public def insert :: fun connection (table a) a -> task (result nothing string) = fun conn t value {
+public def insert :: fun connection (table a) a -> task nothing string = fun conn t value {
 	let cells = (sql.table-encode t) value
 	let (text, binds) = sql.compile-insert (sql.table-name t) cells
-	try r = execute conn text binds
-	task.return when r is ok _ {
-		ok ()
-	} is err e {
-		err e
-	}
+	try _ = execute conn text binds
+	task.return ()
 }
 
 # Deletes the rows of `t` matching `filters` (AND-joined; an empty `filters` deletes every
@@ -278,13 +239,10 @@ public def insert :: fun connection (table a) a -> task (result nothing string) 
 # first, so a typo'd column is a crisp error before SQLite.
 #
 #     try removed = db.delete conn todos [sql.eq "done" (sql.bool true)]
-public def delete :: fun connection (table a) (list predicate) -> task (result int string) = fun conn t filters {
-	when sql.validate-column-names (sql.table-column-names t) (sql.predicate-columns filters) is ok _ {
-		let (text, binds) = sql.compile-delete (sql.table-name t) filters
-		execute-count conn text binds
-	} is err e {
-		task.return (err e)
-	}
+public def delete :: fun connection (table a) (list predicate) -> task int string = fun conn t filters {
+	try _ = task.lift (sql.validate-column-names (sql.table-column-names t) (sql.predicate-columns filters))
+	let (text, binds) = sql.compile-delete (sql.table-name t) filters
+	execute-count conn text binds
 }
 
 # Updates the rows of `t` matching `filters` (an empty `filters` updates every row), setting
@@ -292,18 +250,15 @@ public def delete :: fun connection (table a) (list predicate) -> task (result i
 # columns and the filter columns are validated against the schema first.
 #
 #     try changed = db.update conn todos [("done", sql.bool true)] [sql.lt "priority" (sql.int 3)]
-public def update :: fun connection (table a) (list (string, value)) (list predicate) -> task (result int string) = fun conn t sets filters {
+public def update :: fun connection (table a) (list (string, value)) (list predicate) -> task int string = fun conn t sets filters {
 	let set-cols = list.map sets fun pair {
 		let (c, _) = pair
 		c
 	}
 	let used = list.concat set-cols (sql.predicate-columns filters)
-	when sql.validate-column-names (sql.table-column-names t) used is ok _ {
-		let (text, binds) = sql.compile-update (sql.table-name t) sets filters
-		execute-count conn text binds
-	} is err e {
-		task.return (err e)
-	}
+	try _ = task.lift (sql.validate-column-names (sql.table-column-names t) used)
+	let (text, binds) = sql.compile-update (sql.table-name t) sets filters
+	execute-count conn text binds
 }
 
 # --- migrations ----------------------------------------------------------------
@@ -321,50 +276,41 @@ public def update :: fun connection (table a) (list (string, value)) (list predi
 #     ]
 public alias migration {version :: int, up :: string}
 
-public def migrate :: fun connection (list migration) -> task (result int string) = fun conn migrations {
-	try ensured = batch conn "create table if not exists \"_pluma_migrations\" (version integer primary key)"
-	when ensured is ok _ {
-		try got = applied-versions conn
-		when got is ok applied {
-			let ordered = list.sort-by migrations fun m {
-				m.version
-			}
-			let pending = list.filter ordered fun m {
-				list.contains applied m.version == false
-			}
-			apply-pending conn pending 0
-		} is err e {
-			task.return (err e)
-		}
-	} is err e {
-		task.return (err e)
+public def migrate :: fun connection (list migration) -> task int string = fun conn migrations {
+	try _ = batch conn "create table if not exists \"_pluma_migrations\" (version integer primary key)"
+	try applied = applied-versions conn
+	let ordered = list.sort-by migrations fun m {
+		m.version
 	}
+	let pending = list.filter ordered fun m {
+		list.contains applied m.version == false
+	}
+	apply-pending conn pending 0
 }
 
 # The versions already recorded in the tracking table.
-def applied-versions :: fun connection -> task (result (list int) string) = fun conn {
+def applied-versions :: fun connection -> task (list int) string = fun conn {
 	try rows = execute conn "select version from \"_pluma_migrations\"" []
-	task.return when rows is ok rs {
-		list.try-map rs fun r {
-			sql.get-int r "version"
-		}
-	} is err e {
-		err e
-	}
+	task.lift (list.try-map rows fun r {
+		sql.get-int r "version"
+	})
 }
 
 # Apply each pending migration in order, counting successes; stop and report on the first
 # failure. The failing migration's transaction already rolled back, so its version isn't
 # recorded and a later re-run retries it.
-def apply-pending :: fun connection (list migration) int -> task (result int string) = fun conn pending count {
+def apply-pending :: fun connection (list migration) int -> task int string = fun conn pending count {
 	when pending is [] {
-		task.return (ok count)
+		task.return count
 	} is [m, ...rest] {
-		try r = batch conn (migration-script m)
-		when r is ok _ {
+		# Attempt the migration so a failure can be tagged with its version
+		# before re-raising; the failing migration's transaction already
+		# rolled back, so its version isn't recorded and a re-run retries it.
+		try outcome = task.attempt (batch conn (migration-script m))
+		when outcome is ok _ {
 			apply-pending conn rest (count + 1)
 		} is err e {
-			task.return (err "migration $(to-string m.version): $(e)")
+			task.fail "migration $(to-string m.version): $(e)"
 		}
 	}
 }

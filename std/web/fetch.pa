@@ -41,18 +41,15 @@ public alias response {status :: int, headers :: dict string string, body :: byt
 # requests don't freeze the main thread.
 def web-fetch :: fun string -> task (result string string) = built-in "web-fetch"
 
-# POSTs `body` to `url` with `headers`, returning the server's response. The
-# web counterpart of `http.fetch ... post ...`.
+# POSTs `body` to `url` with `headers`, returning the server's response. A
+# transport or decode error *fails* the task. The web counterpart of
+# `http.fetch ... post ...`.
 #
 #     try resp = fetch.post "http://host/rpc/x" headers body
-public def post :: fun string (dict string string) bytes -> task (result response string) = fun url headers body {
+public def post :: fun string (dict string string) bytes -> task response string = fun url headers body {
 	let req = string.join ["POST", url, render-headers headers, hex.encode body] "\t"
-	try resp = web-fetch req
-	when resp is ok s {
-		task.return (parse-response s)
-	} is err e {
-		task.return (err e)
-	}
+	try text = task.unwrap (web-fetch req)
+	task.lift (parse-response text)
 }
 
 # --- streaming (the `stream R` subscription transport) -----------------------

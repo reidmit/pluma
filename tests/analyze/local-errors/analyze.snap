@@ -6,7 +6,7 @@ error: Type mismatch: expected `int`, but found `local 'a`.
 > 11 | 	local.get 5
         ^^^^^^^^^^^
 
-error: Type mismatch: expected `int`, but found `task 'a`.
+error: Type mismatch: expected `int`, but found `task 'a 'b`.
 > 1 | # Type errors for `std.local`. `local.get` requires a `local`, not a plain
       ^
 

@@ -67,13 +67,13 @@ module `main` (tests/analyze/local-types/main.pa) {
             },
             def(14:0-18:1) :: nothing {
                 name: ident(14:4-14:10) `scoped`,
-                kind: expr(14:13-18:1) :: nothing -> task string {
+                kind: expr(14:13-18:1) :: nothing -> task string 'a {
                     kind: fun(14:13-18:1) {
                         params: [],
                         body: [
-                            expr(15:1-17:2) :: task string {
+                            expr(15:1-17:2) :: task string 'a {
                                 kind: call(15:1-17:2) {
-                                    callee: expr(15:1-15:11) :: (local 'a) 'a (nothing -> task 'b) -> task 'b {
+                                    callee: expr(15:1-15:11) :: (local 'a) 'a (nothing -> task 'b 'c) -> task 'b 'c {
                                         kind: namespace-access `local.with`,
                                     },
                                     args: [
@@ -83,13 +83,13 @@ module `main` (tests/analyze/local-types/main.pa) {
                                         expr(15:19-15:23) :: string {
                                             kind: literal(15:19-15:23) string "req",
                                         },
-                                        expr(15:24-17:2) :: nothing -> task string {
+                                        expr(15:24-17:2) :: nothing -> task string 'a {
                                             kind: fun(15:24-17:2) {
                                                 params: [],
                                                 body: [
-                                                    expr(16:2-16:31) :: task string {
+                                                    expr(16:2-16:31) :: task string 'a {
                                                         kind: call(16:2-16:31) {
-                                                            callee: expr(16:2-16:13) :: 'a -> task 'a {
+                                                            callee: expr(16:2-16:13) :: 'a -> task 'a 'b {
                                                                 kind: namespace-access `task.return`,
                                                             },
                                                             args: [
@@ -122,13 +122,13 @@ module `main` (tests/analyze/local-types/main.pa) {
             },
             def(20:0-24:1) :: nothing {
                 name: ident(20:4-20:14) `scoped-int`,
-                kind: expr(20:17-24:1) :: nothing -> task int {
+                kind: expr(20:17-24:1) :: nothing -> task int 'a {
                     kind: fun(20:17-24:1) {
                         params: [],
                         body: [
-                            expr(21:1-23:2) :: task int {
+                            expr(21:1-23:2) :: task int 'a {
                                 kind: call(21:1-23:2) {
-                                    callee: expr(21:1-21:11) :: (local 'a) 'a (nothing -> task 'b) -> task 'b {
+                                    callee: expr(21:1-21:11) :: (local 'a) 'a (nothing -> task 'b 'c) -> task 'b 'c {
                                         kind: namespace-access `local.with`,
                                     },
                                     args: [
@@ -138,13 +138,13 @@ module `main` (tests/analyze/local-types/main.pa) {
                                         expr(21:18-21:20) :: int {
                                             kind: literal(21:18-21:20) int 42,
                                         },
-                                        expr(21:21-23:2) :: nothing -> task int {
+                                        expr(21:21-23:2) :: nothing -> task int 'a {
                                             kind: fun(21:21-23:2) {
                                                 params: [],
                                                 body: [
-                                                    expr(22:2-22:31) :: task int {
+                                                    expr(22:2-22:31) :: task int 'a {
                                                         kind: call(22:2-22:31) {
-                                                            callee: expr(22:2-22:13) :: 'a -> task 'a {
+                                                            callee: expr(22:2-22:13) :: 'a -> task 'a 'b {
                                                                 kind: namespace-access `task.return`,
                                                             },
                                                             args: [

@@ -2432,13 +2432,14 @@ impl<'compiler> Analyzer<'compiler> {
 		if module != "std.task" {
 			return None;
 		}
-		let task = |a: Type| Type::Enum("__prelude__.task".to_string(), vec![a]);
+		let task = |a: Type, e: Type| Type::Enum("__prelude__.task".to_string(), vec![a, e]);
 		match def_name {
 			"scope-spawn" => {
 				let a = self.new_type_var();
+				let e = self.new_type_var();
 				Some(Type::Fun(
-					vec![scope_handle_type(), task(a.clone())],
-					Box::new(task(a)),
+					vec![scope_handle_type(), task(a.clone(), e.clone())],
+					Box::new(task(a, e)),
 				))
 			}
 			"scope-cancel" => Some(Type::Fun(
@@ -2451,9 +2452,13 @@ impl<'compiler> Analyzer<'compiler> {
 			)),
 			"manual-spawn" => {
 				let a = self.new_type_var();
+				let e = self.new_type_var();
 				Some(Type::Fun(
-					vec![manual_scope_handle_type(a.clone()), task(a.clone())],
-					Box::new(task(a)),
+					vec![
+						manual_scope_handle_type(a.clone()),
+						task(a.clone(), e.clone()),
+					],
+					Box::new(task(a, e)),
 				))
 			}
 			"manual-cancel" => {
@@ -2473,11 +2478,12 @@ impl<'compiler> Analyzer<'compiler> {
 			"manual-next" => {
 				let a = self.new_type_var();
 				let e = self.new_type_var();
+				let outer_e = self.new_type_var();
 				let result_ty = Type::Enum("__prelude__.result".to_string(), vec![a.clone(), e]);
 				let option_ty = Type::Enum("__prelude__.option".to_string(), vec![result_ty]);
 				Some(Type::Fun(
 					vec![manual_scope_handle_type(a), Type::Nothing],
-					Box::new(task(option_ty)),
+					Box::new(task(option_ty, outer_e)),
 				))
 			}
 			_ => None,
@@ -3445,7 +3451,8 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// The body must produce a task; the scope expression is that task.
 				let alpha = self.new_type_var();
-				let task_ty = Type::Enum("__prelude__.task".to_string(), vec![alpha]);
+				let epsilon = self.new_type_var();
+				let task_ty = Type::Enum("__prelude__.task".to_string(), vec![alpha, epsilon]);
 				constraints.push(eq_constraint(body_ty, task_ty.clone()).at(srange));
 				constraints.push(eq_constraint(expr.ty.clone(), task_ty).at(srange));
 
@@ -5787,9 +5794,10 @@ impl<'compiler> Analyzer<'compiler> {
 		subst: &Substitution,
 		new_constraints: &mut Vec<Constraint>,
 		dispatched_any: &mut bool,
-		// The tail type of the enclosing async context (a `fun` body), used to
-		// enforce that a function which awaits returns a task. `None` at the top
-		// level and inside `scope` bodies (which carry their own task constraint).
+		// The tail type of the enclosing async context (a `fun` or `scope`
+		// body), used to enforce that a function which awaits returns a task and
+		// to tie the awaited tasks' failure type to it (so a `try`'d `task a e`
+		// propagates its `e`). `None` only at the top level.
 		enclosing_tail: Option<&Type>,
 	) {
 		// Walk children first so nested `try`s are rewritten bottom-up.
@@ -5936,11 +5944,16 @@ impl<'compiler> Analyzer<'compiler> {
 				}
 			}
 			ExprKind::Scope(ScopeNode { body, .. }) => {
-				// A `scope` body is its own async context (its tail is already
-				// constrained to a task where the scope is typed), so a `try` inside
-				// it must not tie the *enclosing* fun's tail — pass `None`.
+				// A `scope` body is its own async context: its tail is already
+				// constrained to a task where the scope is typed (so a `try` inside
+				// must tie *that* tail, not the enclosing fun's). Threading the
+				// scope's own tail also propagates the awaited tasks' failure type
+				// into the scope's `e`: a fail-fast scope fails with whichever child
+				// fails, so `scope { try a = s.spawn t1; try b = s.spawn t2; ... }`
+				// forces `t1`, `t2`, and the scope itself to share one error type.
+				let tail = body.last().map(|e| e.ty.clone());
 				for e in body.iter_mut() {
-					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, None);
+					self.dispatch_try_in_expr(e, subst, new_constraints, dispatched_any, tail.as_ref());
 				}
 			}
 			ExprKind::Grouping(inner) => {
@@ -6033,8 +6046,9 @@ impl<'compiler> Analyzer<'compiler> {
 		// codegen. Idempotent: once flagged, report no further progress so
 		// the dispatch fixpoint can terminate.
 		if let Type::Enum(name, args) = &resolved_value_ty {
-			if name == "__prelude__.task" && args.len() == 1 {
+			if name == "__prelude__.task" && args.len() == 2 {
 				let payload_ty = args[0].clone();
+				let error_ty = args[1].clone();
 				let t = match &mut expr.kind {
 					ExprKind::Try(t) => t,
 					_ => unreachable!("do_try_dispatch called on non-Try expr"),
@@ -6073,14 +6087,19 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// Soundness: a function that awaits must itself return a task (so its
 				// callers see the right type and it lowers to an async closure). Tie
-				// the enclosing async context's tail to a `task β`. For a tail-
-				// position `try`-chain this is automatic (its tail is `task.return`);
-				// the live case is a `try` whose continuation tail is *not* a task
-				// (e.g. forgetting `task.return`) — that still errors here, exactly as
-				// before. `scope` bodies carry their own task constraint, so the
-				// walker passes `None` inside them.
+				// the enclosing async context's tail to a `task β e` — the *same*
+				// failure type `e` as the awaited task, so awaiting a `task a e`
+				// propagates its typed failure to the caller (the async `?`). For a
+				// tail-position `try`-chain this is automatic (its tail is
+				// `task.return`); the live case is a `try` whose continuation tail is
+				// *not* a task (e.g. forgetting `task.return`) — that still errors
+				// here. `scope` bodies carry their own task constraint, so the walker
+				// passes `None` inside them.
 				if let Some(tail) = enclosing_tail {
-					let task_ty = Type::Enum("__prelude__.task".to_string(), vec![self.new_type_var()]);
+					let task_ty = Type::Enum(
+						"__prelude__.task".to_string(),
+						vec![self.new_type_var(), error_ty.clone()],
+					);
 					new_constraints.push(eq_constraint(tail.clone(), task_ty).at(try_range));
 				}
 				return true;
@@ -6269,10 +6288,10 @@ impl<'compiler> Analyzer<'compiler> {
 		};
 
 		// Recognized carriers mirror `try`: option (1 arg), result (2 args),
-		// task (1 arg). For option/result, `??` *unwraps* to the bare payload;
+		// task (2 args). For option/result, `??` *unwraps* to the bare payload;
 		// for task it stays in the carrier (you can't synchronously unwrap a
-		// task), so the "payload" the result type takes is the whole `task a`
-		// and the fallback must itself be a `task a`.
+		// task), so the "payload" the result type takes is the whole `task a e`
+		// and the fallback must itself be a `task a e` (recovering the failure).
 		let (carrier_module_name, payload_ty): (&'static str, Type) = match &resolved_left {
 			Type::Enum(name, args) if name == "__prelude__.option" && args.len() == 1 => {
 				("option", args[0].clone())
@@ -6280,7 +6299,7 @@ impl<'compiler> Analyzer<'compiler> {
 			Type::Enum(name, args) if name == "__prelude__.result" && args.len() == 2 => {
 				("result", args[0].clone())
 			}
-			Type::Enum(name, args) if name == "__prelude__.task" && args.len() == 1 => {
+			Type::Enum(name, args) if name == "__prelude__.task" && args.len() == 2 => {
 				// Fully-qualified so codegen resolves it by name regardless of
 				// imports: `std.task` isn't auto-imported, but `??` (like
 				// `try`) must work on any task value -- including inside
@@ -7144,7 +7163,7 @@ impl<'compiler> Analyzer<'compiler> {
 			);
 			return;
 		};
-		let kind = if ret_name == "__prelude__.task" && args.len() == 1 {
+		let kind = if ret_name == "__prelude__.task" && args.len() == 2 {
 			crate::rpc::EndpointKind::Unary
 		} else if ret_name == "std.stream.stream" && args.len() == 1 {
 			crate::rpc::EndpointKind::Stream

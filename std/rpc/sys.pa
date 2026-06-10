@@ -13,7 +13,7 @@ use std/sys/http
 # the matching typed `rpc-error` (`rpc.status-error`); a transport-level failure →
 # `transport`.
 def send :: fun string bytes (dict string string) -> task bytes = fun route body headers {
-	try outcome = http.fetch (rpc.server-origin ++ "/rpc/" ++ route) http.method.post headers body
+	try outcome = task.attempt (http.fetch (rpc.server-origin ++ "/rpc/" ++ route) http.method.post headers body)
 	when outcome is ok resp {
 		if resp.status == 200 {
 			task.return resp.body

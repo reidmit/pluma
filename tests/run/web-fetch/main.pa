@@ -18,7 +18,8 @@ use std/task
 use std/web/fetch
 
 def main = fun {
-	try resp = fetch.post "http://127.0.0.1:1/rpc/echo" (dict.empty ()) (string.to-bytes "ping")
+	# a closed port fails the task; reify it with `task.attempt`
+	try resp = task.attempt (fetch.post "http://127.0.0.1:1/rpc/echo" (dict.empty ()) (string.to-bytes "ping"))
 	when resp is ok r {
 		print "unexpected ok (status $(to-string r.status))"
 		task.return 1

@@ -11,16 +11,16 @@ module `main` (tests/analyze/remote-def/main.pa) {
         ] [
             public remote def(3:0-5:1) :: nothing {
                 name: ident(3:18-3:24) `double`,
-                kind: expr(3:58-5:1) :: request int -> task int {
+                kind: expr(3:58-5:1) :: request int -> task int 'a {
                     kind: fun(3:58-5:1) {
                         params: [
                             ident(3:62-3:66) `_req` :: request,
                             ident(3:67-3:68) `n` :: int,
                         ],
                         body: [
-                            expr(4:1-4:20) :: task int {
+                            expr(4:1-4:20) :: task int 'a {
                                 kind: call(4:1-4:20) {
-                                    callee: expr(4:1-4:12) :: 'a -> task 'a {
+                                    callee: expr(4:1-4:12) :: 'a -> task 'a 'b {
                                         kind: namespace-access `task.return`,
                                     },
                                     args: [

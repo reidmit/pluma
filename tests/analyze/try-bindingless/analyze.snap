@@ -16,16 +16,16 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
         ] [
             def(7:0-10:1) :: nothing {
                 name: ident(7:4-7:8) `beat`,
-                kind: expr(7:11-10:1) :: nothing -> task int {
+                kind: expr(7:11-10:1) :: nothing -> task int 'a {
                     kind: fun(7:11-10:1) {
                         params: [],
                         body: [
-                            expr(8:1-9:14) :: task int {
+                            expr(8:1-9:14) :: task int 'a {
                                 kind: try(8:1-9:14) {
                                     pattern: pattern(8:1-8:1) Underscore,
-                                    value: expr(8:5-8:18) :: task int {
+                                    value: expr(8:5-8:18) :: task int 'a {
                                         kind: call(8:5-8:18) {
-                                            callee: expr(8:5-8:16) :: 'a -> task 'a {
+                                            callee: expr(8:5-8:16) :: 'a -> task 'a 'b {
                                                 kind: namespace-access `task.return`,
                                             },
                                             args: [
@@ -36,9 +36,9 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                                         },
                                     },
                                     rest: [
-                                        expr(9:1-9:14) :: task int {
+                                        expr(9:1-9:14) :: task int 'a {
                                             kind: call(9:1-9:14) {
-                                                callee: expr(9:1-9:12) :: 'a -> task 'a {
+                                                callee: expr(9:1-9:12) :: 'a -> task 'a 'b {
                                                     kind: namespace-access `task.return`,
                                                 },
                                                 args: [

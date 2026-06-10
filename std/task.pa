@@ -21,25 +21,24 @@ use std/list
 #
 #     try user = http.get url
 #     task.return user.name
-public def return :: fun a -> task a = built-in "task-return"
+public def return :: fun a -> task a e = built-in "task-return"
 
 # A task that fails with `e` the moment it runs. Failure propagates
 # through `try` (the awaiting task fails too) until something recovers it
 # with `??` / `task.or-else` or reifies it with `task.attempt`. The error
-# value is untyped from the task's point of view -- `task a` tracks only
-# the success type.
-public def fail :: fun e -> task a = built-in "task-fail"
+# you pass *is* the task's failure type: `task.fail "nope"` is a `task a string`.
+public def fail :: fun e -> task a e = built-in "task-fail"
 
 # Hands the scheduler a turn without doing any I/O. A long CPU-bound loop
 # can call `task.yield ()` periodically so sibling tasks (and cancellation)
 # get a chance to run -- tasks are cooperatively scheduled, so nothing
 # else proceeds until the running task suspends.
-public def yield :: fun nothing -> task nothing = built-in "task-yield"
+public def yield :: fun nothing -> task nothing e = built-in "task-yield"
 
 # A task that completes after `d` elapses, producing nothing. Suspends the
 # task on a timer rather than blocking the thread, so siblings keep
 # running. `try _ = task.sleep 200ms` pauses just the current task.
-public def sleep :: fun duration -> task nothing = built-in "task-sleep"
+public def sleep :: fun duration -> task nothing e = built-in "task-sleep"
 
 # Chains a follow-up step onto a task: `then t k` runs `t`, and when it
 # succeeds runs `k` on the result (which returns the next task). If `t`
@@ -49,7 +48,7 @@ public def sleep :: fun duration -> task nothing = built-in "task-sleep"
 #
 #     try x = t
 #     k x
-public def then :: fun (task a) (fun a -> task b) -> task b = built-in "task-then"
+public def then :: fun (task a e) (fun a -> task b e) -> task b e = built-in "task-then"
 
 # Recovers from a failed task. `or-else t recover` runs `t`; if it succeeds,
 # its value passes through, and `recover` is never run. If `t` fails,
@@ -57,14 +56,15 @@ public def then :: fun (task a) (fun a -> task b) -> task b = built-in "task-the
 # does over a task, so you'll usually write the operator:
 #
 #     fetch-primary () ?? fetch-backup ()
-public def or-else :: fun (task a) (fun nothing -> task a) -> task a = built-in "task-or-else"
+public def or-else :: fun (task a e) (fun nothing -> task a e) -> task a e = built-in "task-or-else"
 
-# Reifies a task's failure into its value. `attempt t` runs `t` and always
-# succeeds: `ok v` if `t` produced `v`, `err e` if `t` failed with `e`. This
+# Reifies a task's typed failure into its value. `attempt t` runs `t` and
+# always succeeds: `ok v` if `t` produced `v`, `err e` if `t` failed with `e`
+# (the `task a e`'s own failure type carries straight into the `result`). This
 # is how you keep going past a failure -- a failed `attempt`ed task no longer
 # fails its scope, so `task.all (list.map ts task.attempt)` settles every
 # task instead of stopping at the first error.
-public def attempt :: fun (task a) -> task (result a e) = built-in "task-attempt"
+public def attempt :: fun (task a e) -> task (result a e) f = built-in "task-attempt"
 
 # Transforms a task's successful value with a plain function. `map t f` runs
 # `t` and applies `f` to its result; a failure passes through untouched. Note
@@ -72,7 +72,7 @@ public def attempt :: fun (task a) -> task (result a e) = built-in "task-attempt
 # composes with `|`):
 #
 #     http.get url | task.map parse-body
-public def map :: fun (task a) (fun a -> b) -> task b = built-in "task-map"
+public def map :: fun (task a e) (fun a -> b) -> task b e = built-in "task-map"
 
 # Runs `t` in an uninterruptible region: a concurrent cancellation (a sibling
 # failing, a deadline, an `s.cancel`) can't interrupt `t` — it runs to
@@ -80,7 +80,7 @@ public def map :: fun (task a) (fun a -> b) -> task b = built-in "task-map"
 # a critical section or cleanup that must not be torn apart partway through. A
 # shielded `t` may not await across fibers (a scope handle / `s.next` / a nested
 # `scope`); shield self-contained work.
-public def shielded :: fun (task a) -> task a = built-in "task-shielded"
+public def shielded :: fun (task a e) -> task a e = built-in "task-shielded"
 
 # --- detached spawning: fire async work onto the scheduler ------------------
 #
@@ -92,9 +92,9 @@ public def shielded :: fun (task a) -> task a = built-in "task-shielded"
 # additionally hands back a thunk that tears the work down -- pair it with
 # `signal.on-cleanup` to bind a subscription's lifetime to a dynamic subtree.
 
-def spawn-command :: fun (task nothing) -> nothing = built-in "spawn-command"
+def spawn-command :: fun (task nothing e) -> nothing = built-in "spawn-command"
 
-def spawn-sub :: fun (task nothing) -> int = built-in "spawn-sub"
+def spawn-sub :: fun (task nothing e) -> int = built-in "spawn-sub"
 
 def cancel-sub :: fun int -> nothing = built-in "cancel-sub"
 
@@ -146,13 +146,13 @@ public def fire :: fun (task a) (fun a -> nothing) -> nothing = fun t f {
 # calls `body` with the scope's handle, and runs the resulting task as the
 # scope's root, blocking the scope's exit until every child spawned into it has
 # settled or been cancelled. `is-manual` picks the manual (non-fail-fast) form.
-def scope-new :: fun bool (fun scope-handle -> task a) -> task a = built-in "scope-new"
+def scope-new :: fun bool (fun scope-handle -> task a e) -> task a e = built-in "scope-new"
 
 # Starts task `t` as a child of scope `s` and returns a hot handle. The handle
 # is itself a `task a`: awaiting it (`try`) waits for that child; awaiting it
 # again yields the same result, since the child already ran. A fail-fast
 # scope's children are heterogeneous, so each `spawn` is independently typed.
-def scope-spawn :: fun scope-handle (task a) -> task a = built-in "scope-spawn"
+def scope-spawn :: fun scope-handle (task a e) -> task a e = built-in "scope-spawn"
 
 # Cancels scope `s` and, recursively, every task it owns. Children observe the
 # cancellation at their next suspension point; their `defer`s still run.
@@ -167,7 +167,7 @@ def scope-cancel-after :: fun scope-handle duration -> nothing = built-in "scope
 # `scope-*` forms -- they share the same `built-in` tags -- but the handle type
 # is parameterized by the children's type `a` (manual scopes are homogeneous),
 # so `manual-next` can return that type.
-def manual-spawn :: fun (manual-scope-handle a) (task a) -> task a = built-in "scope-spawn"
+def manual-spawn :: fun (manual-scope-handle a) (task a e) -> task a e = built-in "scope-spawn"
 
 def manual-cancel :: fun (manual-scope-handle a) nothing -> nothing = built-in "scope-cancel"
 
@@ -176,7 +176,7 @@ def manual-cancel-after :: fun (manual-scope-handle a) duration -> nothing = bui
 # (Manual scopes.) Awaits the next child of `s` to settle: a task yielding
 # `some (ok v)` / `some (err e)` per completion, then `none` once every child
 # has been drained. The building block under `race` / `any` / `pool`.
-def manual-next :: fun (manual-scope-handle a) nothing -> task (option (result a e)) = built-in "scope-next"
+def manual-next :: fun (manual-scope-handle a) nothing -> task (option (result a e)) f = built-in "scope-next"
 
 # --- concurrent combinators ----------------------------------------------
 #
@@ -193,15 +193,30 @@ def manual-next :: fun (manual-scope-handle a) nothing -> task (option (result a
 # parameter; its signature names the param `manual-scope-handle a`, which is what lets
 # the method calls dispatch on a handle received as an argument.
 
-# Lifts a settled `result` back onto the task carrier: `ok v` becomes a task
-# that succeeds with `v`, `err e` one that fails with `e`. The glue between
-# `s.next` (which hands back a `result`) and the combinators that re-raise it.
-def result-to-task :: fun (result a e) -> task a = fun r {
+# Lifts a settled `result` onto the task carrier: `ok v` becomes a task that
+# succeeds with `v`, `err e` one that fails with `e`. The bridge from the
+# `result`-returning world (a pure decode, a `std.sql` validate, an `s.next`
+# completion) into a `task a e` pipeline: `try x = task.lift (decode row)`
+# propagates a decode failure exactly the way an awaited I/O failure does. The
+# inverse of `task.attempt`, which reifies a task's failure back into a `result`.
+public def lift :: fun (result a e) -> task a e = fun r {
 	when r is ok x {
 		return x
 	} is err e {
 		fail e
 	}
+}
+
+# Awaits a task whose value is itself a `result` and joins that inner result
+# onto the task's own failure channel: `ok v` settles the task with `v`, `err e`
+# fails it with `e`. The bridge up from the low-level layer that carries failure
+# *inside* the task (a raw `std.sys.net` read, a host builtin returning a
+# `task (result a string)`) to the typed-error world, so callers read a straight
+# line of `try`s instead of re-matching each inner `ok`/`err`. `task.unwrap t`
+# is `task.lift` behind an await; the inverse of `task.attempt`.
+public def unwrap :: fun (task (result a e)) -> task a e = fun t {
+	try r = t
+	lift r
 }
 
 # Awaits a list of already-spawned handles in order, collecting their values.
@@ -268,7 +283,7 @@ public def race :: fun (list (task a)) -> task a = fun ts {
 		try first = s.next ()
 		s.cancel ()
 		when first is some r {
-			result-to-task r
+			lift r
 		} is none {
 			fail "race: empty"
 		}
@@ -331,7 +346,7 @@ def gather :: fun (manual-scope-handle a) (list (task a)) (ref int) (list a) -> 
 	when got is none {
 		return acc
 	} is some r {
-		try x = result-to-task r
+		try x = lift r
 		let _ = list.push acc x
 		let i = ref.get next
 		let _ = when i < list.length ts is true {

@@ -20,10 +20,10 @@ def route-fp :: string = "3046392278730166848"
 # POST the encoded args with the given headers; for a 200, decode and return the
 # sum, otherwise report the status code (a reject surfaces as its HTTP status).
 def probe :: fun string (dict string string) -> task int = fun url headers {
-	try resp = http.fetch url http.method.post (dict.insert headers "x-rpc-fingerprint" route-fp) (wire.encode (
+	try resp = task.attempt (http.fetch url http.method.post (dict.insert headers "x-rpc-fingerprint" route-fp) (wire.encode (
 		2,
 		3,
-	))
+	)))
 	when resp is ok r {
 		if r.status == 200 {
 			let decoded :: result int wire-error = wire.decode r.body

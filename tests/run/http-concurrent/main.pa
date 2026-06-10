@@ -32,36 +32,25 @@ def await-pair :: fun (ref int) int -> task bool = fun gate fuel {
 	}
 }
 
-# Read until the server closes the connection (Connection: close).
-def drain :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
-	try r = net.read conn 4096
-	when r is ok chunk {
-		if bytes.is-empty chunk {
-			task.return (ok acc)
-		} else {
-			drain conn (bytes.concat acc chunk)
-		}
-	} is err e {
-		task.return (err e)
+# Read until the server closes the connection (Connection: close). `task.unwrap` joins the
+# raw net read's in-task `result` onto this task's failure channel so the loop reads linearly.
+def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
+	try chunk = task.unwrap (net.read conn 4096)
+	if bytes.is-empty chunk {
+		task.return acc
+	} else {
+		drain conn (bytes.concat acc chunk)
 	}
 }
 
 # Send one GET and return just the response body (past the blank line).
 def client :: fun string string -> task string = fun addr path {
-	try c = net.connect addr
-	when c is ok conn {
-		try _ = net.write conn (string.to-bytes ("GET " ++ path ++ " HTTP/1.1\r\nHost: x\r\n\r\n"))
-		try resp = drain conn (string.to-bytes "")
-		let _ = net.close conn
-		when resp is ok raw {
-			let body = bytes.to-string raw ?? "<bad utf8>"
-			task.return (list.head (list.drop (string.split body "\r\n\r\n") 1) ?? "<no body>")
-		} is err e {
-			task.fail e
-		}
-	} is err e {
-		task.fail e
-	}
+	try conn = task.unwrap (net.connect addr)
+	try _ = task.unwrap (net.write conn (string.to-bytes ("GET " ++ path ++ " HTTP/1.1\r\nHost: x\r\n\r\n")))
+	try raw = drain conn (string.to-bytes "")
+	let _ = net.close conn
+	let body = bytes.to-string raw ?? "<bad utf8>"
+	task.return (list.head (list.drop (string.split body "\r\n\r\n") 1) ?? "<no body>")
 }
 
 def main = fun {

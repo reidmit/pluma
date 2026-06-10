@@ -12,13 +12,13 @@ module `main` (tests/analyze/task-basics/main.pa) {
         ] [
             def(3:0-5:1) :: nothing {
                 name: ident(3:4-3:12) `make-num`,
-                kind: expr(3:15-5:1) :: nothing -> task int {
+                kind: expr(3:15-5:1) :: nothing -> task int 'a {
                     kind: fun(3:15-5:1) {
                         params: [],
                         body: [
-                            expr(4:1-4:15) :: task int {
+                            expr(4:1-4:15) :: task int 'a {
                                 kind: call(4:1-4:15) {
-                                    callee: expr(4:1-4:12) :: 'a -> task 'a {
+                                    callee: expr(4:1-4:12) :: 'a -> task 'a 'b {
                                         kind: namespace-access `task.return`,
                                     },
                                     args: [
@@ -34,13 +34,13 @@ module `main` (tests/analyze/task-basics/main.pa) {
             },
             def(7:0-9:1) :: nothing {
                 name: ident(7:4-7:13) `make-fail`,
-                kind: expr(7:16-9:1) :: nothing -> task 'a {
+                kind: expr(7:16-9:1) :: nothing -> task 'a string {
                     kind: fun(7:16-9:1) {
                         params: [],
                         body: [
-                            expr(8:1-8:17) :: task 'a {
+                            expr(8:1-8:17) :: task 'a string {
                                 kind: call(8:1-8:17) {
-                                    callee: expr(8:1-8:10) :: 'a -> task 'b {
+                                    callee: expr(8:1-8:10) :: 'a -> task 'b 'a {
                                         kind: namespace-access `task.fail`,
                                     },
                                     args: [
@@ -56,13 +56,13 @@ module `main` (tests/analyze/task-basics/main.pa) {
             },
             def(11:0-13:1) :: nothing {
                 name: ident(11:4-11:9) `pause`,
-                kind: expr(11:12-13:1) :: nothing -> task nothing {
+                kind: expr(11:12-13:1) :: nothing -> task nothing 'a {
                     kind: fun(11:12-13:1) {
                         params: [],
                         body: [
-                            expr(12:1-12:17) :: task nothing {
+                            expr(12:1-12:17) :: task nothing 'a {
                                 kind: call(12:1-12:17) {
-                                    callee: expr(12:1-12:11) :: duration -> task nothing {
+                                    callee: expr(12:1-12:11) :: duration -> task nothing 'a {
                                         kind: namespace-access `task.sleep`,
                                     },
                                     args: [
@@ -78,13 +78,13 @@ module `main` (tests/analyze/task-basics/main.pa) {
             },
             def(15:0-17:1) :: nothing {
                 name: ident(15:4-15:13) `give-turn`,
-                kind: expr(15:16-17:1) :: nothing -> task nothing {
+                kind: expr(15:16-17:1) :: nothing -> task nothing 'a {
                     kind: fun(15:16-17:1) {
                         params: [],
                         body: [
-                            expr(16:1-16:14) :: task nothing {
+                            expr(16:1-16:14) :: task nothing 'a {
                                 kind: call(16:1-16:14) {
-                                    callee: expr(16:1-16:11) :: nothing -> task nothing {
+                                    callee: expr(16:1-16:11) :: nothing -> task nothing 'a {
                                         kind: namespace-access `task.yield`,
                                     },
                                     args: [

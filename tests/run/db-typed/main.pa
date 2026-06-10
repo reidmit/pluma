@@ -54,45 +54,23 @@ def show :: fun todo -> string = fun t {
 }
 
 def main = fun {
-	try opened = db.open ":memory:"
-	when opened is ok conn {
-		# DDL straight from the schema
-		try _ddl = db.execute conn (sql.create-table todos) []
-		try _1 = db.insert conn todos {id: 1, title: "wash", done: false, priority: some 2}
-		try _2 = db.insert conn todos {id: 2, title: "cook", done: true, priority: none}
-		try _3 = db.insert conn todos {id: 3, title: "read", done: false, priority: some 1}
-		try found = db.from todos |> db.filter (sql.eq "done" (sql.bool false)) |> db.order-by (sql.asc "priority") |> db.run conn
-		when found is ok items {
-			# encoder-driven inserts (incl. a NULL via `none`)
-
-			# typed pipeline: decoder threaded, SELECT = schema columns, ordered by priority
-
-			print "open todos: $(to-string (list.length items))"
-			list.each items fun it {
-				print "  $(show it)"
-			}
-		} is err e {
-			print "run err: $(e)"
-		}
-		try every = db.all conn todos
-		when every is ok items {
-			# whole table, decoded
-
-			print "all: $(to-string (list.length items))"
-		} is err e {
-			print "all err: $(e)"
-		}
-		try bad = db.from todos |> db.filter (sql.gt "nope" (sql.int 0)) |> db.run conn
-		when bad is ok _ {
-			# schema validation: an unknown column is caught before SQLite
-
-			print "unexpected ok"
-		} is err e {
-			print "validate: $(e)"
-		}
-		task.return 0
-	} is err e {
-		print "open err: $(e)"
-		task.return 0
+	try conn = db.open ":memory:"
+	try _ddl = db.execute conn (sql.create-table todos) []
+	try _1 = db.insert conn todos {id: 1, title: "wash", done: false, priority: some 2}
+	try _2 = db.insert conn todos {id: 2, title: "cook", done: true, priority: none}
+	try _3 = db.insert conn todos {id: 3, title: "read", done: false, priority: some 1}
+	try items = db.from todos |> db.filter (sql.eq "done" (sql.bool false)) |> db.order-by (sql.asc "priority") |> db.run conn
+	print "open todos: $(to-string (list.length items))"
+	list.each items fun it {
+		print "  $(show it)"
 	}
+	try every = db.all conn todos
+	print "all: $(to-string (list.length every))"
+	try bad = task.attempt (db.from todos |> db.filter (sql.gt "nope" (sql.int 0)) |> db.run conn)
+	when bad is ok _ {
+		print "unexpected ok"
+	} is err e {
+		print "validate: $(e)"
+	}
+	task.return 0
 }

@@ -16,52 +16,31 @@ def migrations :: list migration = [
 ]
 
 def main = fun {
-	try opened = db.open ":memory:"
-	when opened is ok conn {
-		try first = db.migrate conn migrations
-		when first is ok n {
-			print "applied: $(to-string n)"
-		} is err e {
-			print "migrate err: $(e)"
-		}
-		try again = db.migrate conn migrations
-		when again is ok n {
-			print "reapplied: $(to-string n)"
-		} is err e {
-			print "migrate err: $(e)"
-		}
-		try _ins = db.execute conn "insert into users (id, name, email) values (?, ?, ?)" [
-			sql.int 1,
-			sql.text "ada",
-			sql.text "ada@x.io",
-		]
-		try rows = db.execute conn "select email from users" []
-		when rows is ok rs {
-			when list.head rs is some r {
-				print "email: $(sql.get-text r "email" ?? "?")"
-			} is none {
-				print "no rows"
-			}
-		} is err e {
-			print "select err: $(e)"
-		}
-		try bad = db.migrate conn [
-			{version: 3, up: "create table temp_t (x integer); this is not valid sql"},
-		]
-		when bad is ok _ {
-			print "unexpected ok"
-		} is err _ {
-			print "failed migration: err"
-		}
-		try after = db.migrate conn [{version: 3, up: "create table temp_t (x integer)"}]
-		when after is ok n {
-			print "retry applied: $(to-string n)"
-		} is err e {
-			print "retry err: $(e)"
-		}
-		task.return 0
-	} is err e {
-		print "open err: $(e)"
-		task.return 0
+	try conn = db.open ":memory:"
+	try n = db.migrate conn migrations
+	print "applied: $(to-string n)"
+	try again = db.migrate conn migrations
+	print "reapplied: $(to-string again)"
+	try _ins = db.execute conn "insert into users (id, name, email) values (?, ?, ?)" [
+		sql.int 1,
+		sql.text "ada",
+		sql.text "ada@x.io",
+	]
+	try rows = db.execute conn "select email from users" []
+	when list.head rows is some r {
+		print "email: $(sql.get-text r "email" ?? "?")"
+	} is none {
+		print "no rows"
 	}
+	try bad = task.attempt (db.migrate conn [
+		{version: 3, up: "create table temp_t (x integer); this is not valid sql"},
+	])
+	when bad is ok _ {
+		print "unexpected ok"
+	} is err _ {
+		print "failed migration: err"
+	}
+	try after = db.migrate conn [{version: 3, up: "create table temp_t (x integer)"}]
+	print "retry applied: $(to-string after)"
+	task.return 0
 }

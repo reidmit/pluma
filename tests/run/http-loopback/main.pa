@@ -14,34 +14,24 @@ def handler :: fun http.request -> task http.response = fun req {
 	task.return (http.text 200 ("you asked for " ++ req.path))
 }
 
-# Read from the connection until the server closes it (Connection: close).
-def drain :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
-	try r = net.read conn 4096
-	when r is ok chunk {
-		if bytes.is-empty chunk {
-			task.return (ok acc)
-		} else {
-			drain conn (bytes.concat acc chunk)
-		}
-	} is err e {
-		task.return (err e)
+# Read from the connection until the server closes it (Connection: close). The raw
+# `std.sys.net` reads carry their failure inside the task (`task (result …)`), so
+# `task.unwrap` joins it onto this task's own failure channel and the loop reads linearly.
+def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
+	try chunk = task.unwrap (net.read conn 4096)
+	if bytes.is-empty chunk {
+		task.return acc
+	} else {
+		drain conn (bytes.concat acc chunk)
 	}
 }
 
 def client :: fun string -> task string = fun addr {
-	try c = net.connect addr
-	when c is ok conn {
-		try _ = net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\n\r\n")
-		try resp = drain conn (string.to-bytes "")
-		let _ = net.close conn
-		when resp is ok raw {
-			task.return (bytes.to-string raw ?? "<bad utf8>")
-		} is err e {
-			task.fail e
-		}
-	} is err e {
-		task.fail e
-	}
+	try conn = task.unwrap (net.connect addr)
+	try _ = task.unwrap (net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\n\r\n"))
+	try raw = drain conn (string.to-bytes "")
+	let _ = net.close conn
+	task.return (bytes.to-string raw ?? "<bad utf8>")
 }
 
 def main = fun {

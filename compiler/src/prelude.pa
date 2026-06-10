@@ -49,21 +49,27 @@ public enum result a b {
 	err b
 }
 
-# A computation that, when run, will eventually produce an `a` (or fail,
-# or be cancelled). A `task a` is *cold*: building one does nothing;
-# awaiting it with `try`, spawning it into a `scope`, or `task.start`ing
-# it runs it. Tasks are re-runnable recipes -- awaiting the same task
-# twice runs it twice -- so `task.retry`/polling can take a plain task.
+# A computation that, when run, will eventually produce an `a`, fail with
+# an `e`, or be cancelled. A `task a e` is an *async result*: its second
+# parameter is the failure type, so the failure channel `task.fail` and
+# `try` already carry is now typed (`db.execute ... : task (list row) string`).
+# A `task a` is *cold*: building one does nothing; awaiting it with `try`,
+# spawning it into a `scope`, or `task.start`ing it runs it. Tasks are
+# re-runnable recipes -- awaiting the same task twice runs it twice -- so
+# `task.retry`/polling can take a plain task.
 #
 # It's the third `try` carrier alongside `option` and `result`: inside a
-# function that returns a `task`, `try x = some-task` awaits it, and the
-# whole function is itself a `task`. The `task.*` helpers (in `std.task`,
-# auto-imported) build and combine them; `scope` (a keyword) runs them
-# concurrently.
+# function that returns a `task a e`, `try x = some-task` awaits it, binds
+# its success `a`, and propagates its failure `e` -- the whole function is
+# itself a `task _ e`. `result` is the reified form: `task.attempt` turns a
+# `task a e` into a `task (result a e) _` you can match on. The `task.*`
+# helpers (in `std.task`, auto-imported) build and combine them; `scope`
+# (a keyword) runs them concurrently. A task that never fails in a typed
+# way (`task.return`, `task.sleep`) leaves `e` polymorphic.
 #
 # The type has no surface constructors -- you never write `task.mk`; you
 # make one with `task.return` / `task.sleep` / an async function call.
-public enum task a {
+public enum task a e {
 }
 
 # The handle bound by `scope as s` (the fail-fast form) -- your control surface

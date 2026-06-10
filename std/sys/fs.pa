@@ -81,9 +81,19 @@ def fs-op-sync-b :: fun int string bytes -> result bytes string = built-in "fs-o
 
 # Await an async op and decode its raw `result bytes string` with `decode`. The sync
 # wrappers call the `decode` helpers directly (no await); the async ones run through here.
+# Used by the infallible queries (`exists`/`is-file`/`is-dir`), whose decoder yields a
+# plain value rather than a `result`.
 def run :: fun (task (result bytes string)) (fun (result bytes string) -> a) -> task a = fun t decode {
 	try r = t
 	task.return (decode r)
+}
+
+# Like `run`, but for the fallible ops: the decoder yields a `result a string`, which
+# `task.unwrap` joins onto the task's own failure channel so the wrapper returns a clean
+# `task a string` (a missing file or decode failure fails the task rather than surfacing as
+# an `err` value the caller has to re-match).
+def run-result :: fun (task (result bytes string)) (fun (result bytes string) -> result a string) -> task a string = fun t decode {
+	task.unwrap (task.map t decode)
 }
 
 # --- decoders (shared by the async + sync wrappers) ----------------------------
@@ -180,8 +190,8 @@ def parse-kind :: fun string -> file-kind = fun s {
 # missing, unreadable, or not valid UTF-8.
 #
 #     try text = fs.read-text "notes.txt"
-public def read-text :: fun string -> task (result string string) = fun path {
-	run (fs-op-s op-read-text path "") to-text
+public def read-text :: fun string -> task string string = fun path {
+	run-result (fs-op-s op-read-text path "") to-text
 }
 
 public def read-text-sync :: fun string -> result string string = fun path {
@@ -190,8 +200,8 @@ public def read-text-sync :: fun string -> result string string = fun path {
 
 # Reads an entire file as raw `bytes`, making no assumption that it is text. Reach for this
 # with images, compressed files, or anything that isn't UTF-8.
-public def read-bytes :: fun string -> task (result bytes string) = fun path {
-	run (fs-op-s op-read-bytes path "") fun r {
+public def read-bytes :: fun string -> task bytes string = fun path {
+	run-result (fs-op-s op-read-bytes path "") fun r {
 		r
 	}
 }
@@ -204,8 +214,8 @@ public def read-bytes-sync :: fun string -> result bytes string = fun path {
 # path isn't a directory you can read.
 #
 #     try entries = fs.read-dir "."
-public def read-dir :: fun string -> task (result (list string) string) = fun path {
-	run (fs-op-s op-read-dir path "") to-names
+public def read-dir :: fun string -> task (list string) string = fun path {
+	run-result (fs-op-s op-read-dir path "") to-names
 }
 
 public def read-dir-sync :: fun string -> result (list string) string = fun path {
@@ -214,8 +224,8 @@ public def read-dir-sync :: fun string -> result (list string) string = fun path
 
 # Reads a path's metadata: its size, kind, and last-modified time. `err` if the path
 # doesn't exist or can't be read.
-public def stat :: fun string -> task (result file-info string) = fun path {
-	run (fs-op-s op-stat path "") to-info
+public def stat :: fun string -> task file-info string = fun path {
+	run-result (fs-op-s op-stat path "") to-info
 }
 
 public def stat-sync :: fun string -> result file-info string = fun path {
@@ -228,8 +238,8 @@ public def stat-sync :: fun string -> result file-info string = fun path {
 # doesn't exist. `ok nothing` on success.
 #
 #     try _ = fs.write-text "out.txt" "hello"
-public def write-text :: fun string string -> task (result nothing string) = fun path content {
-	run (fs-op-s op-write path content) to-void
+public def write-text :: fun string string -> task nothing string = fun path content {
+	run-result (fs-op-s op-write path content) to-void
 }
 
 public def write-text-sync :: fun string string -> result nothing string = fun path content {
@@ -237,8 +247,8 @@ public def write-text-sync :: fun string string -> result nothing string = fun p
 }
 
 # Writes raw `bytes` to a file, replacing whatever was there before.
-public def write-bytes :: fun string bytes -> task (result nothing string) = fun path content {
-	run (fs-op-b op-write path content) to-void
+public def write-bytes :: fun string bytes -> task nothing string = fun path content {
+	run-result (fs-op-b op-write path content) to-void
 }
 
 public def write-bytes-sync :: fun string bytes -> result nothing string = fun path content {
@@ -247,8 +257,8 @@ public def write-bytes-sync :: fun string bytes -> result nothing string = fun p
 
 # Adds text to the end of a file, keeping the existing contents. Creates the file if it
 # doesn't exist.
-public def append-text :: fun string string -> task (result nothing string) = fun path content {
-	run (fs-op-s op-append path content) to-void
+public def append-text :: fun string string -> task nothing string = fun path content {
+	run-result (fs-op-s op-append path content) to-void
 }
 
 public def append-text-sync :: fun string string -> result nothing string = fun path content {
@@ -256,8 +266,8 @@ public def append-text-sync :: fun string string -> result nothing string = fun 
 }
 
 # Adds raw `bytes` to the end of a file.
-public def append-bytes :: fun string bytes -> task (result nothing string) = fun path content {
-	run (fs-op-b op-append path content) to-void
+public def append-bytes :: fun string bytes -> task nothing string = fun path content {
+	run-result (fs-op-b op-append path content) to-void
 }
 
 public def append-bytes-sync :: fun string bytes -> result nothing string = fun path content {
@@ -268,8 +278,8 @@ public def append-bytes-sync :: fun string bytes -> result nothing string = fun 
 
 # Creates a directory, along with any parent directories that don't exist yet (like
 # `mkdir -p`). Quietly succeeds if it's already there.
-public def make-dir :: fun string -> task (result nothing string) = fun path {
-	run (fs-op-s op-make-dir path "") to-void
+public def make-dir :: fun string -> task nothing string = fun path {
+	run-result (fs-op-s op-make-dir path "") to-void
 }
 
 public def make-dir-sync :: fun string -> result nothing string = fun path {
@@ -278,8 +288,8 @@ public def make-dir-sync :: fun string -> result nothing string = fun path {
 
 # Removes a file or an *empty* directory. `err` if the path doesn't exist, or if it's a
 # non-empty directory (use `fs.remove-all` for that).
-public def remove :: fun string -> task (result nothing string) = fun path {
-	run (fs-op-s op-remove path "") to-void
+public def remove :: fun string -> task nothing string = fun path {
+	run-result (fs-op-s op-remove path "") to-void
 }
 
 public def remove-sync :: fun string -> result nothing string = fun path {
@@ -287,8 +297,8 @@ public def remove-sync :: fun string -> result nothing string = fun path {
 }
 
 # Removes a file, or a directory and everything inside it (like `rm -rf`).
-public def remove-all :: fun string -> task (result nothing string) = fun path {
-	run (fs-op-s op-remove-all path "") to-void
+public def remove-all :: fun string -> task nothing string = fun path {
+	run-result (fs-op-s op-remove-all path "") to-void
 }
 
 public def remove-all-sync :: fun string -> result nothing string = fun path {
@@ -297,8 +307,8 @@ public def remove-all-sync :: fun string -> result nothing string = fun path {
 
 # Renames or moves a path from `source` to `dest`. `err` if `source` doesn't exist (or the
 # move crosses filesystems, which the OS may reject).
-public def rename :: fun string string -> task (result nothing string) = fun source dest {
-	run (fs-op-s op-rename source dest) to-void
+public def rename :: fun string string -> task nothing string = fun source dest {
+	run-result (fs-op-s op-rename source dest) to-void
 }
 
 public def rename-sync :: fun string string -> result nothing string = fun source dest {
@@ -307,8 +317,8 @@ public def rename-sync :: fun string string -> result nothing string = fun sourc
 
 # Copies a file's contents (and permission bits) from `source` to `dest`, replacing `dest`
 # if it exists.
-public def copy :: fun string string -> task (result nothing string) = fun source dest {
-	run (fs-op-s op-copy source dest) to-void
+public def copy :: fun string string -> task nothing string = fun source dest {
+	run-result (fs-op-s op-copy source dest) to-void
 }
 
 public def copy-sync :: fun string string -> result nothing string = fun source dest {

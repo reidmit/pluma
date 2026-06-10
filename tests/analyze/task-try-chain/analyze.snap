@@ -14,18 +14,18 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
         ] [
             def(5:0-9:1) :: nothing {
                 name: ident(5:4-5:9) `steps`,
-                kind: expr(5:12-9:1) :: nothing -> task ((nothing, nothing)) {
+                kind: expr(5:12-9:1) :: nothing -> task ((nothing, nothing)) 'a {
                     kind: fun(5:12-9:1) {
                         params: [],
                         body: [
-                            expr(6:1-8:19) :: task ((nothing, nothing)) {
+                            expr(6:1-8:19) :: task ((nothing, nothing)) 'a {
                                 kind: try(6:1-8:19) {
                                     pattern: pattern(6:5-6:6) Identifier(
                                         ident(6:5-6:6) `a`,
                                     ),
-                                    value: expr(6:9-6:22) :: task nothing {
+                                    value: expr(6:9-6:22) :: task nothing 'a {
                                         kind: call(6:9-6:22) {
-                                            callee: expr(6:9-6:19) :: duration -> task nothing {
+                                            callee: expr(6:9-6:19) :: duration -> task nothing 'a {
                                                 kind: namespace-access `task.sleep`,
                                             },
                                             args: [
@@ -36,14 +36,14 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
                                         },
                                     },
                                     rest: [
-                                        expr(7:1-8:19) :: task ((nothing, nothing)) {
+                                        expr(7:1-8:19) :: task ((nothing, nothing)) 'a {
                                             kind: try(7:1-8:19) {
                                                 pattern: pattern(7:5-7:6) Identifier(
                                                     ident(7:5-7:6) `b`,
                                                 ),
-                                                value: expr(7:9-7:22) :: task nothing {
+                                                value: expr(7:9-7:22) :: task nothing 'a {
                                                     kind: call(7:9-7:22) {
-                                                        callee: expr(7:9-7:19) :: duration -> task nothing {
+                                                        callee: expr(7:9-7:19) :: duration -> task nothing 'a {
                                                             kind: namespace-access `task.sleep`,
                                                         },
                                                         args: [
@@ -54,9 +54,9 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
                                                     },
                                                 },
                                                 rest: [
-                                                    expr(8:1-8:19) :: task ((nothing, nothing)) {
+                                                    expr(8:1-8:19) :: task ((nothing, nothing)) 'a {
                                                         kind: call(8:1-8:19) {
-                                                            callee: expr(8:1-8:12) :: 'a -> task 'a {
+                                                            callee: expr(8:1-8:12) :: 'a -> task 'a 'b {
                                                                 kind: namespace-access `task.return`,
                                                             },
                                                             args: [
@@ -85,18 +85,18 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
             },
             def(11:0-14:1) :: nothing {
                 name: ident(11:4-11:13) `use-steps`,
-                kind: expr(11:16-14:1) :: nothing -> task ((nothing, nothing)) {
+                kind: expr(11:16-14:1) :: nothing -> task ((nothing, nothing)) 'a {
                     kind: fun(11:16-14:1) {
                         params: [],
                         body: [
-                            expr(12:1-13:17) :: task ((nothing, nothing)) {
+                            expr(12:1-13:17) :: task ((nothing, nothing)) 'a {
                                 kind: try(12:1-13:17) {
                                     pattern: pattern(12:5-12:9) Identifier(
                                         ident(12:5-12:9) `pair`,
                                     ),
-                                    value: expr(12:12-12:20) :: task ((nothing, nothing)) {
+                                    value: expr(12:12-12:20) :: task ((nothing, nothing)) 'a {
                                         kind: call(12:12-12:20) {
-                                            callee: expr(12:12-12:17) :: nothing -> task ((nothing, nothing)) {
+                                            callee: expr(12:12-12:17) :: nothing -> task ((nothing, nothing)) 'a {
                                                 kind: ident(12:12-12:17) `steps`,
                                             },
                                             args: [
@@ -107,9 +107,9 @@ module `main` (tests/analyze/task-try-chain/main.pa) {
                                         },
                                     },
                                     rest: [
-                                        expr(13:1-13:17) :: task ((nothing, nothing)) {
+                                        expr(13:1-13:17) :: task ((nothing, nothing)) 'a {
                                             kind: call(13:1-13:17) {
-                                                callee: expr(13:1-13:12) :: 'a -> task 'a {
+                                                callee: expr(13:1-13:12) :: 'a -> task 'a 'b {
                                                     kind: namespace-access `task.return`,
                                                 },
                                                 args: [

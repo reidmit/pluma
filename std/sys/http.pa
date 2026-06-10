@@ -486,24 +486,20 @@ def status-names :: dict int string = dict.from-entries [
 # Makes one HTTP/1.1 request and returns the response. `url` looks like
 # "http://127.0.0.1:8080/path" (the `http://` scheme is optional). Plain TCP
 # only -- no TLS -- and the connection is closed after the single exchange
-# (`Connection: close`). `err`s as an `ok`-wrapped failure string if the host
-# can't be reached or the exchange breaks down.
+# (`Connection: close`). The task *fails* with a message if the host can't be
+# reached or the exchange breaks down.
 #
 #     try resp = http.fetch "http://127.0.0.1:8080/echo"
 #         post (dict.empty ()) (string.to-bytes "hi")
-public def fetch :: fun string method (dict string string) bytes -> task (result response string) = fun url verb headers body {
+public def fetch :: fun string method (dict string string) bytes -> task response string = fun url verb headers body {
 	let split = split-url url
 	let authority = split.0
 	let path = split.1
-	try c = net.connect authority
-	when c is ok conn {
-		try _ = write-all conn (serialize-request verb path authority headers body)
-		try resp-r = read-response conn
-		let _ = net.close conn
-		task.return resp-r
-	} is err e {
-		task.return (err e)
-	}
+	try conn = task.unwrap (net.connect authority)
+	try _ = task.unwrap (write-all conn (serialize-request verb path authority headers body))
+	try resp = read-response conn
+	let _ = net.close conn
+	task.return resp
 }
 
 # Splits "http://host:port/a/b?x" into `("host:port", "/a/b?x")`. A missing
@@ -554,24 +550,11 @@ def method-name :: fun method -> string = fun m {
 # Read and parse one response off `conn`: the status line + headers, then the
 # body sized by Content-Length (whatever already arrived with the headers
 # counts toward it).
-def read-response :: fun net.connection -> task (result response string) = fun conn {
-	try raw-r = read-until-headers conn (string.to-bytes "")
-	when raw-r is ok raw {
-		let parsed = parse-response-head raw
-		try body-r = read-body conn parsed.body-start parsed.content-length
-		when body-r is ok body {
-			task.return (ok {
-				status: parsed.status,
-				headers: parsed.headers,
-				body,
-				stream-body: none,
-			})
-		} is err e {
-			task.return (err e)
-		}
-	} is err e {
-		task.return (err e)
-	}
+def read-response :: fun net.connection -> task response string = fun conn {
+	try raw = task.unwrap (read-until-headers conn (string.to-bytes ""))
+	let parsed = parse-response-head raw
+	try body = task.unwrap (read-body conn parsed.body-start parsed.content-length)
+	task.return {status: parsed.status, headers: parsed.headers, body, stream-body: none}
 }
 
 # Split the raw bytes at the header/body boundary and parse the status line +
