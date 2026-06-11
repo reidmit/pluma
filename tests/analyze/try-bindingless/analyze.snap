@@ -12,7 +12,7 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
     },
     ast: Some(
         module(5:0-24:1) [
-            use(5:0-5:12) `std.task`,
+            use(5:0-5:12) `std/task`,
         ] [
             def(7:0-10:1) :: nothing {
                 name: ident(7:4-7:8) `beat`,

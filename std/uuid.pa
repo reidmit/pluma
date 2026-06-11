@@ -1,6 +1,6 @@
 # Making and checking UUIDs -- the 128-bit identifiers that look like
 # "550e8400-e29b-41d4-a716-446655440000". Pluma represents them as plain
-# lowercase, hyphenated strings, so every `std.string` operation works
+# lowercase, hyphenated strings, so every `std/string` operation works
 # on them too; there's no special UUID type to learn.
 
 # Generates a random (version 4) UUID. Unpredictable, which makes it a

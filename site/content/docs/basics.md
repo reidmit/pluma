@@ -56,7 +56,7 @@ let list-across-lines = [
 
 ## Dicts
 
-Mutable, insertion-ordered hash dicts (key/value tables). `insert` and `remove` change the dict in place (and hand it back, for chaining), so two bindings to one dict are two views of the same table — like a `ref`. There's no dict literal syntax — construct one through `std.dict`:
+Mutable, insertion-ordered hash dicts (key/value tables). `insert` and `remove` change the dict in place (and hand it back, for chaining), so two bindings to one dict are two views of the same table — like a `ref`. There's no dict literal syntax — construct one through `std/dict`:
 
 ```pluma
 use std/dict
@@ -72,7 +72,7 @@ The key type must have a `hash` instance. `int`, `float`, `string`, `bool`, `opt
 
 Iteration (`keys`, `values`, `entries`, `fold`, `map`, `filter`) is in insertion order. `insert`/`remove` mutate in place; the transformers `map`, `filter`, and `merge` instead build a new dict and leave their inputs alone. `from-entries` and `merge` are right-wins on duplicate keys. `==` on dicts is structural and order-independent. `size` returns the entry count.
 
-See `std.dict` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
+See `std/dict` for the full surface: `empty`, `insert`, `lookup`, `remove`, `contains-key`, `size`, `keys`, `values`, `entries`, `from-entries`, `merge`, `map`, `filter`, `fold`.
 
 ## Refs
 

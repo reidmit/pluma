@@ -32,9 +32,9 @@ when method is 'GET' { ... }
 is 'POST' { ... }
 ```
 
-## The `std.bytes` module
+## The `std/bytes` module
 
-A parallel surface to `std.string`:
+A parallel surface to `std/string`:
 
 ```pluma
 use std/bytes
@@ -61,7 +61,7 @@ bytes.split b sep           # empty sep splits into single-byte chunks
 
 ## Byte-aware I/O
 
-Byte-side file I/O lives in `std.sys.fs`, the stdin/stdout stream versions in `std.sys.io`:
+Byte-side file I/O lives in `std/sys/fs`, the stdin/stdout stream versions in `std/sys/io`:
 
 ```pluma
 fs.read-file-bytes path        # result bytes string — survives non-UTF-8 contents

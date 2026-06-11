@@ -1,4 +1,4 @@
-# A click counter — the smallest real `std.web.dom` app.
+# A click counter — the smallest real `std/web/dom` app.
 #
 # Build it for the browser and serve the bundle:
 #

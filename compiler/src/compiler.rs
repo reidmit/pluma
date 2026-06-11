@@ -17,16 +17,16 @@ use std::path::{Path, PathBuf};
 // `then`, `option.some` falls through to the enum's `some`). The
 // FieldAccess dispatch in the analyzer handles the overlap.
 pub const AUTO_IMPORTS: &[(&str, &str)] = &[
-	("std.ref", "ref"),
-	("std.option", "option"),
-	("std.result", "result"),
-	// NB: `std.task` is deliberately *not* auto-imported. The async syntax
+	("std/ref", "ref"),
+	("std/option", "option"),
+	("std/result", "result"),
+	// NB: `std/task` is deliberately *not* auto-imported. The async syntax
 	// (`try`/`??` over a task, `scope`, `defer`, duration literals) needs no
 	// import — it's type-driven and lowers to fully-qualified globals — but
 	// every *named* task function (`task.return`, `task.sleep`, `task.both`,
 	// the kernel behind `s.spawn`/`s.next`, …) lives behind `use std/task`.
 	// Since you can't build a task without `task.return`/`task.fail`, async
-	// code imports `std.task` anyway; keeping it explicit avoids pulling the
+	// code imports `std/task` anyway; keeping it explicit avoids pulling the
 	// whole combinator surface into every module's namespace.
 ];
 
@@ -71,7 +71,7 @@ pub struct Compiler {
 	// the generated `rpc-client` targets the web transport (`fetch.post`).
 	pub fullstack: bool,
 	// The server origin the synthesized RPC client stubs POST to, baked at build
-	// time into `std.rpc.server-origin` (`pluma build/dev --server-url`). `None`
+	// time into `std/rpc.server-origin` (`pluma build/dev --server-url`). `None`
 	// keeps the built-in fallback. Empty string = same-origin (`/rpc/...`).
 	pub rpc_base_url: Option<String>,
 	// Every `remote def` discovered during analysis, with its resolved wire
@@ -231,11 +231,11 @@ impl Compiler {
 		// build, or the client half of a fullstack build), force-load the web
 		// transport so the lowerer can reference its `install` (no user code `use`s
 		// it). It's outside every root's use-graph, so tier gating never traverses
-		// it — its `std.web.*` imports don't bar the sys server. DCE drops it from
+		// it — its `std/web/*` imports don't bar the sys server. DCE drops it from
 		// any artifact that doesn't install it.
 		let emits_client = self.fullstack || self.target == Some(crate::platform::Target::Web);
 		if emits_client && !self.rpc_endpoints.is_empty() {
-			self.load_module("std.rpc.web", &mut visiting);
+			self.load_module("std/rpc/web", &mut visiting);
 		}
 
 		self.gate_by_reachability();
@@ -248,7 +248,7 @@ impl Compiler {
 	}
 
 	// Enforce deploy-target tier gating by def-level
-	// reachability. A forbidden-tier module (`std.sys.*` on `web`, `std.web.*`
+	// reachability. A forbidden-tier module (`std/sys/*` on `web`, `std/web/*`
 	// on `sys`) is rejected only when reachable from an entry through
 	// *non-`remote def`* code — a server island's server-only imports never
 	// reach the client closure. This replaces the coarse per-`use` tier gate;
@@ -448,7 +448,7 @@ impl Compiler {
 		let mut rejected_imports: HashSet<String> = HashSet::new();
 		for (full_name, _, range, use_range) in &imports {
 			let _ = use_range;
-			// Deploy-target tier gating (`std.sys.*` vs `std.web.*`) is *not*
+			// Deploy-target tier gating (`std/sys/*` vs `std/web/*`) is *not*
 			// enforced here at the `use` site — it's done after analysis by
 			// def-level reachability (`gate_by_reachability`), so a `remote def`
 			// body's server-only imports don't bar a web client. Only the
@@ -513,15 +513,15 @@ impl Compiler {
 		}
 
 		// Auto-imported modules: bound under a bare name in every user
-		// module without an explicit `use`. Currently `std.ref` →
-		// `ref`, `std.option` → `option`, `std.result` → `result`.
+		// module without an explicit `use`. Currently `std/ref` →
+		// `ref`, `std/option` → `option`, `std/result` → `result`.
 		// User code can shadow by binding the local name to something
 		// else via `use`. Exports come from either a baked `.pa` source
 		// (loaded via `load_module` into `exports_cache`) or from a
 		// pre-registered native module. Auto-imports don't apply when
 		// loading an auto-imported module itself — they'd otherwise
-		// form a cycle among themselves (loading `std.option` would
-		// recurse into loading `std.ref` etc. while `std.option` is
+		// form a cycle among themselves (loading `std/option` would
+		// recurse into loading `std/ref` etc. while `std/option` is
 		// still on the visiting stack).
 		let is_auto_imported_module = AUTO_IMPORTS.iter().any(|(n, _)| *n == module_name);
 		if !is_auto_imported_module {
@@ -604,24 +604,24 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
 
 /// Whether `name` is a discovered test *file* (`<segments>.test.pa`), as
 /// opposed to ordinary code. These are import-gated: only other test modules may
-/// `use` them. `std.test` is excluded — it's the test *framework* (stdlib),
+/// `use` them. `std/test` is excluded — it's the test *framework* (stdlib),
 /// importable from anywhere, and only incidentally shares the `.test` suffix.
 fn is_test_module(name: &str) -> bool {
-	name.ends_with(".test") && name != "std.test"
+	name.ends_with(".test") && name != "std/test"
 }
 
 pub fn to_module_path(root_dir: &Path, module_name: &str) -> PathBuf {
 	let mut path = root_dir.to_path_buf();
 	// Test modules live in `<segments>.test.pa` files. Their module name keeps
-	// the `.test` suffix (e.g. `foo.bar.test`), so we peel that off before
-	// turning intermediate dots into path separators.
+	// the `.test` suffix (e.g. `foo/bar.test`), so we peel that off before
+	// pushing the `/`-separated path segments.
 	if let Some(stem) = module_name.strip_suffix(".test") {
-		for segment in stem.split('.') {
+		for segment in stem.split('/') {
 			path.push(segment);
 		}
 		path.set_extension(format!("test.{}", FILE_EXTENSION));
 	} else {
-		for segment in module_name.split('.') {
+		for segment in module_name.split('/') {
 			path.push(segment);
 		}
 		path.set_extension(FILE_EXTENSION);
@@ -655,7 +655,7 @@ fn get_root_dir_and_module_name(entry_path: String) -> Result<(PathBuf, String),
 					let stem_path = rel.with_extension("");
 					let module_name = stem_path
 						.to_string_lossy()
-						.replace(std::path::MAIN_SEPARATOR, ".");
+						.replace(std::path::MAIN_SEPARATOR, "/");
 					(root, module_name)
 				}
 				None => (
@@ -713,8 +713,8 @@ mod platform_gating_tests {
 		assert!(
 			diags
 				.iter()
-				.any(|d| d.message.contains("std.sys.io") && d.message.contains("web")),
-			"expected a web-target rejection for std.sys.io, got: {:?}",
+				.any(|d| d.message.contains("std/sys/io") && d.message.contains("web")),
+			"expected a web-target rejection for std/sys/io, got: {:?}",
 			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
 		);
 	}
@@ -725,7 +725,7 @@ mod platform_gating_tests {
 		for t in [None, Some(Target::Sys), Some(Target::Web)] {
 			assert!(
 				check_with(t, src).is_empty(),
-				"std.list rejected on {:?}",
+				"std/list rejected on {:?}",
 				t
 			);
 		}
@@ -746,7 +746,7 @@ mod platform_gating_tests {
 
 	#[test]
 	fn remote_def_body_imports_dont_reach_web_client() {
-		// `api` touches std.sys.io only inside a `remote def` body — a server
+		// `api` touches std/sys/io only inside a `remote def` body — a server
 		// island. A web client reaching `api`'s non-remote surface must not be
 		// barred by that server-only import (it never enters the client closure).
 		let api = "use std/task\nuse std/request\nuse std/sys/io\n\n\
@@ -764,15 +764,15 @@ mod platform_gating_tests {
 
 	#[test]
 	fn client_reachable_sys_import_is_rejected_on_web() {
-		// The control: when std.sys.io is reached through ordinary (non-remote)
+		// The control: when std/sys/io is reached through ordinary (non-remote)
 		// code across a module boundary, it is correctly barred on web.
 		let api = "use std/sys/io\n\n\
 			public def announce :: fun nothing -> nothing = fun {\n\tio.print \"hi\"\n}\n";
 		let main = "use api\n\ndef main = fun {\n\tapi.announce ()\n}\n";
 		let diags = check_multi(Some(Target::Web), &[("api", api), ("main", main)], "main");
 		assert!(
-			diags.iter().any(|d| d.message.contains("std.sys.io")),
-			"expected a web-target rejection for std.sys.io reached via a user module, got: {:?}",
+			diags.iter().any(|d| d.message.contains("std/sys/io")),
+			"expected a web-target rejection for std/sys/io reached via a user module, got: {:?}",
 			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
 		);
 	}
@@ -797,7 +797,7 @@ mod platform_gating_tests {
 
 	#[test]
 	fn fullstack_gate_allows_each_tier_on_its_own_side() {
-		// The server half reaches `std.sys.*`, the client half `std.web.*` — each
+		// The server half reaches `std/sys/*`, the client half `std/web/*` — each
 		// legal on its own artifact. A single gating profile couldn't admit both.
 		let server = "use std/sys/io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
 		let client = "use std/web/dom\n\ndef main = fun {\n\tlet _ = dom.body ()\n\t()\n}\n";
@@ -815,7 +815,7 @@ mod platform_gating_tests {
 
 	#[test]
 	fn fullstack_gate_bars_a_sys_leak_into_the_client() {
-		// The same `std.sys.io` import: fine reached from the server root, barred
+		// The same `std/sys/io` import: fine reached from the server root, barred
 		// from the client root — the per-artifact split in action.
 		let server = "use std/sys/io\n\ndef main = fun {\n\tio.print \"s\"\n}\n";
 		let client = "use std/sys/io\n\ndef main = fun {\n\tio.print \"c\"\n}\n";
@@ -827,8 +827,8 @@ mod platform_gating_tests {
 		assert!(
 			diags
 				.iter()
-				.any(|d| d.message.contains("std.sys.io") && d.message.contains("web")),
-			"expected the client root to bar std.sys.io on web, got: {:?}",
+				.any(|d| d.message.contains("std/sys/io") && d.message.contains("web")),
+			"expected the client root to bar std/sys/io on web, got: {:?}",
 			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
 		);
 	}

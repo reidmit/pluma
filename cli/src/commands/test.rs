@@ -97,7 +97,7 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 
 	let mut compiler = Compiler::for_root_dir(root_dir.clone());
 	// Add the project marker as an entry so the analyzer type-checks
-	// `def package` against `std.package.info` (catches mistakes in the
+	// `def package` against `std/package.info` (catches mistakes in the
 	// config even when no test code references it).
 	compiler.add_entry_module(compiler::PROJECT_MARKER_MODULE.to_string());
 	for name in &test_modules {
@@ -116,7 +116,7 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 
 	// Synthesize a test entry over the discovered suites and emit a WasmGC module,
 	// then run it under V8 (the deploy engine — `pluma test` exercises the exact
-	// artifact you ship). The runner is itself Pluma: `std.test.run-all` flattens
+	// artifact you ship). The runner is itself Pluma: `std/test.run-all` flattens
 	// each suite, runs the cases, prints the tree, and returns ok / err.
 	let use_color = std::io::IsTerminal::is_terminal(&std::io::stdout());
 	let program = match ir::lower_tests(&compiler, use_color) {
@@ -190,7 +190,7 @@ fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
 				if let Ok(rel) = path.strip_prefix(root) {
 					let rel_str = rel.to_string_lossy();
 					let stem = rel_str.strip_suffix(".pa").unwrap_or(&rel_str);
-					let module_name = stem.replace(std::path::MAIN_SEPARATOR, ".");
+					let module_name = stem.replace(std::path::MAIN_SEPARATOR, "/");
 					out.push(module_name);
 				}
 			}

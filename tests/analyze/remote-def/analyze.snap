@@ -6,8 +6,8 @@ module `main` (tests/analyze/remote-def/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-5:1) [
-            use(0:0-0:15) `std.request`,
-            use(1:0-1:12) `std.task`,
+            use(0:0-0:15) `std/request`,
+            use(1:0-1:12) `std/task`,
         ] [
             public remote def(3:0-5:1) :: nothing {
                 name: ident(3:18-3:24) `double`,

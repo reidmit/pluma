@@ -2,7 +2,7 @@
 //
 // Coarse module-import gating (`platform::gate` at the `use` site) is too
 // blunt for fullstack: a shared module's `remote def` body may legitimately
-// call server-only modules (`std.sys.*`) even when the module is reachable
+// call server-only modules (`std/sys/*`) even when the module is reachable
 // from a web client — the body is a *server island*, compiled only for the
 // server. The client closure must stop at `remote def` bodies.
 //
@@ -16,7 +16,7 @@ use crate::ast::{DefinitionKind, ExprKind, ExprNode, ListItem, ModuleNode};
 use std::collections::HashSet;
 
 // The set of imported-namespace local names a module's **non-remote** code
-// references (`io` for `std.sys.io`, etc.). Imports outside this set are only
+// references (`io` for `std/sys/io`, etc.). Imports outside this set are only
 // used in `remote def` bodies (or unused), so they don't enter the closure.
 pub fn live_prefixes(ast: &ModuleNode) -> HashSet<String> {
 	let mut out = HashSet::new();

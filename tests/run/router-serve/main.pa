@@ -1,5 +1,5 @@
-# std.router over a real connection: a router-built handler is mounted on an
-# actual std.sys.http server (via `http.serve-on` on a loopback listener) and a
+# std/router over a real connection: a router-built handler is mounted on an
+# actual std/sys/http server (via `http.serve-on` on a loopback listener) and a
 # hand-written client sends raw requests to it. This proves the routes dispatch
 # end-to-end over the wire — a matching GET, a matching POST, and a path with no
 # route (the 404 fallback). The in-process matching detail lives in

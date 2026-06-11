@@ -1,7 +1,7 @@
 # Building the `request` value passed to a `remote` call. The `request` type
 # itself is built in (see the prelude) and carries transport metadata -- the
 # headers a client attaches and the server reads. Import this module
-# (`use std.request`) for the builders below.
+# (`use std/request`) for the builders below.
 #
 #     try outcome = users.fetch (request.new ()) 7
 #     try outcome = users.fetch

@@ -1,4 +1,4 @@
-// `std.sys.net` — the host-side socket table + I/O reactor: byte-level TCP ops plus a
+// `std/sys/net` — the host-side socket table + I/O reactor: byte-level TCP ops plus a
 // `polling` readiness reactor. The in-wasm scheduler owns the loop; when its ready
 // queue empties and socket I/O is in flight, it calls the blocking `net-poll` import
 // here (the reactor step). The suspending ops (accept/read/write) are
@@ -46,7 +46,7 @@ pub(crate) enum NetRet {
 	WouldBlock,
 }
 
-/// The `std.sys.net` socket table. The readiness reactor (poller, parked fibers, the
+/// The `std/sys/net` socket table. The readiness reactor (poller, parked fibers, the
 /// `poll`/`unwatch` step) now lives in the shared `Reactor` (`crate::offload`) so socket
 /// readiness and offload completion share one poll step; `HostNet` keeps only the socket
 /// handles, and threads a `&mut Reactor` through the suspending ops to park on it.
@@ -198,7 +198,7 @@ impl HostNet {
 	}
 }
 
-// --- std.web.fetch transport (the native/V8 host) ------------------------------
+// --- std/web/fetch transport (the native/V8 host) ------------------------------
 //
 // In the browser the `web-fetch` host call is a synchronous `XMLHttpRequest`; for
 // the V8 host it's a blocking HTTP/1.1 exchange over `std::net` (the engine-side

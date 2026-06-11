@@ -1,4 +1,4 @@
-# std.signal -- fine-grained reactivity: the core of the post-MVU frontend.
+# std/signal -- fine-grained reactivity: the core of the post-MVU frontend.
 #
 # A `signal a` is a mutable cell that remembers who read it. A `computed` is a
 # derived signal recomputed on demand. An `effect` is a side-effecting reader
@@ -14,8 +14,8 @@
 #     signal.set n 5      # the effect re-runs, printing 10
 #
 # This module is platform-neutral -- it's just a graph over `ref`s, so it works
-# server-side too. The view layer (`std.view`) binds a UI to signals on top of
-# it, and `std.web.render` mounts that to the real DOM.
+# server-side too. The view layer (`std/view`) binds a UI to signals on top of
+# it, and `std/web/render` mounts that to the real DOM.
 #
 # DESIGN. Tracking is *automatic*: `signal.get`, while an effect/computed is
 # running, registers that reader as a subscriber (the "current observer" is held
@@ -214,7 +214,7 @@ public def new :: fun a -> signal a = fun initial {
 #     folded with an **occurrence index** (so two instances of one component --
 #     same call-site -- stay distinct) -- registers a serializer, and seeds the
 #     fresh cell from the carried-over `stash` on a key match.
-#   * `mount-dev` restores the stash (from the dev store, via `std.web.render`)
+#   * `mount-dev` restores the stash (from the dev store, via `std/web/render`)
 #     BEFORE the view is built, and re-persists after every change.
 #
 # Only `wire`-able values cross a reload (`new-keyed`'s `where (wire a)`): the

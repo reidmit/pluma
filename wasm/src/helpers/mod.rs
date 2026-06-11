@@ -961,10 +961,10 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 	Some(match tag {
 		"to-string" => H::ToString,
-		// The MVU command spawn primitive (`std.web.app`): inject a `task msg` into the
+		// The MVU command spawn primitive (`std/web/app`): inject a `task msg` into the
 		// browser scheduler as a root-scoped fiber.
 		"spawn-command" => H::SpawnCommand,
-		// Keyed MVU subscriptions (`std.web.app`): spawn a stream driver in its own
+		// Keyed MVU subscriptions (`std/web/app`): spawn a stream driver in its own
 		// detached scope (`spawn-sub`) so a single sub can later be torn down
 		// (`cancel-sub`) — `spawn-command` is root-scoped and uncancellable.
 		"spawn-sub" => H::SpawnSub,

@@ -106,7 +106,7 @@ pub(crate) fn build_command(
 }
 
 // FULLSTACK build: from one analyzed program emit two artifacts — a `server.wasm`
-// (the `std.sys.http` server mounting the generated `dispatch`) and a browser client
+// (the `std/sys/http` server mounting the generated `dispatch`) and a browser client
 // bundle (the generated stubs riding the host `fetch`). One `check()`, one schema
 // fingerprint stamped into both, per-artifact target gating, and the emitter's
 // reachability prune carves each side out of the shared IR (the server-only `remote

@@ -6,7 +6,7 @@ module `main` (tests/analyze/pipeline/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-4:1) [
-            use(0:0-0:12) `std.list`,
+            use(0:0-0:12) `std/list`,
         ] [
             def(2:0-4:1) :: nothing {
                 name: ident(2:4-2:8) `main`,

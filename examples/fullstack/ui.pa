@@ -149,7 +149,7 @@ public def page :: fun nothing -> view = fun {
 # client loader. Only the server calls this; on the client it's dead code.
 public def document :: fun nothing -> string = fun {
 	# Render the body FIRST: building the view runs each `view.styled`, registering
-	# its rule in `std.css`'s collector. Then `css.style-tag ()` emits exactly those
+	# its rule in `std/css`'s collector. Then `css.style-tag ()` emits exactly those
 	# rules into `<head>`, so the page is styled on first paint with no asset request.
 	let body = view.to-string (page ())
 	"<!doctype html><html><head><meta charset=\"utf-8\"><title>Pluma SSR</title>$(css.style-tag ())</head><body>$(body)<script type=\"module\" src=\"/loader.js\"></script></body></html>"

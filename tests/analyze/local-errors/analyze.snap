@@ -7,9 +7,9 @@ error: Type mismatch: expected `int`, but found `local 'a`.
         ^^^^^^^^^^^
 
 error: Type mismatch: expected `int`, but found `task 'a 'b`.
-> 1 | # Type errors for `std.local`. `local.get` requires a `local`, not a plain
+> 1 | # Type errors for `std/local`. `local.get` requires a `local`, not a plain
       ^
 
 error: Type mismatch: expected `int`, but found `string`.
-> 1 | # Type errors for `std.local`. `local.get` requires a `local`, not a plain
+> 1 | # Type errors for `std/local`. `local.get` requires a `local`, not a plain
       ^

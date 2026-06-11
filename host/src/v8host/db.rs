@@ -1,4 +1,4 @@
-// Native import callback for `std.sys.db` (host/src/db.rs): one generic `db-op` covering
+// Native import callback for `std/sys/db` (host/src/db.rs): one generic `db-op` covering
 // open / execute / close, selected by an op-code, all offloaded to the pinned SQLite
 // worker. Shapes a db `OpResult` into the same `(status, len)` + `(dst, cap)` byte ABI the
 // async fs ops use. Submit-or-collect like every offload op: the first call reads the args
@@ -44,7 +44,7 @@ fn deliver_db(
 }
 
 /// `db-op(i32 fid, i32 op, i64 conn, i32 sql_ptr, i32 sql_len, i32 params_ptr, i32
-/// params_len, i32 dst, i32 cap) -> (i32 status, i32 len)`: run an `std.sys.db` op on the
+/// params_len, i32 dst, i32 cap) -> (i32 status, i32 len)`: run an `std/sys/db` op on the
 /// pinned worker. For `open`, `sql` is the path and `params` is empty; for `execute`,
 /// `conn` selects the connection and `params` is the encoded bind list; the ok payload
 /// (rows, or the new connection id as text) comes back through `(dst, cap)` (overflow

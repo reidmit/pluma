@@ -10,7 +10,7 @@ module `main` (tests/analyze/scope-both/main.pa) {
     },
     ast: Some(
         module(3:0-18:1) [
-            use(3:0-3:12) `std.task`,
+            use(3:0-3:12) `std/task`,
         ] [
             def(5:0-13:1) :: nothing {
                 name: ident(5:4-5:8) `both`,

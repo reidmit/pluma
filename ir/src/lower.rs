@@ -53,7 +53,7 @@ pub fn lower(compiler: &Compiler) -> Result<IrProgram, String> {
 }
 
 /// Lower for `pluma test`: synthesize an entry that runs every module's `tests`
-/// suite through `std.test.run-all`, rather than calling a `main`. `color`
+/// suite through `std/test.run-all`, rather than calling a `main`. `color`
 /// enables ANSI styling in the rendered report.
 pub fn lower_tests(compiler: &Compiler, color: bool) -> Result<IrProgram, String> {
 	let mut lowerer = Lowerer::new(compiler);
@@ -397,16 +397,16 @@ impl<'a> Lowerer<'a> {
 		Ok(self.emit_let(Rvalue::GlobalRef(g), range))
 	}
 
-	/// `task.map task fn` / `task.then task fn` — a call through the std.task
+	/// `task.map task fn` / `task.then task fn` — a call through the std/task
 	/// global, the spine of every synthesized stub/dispatch.
 	fn task_combinator(&mut self, op: &str, task: Atom, f: Atom) -> Result<Atom, String> {
-		let g = self.rpc_global("std.task", op, SYNTHETIC)?;
+		let g = self.rpc_global("std/task", op, SYNTHETIC)?;
 		Ok(self.emit_let(Rvalue::CallClosure(g, vec![task, f]), SYNTHETIC))
 	}
 
 	/// `task.return value` as an atom.
 	fn task_return(&mut self, value: Atom) -> Result<Atom, String> {
-		let g = self.rpc_global("std.task", "return", SYNTHETIC)?;
+		let g = self.rpc_global("std/task", "return", SYNTHETIC)?;
 		Ok(self.emit_let(Rvalue::CallClosure(g, vec![value]), SYNTHETIC))
 	}
 
@@ -454,7 +454,7 @@ impl<'a> Lowerer<'a> {
 		let result = match ep.kind {
 			compiler::rpc::EndpointKind::Unary => {
 				// rpc.call-unary "<route>" "<fp>" body  →  task bytes
-				let call_unary = self.rpc_global("std.rpc", "call-unary", SYNTHETIC)?;
+				let call_unary = self.rpc_global("std/rpc", "call-unary", SYNTHETIC)?;
 				let task_bytes = self.emit_let(
 					Rvalue::CallClosure(call_unary, vec![route, fp, body_bytes]),
 					SYNTHETIC,
@@ -463,13 +463,13 @@ impl<'a> Lowerer<'a> {
 			}
 			compiler::rpc::EndpointKind::Stream => {
 				// rpc.call-stream "<route>" "<fp>" body  →  stream bytes
-				let call_stream = self.rpc_global("std.rpc", "call-stream", SYNTHETIC)?;
+				let call_stream = self.rpc_global("std/rpc", "call-stream", SYNTHETIC)?;
 				let frames = self.emit_let(
 					Rvalue::CallClosure(call_stream, vec![route, fp, body_bytes]),
 					SYNTHETIC,
 				);
 				// stream.map-task frames decode-cb  →  stream R
-				let map_task = self.rpc_global("std.stream", "map-task", SYNTHETIC)?;
+				let map_task = self.rpc_global("std/stream", "map-task", SYNTHETIC)?;
 				self.emit_let(
 					Rvalue::CallClosure(map_task, vec![frames, decode_cb]),
 					SYNTHETIC,
@@ -495,7 +495,7 @@ impl<'a> Lowerer<'a> {
 		let schema = self.lower_wire_shape(result_shape, SYNTHETIC)?;
 		let dec = self.rpc_global("__prelude__", "wire-decode", SYNTHETIC)?;
 		let decoded = self.emit_let(Rvalue::CallClosure(dec, vec![schema, b]), SYNTHETIC);
-		let lift = self.rpc_global("std.rpc", "lift", SYNTHETIC)?;
+		let lift = self.rpc_global("std/rpc", "lift", SYNTHETIC)?;
 		let lifted = self.emit_let(Rvalue::CallClosure(lift, vec![decoded]), SYNTHETIC);
 		self.push_stmt(StmtKind::Return(lifted), SYNTHETIC);
 		let scope = self.scopes.pop().unwrap();
@@ -532,7 +532,7 @@ impl<'a> Lowerer<'a> {
 
 		// Default: no such route → 404.
 		let saved = self.take_stmts();
-		let nf = self.rpc_global("std.sys.http", "not-found", SYNTHETIC)?;
+		let nf = self.rpc_global("std/sys/http", "not-found", SYNTHETIC)?;
 		let resp = self.emit_let(
 			Rvalue::CallClosure(nf, vec![Atom::Const(Const::Unit)]),
 			SYNTHETIC,
@@ -567,7 +567,7 @@ impl<'a> Lowerer<'a> {
 		result: VarId,
 		ep: &compiler::rpc::RpcEndpointMeta,
 	) -> Result<(), String> {
-		let fpok_fn = self.rpc_global("std.rpc", "fingerprint-ok", SYNTHETIC)?;
+		let fpok_fn = self.rpc_global("std/rpc", "fingerprint-ok", SYNTHETIC)?;
 		let fpok = self.emit_let(
 			Rvalue::CallClosure(
 				fpok_fn,
@@ -584,7 +584,7 @@ impl<'a> Lowerer<'a> {
 
 		// else: stale/missing fingerprint → 409.
 		let else_saved = self.take_stmts();
-		let skew = self.rpc_global("std.rpc", "skew-response", SYNTHETIC)?;
+		let skew = self.rpc_global("std/rpc", "skew-response", SYNTHETIC)?;
 		let resp = self.emit_let(
 			Rvalue::CallClosure(skew, vec![Atom::Const(Const::Unit)]),
 			SYNTHETIC,
@@ -617,7 +617,7 @@ impl<'a> Lowerer<'a> {
 
 	/// Invoke one endpoint (assuming its fingerprint already checked out): decode
 	/// the request body against the arg shape, then route the handler through
-	/// `std.rpc.respond` (ambient context + reject + 200/4xx/5xx shaping). A
+	/// `std/rpc.respond` (ambient context + reject + 200/4xx/5xx shaping). A
 	/// malformed body short-circuits to 400 before the handler runs. Assigns the
 	/// `task response` to `result`. Emits into the caller's block buffer.
 	fn dispatch_invoke(
@@ -656,7 +656,7 @@ impl<'a> Lowerer<'a> {
 
 		// err arm: a malformed request body → 400.
 		let err_saved = self.take_stmts();
-		let text = self.rpc_global("std.sys.http", "text", SYNTHETIC)?;
+		let text = self.rpc_global("std/sys/http", "text", SYNTHETIC)?;
 		let resp = self.emit_let(
 			Rvalue::CallClosure(
 				text,
@@ -699,7 +699,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// A handler's result encoder: `fun res { wire.encode <resultschema> res }`,
-	/// producing the reply bytes. The 200-response wrapping lives in `std.rpc`'s
+	/// producing the reply bytes. The 200-response wrapping lives in `std/rpc`'s
 	/// `respond` (which also binds context and catches a `reject`); this closure
 	/// just turns the handler's value into bytes. The schema is lowered inside the
 	/// closure. Captures nothing.
@@ -718,7 +718,7 @@ impl<'a> Lowerer<'a> {
 		Ok(self.emit_let(Rvalue::MakeClosure(fid, Vec::new()), SYNTHETIC))
 	}
 
-	/// The thunk `std.rpc.respond` runs to invoke one endpoint:
+	/// The thunk `std/rpc.respond` runs to invoke one endpoint:
 	/// `fun { task.map (<module>.<name> <args>) (fun res { wire.encode <rs> res }) }`
 	/// — a zero-arg closure capturing the decoded argument vars from the arm. The
 	/// handler is invoked *inside* this closure (not eagerly), because `respond`
@@ -762,7 +762,7 @@ impl<'a> Lowerer<'a> {
 		let mapped = match ep.kind {
 			compiler::rpc::EndpointKind::Unary => self.task_combinator("map", produced, enc)?,
 			compiler::rpc::EndpointKind::Stream => {
-				let smap = self.rpc_global("std.stream", "map", SYNTHETIC)?;
+				let smap = self.rpc_global("std/stream", "map", SYNTHETIC)?;
 				self.emit_let(Rvalue::CallClosure(smap, vec![produced, enc]), SYNTHETIC)
 			}
 		};
@@ -777,7 +777,7 @@ impl<'a> Lowerer<'a> {
 		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms), SYNTHETIC))
 	}
 
-	/// `result = std.rpc.respond <req> <invoke-thunk>` — hand the inbound request
+	/// `result = std/rpc.respond <req> <invoke-thunk>` — hand the inbound request
 	/// and the endpoint's invocation thunk to `respond`, which binds the ambient
 	/// context + reject box, runs the handler, and shapes success / `reject` / fault
 	/// into an HTTP response. Emits into the caller's block buffer.
@@ -796,7 +796,7 @@ impl<'a> Lowerer<'a> {
 			compiler::rpc::EndpointKind::Unary => "respond",
 			compiler::rpc::EndpointKind::Stream => "respond-stream",
 		};
-		let respond = self.rpc_global("std.rpc", respond_name, SYNTHETIC)?;
+		let respond = self.rpc_global("std/rpc", respond_name, SYNTHETIC)?;
 		let resp = self.emit_let(
 			Rvalue::CallClosure(respond, vec![req.clone(), thunk]),
 			SYNTHETIC,
@@ -805,7 +805,7 @@ impl<'a> Lowerer<'a> {
 		Ok(())
 	}
 
-	/// `std.rpc.server-origin`, a baked build-time constant: a thunk returning the
+	/// `std/rpc.server-origin`, a baked build-time constant: a thunk returning the
 	/// `--server-url` string (empty = same-origin). Never settable at runtime.
 	fn synthesize_server_origin(&mut self) -> Result<FuncId, String> {
 		let origin = self.compiler.rpc_base_url.clone().unwrap_or_default();
@@ -1105,7 +1105,7 @@ impl<'a> Lowerer<'a> {
 			},
 			ExprKind::NamespaceAccess(path) => match path.as_slice() {
 				[head, tail] => {
-					if head.name.contains('.') {
+					if head.name.contains('/') {
 						return self.globals.lookup(&head.name, &tail.name);
 					}
 					let qualified_module = self.imports.get(&head.name).cloned()?;
@@ -1445,8 +1445,9 @@ impl<'a> Lowerer<'a> {
 				Some((qualified_enum, variant.name.clone(), arity))
 			}
 			[head, tail] => {
-				// A dotted head is an already-qualified global, never a variant.
-				if head.name.contains('.') {
+				// A slashed head is an already-qualified module global (the
+				// compiler-inserted form), never a variant.
+				if head.name.contains('/') {
 					return None;
 				}
 				// `module.value` (an imported function/value) takes precedence over
@@ -1471,7 +1472,7 @@ impl<'a> Lowerer<'a> {
 				];
 				if let Some(qualified_module) = self.imports.get(&head.name) {
 					let eponym = qualified_module
-						.rsplit('.')
+						.rsplit('/')
 						.next()
 						.unwrap_or(qualified_module);
 					candidates.push(format!("{}.{}", qualified_module, eponym));
@@ -1505,9 +1506,9 @@ impl<'a> Lowerer<'a> {
 		}
 		match path {
 			[head, tail] => {
-				// A dotted head is an already-fully-qualified reference (e.g.
-				// `std.task.or-else`), resolved directly against globals.
-				if head.name.contains('.') {
+				// A slashed head is an already-fully-qualified reference (e.g.
+				// `std/task.or-else`), resolved directly against globals.
+				if head.name.contains('/') {
 					if let Some(g) = self.globals.lookup(&head.name, &tail.name) {
 						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
 					}
@@ -1586,7 +1587,7 @@ impl<'a> Lowerer<'a> {
 			];
 			if let Some(qualified_module) = self.imports.get(&enum_name.name) {
 				let eponym = qualified_module
-					.rsplit('.')
+					.rsplit('/')
 					.next()
 					.unwrap_or(qualified_module);
 				candidates.push(format!("{qualified_module}.{eponym}"));
@@ -1890,7 +1891,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// Lower a backtick regex literal to a `__prelude__.regex-pattern` enum
-	/// value tree — the shape the pure-Pluma `std.regex` engine walks. Mirrors
+	/// value tree — the shape the pure-Pluma `std/regex` engine walks. Mirrors
 	/// `lower_wire_shape`: a structured AST node reified as a runtime value
 	/// rather than flattened to a string. The quantifier `RegexKind`s all
 	/// collapse to `p-repeat inner min max` (`max = -1` is unbounded); a
@@ -2376,15 +2377,15 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// `scope (as s)? { body }` / `manual scope ...` — lower to a call to the
-	/// `std.task.scope-new` kernel: `scope-new <manual> (fun handle { body })`.
+	/// `std/task.scope-new` kernel: `scope-new <manual> (fun handle { body })`.
 	/// The body becomes its own closure frame (so its `try`s suspend within the
 	/// scope's child fiber, not this one — that's why a `scope` doesn't make the
 	/// enclosing function async). Mirrors `emit.rs`'s `emit_scope`.
 	fn lower_scope(&mut self, node: &ScopeNode, range: Range) -> Result<Atom, String> {
 		let g = self
 			.globals
-			.lookup("std.task", "scope-new")
-			.ok_or("`std.task.scope-new` not found")?;
+			.lookup("std/task", "scope-new")
+			.ok_or("`std/task.scope-new` not found")?;
 		let scope_new = self.emit_let(Rvalue::GlobalRef(g), range);
 		let manual = Atom::Const(Const::Bool(node.manual));
 		// The body closure's parameter carries the `scope as NAME` handle so the
@@ -2825,7 +2826,7 @@ impl<'a> Lowerer<'a> {
 			None => return Err(format!("module `{}` has no `main` def", main_module)),
 		};
 		if self.is_client_emit() && !self.compiler.rpc_endpoints.is_empty() {
-			if let Some(install) = self.globals.lookup("std.rpc.web", "install") {
+			if let Some(install) = self.globals.lookup("std/rpc/web", "install") {
 				let g = fresh_let(body, next, Rvalue::GlobalRef(install));
 				body.push(Stmt::synthetic(StmtKind::Discard(Rvalue::CallClosure(
 					Atom::Var(g),
@@ -2843,7 +2844,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// The `pluma test` root: build a `list {name, tests}` from the discovered
-	/// suites and call `std.test.run-all color suites`. The suites are referenced
+	/// suites and call `std/test.run-all color suites`. The suites are referenced
 	/// by `GlobalId`, so their privacy (a `*.test.pa`'s `tests` is private) doesn't
 	/// matter — no source-level import is involved.
 	fn emit_test_runner(
@@ -2855,8 +2856,8 @@ impl<'a> Lowerer<'a> {
 	) -> Result<Atom, String> {
 		let run_all = self
 			.globals
-			.lookup("std.test", "run-all")
-			.ok_or("`std.test.run-all` was not compiled — does a `*.test.pa` file `use std/test`?")?;
+			.lookup("std/test", "run-all")
+			.ok_or("`std/test.run-all` was not compiled — does a `*.test.pa` file `use std/test`?")?;
 
 		// One `{name, tests}` record per suite. Field order is name-sorted to
 		// match the record-shape layout the backends expect from `MakeRecord`.

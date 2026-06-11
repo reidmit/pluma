@@ -1,4 +1,4 @@
-// Embedded SQLite for `std.sys.db`, the second real client of the offload subsystem
+// Embedded SQLite for `std/sys/db`, the second real client of the offload subsystem
 // (host/src/offload.rs). A `rusqlite::Connection` is not `Sync`, so unlike the stateless
 // file ops (which any general-pool worker runs) every db op runs on **one pinned worker
 // thread** that owns the connections — which also serializes writes (SQLite does anyway)
@@ -10,7 +10,7 @@
 // rusqlite-agnostic in shape — a later swap to a pure-Rust engine (turso) is confined here.
 //
 // Values cross the wasm boundary as a small length-prefixed binary blob (the same format
-// `std.sys.db` encodes/decodes on the Pluma side): a tag byte per value, ints/floats as
+// `std/sys/db` encodes/decodes on the Pluma side): a tag byte per value, ints/floats as
 // decimal text terminated by `\n`, strings/blobs length-prefixed (`<len>\n<bytes>`). Rows
 // come back as `<row-count>\n` then per row `<col-count>\n` then per column a length-
 // prefixed name followed by a tagged value.

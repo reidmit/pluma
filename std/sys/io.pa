@@ -1,7 +1,7 @@
 # The standard streams: printing to stdout/stderr and reading stdin.
 #
-# Files and directories live in `std.sys.fs`; command-line arguments,
-# the environment, and exiting live in `std.sys.process`.
+# Files and directories live in `std/sys/fs`; command-line arguments,
+# the environment, and exiting live in `std/sys/process`.
 #
 # Printing and reading the standard streams effectively never fail, so
 # the writers return their values directly; the readers hand back a

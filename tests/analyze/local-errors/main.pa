@@ -1,4 +1,4 @@
-# Type errors for `std.local`. `local.get` requires a `local`, not a plain
+# Type errors for `std/local`. `local.get` requires a `local`, not a plain
 # value; `local.with`'s body must return a `task`; and the bound value must match
 # the cell's type.
 use std/local

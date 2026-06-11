@@ -4,14 +4,14 @@ expression: output
 ---
 module `main` (tests/analyze/local-types/main.pa) {
     comments: {
-        0: " Type-level inference checks for `std.local`. `local.new` returns `local a`",
+        0: " Type-level inference checks for `std/local`. `local.new` returns `local a`",
         1: " with `a` from the argument; `local.get` returns the inner type; `local.with`",
         2: " returns the body task's result type, and binds a value of the cell's type.",
     },
     ast: Some(
         module(3:0-24:1) [
-            use(3:0-3:13) `std.local`,
-            use(4:0-4:12) `std.task`,
+            use(3:0-3:13) `std/local`,
+            use(4:0-4:12) `std/task`,
         ] [
             def(6:0-6:41) :: nothing {
                 name: ident(6:4-6:9) `trace`,

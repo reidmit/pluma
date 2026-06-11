@@ -1,9 +1,9 @@
-# std.rpc.sys -- the native transport for remote calls.
+# std/rpc/sys -- the native transport for remote calls.
 #
 # Installs a sender that POSTs each encoded call to `<origin>/rpc/<route>` over
-# std.sys.http, mapping the HTTP outcome to reply bytes or a typed `rpc-error`.
-# This module imports `std.sys.*`, so it only enters a native build (the neutral
-# `std.rpc` never imports a target module). The mirror of `std.rpc.web`.
+# std/sys/http, mapping the HTTP outcome to reply bytes or a typed `rpc-error`.
+# This module imports `std/sys/*`, so it only enters a native build (the neutral
+# `std/rpc` never imports a target module). The mirror of `std/rpc/web`.
 use std/rpc
 use std/stream
 use std/task

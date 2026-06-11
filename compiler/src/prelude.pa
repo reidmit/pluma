@@ -63,7 +63,7 @@ public enum result a b {
 # its success `a`, and propagates its failure `e` -- the whole function is
 # itself a `task _ e`. `result` is the reified form: `task.attempt` turns a
 # `task a e` into a `task (result a e) _` you can match on. The `task.*`
-# helpers (in `std.task`, auto-imported) build and combine them; `scope`
+# helpers (in `std/task`, auto-imported) build and combine them; `scope`
 # (a keyword) runs them concurrently. A task that never fails in a typed
 # way (`task.return`, `task.sleep`) leaves `e` polymorphic.
 #
@@ -150,7 +150,7 @@ public enum wire-schema {
 }
 
 # The runtime reification of a backtick regex literal: the pattern's shape
-# as a tree the pure-Pluma regex engine (`std.regex`) walks to match. You
+# as a tree the pure-Pluma regex engine (`std/regex`) walks to match. You
 # never write one by hand; the compiler synthesizes it from the `` `...` ``
 # literal. It's public so those synthesized values have a named home.
 #
@@ -176,7 +176,7 @@ public enum regex-pattern {
 # server-only query, so there is nothing to forge. It is a nominal type (not
 # a bare record) so the endpoint checker can recognize an RPC `request`
 # parameter by name. Build one with `request.new ()` and attach metadata with
-# `request.header` (`std.request`); the single constructor stays an internal
+# `request.header` (`std/request`); the single constructor stays an internal
 # detail of that module.
 public enum request {
 	request-with (dict string string)

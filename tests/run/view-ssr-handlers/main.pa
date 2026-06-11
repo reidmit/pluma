@@ -1,5 +1,5 @@
 # A view that uses the full handler surface (on-input/on-change/on-submit
-# reference the relocated `std.event` builtins) and renders to an HTML string.
+# reference the relocated `std/event` builtins) and renders to an HTML string.
 # Guards that the server-renderable view path links and renders: handlers are
 # dropped, text/attrs escaped, void elements self-close, properties become attrs.
 

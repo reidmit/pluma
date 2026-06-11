@@ -118,7 +118,7 @@ pub(super) fn classify_host_call(
 			requested.insert(Helper::ToString);
 		}
 	}
-	// Marshalled `std.sys.io` ops encode their path/data args into scratch
+	// Marshalled `std/sys/io` ops encode their path/data args into scratch
 	// (`__alloc`/`__store_bytes`); reads also `__load_bytes` the payload and need
 	// the `io-copyout` overflow import, and `read-dir` splits names.
 	if is_io_host(tag) {
@@ -152,7 +152,7 @@ pub(super) fn classify_host_call(
 		}
 	}
 
-	// `std.sys.io` result builtins need the `__io_result` shaper + the
+	// `std/sys/io` result builtins need the `__io_result` shaper + the
 	// `io-last-error` channel it queries, on top of their own host import
 	// (registered by the generic path below). `uuid-parse` rides this path too.
 	if is_io_result(tag) {
@@ -160,7 +160,7 @@ pub(super) fn classify_host_call(
 		imports.register("io-last-error");
 	}
 
-	// `std.random`/`std.uuid` payload builders (`emit_rng`): the byte/string ones
+	// `std/random`/`std/uuid` payload builders (`emit_rng`): the byte/string ones
 	// write to scratch and read it back (`random-bytes` may overflow); the scalars
 	// need no helpers. Their host import is registered by the generic path below.
 	if is_rng_host(tag) {
@@ -178,7 +178,7 @@ pub(super) fn classify_host_call(
 		}
 	}
 
-	// `std.time` clock imports (`emit_clock`). now/monotonic/sleep need no helpers;
+	// `std/time` clock imports (`emit_clock`). now/monotonic/sleep need no helpers;
 	// `time-parse` marshals two strings + a scratch i64 slot and shapes its `result
 	// instant string` through `__io_result` (so it needs the marshalling helpers +
 	// the `io-last-error` error channel).
@@ -190,7 +190,7 @@ pub(super) fn classify_host_call(
 		imports.register("io-last-error");
 	}
 
-	// `std.web.dom` (`emit_dom`): string-carrying node ops marshal their args into
+	// `std/web/dom` (`emit_dom`): string-carrying node ops marshal their args into
 	// scratch; `dom-get-value` reads a payload back; `on-click` stows its handler in
 	// the dispatch registry (the `__dom_register`/`__dom_dispatch` helpers, whose dep
 	// `__list_push` and the `dom_handlers` global come in later). The dom host import
@@ -227,7 +227,7 @@ pub(super) fn classify_host_call(
 		}
 	}
 
-	// `std.web.fetch` under the V8 sys host: the blocking transport. Marshalled like an
+	// `std/web/fetch` under the V8 sys host: the blocking transport. Marshalled like an
 	// io read (`(req_ptr, req_len, dst, cap) -> len`, overflow drained via `io-copyout`)
 	// and shaped through `__io_result`; its own host import is registered by the generic
 	// path below. (A browser build intercepts `web-fetch` in `module.rs` and routes it to

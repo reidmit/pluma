@@ -1,4 +1,4 @@
-# Typed mutations over a `table a` (std.sql/std.sys.db v2): `db.update` and `db.delete`.
+# Typed mutations over a `table a` (std/sql/std/sys/db v2): `db.update` and `db.delete`.
 # Both validate their columns against the schema and return the number of rows affected.
 # Exercises: an update that changes a subset (count + persisted effect), a delete of a subset
 # (count + the rows are gone), and the schema validation rejecting an unknown column before

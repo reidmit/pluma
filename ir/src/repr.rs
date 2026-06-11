@@ -41,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 ///
 /// `Duration`/`Instant` are deliberately `Boxed`, not `I64`: although they're
 /// i64-backed, they carry distinct runtime tags (`duration`/`instant`), they're
-/// operated on via `std.time` (never the `numeric` operators, so they never
+/// operated on via `std/time` (never the `numeric` operators, so they never
 /// reach a `Bin`), and their literals/values already repr as `Boxed`
 /// (`const_repr`). Keeping the projection consistent with that avoids a spurious
 /// box/unbox mismatch for the (rare, non-hot) duration-param case.

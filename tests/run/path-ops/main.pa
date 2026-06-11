@@ -1,4 +1,4 @@
-# std.path: the pure path-manipulation helpers (deterministic, no filesystem), plus a
+# std/path: the pure path-manipulation helpers (deterministic, no filesystem), plus a
 # find-up roundtrip over a real directory tree to exercise the project-root walk (the
 # relative result keeps the snapshot stable; project-root itself starts from the absolute
 # cwd, so it's exercised by hand, not here).

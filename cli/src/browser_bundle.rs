@@ -1,6 +1,6 @@
 // The `pluma build --web` bundle: the WasmGC artifact plus the JS glue
 // that runs it in a real browser. `app.wasm` is the compiled module (emitted under
-// the `Web` target, so `std.web.dom` lowers to host imports); `loader.js` supplies
+// the `Web` target, so `std/web/dom` lowers to host imports); `loader.js` supplies
 // those imports backed by the real DOM and drives the module; `index.html` is a
 // minimal shell that loads the loader.
 //
@@ -80,7 +80,7 @@ const floatToStr = (n, ptr, cap) => {
 
 const pluma = {
   float_to_str: floatToStr,
-  // std.web.dom — node handles are opaque JS DOM nodes flowing through wasm $extern boxes.
+  // std/web/dom — node handles are opaque JS DOM nodes flowing through wasm $extern boxes.
   "dom-body": () => document.body,
   "dom-create-element": (p, l) => document.createElement(readStr(p, l)),
   "dom-create-text": (p, l) => document.createTextNode(readStr(p, l)),
@@ -98,7 +98,7 @@ const pluma = {
   // rides as an i32 so `!!flag` is a real boolean (`node.disabled = "false"` is truthy).
   "dom-set-string-property": (n, np, nl, vp, vl) => { n[readStr(np, nl)] = readStr(vp, vl); },
   "dom-set-bool-property": (n, np, nl, v) => { n[readStr(np, nl)] = !!v; },
-  // std.css reactive custom properties: one inline-style property at a time, so a
+  // std/css reactive custom properties: one inline-style property at a time, so a
   // node can carry several without clobbering its whole `style`.
   "dom-set-style-property": (n, np, nl, vp, vl) => { n.style.setProperty(readStr(np, nl), readStr(vp, vl)); },
   "dom-set-text": (n, p, l) => { n.textContent = readStr(p, l); },
@@ -106,7 +106,7 @@ const pluma = {
   // event accessors (the event externref flows in as the handler's arg).
   "event-target-value": (e, dst, cap) => writeStr(dst, cap, (e && e.target && e.target.value) || ""),
   // `checked` rides the same string-probe shape as `target-value`: "true"/"false",
-  // parsed back to a bool in `std.event` (no separate boxed-bool host return path).
+  // parsed back to a bool in `std/event` (no separate boxed-bool host return path).
   "event-target-checked": (e, dst, cap) => writeStr(dst, cap, (e && e.target && e.target.checked) ? "true" : "false"),
   "event-prevent-default": (e) => { e.preventDefault(); },
   // Register a handler for `name`: the wasm side stowed the closure at `token`; on the
@@ -127,10 +127,10 @@ const pluma = {
     try { v = localStorage.getItem(readStr(kp, kl)) || ""; } catch (e) {}
     return writeStr(dst, cap, v);
   },
-  // std.sys.io error/overflow channels, shared by std.web.fetch's marshalled read.
+  // std/sys/io error/overflow channels, shared by std/web/fetch's marshalled read.
   "io-last-error": (dst, cap) => writeStr(dst, cap, lastError),
   "io-copyout": (dst) => { u8().set(readStash, dst); readStash = new Uint8Array(0); },
-  // std.web.fetch — the browser HTTP transport for RPC.
+  // std/web/fetch — the browser HTTP transport for RPC.
   // The request is "POST\t<url>\t<headers>\t<hex-body>"; the reply pushed back onto the
   // channel `token` is one `next` event of "<status>\t<hex-body>" bytes, then `done`
   // (or `fault` on a network error). An *async* `fetch` (not the old blocking XHR):
@@ -163,7 +163,7 @@ const pluma = {
       }
     })();
   },
-  // std.web.stream — the browser RPC *subscription* transport (`stream R` endpoints).
+  // std/web/stream — the browser RPC *subscription* transport (`stream R` endpoints).
   // Unlike web-fetch (one blocking reply), a subscription is an async `fetch` whose
   // body is read incrementally and parsed as SSE-style events, each pushed into the
   // wasm channel `token`. This integrates with the cooperative scheduler (the puller

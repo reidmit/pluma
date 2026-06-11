@@ -87,7 +87,7 @@ pub(super) fn resolve_literals(
 	// qualified name. Resolving by qualified name (not a global scan for an enum with an
 	// `lt` variant) is mandatory: a user/stdlib enum whose variants include `lt`/`eq`/`gt`
 	// at other positions would otherwise make `variant_tag_in` ambiguous and break every
-	// `compare` in the build (`std.sql`'s predicate enum hit exactly this).
+	// `compare` in the build (`std/sql`'s predicate enum hit exactly this).
 	if wrapper_order.iter().any(|t| t.ends_with("-compare")) {
 		let en = "__prelude__.ordering";
 		let tag = |name: &str| {
@@ -237,7 +237,7 @@ pub(super) fn resolve_literals(
 			_ => diags.push("async runtime needs the `result` + `option` enums".to_string()),
 		}
 	}
-	// `std.sys.io` result builtins wrap their host return in `ok`/`err` via
+	// `std/sys/io` result builtins wrap their host return in `ok`/`err` via
 	// `__io_result`; resolve the `result` enum's variant tags + display names.
 	if requested.contains(&Helper::IoResult) {
 		let res = "__prelude__.result";
@@ -250,7 +250,7 @@ pub(super) fn resolve_literals(
 					err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
 				};
 			}
-			_ => diags.push("`std.sys.io` needs the `result` enum".to_string()),
+			_ => diags.push("`std/sys/io` needs the `result` enum".to_string()),
 		}
 	}
 }

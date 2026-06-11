@@ -1,7 +1,7 @@
-# std.web.fetch -- the browser's HTTP transport for RPC client stubs.
+# std/web/fetch -- the browser's HTTP transport for RPC client stubs.
 #
 # In the browser there are no raw TCP sockets, so a remote call can't ride
-# `std.sys.net`/`std.sys.http` the way the server and native clients do.
+# `std/sys/net`/`std/sys/http` the way the server and native clients do.
 # Instead it goes through the host page's `fetch`. In the browser, both `post`
 # (one reply) and `fetch-stream` (many) ride the **same host-fed pull channel**:
 # the host starts an async `fetch` and pushes the reply(s) into a wasm channel,
@@ -13,7 +13,7 @@
 # browser-only.)
 #
 # This module only exists in a web build (the `web-fetch` built-in is gated to
-# the web target, like `std.web.dom`). It is the browser HTTP transport for RPC;
+# the web target, like `std/web/dom`). It is the browser HTTP transport for RPC;
 # the sys arm is `http.fetch`. The result shape matches
 # `http.fetch`'s so a generated RPC stub reads `.status` and `.body` the same way
 # on both targets.

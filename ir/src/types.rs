@@ -43,7 +43,7 @@ pub struct IrProgram {
 	pub enums: HashMap<String, Vec<(String, usize)>>,
 	/// The program entry point.
 	pub entry: FuncId,
-	/// `tests` suites (`std.test`) discovered in entry modules: (module, global).
+	/// `tests` suites (`std/test`) discovered in entry modules: (module, global).
 	/// `lower_tests` synthesizes the entry over these; `pluma test` also reads it to
 	/// detect "no tests found".
 	pub test_suites: Vec<(String, GlobalId)>,

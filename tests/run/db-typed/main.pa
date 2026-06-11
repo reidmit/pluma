@@ -1,5 +1,5 @@
-# The typed `table a` path (std.sql v2): define a table's schema + decode/encode once, then
-# let `std.sys.db` thread the decoder through a whole query. Exercises `sql.create-table`
+# The typed `table a` path (std/sql v2): define a table's schema + decode/encode once, then
+# let `std/sys/db` thread the decoder through a whole query. Exercises `sql.create-table`
 # DDL from the schema, `db.insert` (encoder-driven, parameterized), the typed
 # `db.from | db.filter | db.order-by | db.run` pipeline (decoder threaded; SELECT fixed to
 # the schema columns), `db.all`, and the pre-flight schema validation (an unknown column is

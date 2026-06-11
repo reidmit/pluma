@@ -1,4 +1,4 @@
-# The server half. It serves two things on one `std.sys.http` server:
+# The server half. It serves two things on one `std/sys/http` server:
 #   - GET `/`        → the server-side-rendered page (`ui.document`), for an
 #                      instant first paint the client then hydrates.
 #   - everything else → `rpc.dispatch`, the route table the compiler synthesizes

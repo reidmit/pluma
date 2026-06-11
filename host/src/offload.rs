@@ -1,5 +1,5 @@
 // The shared blocking-I/O offload subsystem: a `Reactor` unifying socket
-// *readiness* (`std.sys.net`) and *completion* of non-pollable blocking work — file I/O,
+// *readiness* (`std/sys/net`) and *completion* of non-pollable blocking work — file I/O,
 // SQLite, name resolution — under one `polling::Poller`, plus the `BlockingPool` of
 // worker threads that run those blocking calls off the single scheduler thread.
 //
@@ -47,7 +47,7 @@ type Submission = (i32, Box<dyn FnOnce() -> OpResult + Send>);
 
 /// A cloneable handle a pinned (non-pool) worker uses to report a finished op back to the
 /// scheduler: push `(fid, result)` onto the shared completion queue and wake the poller,
-/// just as `spawn_pool`'s workers do. The pinned `std.sys.db` worker holds one.
+/// just as `spawn_pool`'s workers do. The pinned `std/sys/db` worker holds one.
 #[derive(Clone)]
 pub(crate) struct CompletionSink {
 	completions: Arc<Mutex<VecDeque<(i32, OpResult)>>>,
@@ -160,7 +160,7 @@ impl Reactor {
 		self.done.remove(&fid)
 	}
 
-	/// A handle for a *non-pool* worker — the pinned `std.sys.db` worker — to report its
+	/// A handle for a *non-pool* worker — the pinned `std/sys/db` worker — to report its
 	/// completions through the same queue + poller the general pool feeds, so one `poll`
 	/// step drains both. The db worker owns a `rusqlite::Connection` (not `Sync`), so it
 	/// can't run on the shared pool; this sink is how it still wakes the scheduler.

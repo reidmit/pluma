@@ -94,7 +94,7 @@ pub(super) fn cb_float_to_str(
 	rv.set_int32(bytes.len() as i32);
 }
 
-/// SSR stubs for the two browser-only event accessors. `std.view` names them in
+/// SSR stubs for the two browser-only event accessors. `std/view` names them in
 /// every handler closure, so a server build that *constructs* a view (to render
 /// it with `view.to-string`) declares these imports even though `to-string` drops
 /// the handlers and never calls them. Registered so the server module links; if
@@ -110,7 +110,7 @@ pub(super) fn cb_event_target_value(
 }
 
 /// `event-target-checked(externref, dst, cap) -> i32 len` — no value, length 0
-/// (decodes to `""`, i.e. `false`, in `std.event`).
+/// (decodes to `""`, i.e. `false`, in `std/event`).
 pub(super) fn cb_event_target_checked(
 	_scope: &mut v8::HandleScope,
 	_args: v8::FunctionCallbackArguments,
@@ -129,7 +129,7 @@ pub(super) fn cb_event_prevent_default(
 
 /// `dom-child-at(externref, i32) -> externref` — SSR/hydration is browser-only, so
 /// under the sys host this is never reached; registered only so an ungated
-/// `pluma run`/`test` of `std.web.render` links. Returns undefined (a null node).
+/// `pluma run`/`test` of `std/web/render` links. Returns undefined (a null node).
 pub(super) fn cb_dom_child_at(
 	_scope: &mut v8::HandleScope,
 	_args: v8::FunctionCallbackArguments,

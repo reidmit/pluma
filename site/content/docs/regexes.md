@@ -16,7 +16,7 @@ let phone = `
 `
 ```
 
-The result is a value of the primitive type `regex`, which can only be tested or extracted from via the operations in `std.regex`.
+The result is a value of the primitive type `regex`, which can only be tested or extracted from via the operations in `std/regex`.
 
 ## The literal
 
@@ -119,7 +119,7 @@ let timestamp = `
 `
 ```
 
-Capture names must be identifiers. Captured substrings are surfaced through the match record returned by `std.regex.find` / `find-all`, and via the `${name}` syntax in replacement strings — see [the API](#the-regex-type-and-core-regex) below.
+Capture names must be identifiers. Captured substrings are surfaced through the match record returned by `std/regex.find` / `find-all`, and via the `${name}` syntax in replacement strings — see [the API](#the-regex-type-and-core-regex) below.
 
 ## Quantifiers
 
@@ -173,7 +173,7 @@ A quantifier on an anchor (`^?`, `$*`, `%+`, etc.) is a parse error — repeatin
 
 The `%` mnemonic: a line separating two dots, like a boundary between two words.
 
-## The `regex` type and `std.regex`
+## The `regex` type and `std/regex`
 
 The literal `` `…` `` produces a value of the primitive type `regex`. Compilation happens once, at the regex's definition site — the value carries the compiled matcher.
 

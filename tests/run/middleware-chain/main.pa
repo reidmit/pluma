@@ -1,4 +1,4 @@
-# std.middleware's `chain`, driven in-process: build a few middlewares, stack
+# std/middleware's `chain`, driven in-process: build a few middlewares, stack
 # them around a base handler, and feed the result hand-made requests. Exercises
 # the ordering guarantee (first in the list is outermost: request flows in
 # top-to-bottom, response flows back out bottom-to-top), request rewriting,

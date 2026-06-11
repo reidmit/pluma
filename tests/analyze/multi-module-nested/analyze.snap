@@ -6,7 +6,7 @@ module `main` (tests/analyze/multi-module-nested/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-4:31) [
-            use(0:0-0:13) `sub.utils`,
+            use(0:0-0:13) `sub/utils`,
         ] [
             def(2:0-2:24) :: nothing {
                 name: ident(2:4-2:9) `value`,

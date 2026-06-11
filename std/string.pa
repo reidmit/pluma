@@ -3,7 +3,7 @@
 # *characters* (Unicode scalar values), not bytes, so an accented letter
 # or an emoji counts as one character even though it takes several bytes
 # to store. When you need the raw bytes instead, use `to-bytes` (or
-# reach for `std.bytes`).
+# reach for `std/bytes`).
 #
 # Strings never change in place: every function here returns a new
 # string and leaves the original alone.

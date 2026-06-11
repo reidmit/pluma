@@ -7,9 +7,9 @@
 //
 // Gating is derived from the module's namespace prefix, not a capability table:
 //
-//   std.sys.*  → allowed only on the `Sys` profile
-//   std.web.*  → allowed only on the `Web` profile
-//   std.*      → allowed on both (pure compute / shared host surface)
+//   std/sys/*  → allowed only on the `Sys` profile
+//   std/web/*  → allowed only on the `Web` profile
+//   std/*      → allowed on both (pure compute / shared host surface)
 //
 // A `Target` is the chosen deploy profile. Most flows don't choose one: the
 // frontend/analysis path, the LSP, `pluma run`/`test`/`check`, and the
@@ -24,9 +24,9 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
 	/// A machine/OS host: servers, CLIs, scripts, batch jobs, desktop.
-	/// Grants `std.sys.*`.
+	/// Grants `std/sys/*`.
 	Sys,
-	/// A web/DOM sandbox host. Grants `std.web.*`.
+	/// A web/DOM sandbox host. Grants `std/web/*`.
 	Web,
 }
 
@@ -49,12 +49,12 @@ impl Target {
 	}
 }
 
-/// The target-specific tier a module name belongs to, if any. `std.sys.*` → `Sys`,
-/// `std.web.*` → `Web`, everything else (shared `std.*`, user modules) → `None`.
+/// The target-specific tier a module name belongs to, if any. `std/sys/*` → `Sys`,
+/// `std/web/*` → `Web`, everything else (shared `std/*`, user modules) → `None`.
 fn module_tier(module_name: &str) -> Option<Target> {
-	if module_name.starts_with("std.sys.") {
+	if module_name.starts_with("std/sys/") {
 		Some(Target::Sys)
-	} else if module_name.starts_with("std.web.") {
+	} else if module_name.starts_with("std/web/") {
 		Some(Target::Web)
 	} else {
 		None
@@ -89,27 +89,27 @@ mod tests {
 
 	#[test]
 	fn ungated_allows_everything() {
-		for m in ["std.list", "std.sys.io", "std.web.dom", "some.user.module"] {
+		for m in ["std/list", "std/sys/io", "std/web/dom", "some/user/module"] {
 			assert!(gate(None, m).is_none(), "ungated rejected {m}");
 		}
 	}
 
 	#[test]
 	fn sys_target_allows_sys_and_shared_rejects_web() {
-		assert!(gate(Some(Target::Sys), "std.sys.io").is_none());
-		assert!(gate(Some(Target::Sys), "std.sys.net").is_none());
-		assert!(gate(Some(Target::Sys), "std.list").is_none());
-		let rej = gate(Some(Target::Sys), "std.web.dom").expect("web module should be rejected on sys");
-		assert!(rej.contains("std.web.dom") && rej.contains("sys"));
+		assert!(gate(Some(Target::Sys), "std/sys/io").is_none());
+		assert!(gate(Some(Target::Sys), "std/sys/net").is_none());
+		assert!(gate(Some(Target::Sys), "std/list").is_none());
+		let rej = gate(Some(Target::Sys), "std/web/dom").expect("web module should be rejected on sys");
+		assert!(rej.contains("std/web/dom") && rej.contains("sys"));
 	}
 
 	#[test]
 	fn web_target_allows_web_and_shared_rejects_sys() {
-		assert!(gate(Some(Target::Web), "std.web.dom").is_none());
-		assert!(gate(Some(Target::Web), "std.web.render").is_none());
-		assert!(gate(Some(Target::Web), "std.list").is_none());
-		let rej = gate(Some(Target::Web), "std.sys.io").expect("sys module should be rejected on web");
-		assert!(rej.contains("std.sys.io") && rej.contains("web"));
+		assert!(gate(Some(Target::Web), "std/web/dom").is_none());
+		assert!(gate(Some(Target::Web), "std/web/render").is_none());
+		assert!(gate(Some(Target::Web), "std/list").is_none());
+		let rej = gate(Some(Target::Web), "std/sys/io").expect("sys module should be rejected on web");
+		assert!(rej.contains("std/sys/io") && rej.contains("web"));
 	}
 
 	#[test]

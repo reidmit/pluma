@@ -1,4 +1,4 @@
-# Schema migrations (std.sys.db, built on the atomic `batch` primitive). Exercises a fresh
+# Schema migrations (std/sys/db, built on the atomic `batch` primitive). Exercises a fresh
 # apply (two migrations run), an idempotent re-run (already-applied versions skipped -> 0),
 # that the migrated schema is actually usable, and -- the important one -- that a *failing*
 # migration rolls back atomically: a bad v3 that creates a table then hits invalid SQL must

@@ -1,6 +1,6 @@
-# std.router — a tiny request router for std.sys.http.
+# std/router — a tiny request router for std/sys/http.
 #
-# A web server built on `std.sys.http` is one function from a `request` to a
+# A web server built on `std/sys/http` is one function from a `request` to a
 # `task response`. Once you have more than a couple of endpoints, writing that
 # function as a chain of `if path == … else if …` gets noisy fast. A router
 # turns it into a list: you describe each endpoint as a `route`, and the router
@@ -13,8 +13,8 @@
 # and turn the list into a handler with `handler`, or serve it directly with
 # `serve`:
 #
-#     use std.router
-#     use std.sys.process
+#     use std/router
+#     use std/sys/process
 #
 #     def main = fun {
 #         let port = process.env "PORT" ?? "8080"

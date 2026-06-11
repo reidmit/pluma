@@ -42,7 +42,7 @@ pub(crate) fn run_command(hmr: bool, entry_path: String, program_args: Vec<Strin
 	// Compile to a WasmGC artifact and run it under V8 — the deploy engine, the exact
 	// thing `pluma build` ships ("run what you deploy"). Every builtin the language
 	// exposes lowers to wasm, so a program the backend can't emit (today only the
-	// web-only `std.web.dom` surface) is a hard `wasm codegen error`.
+	// web-only `std/web/dom` surface) is a hard `wasm codegen error`.
 	let program = match ir::lower(&compiler) {
 		Ok(p) => p,
 		Err(msg) => {

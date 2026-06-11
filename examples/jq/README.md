@@ -55,7 +55,7 @@ $ echo '{"a.b": 42}' | pluma run examples/jq '.["a.b"]'
 - `query.pa` — the `step` enum, the path parser (`parse-path`), and the
   stream evaluator (`eval-path`). The parser walks the path string with
   `string.char-at`/`slice`; the evaluator threads a `list value` through
-  each step with `list.fold`, navigating via the `std.json` accessors
+  each step with `list.fold`, navigating via the `std/json` accessors
   and `dict.values`.
 - `main.pa` — CLI glue: read args/stdin, `json.parse`, run the query,
   `json.stringify-pretty` each result. Parse, path, and read errors are

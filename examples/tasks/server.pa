@@ -1,4 +1,4 @@
-# The server half. One `std.sys.http` server serves two things:
+# The server half. One `std/sys/http` server serves two things:
 #   - GET `/`        → the server-side-rendered page (`ui.document`).
 #   - everything else → `rpc.dispatch`, the route table the compiler synthesizes
 #                       from `api.pa`'s `remote def`s (handles the `/rpc/*` calls).

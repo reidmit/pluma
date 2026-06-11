@@ -1,12 +1,12 @@
 # Talking to an SQL database, the typed-Pluma way. This module is the *pure* half: it has
-# no idea how to reach a real database (that lives in `std.sys.db`). What it gives you is
+# no idea how to reach a real database (that lives in `std/sys/db`). What it gives you is
 # the language for describing queries and reading rows back:
 #
 #   - `value` -- the five storage classes SQLite actually has, and nothing more. There is
 #     no boolean storage class, so a bool is just an integer you interpret (`sql.bool` to
 #     write one, `sql.get-bool` to read it back).
 #   - decoders (`get-int`, `get-text`, ...) that pull a typed Pluma value out of a row,
-#     handing back a `result` with a named error -- the same shape `core.json` uses, just
+#     handing back a `result` with a named error -- the same shape `std/json` uses, just
 #     typed and column-named. Thread several with `try` to decode a whole row into your own
 #     record.
 #   - a query builder you pipe together with `|`, and `compile`, which turns a query into
@@ -16,7 +16,7 @@
 #     construction.
 #
 # Everything here is pure data and total functions, so you can build (and even render) SQL
-# anywhere -- you just need `std.sys.db` to actually run it.
+# anywhere -- you just need `std/sys/db` to actually run it.
 use std/dict
 use std/list
 use std/math
@@ -58,14 +58,14 @@ public def bool :: fun bool -> value = fun b {
 
 # --- rows + typed decoders -----------------------------------------------------
 
-# One result row, addressed by column name. Opaque: `std.sys.db` builds these from a query
+# One result row, addressed by column name. Opaque: `std/sys/db` builds these from a query
 # result (via `row-of`); you read them through `cell` or, better, the typed `get-*`
 # accessors below.
 opaque enum row {
 	row (dict string value)
 }
 
-# Builds a row from its `(name, value)` cells. Used by `std.sys.db` to lift a host result
+# Builds a row from its `(name, value)` cells. Used by `std/sys/db` to lift a host result
 # across the boundary; rarely needed directly, but handy for testing a decoder.
 public def row-of :: fun (list (string, value)) -> row = fun cells {
 	row.row (dict.from-entries cells)
@@ -194,8 +194,8 @@ public def asc :: fun string -> sort = sort.asc
 public def desc :: fun string -> sort = sort.desc
 
 # A SELECT query as plain, inspectable data. You build one by piping the stages below with
-# `|` (each takes the query first, so it threads), then hand it to `std.sql.compile` or a
-# `std.sys.db` runner. An empty `select` means `SELECT *`; `filter` terms are AND-joined.
+# `|` (each takes the query first, so it threads), then hand it to `std/sql.compile` or a
+# `std/sys/db` runner. An empty `select` means `SELECT *`; `filter` terms are AND-joined.
 public alias query {
 	from :: string,
 	select :: list string,
@@ -376,7 +376,7 @@ def snd :: fun (string, list value) -> list value = fun pair {
 #
 # Everything above lets you build and decode a query. A `table` ties those together for one
 # row type: its name, its columns in declared order, and the decode/encode pair. Define one
-# with `sql.table` and the `std.sys.db` runners thread the decoder through a whole query for
+# with `sql.table` and the `std/sys/db` runners thread the decoder through a whole query for
 # you, so you never restate it -- and the SELECT list is always the schema's columns in
 # declared order, so the decoder always sees every column it reads.
 

@@ -1,4 +1,4 @@
-# A small HTTP/1.1 server, built entirely on `std.sys.net`. You write a
+# A small HTTP/1.1 server, built entirely on `std/sys/net`. You write a
 # handler -- a function from a `request` to a `response` -- and `serve`
 # runs it, accepting connections and replying to each one.
 #

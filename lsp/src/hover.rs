@@ -475,7 +475,7 @@ mod tests {
 
 	#[test]
 	fn stdlib_symbol_shows_its_doc() {
-		// `list.reverse` pulls its doc from the baked `std.list` source.
+		// `list.reverse` pulls its doc from the baked `std/list` source.
 		let src = "use std/list\n\ndef x = list.reverse [1]\n";
 		// `reverse` is at line 2, col 13.
 		let doc = hover_doc_at(src, 2, 15).expect("expected a doc for list.reverse");
@@ -484,10 +484,10 @@ mod tests {
 
 	#[test]
 	fn use_path_shows_module_doc() {
-		// Hovering the `std.list` path in the `use` shows the module's own
+		// Hovering the `std/list` path in the `use` shows the module's own
 		// top-level doc comment (the block at the top of `list.pa`).
 		let src = "use std/list\n\ndef x = list.reverse [1]\n";
-		// `std.list` spans cols 4..13 on line 0.
+		// `std/list` spans cols 4..13 on line 0.
 		let doc = hover_doc_at(src, 0, 8).expect("expected the module doc on the use path");
 		assert!(
 			doc.starts_with("Lists:"),

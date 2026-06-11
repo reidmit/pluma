@@ -1,4 +1,4 @@
-# Async fs over the BlockingPool. The `std.sys.fs` ops run on a host worker
+# Async fs over the BlockingPool. The `std/sys/fs` ops run on a host worker
 # thread rather than the single scheduler thread: each parks its fiber on the I/O reactor
 # while `std::fs` runs off-thread, then settles the produced `result`. A write -> append ->
 # read roundtrip exercises the bytes-through-scratch offload path end to end, `stat` and

@@ -1,4 +1,4 @@
-// std.time (the `Clock` capability). Wall clock + monotonic clock + blocking sleep +
+// std/time (the `Clock` capability). Wall clock + monotonic clock + blocking sleep +
 // strtime parse, using the `jiff` crate. `time.now` is an `instant` (unix nanos),
 // `time.monotonic` a `duration` (nanos since a process-start anchor); both cross as i64
 // BigInts and the wasm side boxes them under the right tag.

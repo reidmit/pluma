@@ -56,7 +56,7 @@ an `ord` instance (`int`, `float`, `string`, and parametrically `option`/`result
 
 These treat an `int` as a flat row of 64 bits (two's complement). They are
 `int`-only — there is no `float` overload and no trait dispatch — and each is
-also available as a function in `std.bit` for use in `|>` chains or as a
+also available as a function in `std/bit` for use in `|>` chains or as a
 first-class value.
 
 | Operator | Signature | Meaning |

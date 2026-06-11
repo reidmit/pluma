@@ -1,5 +1,5 @@
 # An HTTP/1.1 request/response over loopback, all in one process: a real
-# std.sys.http server (its accept/read/parse/serialize/write loop) talks to a
+# std/sys/http server (its accept/read/parse/serialize/write loop) talks to a
 # hand-written client that sends a raw GET and reads the raw reply. The
 # server runs under a scope that's cancelled once the exchange is done.
 # Output is the (deterministic) status line and body the client received.
@@ -15,7 +15,7 @@ def handler :: fun http.request -> task http.response = fun req {
 }
 
 # Read from the connection until the server closes it (Connection: close). The raw
-# `std.sys.net` reads carry their failure inside the task (`task (result …)`), so
+# `std/sys/net` reads carry their failure inside the task (`task (result …)`), so
 # `task.unwrap` joins it onto this task's own failure channel and the loop reads linearly.
 def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
 	try chunk = task.unwrap (net.read conn 4096)

@@ -1,4 +1,4 @@
-// std.sys.io reads / fs, plus the process surface (argv/env/exit). Each callback reads
+// std/sys/io reads / fs, plus the process surface (argv/env/exit). Each callback reads
 // path/data out of scratch, runs the `std::fs`/stdin op, delivers bytes back into the
 // caller's `(dst, cap)` buffer (overflow → `read_stash` for `io-copyout`), and sets
 // `last_error` on failure.

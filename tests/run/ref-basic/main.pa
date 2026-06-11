@@ -1,4 +1,4 @@
-# `ref` is auto-imported in every module — no `use std.ref` needed.
+# `ref` is auto-imported in every module — no `use std/ref` needed.
 
 def bump = fun r {
 	ref.update r fun n {

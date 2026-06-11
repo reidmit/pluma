@@ -12,7 +12,7 @@
 # `local` is the typed, concurrency-safe counterpart to `ref`: a `ref` is one
 # shared mutable cell (concurrent tasks clobber each other), whereas a `local`
 # binding is per-task-tree and immutable -- a nested `with` *shadows* it for its
-# own subtree and never disturbs anyone else's. Needs `use std.local`.
+# own subtree and never disturbs anyone else's. Needs `use std/local`.
 use std/task
 
 # A task-local cell. You never see its contents directly -- make one with

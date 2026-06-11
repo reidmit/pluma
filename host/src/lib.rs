@@ -11,7 +11,7 @@
 // message into scratch.
 //
 // This file holds the engine-independent core — the `HostIo` sinks, `HostState`, and
-// the `std.sys.net` reactor (`HostNet`) — that the V8 runner in `v8host.rs` drives. That
+// the `std/sys/net` reactor (`HostNet`) — that the V8 runner in `v8host.rs` drives. That
 // runner has three front doors over one set of host imports, differing only in the
 // `HostIo` sink behind `HostState` — so every door tests the exact runtime the CLI ships:
 //   - `run_streaming_v8` — **process stdio** (stdout/stderr streamed live, stdin read
@@ -27,20 +27,20 @@ use db::HostDb;
 use net::HostNet;
 use offload::Reactor;
 
-// The `std.sys.net` host-side socket table (`HostNet`/`NetRet`), kept in its own
+// The `std/sys/net` host-side socket table (`HostNet`/`NetRet`), kept in its own
 // engine-independent module; `HostState` holds one for the run.
 mod net;
 
 // The shared blocking-I/O offload subsystem (host/src/offload.rs): the `Reactor` (one poller for
 // both socket readiness and worker completion) + the `BlockingPool` of worker threads.
-// `std.sys.net` parks socket reads on it; offload clients (fs, db, …) submit blocking jobs.
+// `std/sys/net` parks socket reads on it; offload clients (fs, db, …) submit blocking jobs.
 mod offload;
 
-// Engine-independent `std.sys.fs` ops (one op-code dispatch), shared by the async pool
+// Engine-independent `std/sys/fs` ops (one op-code dispatch), shared by the async pool
 // path and the synchronous `-sync` path so the two can't drift.
 mod fsop;
 
-// Engine-independent `std.sys.db` (embedded SQLite): the pinned worker owning the
+// Engine-independent `std/sys/db` (embedded SQLite): the pinned worker owning the
 // `rusqlite::Connection`s + the value/row wire codec, an offload client of `offload.rs`.
 mod db;
 
@@ -255,19 +255,19 @@ struct HostState {
 	/// The `io.fail` abort message, stashed before the host traps so the runner can
 	/// surface it as the program's `runtime error: <msg>` status.
 	fail: Option<String>,
-	/// The message the last failed `std.sys.io` call stashed (errno-style); returned
+	/// The message the last failed `std/sys/io` call stashed (errno-style); returned
 	/// by the `io-last-error` import, which `__io_result` queries on the err path.
 	last_error: String,
 	/// Bytes a read op produced that didn't fit the caller's first `dst` buffer; the
 	/// wasm side then reserves the true size and drains this via `__io_copyout`. Empty
 	/// on the common (fits-first-try) path. (The read overflow path.)
 	read_stash: Vec<u8>,
-	/// `std.sys.net` runtime state: the socket table.
+	/// `std/sys/net` runtime state: the socket table.
 	net: HostNet,
 	/// The shared readiness + completion reactor (poller + worker pool) that socket reads
 	/// park on and offload clients (fs, db, …) submit blocking work to. (host/src/offload.rs.)
 	reactor: Reactor,
-	/// `std.sys.db` runtime state: the pinned SQLite worker (spawned on first use). Reports
+	/// `std/sys/db` runtime state: the pinned SQLite worker (spawned on first use). Reports
 	/// completions through `reactor`'s shared queue via a `CompletionSink`.
 	db: HostDb,
 }

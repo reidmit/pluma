@@ -1,5 +1,5 @@
 # JSON stress: parse a small document and stringify it back, repeatedly.
-# Exercises the std.json recursive-descent parser and serializer.
+# Exercises the std/json recursive-descent parser and serializer.
 
 use std/json
 use std/string

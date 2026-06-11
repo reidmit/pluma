@@ -1,6 +1,6 @@
 // Native import callbacks for the shared offload subsystem (host/src/offload.rs): the reactor
 // controls (`io-poll`/`io-unwatch`, driven by the in-wasm scheduler's block step + reap),
-// shared by `std.sys.net` and every offload client, plus the v0 `offload-sleep` proving
+// shared by `std/sys/net` and every offload client, plus the v0 `offload-sleep` proving
 // op. They shape an offload `OpResult` into the same `(status, n)` marshalling ABI the net
 // ops use. The reactor itself (`crate::offload`) is engine-independent; these are the V8
 // glue.
@@ -12,7 +12,7 @@ use super::marshal::{argi, ctx_and_mem, deliver_read_v8, read_mem, read_str, set
 use crate::offload::OpResult;
 
 /// Shape a scalar offload `OpResult` (a count, or `nothing`) into `(status, n)`; an error
-/// stashes its message in `last_error` (read back via `io-last-error`, like net/std.sys.io).
+/// stashes its message in `last_error` (read back via `io-last-error`, like net/std/sys/io).
 /// `status`: 0 ok, 2 error. `Bytes` is a byte op and never reaches here.
 fn offload_scalar(ctx: &mut Ctx, res: OpResult) -> (i32, i32) {
 	match res {
@@ -124,7 +124,7 @@ fn deliver_fs(
 }
 
 /// `fs-op(i32 fid, i32 op, i32 path_ptr, i32 path_len, i32 data_ptr, i32 data_len, i32
-/// dst, i32 cap) -> (i32 status, i32 len)`: run any `std.sys.fs` op (selected by `op`,
+/// dst, i32 cap) -> (i32 status, i32 len)`: run any `std/sys/fs` op (selected by `op`,
 /// see `fsop::op`) on a worker thread. `data` is the write payload or the rename/copy
 /// destination path; the ok payload comes back through `(dst, cap)` (overflow stashed for
 /// `io-copyout`). Submit-or-collect like the net/sleep ops: the first call submits + would-

@@ -1365,7 +1365,7 @@ impl<'a> FnEmitter<'a> {
 			self.make_task(kind, args);
 			return;
 		}
-		// Synchronous `std.sys.net` ops (`listen`/`close`/`local-addr`/`connect`): a host
+		// Synchronous `std/sys/net` ops (`listen`/`close`/`local-addr`/`connect`): a host
 		// call shaped into a `result` here (connect additionally wraps it in a Pure
 		// `$task`, matching its `task (result …)` type).
 		if is_net_sync(tag) {
@@ -1397,7 +1397,7 @@ impl<'a> FnEmitter<'a> {
 			}
 			return;
 		}
-		// Task-local cells (`std.local`). All three lower to scheduler helpers — the
+		// Task-local cells (`std/local`). All three lower to scheduler helpers — the
 		// driver runs for every program, so the helpers always exist. `local.get`'s
 		// helper falls back to the cell's `default` when no binding is in scope (incl.
 		// a fully sync `main`, where the scheduler never spun up).
@@ -1485,7 +1485,7 @@ impl<'a> FnEmitter<'a> {
 				"spawn-command" => self.runtime.idx(Helper::SpawnCommand),
 				"spawn-sub" => self.runtime.idx(Helper::SpawnSub),
 				"cancel-sub" => self.runtime.idx(Helper::CancelSub),
-				// `std.web.stream`: open mints a channel + starts the host `fetch`; close
+				// `std/web/stream`: open mints a channel + starts the host `fetch`; close
 				// aborts it. Both build a Pure `$task` (the scheduler runs it later).
 				"rpc-stream-open" => self.runtime.idx(Helper::RpcStreamOpen),
 				"rpc-stream-close" => self.runtime.idx(Helper::RpcStreamClose),
@@ -1706,7 +1706,7 @@ impl<'a> FnEmitter<'a> {
 			self.push_nothing();
 			return;
 		}
-		// `std.web.fetch` in a browser build: the `WebFetch` helper (mint channel +
+		// `std/web/fetch` in a browser build: the `WebFetch` helper (mint channel +
 		// start the async `fetch` + return a `WEB_FETCH` task the pump pulls). Present
 		// only in a browser build; the sys host falls through to the blocking path
 		// below, which needs the `web-fetch` import index.
@@ -1724,7 +1724,7 @@ impl<'a> FnEmitter<'a> {
 			self.push_nothing();
 			return;
 		};
-		// `std.web.fetch` under the sys host: a string->string blocking host call,
+		// `std/web/fetch` under the sys host: a string->string blocking host call,
 		// marshalled and shaped like an io read but wrapped in a Pure `$task`.
 		if tag == "web-fetch" {
 			self.emit_web_fetch(idx, args);
@@ -1736,26 +1736,26 @@ impl<'a> FnEmitter<'a> {
 			self.emit_byte_writer(tag, idx, &args[0]);
 			return;
 		}
-		// `std.random`/`std.uuid` (except `uuid-parse`, classified as an io read):
+		// `std/random`/`std/uuid` (except `uuid-parse`, classified as an io read):
 		// box a scalar directly, or build a `$bytes`/`$str` from a scratch payload.
 		if is_rng_host(tag) {
 			self.emit_rng(tag, idx, args);
 			return;
 		}
-		// `std.sys.io` host imports: marshal path/data args into scratch, call the
+		// `std/sys/io` host imports: marshal path/data args into scratch, call the
 		// `(i32…) -> i32` import, then shape the `i32` result back into a `$value`
 		// (a `$str`/`$bytes`/`$list` payload, a `nothing`/null status, or a `$bool`).
 		if is_io_host(tag) {
 			self.emit_io(tag, idx, args);
 			return;
 		}
-		// `std.time` clock reads: now/monotonic box an i64 `instant`/`duration`, sleep
+		// `std/time` clock reads: now/monotonic box an i64 `instant`/`duration`, sleep
 		// unboxes its `duration` arg, parse shapes a `result instant string`.
 		if is_clock_host(tag) {
 			self.emit_clock(tag, idx, args);
 			return;
 		}
-		// `std.web.dom` (the Web target): node handles cross as `externref` (boxed into
+		// `std/web/dom` (the Web target): node handles cross as `externref` (boxed into
 		// / unboxed from a `$extern`), strings as scratch, and `on-click` stows its
 		// handler closure in the dispatch registry.
 		if is_dom_host(tag) {
@@ -1855,13 +1855,13 @@ impl<'a> FnEmitter<'a> {
 		(ptr_l, len_l)
 	}
 
-	/// A marshalled `std.sys.io` op: encode its path/data args into scratch, call the
+	/// A marshalled `std/sys/io` op: encode its path/data args into scratch, call the
 	/// `(i32…) -> i32` host import, and shape the `i32` result back into a `$value`.
 	/// Reads length-probe a `dst` buffer (an overflow beyond the initial cap drains
 	/// the host's stash via `__io_copyout`); writers wrap a `status` into `ok nothing`
 	/// / `err`; the queries box a `bool`. `__io_result` does the `ok`/`err` wrapping
 	/// (a null payload = failure), so the host never builds the `result` enum.
-	/// `std.random`/`std.uuid` payload builders (all but `uuid-parse`, which rides
+	/// `std/random`/`std/uuid` payload builders (all but `uuid-parse`, which rides
 	/// `emit_io`). The scalars box the host's `i64`/`f64` return directly; `random-bytes`
 	/// and `uuid-v4`/`v7` fill scratch and build a `$bytes`/`$str`. Validation lives in
 	/// Pluma, so none of these fail (no `result` wrap).
@@ -1966,7 +1966,7 @@ impl<'a> FnEmitter<'a> {
 		});
 	}
 
-	/// `std.web.dom` host imports (`the Web target`). Node handles cross as `externref`
+	/// `std/web/dom` host imports (`the Web target`). Node handles cross as `externref`
 	/// (unboxed from / boxed into a `$extern`); string args ride scratch `(ptr, len)`;
 	/// `on-click` stows its handler closure in the dispatch registry and passes a token.
 	/// A node-returning import (`Body`/`Make`) pushes `TAG_EXTERN` *under* the call so the
@@ -2341,7 +2341,7 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
-	/// `fs-op-sync(op, pp, pl, dp, dl, dst, cap) -> len`: the synchronous `std.sys.fs` op.
+	/// `fs-op-sync(op, pp, pl, dp, dl, dst, cap) -> len`: the synchronous `std/sys/fs` op.
 	/// Marshal the op-code + path + data into scratch, length-probe the bytes result (with
 	/// the `io-copyout` overflow drain), and wrap it `ok`/`err` via `__io_result`. Like a
 	/// path read, but with the leading op-code i32 and a second (data) string arg. The
@@ -2609,7 +2609,7 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::StructNew(types::T_STR));
 	}
 
-	/// `std.time` clock host imports. now/monotonic box the host's i64 under
+	/// `std/time` clock host imports. now/monotonic box the host's i64 under
 	/// `TAG_INSTANT`/`TAG_DURATION` (both reuse the `$int` `{tag, i64}` shape); sleep
 	/// unboxes its `duration` arg to i64 and calls the blocking import; parse marshals
 	/// two strings + a scratch i64 slot into a `result instant string`.
@@ -2770,7 +2770,7 @@ impl<'a> FnEmitter<'a> {
 		self.atom(arg);
 	}
 
-	/// Shape a synchronous `std.sys.net` op into a `result` over the marshalling ABI.
+	/// Shape a synchronous `std/sys/net` op into a `result` over the marshalling ABI.
 	/// `listen`/`connect` encode the address into scratch and call `(addr, alen) ->
 	/// (status, id)`; `close` passes the unboxed socket id and calls `(id) -> status`;
 	/// `local-addr` length-probes the address string into scratch. Each shapes the
@@ -2835,7 +2835,7 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
-	/// `web-fetch req` (the browser HTTP transport under the *sys* host, `std.web.fetch`):
+	/// `web-fetch req` (the browser HTTP transport under the *sys* host, `std/web/fetch`):
 	/// marshal the request string into scratch, call the io-read-shaped `(req_ptr,
 	/// req_len, dst, cap) -> len` host import (the host runs the exchange and writes the
 	/// reply, `len < 0` = failure, an overflow draining via `__io_copyout`), shape the

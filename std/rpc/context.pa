@@ -1,4 +1,4 @@
-# std.rpc.context -- the ambient request context a handler reads.
+# std/rpc/context -- the ambient request context a handler reads.
 #
 # A `remote def`'s contract is the pure logical signature (`fun A.. -> task R`) --
 # it has no `request` parameter, because the transport facts a handler sometimes
@@ -8,9 +8,9 @@
 # through every signature.
 #
 # This carries *transport facts only*; it has no notion of identity. Authentication
-# is app territory built on the same task-local primitive (`std.local`): a handler
+# is app territory built on the same task-local primitive (`std/local`): a handler
 # reads a credential header through `context.header`, validates it, and binds its
-# own typed principal. The binding rides `std.local`, so it survives `try`/await
+# own typed principal. The binding rides `std/local`, so it survives `try`/await
 # and concurrent requests stay isolated (each connection runs in its own task, so a
 # shared `ref` would let one request clobber another's context -- a `local` can't).
 #
@@ -76,6 +76,6 @@ public def path :: fun nothing -> string = fun {
 	}
 }
 
-# (`peer` -- the remote address -- is deferred: `std.sys.http`'s `request` carries
+# (`peer` -- the remote address -- is deferred: `std/sys/http`'s `request` carries
 # no remote-addr field yet. Add it here once the server surfaces one.)
 

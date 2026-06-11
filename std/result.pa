@@ -3,7 +3,7 @@
 #
 # The `result` type itself (`ok` and `err`) is built in and always
 # available, so you don't need this module just to make or match a
-# result -- see the prelude. Import it (`use std.result`) for the
+# result -- see the prelude. Import it (`use std/result`) for the
 # helpers below.
 
 # Chains a follow-up step onto a result. `then r f` runs `f` on the
@@ -155,7 +155,7 @@ public def error :: fun (result a e) -> option e = fun r {
 }
 
 # The `process.fail` primitive, referenced by its builtin tag directly
-# rather than through `std.sys.process`: `result` rides in the prelude, so
+# rather than through `std/sys/process`: `result` rides in the prelude, so
 # importing `process` here would close an import cycle. Aborts with the
 # message on stderr and a nonzero exit; never returns.
 def fail-with :: fun string -> a = built-in "io-fail"

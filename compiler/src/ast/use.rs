@@ -4,7 +4,7 @@ use crate::location::Range;
 pub struct UseNode {
 	pub range: Range,
 	// module path segments; e.g. `use sub/utils` produces [sub, utils].
-	// `module_name()` joins them with `.` for the internal name.
+	// `module_name()` joins them with `/` for the internal name.
 	pub path: Vec<IdentifierNode>,
 	// optional `as <ident>` alias; if None, the local name is the last
 	// path segment.
@@ -18,7 +18,7 @@ impl UseNode {
 			.iter()
 			.map(|p| p.name.clone())
 			.collect::<Vec<_>>()
-			.join(".")
+			.join("/")
 	}
 
 	pub fn local_name(&self) -> &IdentifierNode {

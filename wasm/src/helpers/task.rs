@@ -582,7 +582,7 @@ pub(crate) fn build_rpc_stream_event_fn(
 	w.finish()
 }
 
-/// `__rpc_stream_open(req) -> value`: `rpc-stream-open` (`std.web.stream`). Mint a
+/// `__rpc_stream_open(req) -> value`: `rpc-stream-open` (`std/web/stream`). Mint a
 /// fresh channel record in the `rpc_channels` registry (lazily creating it), marshal
 /// the request `$str` into scratch via `__send_bytes` (offset 0), ask the host to
 /// start the `fetch` for that token, and return `task.return token` — the resource a
@@ -813,7 +813,7 @@ pub(crate) fn build_cancel_sub_fn(list_append: u32, g: TaskGlobals) -> Function 
 }
 
 // ==========================================================================
-// Task-local bindings (`std.local`).
+// Task-local bindings (`std/local`).
 //
 // Each fiber carries a binding env in its `ENV` field: an immutable cons-chain of
 // `[cell, val, next]` `$tuple` nodes (null = empty). `local.with` brackets a body
@@ -1227,7 +1227,7 @@ pub(crate) fn build_pump_fn(
 					);
 				});
 
-				// std.sys.net suspending ops: marshal byte payloads through
+				// std/sys/net suspending ops: marshal byte payloads through
 				// scratch, do the non-blocking host call, then settle the produced
 				// `result` value — or, on would-block, park on socket readiness
 				// (`wait::IO`, re-Started from `fiber::RETRY` by the block step). token =
@@ -1333,7 +1333,7 @@ pub(crate) fn build_pump_fn(
 						});
 					});
 
-					// fs-op (host/src/offload.rs): the generic `std.sys.fs` op. Payload = [op-code $int,
+					// fs-op (host/src/offload.rs): the generic `std/sys/fs` op. Payload = [op-code $int,
 					// path $str, data $str]; marshal op + both strings into scratch, hand the
 					// worker a `dst` buffer, and settle the op's bytes. The payload size is
 					// unknown (a whole-file read), so on overflow (`n > cap`) re-`alloc` the true
@@ -1370,7 +1370,7 @@ pub(crate) fn build_pump_fn(
 						});
 					});
 
-					// db-op (host/src/db.rs): the generic `std.sys.db` op. Payload = [op-code $int,
+					// db-op (host/src/db.rs): the generic `std/sys/db` op. Payload = [op-code $int,
 					// conn-id $int, sql/path $str, params $str]; like fs-op plus the connection id,
 					// run on the pinned SQLite worker. Settles bytes (rows, or a new connection id
 					// as text) through the same `(dst, cap)` + `io-copyout` overflow path.
@@ -1410,7 +1410,7 @@ pub(crate) fn build_pump_fn(
 					});
 				}
 
-				// rpc-stream-next: drain a host-fed RPC stream channel (`std.web.stream`),
+				// rpc-stream-next: drain a host-fed RPC stream channel (`std/web/stream`),
 				// or park on `wait::RPC` until the host pushes the next event. The browser's
 				// push analogue of the net read's pull park: instead of the reactor polling
 				// a socket, the loader's `fetch` reader calls `__rpc_stream_event`, which
@@ -3458,7 +3458,7 @@ fn net_settle(
 		|w| {
 			// Ready: build a payload-or-null and shape it through `__io_result` — status
 			// 0 → `ok <payload>`, non-zero → null → `err (io-last-error())` (the message
-			// was set host-side, same channel as `std.sys.io`).
+			// was set host-side, same channel as `std/sys/io`).
 			w.local_get(status).i32(2).i32_eq(); // err?
 			w.if_result(
 				types::value_ref(),

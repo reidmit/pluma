@@ -6,8 +6,8 @@ module `main` (tests/analyze/multi-module-alias/main.pa) {
     comments: {},
     ast: Some(
         module(0:0-5:25) [
-            use(0:0-0:13) `a.b.utils`,
-            use(1:0-1:23) `c.d.utils` as `utils2`,
+            use(0:0-0:13) `a/b/utils`,
+            use(1:0-1:23) `c/d/utils` as `utils2`,
         ] [
             def(3:0-3:23) :: nothing {
                 name: ident(3:4-3:9) `first`,

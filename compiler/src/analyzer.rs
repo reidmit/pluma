@@ -465,7 +465,7 @@ fn is_syntactic_value(e: &ExprNode) -> bool {
 	}
 }
 
-// Maps a scope-handle method name + handle kind to the `std.task` kernel def
+// Maps a scope-handle method name + handle kind to the `std/task` kernel def
 // it lowers to. `None` if the method isn't valid on that handle (e.g. `next`
 // on a fail-fast scope), so it falls through to the normal record/error path.
 fn scope_method_def(method: &str, kind: HandleKind) -> Option<&'static str> {
@@ -570,7 +570,7 @@ impl<'compiler> Analyzer<'compiler> {
 		self.add_type_binding("string".into(), Type::String, Range::collapsed(0, 0));
 		self.add_type_binding("bytes".into(), Type::Bytes, Range::collapsed(0, 0));
 		// `regex` is the pure-Pluma `regex-pattern` enum tree (a backtick literal
-		// reifies to it; `std.regex` walks it). The opaque `Type::Regex` is gone.
+		// reifies to it; `std/regex` walks it). The opaque `Type::Regex` is gone.
 		self.add_type_binding(
 			"regex".into(),
 			Type::Enum("__prelude__.regex-pattern".into(), vec![]),
@@ -649,7 +649,7 @@ impl<'compiler> Analyzer<'compiler> {
 			// prelude or local declaration of the same name overrides this (both
 			// are seeded after this loop), so it never shadows a built-in type.
 			let eponym = qualified_module
-				.rsplit('.')
+				.rsplit('/')
 				.next()
 				.unwrap_or(qualified_module.as_str());
 			if enum_name == eponym {
@@ -2418,9 +2418,9 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	// The structured-concurrency kernel defs (`scope-spawn`, `manual-next`, …)
-	// are private to `std.task`: they're the lowering targets of the `scope`
+	// are private to `std/task`: they're the lowering targets of the `scope`
 	// keyword and the `s.spawn`/`s.next` handle methods, not a public API, so
-	// their signatures aren't carried in `std.task`'s exports. But a handle
+	// their signatures aren't carried in `std/task`'s exports. But a handle
 	// method rewritten to `task.scope-spawn …` still needs to type-check, so
 	// synthesize their (fixed, compiler-known) signatures here — with fresh
 	// tyvars for per-use polymorphism, mirroring how an imported value would be
@@ -2429,7 +2429,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// so nothing downstream needs the def to be public. Keep these in lockstep
 	// with the signatures in `std/task.pa`.
 	fn scope_kernel_def_type(&mut self, module: &str, def_name: &str) -> Option<Type> {
-		if module != "std.task" {
+		if module != "std/task" {
 			return None;
 		}
 		let task = |a: Type, e: Type| Type::Enum("__prelude__.task".to_string(), vec![a, e]);
@@ -2525,7 +2525,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// content-neutral (the name never enters the hash), so dedup and the emitted CSS
 	// are unchanged; this is purely a debug-build legibility aid. A no-op off `hmr`,
 	// matching `pluma build`'s bare-hash classes. Keyed on the value's head being a
-	// `std.css` `rule`/`compose` call — the shape that reliably marks a ruleset value
+	// `std/css` `rule`/`compose` call — the shape that reliably marks a ruleset value
 	// before inference — so non-ruleset defs are untouched.
 	fn maybe_name_css_ruleset_def(&mut self, definition: &mut DefinitionNode) {
 		if !self.hmr {
@@ -2547,11 +2547,11 @@ impl<'compiler> Analyzer<'compiler> {
 		if !self.is_css_ruleset_call(head) {
 			return;
 		}
-		// The local name `std.css` was imported under, for the `<css>.label` callee.
+		// The local name `std/css` was imported under, for the `<css>.label` callee.
 		let Some(css_local) = self
 			.import_qualified
 			.iter()
-			.find(|(_, full)| full.as_str() == "std.css")
+			.find(|(_, full)| full.as_str() == "std/css")
 			.map(|(local, _)| local.clone())
 		else {
 			return;
@@ -2610,7 +2610,7 @@ impl<'compiler> Analyzer<'compiler> {
 		});
 	}
 
-	// True when `expr` is a call to `std.css`'s `rule` or `compose` (the two
+	// True when `expr` is a call to `std/css`'s `rule` or `compose` (the two
 	// ruleset-producing builders), written either qualified (`css.rule …`) or as a
 	// `using css { ... }` leading-dot member (`.rule …`). Alias-agnostic via
 	// `import_qualified`.
@@ -2627,7 +2627,7 @@ impl<'compiler> Analyzer<'compiler> {
 			_ => return false,
 		};
 		(member == "rule" || member == "compose")
-			&& self.import_qualified.get(ns_local).map(String::as_str) == Some("std.css")
+			&& self.import_qualified.get(ns_local).map(String::as_str) == Some("std/css")
 	}
 
 	fn maybe_rewrite_scope_method(&mut self, expr: &mut ExprNode) {
@@ -2666,26 +2666,26 @@ impl<'compiler> Analyzer<'compiler> {
 		};
 
 		// New callee: the kernel def `<def_name>`. In a module that imports
-		// `std.task` (under whatever local name) it lives in that namespace, so
+		// `std/task` (under whatever local name) it lives in that namespace, so
 		// emit a `<local>.<def_name>` namespace access with its type synthesized
-		// here (the kernel defs are private to `std.task`, so they aren't in its
+		// here (the kernel defs are private to `std/task`, so they aren't in its
 		// exports and can't be resolved through imports — `scope_kernel_def_type`
 		// supplies the known signature). Synthesizing it here, rather than letting
 		// the FieldAccess resolver look it up, is precisely what keeps these defs
 		// private: a kernel name a *user* writes (`task.scope-spawn …`) still
-		// reaches the resolver and is reported private. Inside `std.task` itself
+		// reaches the resolver and is reported private. Inside `std/task` itself
 		// there's no such import — the def is a local top-level — so reference it
 		// bare (this is what lets the combinators in task.pa use `s.spawn`/`s.next`
 		// on their own handles, and it resolves regardless of visibility).
 		let task_local = self
 			.import_qualified
 			.iter()
-			.find(|(_, full)| full.as_str() == "std.task")
+			.find(|(_, full)| full.as_str() == "std/task")
 			.map(|(local, _)| local.clone());
 		let new_callee = match task_local {
 			Some(local) => {
 				let ty = self
-					.scope_kernel_def_type("std.task", def_name)
+					.scope_kernel_def_type("std/task", def_name)
 					.expect("scope_method_def name must have a kernel signature");
 				ExprNode {
 					ty,
@@ -3256,7 +3256,7 @@ impl<'compiler> Analyzer<'compiler> {
 							if field.name == "new"
 								&& matches!(&receiver.kind, ExprKind::Identifier(recv)
 									if self.import_qualified.get(&recv.name).map(String::as_str)
-										== Some("std.signal")) =>
+										== Some("std/signal")) =>
 						{
 							let p = field.range.start;
 							let module = self.module_name.clone().unwrap_or_default();
@@ -3619,7 +3619,7 @@ impl<'compiler> Analyzer<'compiler> {
 						// `pluma dev` hot-reload: redirect `render.mount` to its state-
 						// persisting `mount-dev` variant, which carries the keyed-signal stash
 						// across a reload. Keyed on the `-dev` variant existing in the module
-						// (only `std.web.render` defines it), so it's alias-agnostic and a
+						// (only `std/web/render` defines it), so it's alias-agnostic and a
 						// no-op everywhere else. Renaming `field` here -- before the constraint
 						// freshening below -- discharges the variant's `where (wire …)` at this
 						// call site.
@@ -6301,12 +6301,12 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 			Type::Enum(name, args) if name == "__prelude__.task" && args.len() == 2 => {
 				// Fully-qualified so codegen resolves it by name regardless of
-				// imports: `std.task` isn't auto-imported, but `??` (like
+				// imports: `std/task` isn't auto-imported, but `??` (like
 				// `try`) must work on any task value -- including inside
-				// `std.task` itself and in modules that only received a task
-				// from elsewhere. The dot marks it compiler-inserted (user
+				// `std/task` itself and in modules that only received a task
+				// from elsewhere. The slash marks it compiler-inserted (user
 				// namespace names are bare identifiers).
-				("std.task", resolved_left.clone())
+				("std/task", resolved_left.clone())
 			}
 			_ => {
 				self.error(
@@ -7165,7 +7165,7 @@ impl<'compiler> Analyzer<'compiler> {
 		};
 		let kind = if ret_name == "__prelude__.task" && args.len() == 2 {
 			crate::rpc::EndpointKind::Unary
-		} else if ret_name == "std.stream.stream" && args.len() == 1 {
+		} else if ret_name == "std/stream.stream" && args.len() == 1 {
 			crate::rpc::EndpointKind::Stream
 		} else {
 			self.error(
@@ -7183,7 +7183,7 @@ impl<'compiler> Analyzer<'compiler> {
 		// the door is labelled rather than silently ajar.
 		for p in params.iter() {
 			if let Type::Enum(n, _) = p {
-				if n == "std.stream.stream" {
+				if n == "std/stream.stream" {
 					self.error(
 						range,
 						AnalysisErrorKind::RemoteDefSignature {

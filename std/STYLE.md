@@ -25,10 +25,10 @@ So:
   list counts as true" not "vacuously true".)
 - **No internal references.** The reader can't see our source tree.
   Don't mention file names, builtins, backend internals, or commit
-  history. To point at another stdlib module, name it as `std.option`,
-  `std.bytes`, etc.
+  history. To point at another stdlib module, name it as `std/option`,
+  `std/bytes`, etc.
 - **Define a term the first time it earns its keep**, then reuse it.
-  `std.list` defines "predicate" once in the module header and then
+  `std/list` defines "predicate" once in the module header and then
   uses the word freely.
 
 ## Voice: warm and plain-spoken

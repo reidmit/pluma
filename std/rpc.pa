@@ -1,4 +1,4 @@
-# std.rpc -- the runtime behind `remote def`.
+# std/rpc -- the runtime behind `remote def`.
 #
 # A `public remote def` is a remote-call contract: the pure logical signature
 # `fun A.. -> task R`. The compiler supplies each endpoint's body per target --
@@ -9,8 +9,8 @@
 # This module is the hand-written, target-neutral runtime the synthesized code
 # leans on: the typed error channel, the ambient transport, and the server-side
 # `dispatch` handler (whose body the compiler fills from the discovered
-# endpoints). The concrete transports live in `std.rpc.http-sys` /
-# `std.rpc.http-web` -- one per deploy target -- so this core never imports a
+# endpoints). The concrete transports live in `std/rpc/sys` /
+# `std/rpc/web` -- one per deploy target -- so this core never imports a
 # target-specific module.
 use std/dict
 use std/list
@@ -62,7 +62,7 @@ public def status-error :: fun string int -> rpc-error = fun route status {
 
 # A transport: one request/response round-trip. An implementation succeeds with
 # the encoded reply bytes, or fails the task with an `rpc-error`. One transport
-# per deploy target lives in its own module (`std.rpc.http-sys` / `std.rpc.http-web`)
+# per deploy target lives in its own module (`std/rpc/sys` / `std/rpc/web`)
 # and installs itself as the ambient sender at startup (the build injects the
 # call). Streaming is not covered here yet. (Cross-module `trait`/`implement` isn't
 # supported, so the contract is a plain function type rather than a typeclass --
@@ -71,7 +71,7 @@ public alias sender fun string bytes (dict string string) -> task bytes
 
 # A streaming transport: opens a server->client subscription, surfacing each
 # server-sent frame as one `bytes` element of a `stream`. End-of-stream and
-# faults ride the stream the same way `std.stream` defines them (drained = the
+# faults ride the stream the same way `std/stream` defines them (drained = the
 # stream ends, a fault = a task failure on the puller). One per deploy target,
 # installed alongside the unary `sender`. The streaming half of `sender`.
 public alias stream-sender fun string bytes (dict string string) -> stream bytes
@@ -392,7 +392,7 @@ public def guard :: fun policy (fun http.request -> task http.response) -> (fun 
 }
 
 # `dispatch` as a mountable route under `/rpc`, behind the same-origin gate --
-# drop it into a `std.router` route list alongside hand-written endpoints. The
+# drop it into a `std/router` route list alongside hand-written endpoints. The
 # prefix is a build constant shared with the client stubs.
 public def mounted :: router.route = router.prefix "/rpc" (guard policy.same-origin dispatch)
 

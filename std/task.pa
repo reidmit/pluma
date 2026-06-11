@@ -4,7 +4,7 @@
 # The `task` type itself is built in and always available (see the prelude),
 # and the async *syntax* -- `try`/`??` over a task, the `scope` block, `defer`,
 # duration literals -- needs no import. But the named functions here all live
-# behind `use std.task`: since you can't build a task without `task.return` /
+# behind `use std/task`: since you can't build a task without `task.return` /
 # `task.fail`, async code imports this module anyway.
 #
 # You rarely call `task.then` by hand: inside a function that returns a
@@ -193,7 +193,7 @@ def manual-next :: fun (manual-scope-handle a) nothing -> task (option (result a
 
 # Lifts a settled `result` onto the task carrier: `ok v` becomes a task that
 # succeeds with `v`, `err e` one that fails with `e`. The bridge from the
-# `result`-returning world (a pure decode, a `std.sql` validate, an `s.next`
+# `result`-returning world (a pure decode, a `std/sql` validate, an `s.next`
 # completion) into a `task a e` pipeline: `try x = task.lift (decode row)`
 # propagates a decode failure exactly the way an awaited I/O failure does. The
 # inverse of `task.attempt`, which reifies a task's failure back into a `result`.
@@ -208,7 +208,7 @@ public def lift :: fun (result a e) -> task a e = fun r {
 # Awaits a task whose value is itself a `result` and joins that inner result
 # onto the task's own failure channel: `ok v` settles the task with `v`, `err e`
 # fails it with `e`. The bridge up from the low-level layer that carries failure
-# *inside* the task (a raw `std.sys.net` read, a host builtin returning a
+# *inside* the task (a raw `std/sys/net` read, a host builtin returning a
 # `task (result a string)`) to the typed-error world, so callers read a straight
 # line of `try`s instead of re-matching each inner `ok`/`err`. `task.unwrap t`
 # is `task.lift` behind an await; the inverse of `task.attempt`.

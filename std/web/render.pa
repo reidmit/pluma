@@ -1,8 +1,8 @@
-# std.web.render -- mount a `std.view` tree into the live browser DOM.
+# std/web/render -- mount a `std/view` tree into the live browser DOM.
 #
 # The browser-side consumer of a `view` (its server-side dual is
 # `view.to-string`). `mount` walks the view once, builds the real DOM via
-# `std.web.dom`, and wires every reactive part to a `signal.effect` so the DOM
+# `std/web/dom`, and wires every reactive part to a `signal.effect` so the DOM
 # stays in sync surgically -- there is no diff and no retained virtual tree.
 # After mount, updates flow signal -> effect -> DOM directly.
 #
@@ -368,7 +368,7 @@ public def mount :: fun dom.node (fun nothing -> view) -> task nothing = fun par
 # --- dev HMR: keyed-signal state across a `pluma dev` reload -----------------
 #
 # The compiler redirects `render.mount` to `mount-dev` in an hmr build. It bridges
-# `std.signal`'s (platform-neutral) stash to the browser's dev store: restore the
+# `std/signal`'s (platform-neutral) stash to the browser's dev store: restore the
 # previous instance's signal values BEFORE the view is built (so `new-keyed` seeds
 # each cell), then re-persist after every change. The whole app's keyed state
 # crosses the reload as one `hex.encode (wire.encode (dict string bytes))` blob in

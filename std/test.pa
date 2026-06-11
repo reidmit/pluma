@@ -1,12 +1,12 @@
-# std.test — declarative test trees that `pluma test` runs.
+# std/test — declarative test trees that `pluma test` runs.
 #
 # A test file (`*.test.pa`) exports a single `tests :: test.suite` — a list of
 # test nodes. Build them with the constructors below; each `case` body returns a
 # `result` (`ok ()` to pass, `err msg` to fail), which is exactly what the
-# `std.assert` checks produce.
+# `std/assert` checks produce.
 #
-#     use std.test
-#     use std.assert
+#     use std/test
+#     use std/assert
 #
 #     def tests :: test.suite = [
 #         test.case "adds" (fun { assert.equals (2 + 3) 5 }),
@@ -28,10 +28,10 @@ use std/list
 use std/string
 
 # --- inlined ANSI styling --------------------------------------------------
-# `std.test` is a shared module (it runs under V8 on both the `sys` and `web`
-# targets), so it cannot depend on the `sys`-only `std.sys.terminal`. The few
+# `std/test` is a shared module (it runs under V8 on both the `sys` and `web`
+# targets), so it cannot depend on the `sys`-only `std/sys/terminal`. The few
 # styling helpers the runner needs are inlined here instead — kept byte-for-byte
-# in sync with `std.sys.terminal`'s `styled`/wrappers.
+# in sync with `std/sys/terminal`'s `styled`/wrappers.
 
 # ESC (0x1b) as a one-character string. Built from a byte since string literals
 # don't carry a `\x` escape; `build`/`to-string` for code 27 never fails.

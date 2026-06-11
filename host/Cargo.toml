@@ -16,19 +16,19 @@ publish = false
 # The V8 backend (rusty_v8): instantiates the WasmGC artifact under V8, driving the
 # marshalled `pluma.*` imports as native callbacks over the exported memory's ArrayBuffer.
 v8 = "137"
-# The host-side I/O reactor for `std.sys.net`: accept/read/write park the calling fiber
+# The host-side I/O reactor for `std/sys/net`: accept/read/write park the calling fiber
 # until the fd is ready (epoll/kqueue) rather than blocking the scheduler thread.
 polling = "3"
 # Lets `http.serve` set SO_REUSEADDR before bind, so a server rebinds cleanly while
 # prior connections to its port are still draining in TIME_WAIT (e.g. `pluma dev`
 # restarting the server subprocess on every edit).
 socket2 = "0.6"
-# `std.random` / `std.uuid` host imports (the deploy `Entropy` capability).
+# `std/random` / `std/uuid` host imports (the deploy `Entropy` capability).
 rand = "0.10"
 uuid = { version = "1", features = ["v4", "v7"] }
-# `std.time` clock imports (`time.now`/`monotonic`/`parse`) — wall-clock + strtime parsing.
+# `std/time` clock imports (`time.now`/`monotonic`/`parse`) — wall-clock + strtime parsing.
 jiff = "0.2.25"
-# `std.sys.db` embedded SQLite (`bundled` = compile SQLite from source, no system lib).
+# `std/sys/db` embedded SQLite (`bundled` = compile SQLite from source, no system lib).
 # Vendored per the stdlib heavy-lifting rule; `HostDb` stays crate-agnostic so a later
 # swap to a pure-Rust engine (turso) is a one-file change.
 rusqlite = { version = "0.31", features = ["bundled"] }

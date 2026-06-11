@@ -1,4 +1,4 @@
-# std.view -- your UI as a value: a tree of elements bound to signals.
+# std/view -- your UI as a value: a tree of elements bound to signals.
 #
 # This is the post-MVU view layer. You describe the page by building a `view`
 # (with `view.div`, `view.button`, `view.text`, ...), bind the reactive parts to
@@ -17,11 +17,11 @@
 #     }
 #
 # A `view` is *pure data* -- it never touches the DOM. Two consumers turn it into
-# output: `std.web.render`'s `mount` builds real DOM and wires effects (browser),
+# output: `std/web/render`'s `mount` builds real DOM and wires effects (browser),
 # and `to-string` here renders HTML (server-side rendering, and headless tests).
 # That split is what lets the same view render on both server and client. The
-# `event` a handler receives comes from the tier-neutral `std.event` (not
-# `std.web.dom`), so `std.view` builds on the server profile too -- the only DOM
+# `event` a handler receives comes from the tier-neutral `std/event` (not
+# `std/web/dom`), so `std/view` builds on the server profile too -- the only DOM
 # the server ever needs is the handler *type*, never the DOM itself.
 
 use std/css
@@ -908,7 +908,7 @@ public def class-list :: fun (list (string, bool)) -> string = fun pairs {
 	}) " "
 }
 
-# A typed inline `style` attribute from a `std.css` declaration list:
+# A typed inline `style` attribute from a `std/css` declaration list:
 # `view.style-of [css.color (css.hex "#e11"), css.padding (css.rem 1.0)]`. For a
 # reactive style, wrap `css.inline` in `bind`: `view.bind-attr "style" (fun { css.inline [...] })`.
 public def style-of :: fun (list css.decl) -> attribute = fun decls {
@@ -916,7 +916,7 @@ public def style-of :: fun (list css.decl) -> attribute = fun decls {
 }
 
 # Apply an extracted `css.ruleset` as a `class` attribute: yields the rule's hashed
-# class name and registers its CSS in `std.css`'s collector, so server-side
+# class name and registers its CSS in `std/css`'s collector, so server-side
 # `css.style-tag`/`collect` (or a build-time extraction) emits exactly the rules a
 # render actually used. The full power of CSS -- `:hover`, `@media`, etc. -- that an
 # inline `style` can't express.

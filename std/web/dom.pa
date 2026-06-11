@@ -1,4 +1,4 @@
-# std.web.dom -- building and reacting to a web page's DOM, from the browser.
+# std/web/dom -- building and reacting to a web page's DOM, from the browser.
 #
 # These functions only exist when you compile for the browser target
 # (`pluma build --web`): they reach the real DOM through the
@@ -12,7 +12,7 @@
 # back the page's root, the node everything else hangs under. A node is
 # opaque -- you hold the handle and pass it along, but can't look inside.
 #
-# Most apps build their UI with `std.view` + `std.web.render` (the signals
+# Most apps build their UI with `std/view` + `std/web/render` (the signals
 # frontend) and never touch this module directly.
 
 use std/event
@@ -99,8 +99,8 @@ public def get-value :: fun node -> string = built-in "dom-get-value"
 # hydrator only indexes positions it knows the server emitted.)
 public def child-at :: fun node int -> node = built-in "dom-child-at"
 
-# The `event` a handler receives is `std.event`'s shared type (re-used so a
-# `std.view` handler and the listener wired here agree on one type).
+# The `event` a handler receives is `std/event`'s shared type (re-used so a
+# `std/view` handler and the listener wired here agree on one type).
 
 # Run `handler` whenever the named DOM event (`"click"`, `"input"`,
 # `"submit"`, ...) fires on the node. The handler receives the `event`.

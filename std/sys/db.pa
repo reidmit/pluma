@@ -1,11 +1,11 @@
 # Running queries against an embedded SQLite database. This is the *effectful* half of the
-# SQL story -- `std.sql` describes queries and decodes rows as pure data; this module is
-# what actually opens a database file and runs them. It's `Sys`-gated (like `std.sys.net`),
+# SQL story -- `std/sql` describes queries and decodes rows as pure data; this module is
+# what actually opens a database file and runs them. It's `Sys`-gated (like `std/sys/net`),
 # so a `--web` build can't reach it.
 #
 # Every operation is **asynchronous**: a query is offloaded to a dedicated database worker
 # thread so the single scheduler thread never blocks waiting on the disk, and other fibers
-# keep running. You await a result with `try`, exactly like `std.sys.fs`:
+# keep running. You await a result with `try`, exactly like `std/sys/fs`:
 #
 #     def adults :: fun connection -> task (list user) string = fun conn {
 #         sql.from "users"
@@ -82,7 +82,7 @@ public def close :: fun connection -> task nothing string = fun conn {
 
 # Runs a parameterized SQL statement, binding `params` to its `?` placeholders in order,
 # and returns the result rows (empty for a statement that returns none, like INSERT or
-# CREATE TABLE). This is the raw escape hatch; prefer `db.fetch` with a `std.sql` query.
+# CREATE TABLE). This is the raw escape hatch; prefer `db.fetch` with a `std/sql` query.
 #
 #     try _ = db.execute conn "create table users (id integer, name text)" []
 #     try _ = db.execute conn "insert into users values (?, ?)" [sql.int 1, sql.text "ada"]
@@ -148,7 +148,7 @@ public def transaction :: fun connection (fun nothing -> task a string) -> task 
 	}
 }
 
-# Compiles a `std.sql` query, runs it, and decodes each row with `decode`. The terminal
+# Compiles a `std/sql` query, runs it, and decodes each row with `decode`. The terminal
 # stage of a `|`-built query pipeline: total, injection-free SQL in, typed rows out.
 #
 #     sql.from "users" | sql.filter (sql.gt "age" (sql.int 17)) | db.fetch conn decode-user
@@ -162,8 +162,8 @@ public def fetch :: fun query connection (fun row -> result a string) -> task (l
 # --- typed tables: thread the decoder through a whole query --------------------
 #
 # `db.fetch` above already runs a query and decodes its rows, but you hand it the decoder
-# every call. A `table a` (from `std.sql`) bundles the schema with its decode/encode pair
-# once; the stages here thread that decoder for you. Seed with `db.from`, add `std.sql`
+# every call. A `table a` (from `std/sql`) bundles the schema with its decode/encode pair
+# once; the stages here thread that decoder for you. Seed with `db.from`, add `std/sql`
 # predicates and ordering, and finish with `db.run` -- the row type flows the whole way and
 # the SELECT list is always the schema's columns, so the decoder always matches:
 #
@@ -171,7 +171,7 @@ public def fetch :: fun query connection (fun row -> result a string) -> task (l
 #     # :: task (list user) string
 
 # A query against a typed table: the table (schema + decoder) plus the accumulating
-# `std.sql` clauses. Opaque -- build it with `db.from` and the stages below, run it with
+# `std/sql` clauses. Opaque -- build it with `db.from` and the stages below, run it with
 # `db.run`.
 # (The payload types are written qualified -- `sql.table`/`sql.query` -- because an enum
 # payload's types resolve against the prelude and this module, not bare imports, unlike a
@@ -186,7 +186,7 @@ public def from :: fun (table a) -> table-query a = fun t {
 	table-query.tq t (sql.select (sql.from (sql.table-name t)) (sql.table-column-names t))
 }
 
-# Adds a WHERE condition (AND-joined, in order), built with the `std.sql` constructors
+# Adds a WHERE condition (AND-joined, in order), built with the `std/sql` constructors
 # (`sql.eq`, `sql.gt`, ...).
 public def filter :: fun (table-query a) predicate -> table-query a = fun q p {
 	when q is table-query.tq t inner {

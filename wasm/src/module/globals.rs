@@ -131,7 +131,7 @@ pub(super) fn build_globals(
 			ctxlen: wire_global(ValType::I32, &zero_i32),
 		};
 	}
-	// The `std.web.dom` event-handler registry (`dom_handlers`): a mutable `(ref null
+	// The `std/web/dom` event-handler registry (`dom_handlers`): a mutable `(ref null
 	// $list)` of handler closures, indexed by the token `dom.on-click` hands the host.
 	// Allocated (and `__dom_dispatch` exported, later) only when a listener is
 	// reachable — `__dom_register` lazily fills it on the first registration.

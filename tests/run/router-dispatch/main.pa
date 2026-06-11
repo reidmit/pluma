@@ -1,4 +1,4 @@
-# std.router's dispatch, driven in-process: build a handler from a list of
+# std/router's dispatch, driven in-process: build a handler from a list of
 # routes and feed it hand-made requests, so the routing logic (method + path
 # matching, first-match-wins ordering, the 404 fallback) is exercised without a
 # socket. `serve` over a real connection is covered separately by `router-serve`.

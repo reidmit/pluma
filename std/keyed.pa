@@ -1,4 +1,4 @@
-# std.keyed -- ready-made key functions for `view.each` (and any keyed API).
+# std/keyed -- ready-made key functions for `view.each` (and any keyed API).
 #
 # `view.each` reconciles a list by a stable string key per item -- a `fun a -> string`.
 # When the key is just a field, these spare you the lambda:

@@ -1,4 +1,4 @@
-# User-facing transactions (std.sys.db). `db.transaction` brackets a Pluma callback with
+# User-facing transactions (std/sys/db). `db.transaction` brackets a Pluma callback with
 # BEGIN/COMMIT (or ROLLBACK if the body returns `err`), so several db ops are atomic. Built
 # purely on `execute` -- the pinned worker serializes a connection's ops, so the raw
 # BEGIN/COMMIT bracket the body's writes. Exercises: a committed transaction whose return

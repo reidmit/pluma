@@ -210,7 +210,7 @@ public def get-array :: fun value -> option (list value) = fun v {
 }
 
 # Pulls the contents of a JSON object out as a `dict string value`,
-# which you can walk with `std.dict`. `none` if the value isn't an
+# which you can walk with `std/dict`. `none` if the value isn't an
 # object.
 #
 #     try doc = json.parse "{\"a\": 1}"

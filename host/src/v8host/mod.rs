@@ -96,7 +96,7 @@ pub fn run_streaming_v8(bytes: &[u8], args: &[String]) -> i32 {
 }
 
 /// Run a `pluma test` artifact under V8, streaming the report to stdout, and map
-/// the outcome to a process exit code. The runner (`std.test.run-all`) prints
+/// the outcome to a process exit code. The runner (`std/test.run-all`) prints
 /// everything itself and returns `ok ()` on success or `err ""` on test failures
 /// — so a clean failure (`"runtime error: "` with an empty message) just exits 1
 /// silently, while a genuine trap (a crashing case) still surfaces its message.
@@ -177,7 +177,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-write-bytes", cb_write_out);
 	register(scope, pluma, data, "io-write-err-bytes", cb_write_err);
 	register(scope, pluma, data, "io-fail", cb_io_fail);
-	// std.sys.io reads / fs.
+	// std/sys/io reads / fs.
 	register(scope, pluma, data, "io-read", cb_io_read);
 	register(scope, pluma, data, "io-read-all", cb_io_read_all);
 	register(
@@ -200,7 +200,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-is-dir", cb_is_dir);
 	register(scope, pluma, data, "io-last-error", cb_last_error);
 	register(scope, pluma, data, "io-copyout", cb_io_copyout);
-	// std.sys.io process surface (Process capability) — argv, env, exit.
+	// std/sys/io process surface (Process capability) — argv, env, exit.
 	register(scope, pluma, data, "io-args", cb_io_args);
 	register(scope, pluma, data, "io-env", cb_io_env);
 	register(scope, pluma, data, "io-exit", cb_io_exit);
@@ -212,7 +212,7 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "math-exp", cb_math_exp);
 	register(scope, pluma, data, "math-sin", cb_math_sin);
 	register(scope, pluma, data, "math-cos", cb_math_cos);
-	// std.random / std.uuid (Entropy).
+	// std/random / std/uuid (Entropy).
 	register(scope, pluma, data, "random-int", cb_random_int);
 	register(scope, pluma, data, "random-float", cb_random_float);
 	register(scope, pluma, data, "random-int-range", cb_random_int_range);
@@ -220,12 +220,12 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "uuid-v4", cb_uuid_v4);
 	register(scope, pluma, data, "uuid-v7", cb_uuid_v7);
 	register(scope, pluma, data, "uuid-parse", cb_uuid_parse);
-	// std.time clock surface (Clock capability) — wall/monotonic clock, sleep, parse.
+	// std/time clock surface (Clock capability) — wall/monotonic clock, sleep, parse.
 	register(scope, pluma, data, "time-now", cb_time_now);
 	register(scope, pluma, data, "time-monotonic", cb_time_monotonic);
 	register(scope, pluma, data, "time-sleep", cb_time_sleep);
 	register(scope, pluma, data, "time-parse", cb_time_parse);
-	// std.sys.net — socket ops (the multi-result ones return a `[status, n]` JS array).
+	// std/sys/net — socket ops (the multi-result ones return a `[status, n]` JS array).
 	register(scope, pluma, data, "net-listen", cb_net_listen);
 	register(scope, pluma, data, "net-connect", cb_net_connect);
 	register(scope, pluma, data, "net-close", cb_net_close);
@@ -240,17 +240,17 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-poll", cb_io_poll);
 	register(scope, pluma, data, "io-unwatch", cb_io_unwatch);
 	register(scope, pluma, data, "offload-sleep", cb_offload_sleep);
-	// std.sys.fs (host/src/offload.rs): one generic op-code dispatch — `fs-op` runs the op on a
+	// std/sys/fs (host/src/offload.rs): one generic op-code dispatch — `fs-op` runs the op on a
 	// pool worker (async, the default surface), `fs-op-sync` runs it inline (the `-sync`
 	// twin). Both shape `(dst, cap) -> bytes` like the other reads.
 	register(scope, pluma, data, "fs-op", cb_fs_op);
 	register(scope, pluma, data, "fs-op-sync", cb_fs_op_sync);
-	// std.sys.db (host/src/db.rs): one generic `db-op` (open/execute/close by op-code),
+	// std/sys/db (host/src/db.rs): one generic `db-op` (open/execute/close by op-code),
 	// offloaded to the pinned SQLite worker — async only, no `-sync` twin.
 	register(scope, pluma, data, "db-op", cb_db_op);
-	// std.web.fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
+	// std/web/fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
 	register(scope, pluma, data, "web-fetch", cb_web_fetch);
-	// std.event — SSR stubs (a server build constructs view handlers but never runs
+	// std/event — SSR stubs (a server build constructs view handlers but never runs
 	// them; these link the import and are never actually called).
 	register(
 		scope,

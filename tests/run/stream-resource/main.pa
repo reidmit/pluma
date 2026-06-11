@@ -1,4 +1,4 @@
-# std.stream's `from-resource` lifecycle: `open` lazily on the first pull, `close`
+# std/stream's `from-resource` lifecycle: `open` lazily on the first pull, `close`
 # exactly once on EVERY terminus — drained, bounded (the upstream is terminated by
 # `take`), faulted (a producer failure), and cancelled (a `with-timeout` deadline
 # fires mid-consumption). The cancelled close rides the awaited-`defer` shielded

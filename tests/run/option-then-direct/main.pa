@@ -1,5 +1,5 @@
 # Direct calls to `option.then` (the module's `then` function on the
-# auto-imported `std.option` native module). Chains over option values:
+# auto-imported `std/option` native module). Chains over option values:
 # `some v` invokes the continuation; `none` short-circuits.
 
 def double-if-positive = fun n {

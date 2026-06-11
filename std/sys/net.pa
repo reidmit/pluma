@@ -3,7 +3,7 @@
 #
 # This is the low-level layer the web server is built on. It deals only
 # in bytes -- it knows nothing about HTTP. Most programs reach for
-# `std.sys.http` instead and never touch this module directly.
+# `std/sys/http` instead and never touch this module directly.
 #
 # A `listener` is a socket bound to an address, waiting for clients. A
 # `connection` is one open conversation with a client. Both are opaque
@@ -13,7 +13,7 @@
 # Anything that touches the network can fail -- an address might already
 # be in use, a peer might hang up mid-message -- so these operations hand
 # back a `result`, with a message from the operating system on the `err`
-# side, exactly like `std.sys.io`.
+# side, exactly like `std/sys/io`.
 #
 # The three operations that wait on the network -- `accept`, `read`, and
 # `write` -- return a `task`, because they pause until the network is

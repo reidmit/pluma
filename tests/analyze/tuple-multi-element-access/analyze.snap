@@ -14,7 +14,7 @@ module `main` (tests/analyze/tuple-multi-element-access/main.pa) {
     },
     ast: Some(
         module(0:0-18:1) [
-            use(0:0-0:12) `std.list`,
+            use(0:0-0:12) `std/list`,
         ] [
             public def(8:0-10:1) :: nothing {
                 name: ident(8:11-8:15) `swap`,

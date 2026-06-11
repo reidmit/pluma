@@ -51,7 +51,7 @@ struct Case {
 // the two emits stay independent under parallel test threads).
 // --------------------------------------------------------------------------
 
-/// Compile a single-module Pluma source string to lowered IR. Stdlib (`std.*`)
+/// Compile a single-module Pluma source string to lowered IR. Stdlib (`std/*`)
 /// resolves from the baked-in registry, so an arbitrary root dir is fine.
 fn lower_src(name: &str, src: &str) -> ir::IrProgram {
 	let mut compiler = Compiler::for_root_dir(std::env::temp_dir());

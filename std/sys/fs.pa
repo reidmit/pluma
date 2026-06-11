@@ -358,7 +358,7 @@ public def is-dir-sync :: fun string -> bool = fun path {
 
 # Walks up from directory `start` looking for a file named `name`, returning the first
 # directory that contains it (`some dir`), or `none` if the filesystem root is reached
-# without finding it. The path manipulation comes from `std.path`.
+# without finding it. The path manipulation comes from `std/path`.
 public def find-up :: fun string string -> option string = fun start name {
 	if is-file-sync (path.join start name) {
 		some start

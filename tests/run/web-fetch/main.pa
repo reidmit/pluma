@@ -1,6 +1,6 @@
-# The browser HTTP transport (`std.web.fetch`). A web
+# The browser HTTP transport (`std/web/fetch`). A web
 # client can't open raw sockets, so its RPC stubs ride the host `fetch`
-# (`fetch.post`) instead of `std.sys.net`. This exercises that transport's
+# (`fetch.post`) instead of `std/sys/net`. This exercises that transport's
 # plumbing end-to-end under V8: marshal a request, hand it to the `web-fetch`
 # host call, and shape the reply.
 #

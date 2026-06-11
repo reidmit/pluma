@@ -3,7 +3,7 @@
 # Every helper here is pure -- none of them touch the filesystem, so they work anywhere,
 # on any target. They use forward-slash `/` separators (Pluma's deploy targets are Unix).
 # The filesystem walks that go with paths -- `fs.find-up` and `fs.project-root` (the
-# nearest `pluma.pa`) -- live in `std.sys.fs`, since they read the disk.
+# nearest `pluma.pa`) -- live in `std/sys/fs`, since they read the disk.
 use std/list
 use std/string
 

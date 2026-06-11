@@ -55,7 +55,7 @@ impl Module {
 		// `scan_helpers` below).
 		let mut requested: HelperSet = HelperSet::new();
 
-		// Whether the program reaches a `std.sys.net` builtin. The seven socket ops plus
+		// Whether the program reaches a `std/sys/net` builtin. The seven socket ops plus
 		// the reactor's `net-poll`/`net-unwatch` are registered together once, after the
 		// scan (see below) — the suspending `accept`/`read`/`write` are `$task`
 		// constructors driven by the scheduler, and `poll`/`unwatch` are reached only
@@ -72,13 +72,13 @@ impl Module {
 		// on actual use.
 		let mut uses_local_get = false;
 		let mut uses_local_kernel = false;
-		// Whether the program reaches a browser RPC stream builtin (`std.web.stream`).
+		// Whether the program reaches a browser RPC stream builtin (`std/web/stream`).
 		// The three `rpc-stream-*` builtins + their host channel are registered together
 		// once, after the scan (like net): `rpc-stream-next` is a `$task` kind driven by
 		// the scheduler, `open`/`close` are shaped at their emit sites, and the exports
 		// (`__rpc_stream_alloc`/`_event`) are host-called, so none is an ordinary call.
 		let mut uses_rpc_stream = false;
-		// Whether the program reaches the unary browser fetch (`std.web.fetch`). It rides
+		// Whether the program reaches the unary browser fetch (`std/web/fetch`). It rides
 		// the same host-fed channel as the stream path (`post` pulls its one reply with
 		// `rpc-stream-next`), so it only adds the `WebFetchOpen` helper + its import on top
 		// of the shared rpc-stream machinery.
@@ -134,7 +134,7 @@ impl Module {
 		if requested.contains(&Helper::ToString) {
 			imports.register("float_to_str");
 		}
-		// `std.sys.net`: register the seven socket ops together when any net builtin is
+		// `std/sys/net`: register the seven socket ops together when any net builtin is
 		// reachable (the sync ops shaped at the call site, the suspending ops driven by the
 		// scheduler). The host defines them all unconditionally, so importing the full set
 		// even when only some are used is harmless; it keeps the indices a contiguous block.
@@ -164,7 +164,7 @@ impl Module {
 			db: imports.register("db-op"),
 		});
 		// Both net and offload shape their results through `__io_result` (the same `ok`/`err`
-		// + `io-last-error` channel as `std.sys.io`) and marshal byte payloads through scratch
+		// + `io-last-error` channel as `std/sys/io`) and marshal byte payloads through scratch
 		// — pull those helpers + the error import in when either is reachable.
 		if uses_net || uses_offload {
 			requested.insert(Helper::IoResult);
@@ -187,7 +187,7 @@ impl Module {
 			requested.insert(Helper::BrowserResume);
 			imports.register("dom-set-timeout");
 		}
-		// `std.web.stream`: a browser RPC subscription. The exported channel pump
+		// `std/web/stream`: a browser RPC subscription. The exported channel pump
 		// (`__rpc_stream_alloc`/`_event`), the scratch-marshalling helpers the
 		// open/event paths use, the list ops the channel registry/queue use, and the
 		// two host imports (`fetch` start + abort). `RpcStreamEvent` pulls the wake
@@ -206,7 +206,7 @@ impl Module {
 			imports.register("rpc-stream-open");
 			imports.register("rpc-stream-close");
 		}
-		// `std.web.fetch` unary transport in a browser build: the single-shot case of the
+		// `std/web/fetch` unary transport in a browser build: the single-shot case of the
 		// channel above. The `WebFetch` helper mints a channel + starts the async `fetch`
 		// (the `web-fetch-open` import) and returns a `WEB_FETCH` task; the pump pulls the
 		// one reply. Request the shared channel machinery so it stands alone even if the
@@ -519,7 +519,7 @@ impl Module {
 		}
 		// `__rpc_stream_alloc(token, n) -> ptr` / `__rpc_stream_event(token, kind, ptr,
 		// len)`: the browser loader reserves scratch + pushes parsed SSE events into a
-		// subscription's channel (`std.web.stream`).
+		// subscription's channel (`std/web/stream`).
 		if let Some(w) = runtime.idx(Helper::RpcStreamAlloc) {
 			exports.export("__rpc_stream_alloc", ExportKind::Func, w);
 		}

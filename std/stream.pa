@@ -1,4 +1,4 @@
-# std.stream — pull-based asynchronous streams.
+# std/stream — pull-based asynchronous streams.
 #
 # A `stream a` is a sequence of `a`s produced over time and consumed one at a
 # time. It is *pull-based*: the consumer asks for the next element, the producer
@@ -13,7 +13,7 @@
 # end with a consumer (`for-each` / `fold` / `drain`). The consumers release the
 # stream's resource for you, on every way it can end:
 #
-#     use std.stream
+#     use std/stream
 #
 #     # the first 10 lines of a file, upper-cased, printed
 #     try _ = stream.for-each

@@ -1,6 +1,6 @@
-# Embedded SQLite end to end (std.sql + std.sys.db). Every query is offloaded to the
+# Embedded SQLite end to end (std/sql + std/sys/db). Every query is offloaded to the
 # pinned database worker thread (host/src/db.rs) and awaited with `try`, like the other
-# std.sys async ops. Uses an in-memory database so the fixture is hermetic.
+# std/sys async ops. Uses an in-memory database so the fixture is hermetic.
 #
 # Exercises: open, a DDL + parameterized inserts (covering all five storage classes,
 # including NULL and a binary blob), a `|`-built typed query through `db.fetch` + a decoder,

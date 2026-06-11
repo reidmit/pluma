@@ -1,4 +1,4 @@
-# std.sys.terminal — ANSI styling for terminal output.
+# std/sys/terminal — ANSI styling for terminal output.
 #
 # Pure string-wrapping: each helper wraps a string in SGR escape codes with a
 # single reset, so colored output composes without the early-reset bug you get
@@ -6,7 +6,7 @@
 # capability — the caller decides whether to apply styling (e.g. only when the
 # output is a TTY) and prints the result itself.
 #
-#     use std.sys.terminal
+#     use std/sys/terminal
 #     print (terminal.bold-green "passed")
 #     print (terminal.styled [1, 31] "bold red")
 

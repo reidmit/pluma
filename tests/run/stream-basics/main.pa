@@ -1,4 +1,4 @@
-# std.stream's resourceless surface: a `from-seed` producer reshaped by the lazy
+# std/stream's resourceless surface: a `from-seed` producer reshaped by the lazy
 # transformers (`map` / `filter` / `take` / `take-while`) and driven by the
 # consumers (`for-each` / `fold` / `drain`) plus the low-level `next`.
 use std/stream

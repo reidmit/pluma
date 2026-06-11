@@ -278,11 +278,11 @@ enum FuncKind {
 	/// `$bytes` into scratch at offset 0, returning its length (the single-payload
 	/// convenience the writer emit sites + the `print`-as-value wrapper share).
 	MarshalSend,
-	/// A `std.sys.io` host import with two i32 args → one i32 result: `(i32, i32) -> i32`.
+	/// A `std/sys/io` host import with two i32 args → one i32 result: `(i32, i32) -> i32`.
 	/// Covers the stdin reads + `io-last-error` (`(dst, cap) -> len`), `delete`/`mkdir`
 	/// (`(path, plen) -> status`), and `exists`/`is-dir` (`(path, plen) -> bool`).
 	Io2,
-	/// A `std.sys.io` host import with four i32 args → one i32 result: `(i32,i32,i32,i32)
+	/// A `std/sys/io` host import with four i32 args → one i32 result: `(i32,i32,i32,i32)
 	/// -> i32`. Covers the path reads (`(path, plen, dst, cap) -> len`) and the file
 	/// writers (`(path, plen, data, dlen) -> status`).
 	Io4,
@@ -317,7 +317,7 @@ enum FuncKind {
 	WireReadByte,
 	/// The decode varint source: `() -> i64` (reads a LEB128 varint / sets `g_err`).
 	WireReadVarint,
-	/// A `std.sys.net` op returning `(i32 status, i32 n)` from two i32 args:
+	/// A `std/sys/net` op returning `(i32 status, i32 n)` from two i32 args:
 	/// `(i32, i32) -> (i32, i32)`. `net-listen`/`net-connect` (`(addr_ptr, alen) ->
 	/// (status, socket-id)`) and `net-accept` (`(fid, listener-id) -> (status, conn-id)`).
 	NetListen,
@@ -338,17 +338,17 @@ enum FuncKind {
 	/// A `BlockingPool` offload op with an i64 arg: `(i32 fid, i64 arg) -> (i32 status, i32
 	/// n)` — `offload-sleep` (arg = nanos). Submit-or-collect like the net read/write ops.
 	OffloadSleep,
-	/// The async `std.sys.fs` op `fs-op`: `(i32 fid, i32 op, i32 path_ptr, i32 path_len, i32
+	/// The async `std/sys/fs` op `fs-op`: `(i32 fid, i32 op, i32 path_ptr, i32 path_len, i32
 	/// data_ptr, i32 data_len, i32 dst, i32 cap) -> (i32 status, i32 len)`.
 	OffloadOp,
-	/// The async `std.sys.db` op `db-op`: `(i32 fid, i32 op, i32 conn, i32 sql_ptr, i32
+	/// The async `std/sys/db` op `db-op`: `(i32 fid, i32 op, i32 conn, i32 sql_ptr, i32
 	/// sql_len, i32 params_ptr, i32 params_len, i32 dst, i32 cap) -> (i32 status, i32 len)`.
 	/// Like `OffloadOp` plus the connection id (an i31-friendly i32 — conn ids are small).
 	DbOp,
-	/// The sync `std.sys.fs` op `fs-op-sync`: `(i32 op, i32 path_ptr, i32 path_len, i32
+	/// The sync `std/sys/fs` op `fs-op-sync`: `(i32 op, i32 path_ptr, i32 path_len, i32
 	/// data_ptr, i32 data_len, i32 dst, i32 cap) -> i32 len`.
 	FsOpSync,
-	/// A `std.web.dom` node-producing import: `(i32 ptr, i32 len) -> externref`
+	/// A `std/web/dom` node-producing import: `(i32 ptr, i32 len) -> externref`
 	/// (`dom-create-element`/`dom-create-text` — a tag/text string in scratch →
 	/// a fresh DOM node). The host returns the engine-managed `externref`; wasm
 	/// boxes it into a `$extern` (`emit_dom`).
@@ -403,7 +403,7 @@ enum FuncKind {
 	Thunk,
 	/// `rpc-stream-open(i32 ptr, i32 len, i32 token) -> ()` — ask the host to start the
 	/// `fetch` for a browser RPC subscription, given the marshalled request string and
-	/// the channel token (`std.web.stream`).
+	/// the channel token (`std/web/stream`).
 	RpcStreamOpen,
 }
 
@@ -558,12 +558,12 @@ impl FuncTypes {
 		self.intern(FuncKind::MarshalSend)
 	}
 
-	/// A two-arg `std.sys.io` host import: `(i32, i32) -> i32`.
+	/// A two-arg `std/sys/io` host import: `(i32, i32) -> i32`.
 	pub fn for_io2(&mut self) -> u32 {
 		self.intern(FuncKind::Io2)
 	}
 
-	/// A four-arg `std.sys.io` host import: `(i32, i32, i32, i32) -> i32`.
+	/// A four-arg `std/sys/io` host import: `(i32, i32, i32, i32) -> i32`.
 	pub fn for_io4(&mut self) -> u32 {
 		self.intern(FuncKind::Io4)
 	}
@@ -680,7 +680,7 @@ impl FuncTypes {
 		self.intern(FuncKind::WireReadVarint)
 	}
 
-	/// `std.web.dom` node-producing import type: `(i32, i32) -> externref`.
+	/// `std/web/dom` node-producing import type: `(i32, i32) -> externref`.
 	pub fn for_dom_make(&mut self) -> u32 {
 		self.intern(FuncKind::DomMake)
 	}
@@ -1106,7 +1106,7 @@ impl FuncTypes {
 					types.ty().function([value_ref()], [ValType::I32]);
 					continue;
 				}
-				// std.sys.net host imports. Each fallible op returns a
+				// std/sys/net host imports. Each fallible op returns a
 				// `(status:i32, n:i32)` pair — `n` is a socket id / byte count / read
 				// length; byte payloads (addr, data, the read result) cross via scratch.
 				FuncKind::NetListen => {
@@ -1195,7 +1195,7 @@ impl FuncTypes {
 					types.ty().function([], [ValType::I64]);
 					continue;
 				}
-				// std.web.dom host imports (the Web target) — node handles cross as
+				// std/web/dom host imports (the Web target) — node handles cross as
 				// `externref`, strings as scratch `(ptr, len)`. The one externref-
 				// returning shape is `DomMake`/`DomBody`.
 				FuncKind::DomMake => {

@@ -1,16 +1,16 @@
-# std.event -- a DOM event delivered to a view handler.
+# std/event -- a DOM event delivered to a view handler.
 #
-# This is a *shared* (`std.*`) module, not `std.web.*`, on purpose: `std.view`
-# names the `event` type in every handler's signature, and `std.view` must build
+# This is a *shared* (`std/*`) module, not `std/web/*`, on purpose: `std/view`
+# names the `event` type in every handler's signature, and `std/view` must build
 # on the server profile too (server-side rendering calls `view.to-string`). So the
 # event *type* and its accessors live here, tier-neutral, while the underlying
 # host builtins are browser-only -- they are only ever *called* inside a handler,
 # which the server's `to-string` drops, so a server build never reaches them.
 #
 # An `event` is opaque, like a `dom.node`: the browser owns it, you hold the
-# handle and read details with the accessors below. `std.web.dom` re-exports this
-# same type for `add-listener`, so a handler built by `std.view` and a listener
-# wired by `std.web.render` agree on one event type.
+# handle and read details with the accessors below. `std/web/dom` re-exports this
+# same type for `add-listener`, so a handler built by `std/view` and a listener
+# wired by `std/web/render` agree on one event type.
 
 # An event delivered to a handler -- a click, an input change, a form submit.
 # Opaque; read details with the accessors below. (The runtime carrier is an

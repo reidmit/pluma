@@ -1,6 +1,6 @@
 # The pure value layer of styling. These pin the
 # serialization -- color/length rendering, the `.0`-stripping number format, inline
-# declaration joining -- plus the `std.view` integration helpers (`style-of`,
+# declaration joining -- plus the `std/view` integration helpers (`style-of`,
 # `classes`) via `view.to-string`. All pure, so they run headless under V8.
 
 use std/assert

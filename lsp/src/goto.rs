@@ -47,7 +47,7 @@ pub enum ModuleLocation {
 	/// A user module: a real file on disk.
 	Disk(PathBuf),
 	/// A baked-in stdlib module (source inlined in the compiler binary),
-	/// named e.g. `std.list`. Materialized to a cache file on demand.
+	/// named e.g. `std/list`. Materialized to a cache file on demand.
 	Stdlib(String),
 }
 
@@ -961,7 +961,7 @@ mod tests {
 
 	#[test]
 	fn stdlib_value_resolves_to_baked_module() {
-		// `list.reverse` resolves into the baked `std.list` source — no file
+		// `list.reverse` resolves into the baked `std/list` source — no file
 		// on disk, no materialization (resolve is pure).
 		let main = "use std/list\n\ndef x = list.reverse [1]\n";
 		// `reverse` in `list.reverse` is at line 2, col 13.
@@ -971,7 +971,7 @@ mod tests {
 				module,
 				range,
 			}) => {
-				assert_eq!(name, "std.list");
+				assert_eq!(name, "std/list");
 				// `def reverse` is on line 37 of list.pa (0-indexed 36)... assert
 				// it lands on a def whose name is `reverse`.
 				let def = module
