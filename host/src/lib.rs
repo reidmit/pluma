@@ -40,6 +40,10 @@ mod offload;
 // path and the synchronous `-sync` path so the two can't drift.
 mod fsop;
 
+// Engine-independent `std/sys/process` subprocess ops. Rides the same op-code dispatch as
+// `fsop` (the offload callbacks route op-codes >= `procop::op::RUN` here).
+mod procop;
+
 // Engine-independent `std/sys/db` (embedded SQLite): the pinned worker owning the
 // `rusqlite::Connection`s + the value/row wire codec, an offload client of `offload.rs`.
 mod db;

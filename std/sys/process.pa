@@ -1,5 +1,10 @@
-# The running program itself: its command-line arguments, environment,
-# and the ways it can stop.
+# The running program itself -- its command-line arguments, environment, and the ways it
+# can stop -- plus running *other* programs as child processes.
+
+use std/bytes
+use std/list
+use std/string
+use std/task
 
 # The command-line arguments your program was run with, in order. The
 # `pluma` command and the script path are left out -- running
@@ -35,3 +40,268 @@ public def exit :: fun int -> a = built-in "io-exit"
 #
 #     process.fail "config.toml is missing"
 public def fail :: fun string -> a = built-in "io-fail"
+
+# --- running other programs ---------------------------------------------------------
+#
+# Subprocess ops ride the same generic blocking-pool channel as `std/sys/fs` (the
+# `fs-op`/`fs-op-sync` builtins): the worker runs the blocking `std::process::Command`
+# off the scheduler thread. Op-codes >= 100 route to the subprocess dispatch host-side;
+# keep them in step with `host/src/procop.rs`. The command crosses in the string slot, the
+# rest of the request (cwd / stdin / args / env) as a length-prefixed `bytes` blob.
+
+def op-run = 100
+
+def op-exec = 101
+
+def op-shell = 102
+
+def op-which = 103
+
+def op-env-all = 104
+
+def op-pid = 105
+
+def proc-op :: fun int string bytes -> task (result bytes string) = built-in "fs-op"
+
+def proc-op-sync :: fun int string bytes -> result bytes string = built-in "fs-op-sync"
+
+# A finished child process: the exit `status` (0 means success; nonzero is the program's
+# own failure code, *not* a failure to run it), and whatever it wrote to its two streams.
+public alias output {status :: int, stdout :: string, stderr :: string}
+
+# A single `NAME=value` environment entry, layered onto the inherited environment.
+public alias env-var {key :: string, value :: string}
+
+# A fully-specified command for `run-with`/`exec-with`: the program, its arguments, an
+# optional working directory (`none` inherits the current one), extra environment entries
+# (layered onto the inherited environment), and text piped to the child's standard input.
+#
+#     process.run-with {cmd: "cargo", args: ["build"], cwd: some "/repo", env: [], stdin: ""}
+public alias command {
+	cmd :: string,
+	args :: list string,
+	cwd :: option string,
+	env :: list env-var,
+	stdin :: string,
+}
+
+# True when the process exited successfully (status 0).
+public def succeeded :: fun output -> bool = fun o {
+	o.status == 0
+}
+
+# --- request encoding (mirrors host/src/procop.rs::parse_req) ------------------------
+
+def no-data = string.to-bytes ""
+
+# A big-endian unsigned 32-bit length, as 4 bytes.
+def u32 :: fun int -> bytes = fun n {
+	bytes.from-list [n / 16777216 % 256, n / 65536 % 256, n / 256 % 256, n % 256] ?? no-data
+}
+
+# A length-prefixed field: its byte length as a `u32`, then the bytes themselves.
+def field :: fun bytes -> bytes = fun b {
+	bytes.concat (u32 (bytes.length b)) b
+}
+
+def str-field :: fun string -> bytes = fun s {
+	field (string.to-bytes s)
+}
+
+# A length-prefixed list: a `u32` count, then each element as its own length-prefixed field.
+def list-field :: fun (list string) -> bytes = fun xs {
+	bytes.concat (u32 (list.length xs)) (bytes.join (list.map xs str-field) no-data)
+}
+
+def env-field :: fun (list env-var) -> bytes = fun es {
+	bytes.concat (u32 (list.length es)) (bytes.join (list.map es fun e {
+		bytes.concat (str-field e.key) (str-field e.value)
+	}) no-data)
+}
+
+def encode-req :: fun command -> bytes = fun c {
+	let cwd-bytes = when c.cwd is some d {
+		string.to-bytes d
+	} is none {
+		no-data
+	}
+	let head = bytes.concat (field cwd-bytes) (str-field c.stdin)
+	let tail = bytes.concat (list-field c.args) (env-field c.env)
+	bytes.concat head tail
+}
+
+# --- response decoding (mirrors host/src/procop.rs::encode_output) -------------------
+
+def read-u32 :: fun bytes int -> int = fun b off {
+	let b0 = bytes.get b off * 16777216
+	let b1 = bytes.get b (off + 1) * 65536
+	let b2 = bytes.get b (off + 2) * 256
+	b0 + b1 + b2 + bytes.get b (off + 3)
+}
+
+# The exit status is a signed 32-bit int (`-1` when the child was killed by a signal).
+def read-status :: fun bytes -> int = fun b {
+	let v = read-u32 b 0
+	if v >= 2147483648 {
+		v - 4294967296
+	} else {
+		v
+	}
+}
+
+def decode-output :: fun (result bytes string) -> result output string = fun r {
+	when r is ok raw {
+		let out-len = read-u32 raw 4
+		let err-off = 8 + out-len
+		let err-len = read-u32 raw err-off
+		ok {
+			status: read-status raw,
+			stdout: bytes.to-string (bytes.slice raw 8 err-off) ?? "",
+			stderr: bytes.to-string (bytes.slice raw (err-off + 4) (err-off + 4 + err-len)) ?? "",
+		}
+	} is err e {
+		err e
+	}
+}
+
+def decode-status :: fun (result bytes string) -> result int string = fun r {
+	when r is ok raw {
+		ok (read-status raw)
+	} is err e {
+		err e
+	}
+}
+
+def await-output :: fun (task (result bytes string)) -> task output string = fun t {
+	task.unwrap (task.map t decode-output)
+}
+
+# Walk the `env-all` blob -- a `u32` count, then that many length-prefixed key/value field
+# pairs -- accumulating `env-var`s. `acc` is built in reverse and flipped at the end.
+def decode-env-loop :: fun bytes int int (list env-var) -> list env-var = fun raw off n acc {
+	if n == 0 {
+		list.reverse acc
+	} else {
+		let klen = read-u32 raw off
+		let key = bytes.to-string (bytes.slice raw (off + 4) (off + 4 + klen)) ?? ""
+		let voff = off + 4 + klen
+		let vlen = read-u32 raw voff
+		let value = bytes.to-string (bytes.slice raw (voff + 4) (voff + 4 + vlen)) ?? ""
+		decode-env-loop raw (voff + 4 + vlen) (n - 1) [{key, value}, ...acc]
+	}
+}
+
+def decode-env :: fun bytes -> list env-var = fun raw {
+	decode-env-loop raw 4 (read-u32 raw 0) []
+}
+
+# --- the surface --------------------------------------------------------------------
+
+# Run `cmd` with `args`, wait for it to finish, and capture what it wrote. The task fails
+# only if the program couldn't be started (not found, not executable); a program that runs
+# and exits nonzero succeeds here with that code in `output.status`.
+#
+#     let r = try process.run "git" ["rev-parse", "HEAD"]
+#     if process.succeeded r { print (string.trim r.stdout) } else { print r.stderr }
+public def run :: fun string (list string) -> task output string = fun cmd args {
+	await-output (proc-op op-run cmd (encode-req {cmd, args, cwd: none, env: [], stdin: ""}))
+}
+
+public def run-sync :: fun string (list string) -> result output string = fun cmd args {
+	decode-output (proc-op-sync op-run cmd (encode-req {cmd, args, cwd: none, env: [], stdin: ""}))
+}
+
+# Like `run`, but takes a full `command` -- use it when you need a working directory, extra
+# environment, or piped stdin.
+public def run-with :: fun command -> task output string = fun c {
+	await-output (proc-op op-run c.cmd (encode-req c))
+}
+
+public def run-with-sync :: fun command -> result output string = fun c {
+	decode-output (proc-op-sync op-run c.cmd (encode-req c))
+}
+
+# Run `cmd` with the child's standard input/output/error wired straight to this program's
+# terminal -- for interactive tools (`$EDITOR`, `less`, `vim`). Nothing is captured; the
+# task yields the exit status.
+public def exec :: fun string (list string) -> task int string = fun cmd args {
+	task.unwrap (task.map (proc-op op-exec cmd (encode-req {
+		cmd,
+		args,
+		cwd: none,
+		env: [],
+		stdin: "",
+	})) decode-status)
+}
+
+public def exec-sync :: fun string (list string) -> result int string = fun cmd args {
+	decode-status (proc-op-sync op-exec cmd (encode-req {cmd, args, cwd: none, env: [], stdin: ""}))
+}
+
+public def exec-with :: fun command -> task int string = fun c {
+	task.unwrap (task.map (proc-op op-exec c.cmd (encode-req c)) decode-status)
+}
+
+# Run a shell command line through `/bin/sh -c`, capturing output. Handy for pipes and
+# globbing (`process.shell "ls *.pa | wc -l"`), but the string is interpreted by the shell
+# -- never interpolate untrusted input into it. Prefer `run` with explicit args when you can.
+public def shell :: fun string -> task output string = fun cmd {
+	await-output (proc-op op-shell cmd (encode-req {cmd, args: [], cwd: none, env: [], stdin: ""}))
+}
+
+public def shell-sync :: fun string -> result output string = fun cmd {
+	decode-output (proc-op-sync op-shell cmd (encode-req {
+		cmd,
+		args: [],
+		cwd: none,
+		env: [],
+		stdin: "",
+	}))
+}
+
+# Run `cmd`, returning its stdout on success and failing the task with its stderr (or a
+# status line) on a nonzero exit -- the "give me the output or fail loudly" shortcut over
+# `run` for when you don't care to inspect the exit code yourself.
+#
+#     let head = try process.check "git" ["rev-parse", "HEAD"]
+public def check :: fun string (list string) -> task string string = fun cmd args {
+	try out = run cmd args
+	if out.status == 0 {
+		task.return out.stdout
+	} else if string.length out.stderr > 0 {
+		task.fail out.stderr
+	} else {
+		task.fail "$(cmd) exited with status $(to-string out.status)"
+	}
+}
+
+# Locate an executable named `name` on `PATH`, like the `which` command. `some path` to the
+# first match, `none` if it isn't found.
+#
+#     when process.which "rg" is some _ { ... use ripgrep ... } is none { ... fall back ... }
+public def which :: fun string -> option string = fun name {
+	when proc-op-sync op-which name no-data is ok raw {
+		some (bytes.to-string raw ?? "")
+	} is err _ {
+		none
+	}
+}
+
+# Every environment variable the program inherited, as `NAME`/value pairs (in no particular
+# order). For a single lookup, prefer `process.env`.
+public def env-all :: fun nothing -> list env-var = fun {
+	when proc-op-sync op-env-all "" no-data is ok raw {
+		decode-env raw
+	} is err _ {
+		[]
+	}
+}
+
+# This program's own process id.
+public def pid :: fun nothing -> int = fun {
+	when proc-op-sync op-pid "" no-data is ok raw {
+		string.to-int (bytes.to-string raw ?? "0") ?? 0
+	} is err _ {
+		0
+	}
+}

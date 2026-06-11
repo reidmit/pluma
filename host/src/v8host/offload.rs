@@ -148,10 +148,10 @@ pub(super) fn cb_fs_op(
 		None => {
 			let path = read_str(scope, mem, pp, pl);
 			let data = read_mem(scope, mem, dp.max(0) as usize, dl.max(0) as usize);
-			ctx.state.reactor.submit(
-				fid,
-				Box::new(move || crate::fsop::dispatch(op, &path, &data)),
-			);
+			ctx
+				.state
+				.reactor
+				.submit(fid, Box::new(move || sys_dispatch(op, &path, &data)));
 			set_pair(scope, &mut rv, 1, 0);
 		}
 	}
@@ -173,13 +173,17 @@ pub(super) fn cb_fs_op_sync(
 	let (ctx, mem) = ctx_and_mem(scope, &args);
 	let path = read_str(scope, mem, pp, pl);
 	let data = read_mem(scope, mem, dp.max(0) as usize, dl.max(0) as usize);
-	let (s, n) = deliver_fs(
-		scope,
-		mem,
-		ctx,
-		dst,
-		cap,
-		crate::fsop::dispatch(op, &path, &data),
-	);
+	let (s, n) = deliver_fs(scope, mem, ctx, dst, cap, sys_dispatch(op, &path, &data));
 	rv.set_int32(if s == 0 { n } else { -1 });
+}
+
+/// Pick the blocking-op dispatch for `op`: the `std/sys/process` subprocess ops
+/// (`procop`) for op-codes >= `procop::op::RUN`, otherwise the `std/sys/fs` ops (`fsop`).
+/// Both share the `(op, path, data) -> OpResult` shape, so one channel serves both surfaces.
+fn sys_dispatch(op: i32, path: &str, data: &[u8]) -> OpResult {
+	if crate::procop::is_proc_op(op) {
+		crate::procop::dispatch(op, path, data)
+	} else {
+		crate::fsop::dispatch(op, path, data)
+	}
 }

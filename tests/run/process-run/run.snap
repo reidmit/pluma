@@ -1,0 +1,19 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+run: status=0 out=hello world ok=true
+nonzero: status=3 stderr=boom ok=false
+stdin: piped
+check: checked
+shell: one
+two
+exec: status=7
+which: sh found
+which: bogus missing
+pid: positive=true
+env-all: non-empty=true all-named=true
+== stderr ==
