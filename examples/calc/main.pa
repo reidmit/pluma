@@ -37,8 +37,8 @@ public def main = fun {
 # they can be used (or even shadowed) like any other name.
 public def seed-env = fun {
 	let m = dict.empty ()
-	let m = dict.insert m "pi" (float-val math.pi)
-	let m = dict.insert m "e" (float-val math.e)
+	let m = dict.insert m "pi" (value.num.float-val math.pi)
+	let m = dict.insert m "e" (value.num.float-val math.e)
 	m
 }
 
@@ -115,9 +115,9 @@ public def run-line = fun env line {
 	when parser.parse line is err m {
 		io.print "error: $(m)"
 	} is ok st {
-		when st is assign name e {
+		when st is parser.stmt.assign name e {
 			run-assign env name e
-		} is bare e {
+		} is parser.stmt.bare e {
 			run-bare env e
 		}
 	}

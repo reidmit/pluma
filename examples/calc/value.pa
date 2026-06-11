@@ -21,9 +21,9 @@ public enum num {
 
 # Coerce to float — used on the promote-both-to-float path.
 public def as-float = fun n {
-	when n is int-val i {
+	when n is num.int-val i {
 		math.to-float i
-	} is float-val f {
+	} is num.float-val f {
 		f
 	}
 }
@@ -31,18 +31,18 @@ public def as-float = fun n {
 # The multiplicative identity matching `n`'s underlying type, so that
 # `int ^ k` stays an int while `float ^ k` stays a float.
 public def one-like = fun n {
-	when n is int-val _i {
-		int-val 1
-	} is float-val _f {
-		float-val 1.0
+	when n is num.int-val _i {
+		num.int-val 1
+	} is num.float-val _f {
+		num.float-val 1.0
 	}
 }
 
 # True when both operands are zero — for guarding division.
 public def is-zero = fun n {
-	when n is int-val i {
+	when n is num.int-val i {
 		i == 0
-	} is float-val f {
+	} is num.float-val f {
 		f == 0.0
 	}
 }
@@ -51,36 +51,36 @@ public def is-zero = fun n {
 # and stay an int; if either side is a float, both are promoted and
 # the result goes through `float-op`.
 public def lift = fun a b int-op float-op {
-	when a is int-val x {
-		when b is int-val y {
+	when a is num.int-val x {
+		when b is num.int-val y {
 			int-op x y
-		} is float-val y {
+		} is num.float-val y {
 			float-op (math.to-float x) y
 		}
-	} is float-val x {
-		when b is int-val y {
+	} is num.float-val x {
+		when b is num.int-val y {
 			float-op x (math.to-float y)
-		} is float-val y {
+		} is num.float-val y {
 			float-op x y
 		}
 	}
 }
 
 public def num-add = fun a b {
-	lift a b fun x y { int-val (x + y) } fun x y {
-		float-val (x + y)
+	lift a b fun x y { num.int-val (x + y) } fun x y {
+		num.float-val (x + y)
 	}
 }
 
 public def num-sub = fun a b {
-	lift a b fun x y { int-val (x - y) } fun x y {
-		float-val (x - y)
+	lift a b fun x y { num.int-val (x - y) } fun x y {
+		num.float-val (x - y)
 	}
 }
 
 public def num-mul = fun a b {
-	lift a b fun x y { int-val (x * y) } fun x y {
-		float-val (x * y)
+	lift a b fun x y { num.int-val (x * y) } fun x y {
+		num.float-val (x * y)
 	}
 }
 
@@ -90,17 +90,17 @@ public def num-mul = fun a b {
 # four promotion cases out instead. (`%` is still overloaded over a
 # *concrete* int or float, which is all we need here.)
 public def num-mod = fun a b {
-	when a is int-val x {
-		when b is int-val y {
-			int-val (x % y)
-		} is float-val y {
-			float-val (math.to-float x % y)
+	when a is num.int-val x {
+		when b is num.int-val y {
+			num.int-val (x % y)
+		} is num.float-val y {
+			num.float-val (math.to-float x % y)
 		}
-	} is float-val x {
-		when b is int-val y {
-			float-val (x % math.to-float y)
-		} is float-val y {
-			float-val (x % y)
+	} is num.float-val x {
+		when b is num.int-val y {
+			num.float-val (x % math.to-float y)
+		} is num.float-val y {
+			num.float-val (x % y)
 		}
 	}
 }
@@ -109,14 +109,14 @@ public def num-mod = fun a b {
 # integer-flooring `/` would surprise at a calculator prompt, so we
 # promote to float unconditionally.
 public def num-div = fun a b {
-	float-val (as-float a / as-float b)
+	num.float-val (as-float a / as-float b)
 }
 
 public def num-neg = fun a {
-	when a is int-val x {
-		int-val (negate x)
-	} is float-val x {
-		float-val (negate x)
+	when a is num.int-val x {
+		num.int-val (negate x)
+	} is num.float-val x {
+		num.float-val (negate x)
 	}
 }
 
@@ -125,14 +125,14 @@ public def num-neg = fun a {
 # preserves the base's type (so `2 ^ 10` is the int `1024`); a
 # negative exponent or a float exponent forces a float result.
 public def num-pow = fun base exp {
-	when exp is int-val e {
+	when exp is num.int-val e {
 		if e < 0 {
-			num-div (int-val 1) (ipow base (negate e))
+			num-div (num.int-val 1) (ipow base (negate e))
 		} else {
 			ipow base e
 		}
-	} is float-val ef {
-		float-val (math.exp (ef * math.log (as-float base)))
+	} is num.float-val ef {
+		num.float-val (math.exp (ef * math.log (as-float base)))
 	}
 }
 
@@ -148,9 +148,9 @@ public def ipow = fun base e {
 # Render a result for display. `to-string` is the prelude's, which
 # prints floats with a trailing `.0` so the type stays visible.
 public def num-to-string = fun n {
-	when n is int-val i {
+	when n is num.int-val i {
 		to-string i
-	} is float-val f {
+	} is num.float-val f {
 		to-string f
 	}
 }

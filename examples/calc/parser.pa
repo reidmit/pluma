@@ -59,9 +59,9 @@ public def parse = fun src {
 # An assignment is exactly a name, then `=`, then an expression. Any
 # other shape is a bare expression — including `pi` or `x` on its own.
 public def parse-stmt = fun toks {
-	when toks is [t-name name, t-op eqtok, ...rest] {
+	when toks is [lexer.token.t-name name, lexer.token.t-op eqtok, ...rest] {
 		if eqtok == "=" {
-			finish fun e { assign name e } (parse-expr rest)
+			finish fun e { stmt.assign name e } (parse-expr rest)
 		} else {
 			finish-bare toks
 		}
@@ -71,19 +71,19 @@ public def parse-stmt = fun toks {
 }
 
 public def finish-bare = fun toks {
-	finish fun e { bare e } (parse-expr toks)
+	finish fun e { stmt.bare e } (parse-expr toks)
 }
 
 # Wrap a parsed expression in `build`, but only if it consumed every
 # token — trailing input (`1 2`, `x = 3 +`) is an error.
 public def finish = fun build result {
-	when result is ok-at e remaining {
+	when result is parsed.ok-at e remaining {
 		when remaining is [] {
 			ok (build e)
 		} else {
 			err "unexpected trailing input"
 		}
-	} is perr m {
+	} is parsed.perr m {
 		err m
 	}
 }
@@ -94,82 +94,82 @@ public def finish = fun build result {
 # ---------------------------------------------------------------------
 
 public def parse-expr = fun toks {
-	when parse-term toks is ok-at left rest {
+	when parse-term toks is parsed.ok-at left rest {
 		expr-rest left rest
-	} is perr m {
-		perr m
+	} is parsed.perr m {
+		parsed.perr m
 	}
 }
 
 public def expr-rest = fun left toks {
-	when toks is [t-op op, ...rest] {
+	when toks is [lexer.token.t-op op, ...rest] {
 		if op == "+" || op == "-" {
-			when parse-term rest is ok-at right rest2 {
-				expr-rest (bin op left right) rest2
-			} is perr m {
-				perr m
+			when parse-term rest is parsed.ok-at right rest2 {
+				expr-rest (expr.bin op left right) rest2
+			} is parsed.perr m {
+				parsed.perr m
 			}
 		} else {
-			ok-at left toks
+			parsed.ok-at left toks
 		}
 	} else {
-		ok-at left toks
+		parsed.ok-at left toks
 	}
 }
 
 public def parse-term = fun toks {
-	when parse-power toks is ok-at left rest {
+	when parse-power toks is parsed.ok-at left rest {
 		term-rest left rest
-	} is perr m {
-		perr m
+	} is parsed.perr m {
+		parsed.perr m
 	}
 }
 
 public def term-rest = fun left toks {
-	when toks is [t-op op, ...rest] {
+	when toks is [lexer.token.t-op op, ...rest] {
 		if op == "*" || op == "/" || op == "%" {
-			when parse-power rest is ok-at right rest2 {
-				term-rest (bin op left right) rest2
-			} is perr m {
-				perr m
+			when parse-power rest is parsed.ok-at right rest2 {
+				term-rest (expr.bin op left right) rest2
+			} is parsed.perr m {
+				parsed.perr m
 			}
 		} else {
-			ok-at left toks
+			parsed.ok-at left toks
 		}
 	} else {
-		ok-at left toks
+		parsed.ok-at left toks
 	}
 }
 
 # `^` binds tighter than `* /` and is right-associative, so the
 # exponent recurses back into `parse-power` rather than looping.
 public def parse-power = fun toks {
-	when parse-unary toks is ok-at base rest {
-		when rest is [t-op op, ...rest2] {
+	when parse-unary toks is parsed.ok-at base rest {
+		when rest is [lexer.token.t-op op, ...rest2] {
 			if op == "^" {
-				when parse-power rest2 is ok-at exp rest3 {
-					ok-at (bin "^" base exp) rest3
-				} is perr m {
-					perr m
+				when parse-power rest2 is parsed.ok-at exp rest3 {
+					parsed.ok-at (expr.bin "^" base exp) rest3
+				} is parsed.perr m {
+					parsed.perr m
 				}
 			} else {
-				ok-at base rest
+				parsed.ok-at base rest
 			}
 		} else {
-			ok-at base rest
+			parsed.ok-at base rest
 		}
-	} is perr m {
-		perr m
+	} is parsed.perr m {
+		parsed.perr m
 	}
 }
 
 public def parse-unary = fun toks {
-	when toks is [t-op op, ...rest] {
+	when toks is [lexer.token.t-op op, ...rest] {
 		if op == "-" {
-			when parse-unary rest is ok-at e rest2 {
-				ok-at (neg e) rest2
-			} is perr m {
-				perr m
+			when parse-unary rest is parsed.ok-at e rest2 {
+				parsed.ok-at (expr.neg e) rest2
+			} is parsed.perr m {
+				parsed.perr m
 			}
 		} else if op == "+" {
 			parse-unary rest
@@ -185,25 +185,25 @@ public def parse-unary = fun toks {
 # over both the list shape (empty / non-empty) and the token variants.
 public def parse-atom = fun toks {
 	when toks is [] {
-		perr "unexpected end of input"
+		parsed.perr "unexpected end of input"
 	} is [first, ...rest] {
-		when first is t-num n {
-			ok-at (lit n) rest
-		} is t-name name {
-			when rest is [t-op p, ...rest2] {
+		when first is lexer.token.t-num n {
+			parsed.ok-at (expr.lit n) rest
+		} is lexer.token.t-name name {
+			when rest is [lexer.token.t-op p, ...rest2] {
 				if p == "(" {
 					parse-call name rest2
 				} else {
-					ok-at (var name) rest
+					parsed.ok-at (expr.var name) rest
 				}
 			} else {
-				ok-at (var name) rest
+				parsed.ok-at (expr.var name) rest
 			}
-		} is t-op p {
+		} is lexer.token.t-op p {
 			if p == "(" {
 				parse-paren rest
 			} else {
-				perr "unexpected operator '$(p)'"
+				parsed.perr "unexpected operator '$(p)'"
 			}
 		}
 	}
@@ -211,27 +211,27 @@ public def parse-atom = fun toks {
 
 # Just consumed `(`: parse the inner expression and require a `)`.
 public def parse-paren = fun toks {
-	when parse-expr toks is ok-at e rest {
-		when rest is [t-op q, ...rest2] {
+	when parse-expr toks is parsed.ok-at e rest {
+		when rest is [lexer.token.t-op q, ...rest2] {
 			if q == ")" {
-				ok-at e rest2
+				parsed.ok-at e rest2
 			} else {
-				perr "expected ')'"
+				parsed.perr "expected ')'"
 			}
 		} else {
-			perr "expected ')'"
+			parsed.perr "expected ')'"
 		}
-	} is perr m {
-		perr m
+	} is parsed.perr m {
+		parsed.perr m
 	}
 }
 
 # Just consumed `name (`: parse the comma-separated argument list and
 # the closing `)`. Handles the empty list (`now()`-style) up front.
 public def parse-call = fun name toks {
-	when toks is [t-op p, ...rest] {
+	when toks is [lexer.token.t-op p, ...rest] {
 		if p == ")" {
-			ok-at (call name []) rest
+			parsed.ok-at (expr.call name []) rest
 		} else {
 			parse-args name toks []
 		}
@@ -241,19 +241,19 @@ public def parse-call = fun name toks {
 }
 
 public def parse-args = fun name toks acc {
-	when parse-expr toks is ok-at arg rest {
-		when rest is [t-op p, ...rest2] {
+	when parse-expr toks is parsed.ok-at arg rest {
+		when rest is [lexer.token.t-op p, ...rest2] {
 			if p == "," {
 				parse-args name rest2 [arg, ...acc]
 			} else if p == ")" {
-				ok-at (call name (list.reverse [arg, ...acc])) rest2
+				parsed.ok-at (expr.call name (list.reverse [arg, ...acc])) rest2
 			} else {
-				perr "expected ',' or ')' in arguments"
+				parsed.perr "expected ',' or ')' in arguments"
 			}
 		} else {
-			perr "expected ')' to close arguments"
+			parsed.perr "expected ')' to close arguments"
 		}
-	} is perr m {
-		perr m
+	} is parsed.perr m {
+		parsed.perr m
 	}
 }

@@ -106,7 +106,7 @@ public def flush-text = fun acc more {
 	when acc is [] {
 		more
 	} else {
-		[text (decode (list.reverse acc)), ...more]
+		[inline.text (decode (list.reverse acc)), ...more]
 	}
 }
 
@@ -119,7 +119,7 @@ public def inline-loop = fun bs acc {
 		when c is 96 {
 			# `code` — literal, no inner parsing.
 			when break1 rest 96 is some (inside, after) {
-				flush-text acc [code-span (decode inside), ...inline-loop after []]
+				flush-text acc [inline.code-span (decode inside), ...inline-loop after []]
 			} is none {
 				inline-loop rest [c, ...acc]
 			}
@@ -128,13 +128,13 @@ public def inline-loop = fun bs acc {
 			when rest is [n, ...rest2] {
 				if n == 42 is true {
 					when break2 rest2 42 42 is some (inside, after) {
-						flush-text acc [strong (inline-loop inside []), ...inline-loop after []]
+						flush-text acc [inline.strong (inline-loop inside []), ...inline-loop after []]
 					} is none {
 						inline-loop rest [c, ...acc]
 					}
 				} else {
 					when break1 rest 42 is some (inside, after) {
-						flush-text acc [emph (inline-loop inside []), ...inline-loop after []]
+						flush-text acc [inline.emph (inline-loop inside []), ...inline-loop after []]
 					} is none {
 						inline-loop rest [c, ...acc]
 					}
@@ -149,7 +149,7 @@ public def inline-loop = fun bs acc {
 					if lp == 40 is true {
 						when break1 after-lp 41 is some (url, after-rp) {
 							flush-text acc [
-								link (decode txt) (decode url)
+								inline.link (decode txt) (decode url),
 								...inline-loop after-rp []
 							]
 						} is none {
@@ -334,25 +334,25 @@ public def parse-blocks = fun lines {
 			parse-blocks rest
 		} else if heading-level line > 0 is true {
 			let lvl = heading-level line
-			[heading lvl (parse-inline (string.drop line (lvl + 1))), ...parse-blocks rest]
+			[block.heading lvl (parse-inline (string.drop line (lvl + 1))), ...parse-blocks rest]
 		} else if string.starts-with line "```" is true {
 			let lang = string.trim (string.drop line 3)
 			let (code-lines, after) = take-fence rest
-			[code-block lang (string.join code-lines "\n"), ...parse-blocks after]
+			[block.code-block lang (string.join code-lines "\n"), ...parse-blocks after]
 		} else if is-hr line is true {
-			[thematic-break, ...parse-blocks rest]
+			[block.thematic-break, ...parse-blocks rest]
 		} else if string.starts-with line ">" is true {
 			let (q-lines, after) = take-quote lines
-			[block-quote (parse-inline (string.join q-lines " ")), ...parse-blocks after]
+			[block.block-quote (parse-inline (string.join q-lines " ")), ...parse-blocks after]
 		} else if bullet-item line is true {
 			let (items, after) = take-bullets lines
-			[bullet-list items, ...parse-blocks after]
+			[block.bullet-list items, ...parse-blocks after]
 		} else if ordered-item line is true {
 			let (items, after) = take-ordered lines
-			[ordered-list items, ...parse-blocks after]
+			[block.ordered-list items, ...parse-blocks after]
 		} else {
 			let (p-lines, after) = take-para lines
-			[paragraph (parse-inline (string.join p-lines " ")), ...parse-blocks after]
+			[block.paragraph (parse-inline (string.join p-lines " ")), ...parse-blocks after]
 		}
 	}
 }
@@ -369,15 +369,15 @@ public def escape-html = fun s {
 }
 
 public def render-inline = fun x {
-	when x is text s {
+	when x is inline.text s {
 		escape-html s
-	} is strong inner {
+	} is inline.strong inner {
 		"<strong>" ++ render-inlines inner ++ "</strong>"
-	} is emph inner {
+	} is inline.emph inner {
 		"<em>" ++ render-inlines inner ++ "</em>"
-	} is code-span s {
+	} is inline.code-span s {
 		"<code>" ++ escape-html s ++ "</code>"
-	} is link txt url {
+	} is inline.link txt url {
 		"<a href=\"" ++ escape-html url ++ "\">" ++ escape-html txt ++ "</a>"
 	}
 }
@@ -407,20 +407,20 @@ public def heading-tag = fun level {
 }
 
 public def render-block = fun b {
-	when b is heading lvl inlines {
+	when b is block.heading lvl inlines {
 		let tag = heading-tag lvl
 		"<" ++ tag ++ ">" ++ render-inlines inlines ++ "</" ++ tag ++ ">"
-	} is paragraph inlines {
+	} is block.paragraph inlines {
 		"<p>" ++ render-inlines inlines ++ "</p>"
-	} is code-block _lang code {
+	} is block.code-block _lang code {
 		"<pre><code>" ++ escape-html code ++ "</code></pre>"
-	} is bullet-list items {
+	} is block.bullet-list items {
 		"<ul>" ++ render-items items ++ "</ul>"
-	} is ordered-list items {
+	} is block.ordered-list items {
 		"<ol>" ++ render-items items ++ "</ol>"
-	} is block-quote inlines {
+	} is block.block-quote inlines {
 		"<blockquote>" ++ render-inlines inlines ++ "</blockquote>"
-	} is thematic-break {
+	} is block.thematic-break {
 		"<hr>"
 	}
 }

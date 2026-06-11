@@ -63,7 +63,7 @@ public def parse-steps = fun s i acc {
 			if j == i + 1 {
 				parse-steps s (i + 1) acc
 			} else {
-				parse-steps s j [field (string.slice s (i + 1) j), ...acc]
+				parse-steps s j [step.field (string.slice s (i + 1) j), ...acc]
 			}
 		} else if c == "[" {
 			let j = span s (i + 1) fun ch {
@@ -88,16 +88,16 @@ public def parse-steps = fun s i acc {
 public def parse-bracket = fun inner {
 	let t = string.trim inner
 	if t == "" {
-		ok iterate
+		ok step.iterate
 	} else if string.starts-with t "\"" {
 		if string.ends-with t "\"" && string.length t >= 2 {
-			ok (field (string.slice t 1 (string.length t - 1)))
+			ok (step.field (string.slice t 1 (string.length t - 1)))
 		} else {
 			err "unterminated string key: [$(inner)]"
 		}
 	} else {
 		when string.to-int t is ok n {
-			ok (index n)
+			ok (step.index n)
 		} is err _ {
 			err "invalid index: [$(inner)]"
 		}
@@ -110,7 +110,7 @@ public def parse-bracket = fun inner {
 
 # Apply a single step to every value in the stream.
 public def step-eval = fun stream st {
-	when st is field name {
+	when st is step.field name {
 		list.fold stream [] fun acc v {
 			when json.get-field v name is some r {
 				[...acc, r]
@@ -118,7 +118,7 @@ public def step-eval = fun stream st {
 				acc
 			}
 		}
-	} is index n {
+	} is step.index n {
 		list.fold stream [] fun acc v {
 			when json.get-array v is some xs {
 				let len = list.length xs
@@ -140,7 +140,7 @@ public def step-eval = fun stream st {
 				acc
 			}
 		}
-	} is iterate {
+	} is step.iterate {
 		list.fold stream [] fun acc v {
 			when json.get-array v is some xs {
 				[...acc, ...xs]

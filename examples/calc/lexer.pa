@@ -73,7 +73,7 @@ public def scan = fun s i acc {
 		} else if is-name-start c {
 			lex-name s i acc
 		} else if is-op c {
-			scan s (i + 1) [t-op c, ...acc]
+			scan s (i + 1) [token.t-op c, ...acc]
 		} else {
 			err "unexpected character '$(c)' at column $(to-string (i + 1))"
 		}
@@ -89,14 +89,14 @@ public def lex-number = fun s i acc {
 		let k = span s (j + 1) is-digit
 		let text = string.slice s i k
 		when string.to-float text is ok f {
-			scan s k [t-num (float-val f), ...acc]
+			scan s k [token.t-num (value.num.float-val f), ...acc]
 		} is err _e {
 			err "bad number '$(text)'"
 		}
 	} else {
 		let text = string.slice s i j
 		when string.to-int text is ok n {
-			scan s j [t-num (int-val n), ...acc]
+			scan s j [token.t-num (value.num.int-val n), ...acc]
 		} is err _e {
 			err "bad number '$(text)'"
 		}
@@ -106,5 +106,5 @@ public def lex-number = fun s i acc {
 # A name run: a variable reference or a function name.
 public def lex-name = fun s i acc {
 	let j = span s i is-name-char
-	scan s j [t-name (string.slice s i j), ...acc]
+	scan s j [token.t-name (string.slice s i j), ...acc]
 }

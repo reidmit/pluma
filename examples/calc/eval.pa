@@ -16,21 +16,21 @@ use parser
 use value
 
 public def eval = fun env e {
-	when e is lit n {
+	when e is parser.expr.lit n {
 		ok n
-	} is var name {
+	} is parser.expr.var name {
 		when dict.lookup (ref.get env) name is some v {
 			ok v
 		} is none {
 			err "undefined name '$(name)'"
 		}
-	} is neg inner {
+	} is parser.expr.neg inner {
 		when eval env inner is ok v {
 			ok (value.num-neg v)
 		} is err m {
 			err m
 		}
-	} is bin op l r {
+	} is parser.expr.bin op l r {
 		when eval env l is ok lv {
 			when eval env r is ok rv {
 				apply-op op lv rv
@@ -40,7 +40,7 @@ public def eval = fun env e {
 		} is err m {
 			err m
 		}
-	} is call name args {
+	} is parser.expr.call name args {
 		eval-call env name args
 	}
 }
@@ -113,33 +113,33 @@ public def apply-fn = fun name vals {
 
 public def apply-unary = fun name x {
 	if name == "sqrt" {
-		ok (float-val (math.sqrt (value.as-float x)))
+		ok (value.num.float-val (math.sqrt (value.as-float x)))
 	} else if name == "sin" {
-		ok (float-val (math.sin (value.as-float x)))
+		ok (value.num.float-val (math.sin (value.as-float x)))
 	} else if name == "cos" {
-		ok (float-val (math.cos (value.as-float x)))
+		ok (value.num.float-val (math.cos (value.as-float x)))
 	} else if name == "tan" {
-		ok (float-val (math.tan (value.as-float x)))
+		ok (value.num.float-val (math.tan (value.as-float x)))
 	} else if name == "ln" {
-		ok (float-val (math.log (value.as-float x)))
+		ok (value.num.float-val (math.log (value.as-float x)))
 	} else if name == "log" {
-		ok (float-val (math.log10 (value.as-float x)))
+		ok (value.num.float-val (math.log10 (value.as-float x)))
 	} else if name == "log2" {
-		ok (float-val (math.log2 (value.as-float x)))
+		ok (value.num.float-val (math.log2 (value.as-float x)))
 	} else if name == "exp" {
-		ok (float-val (math.exp (value.as-float x)))
+		ok (value.num.float-val (math.exp (value.as-float x)))
 	} else if name == "abs" {
 		ok (num-abs x)
 	} else if name == "floor" {
-		ok (int-val (math.floor (value.as-float x)))
+		ok (value.num.int-val (math.floor (value.as-float x)))
 	} else if name == "ceil" {
-		ok (int-val (math.ceil (value.as-float x)))
+		ok (value.num.int-val (math.ceil (value.as-float x)))
 	} else if name == "round" {
-		ok (int-val (math.round (value.as-float x)))
+		ok (value.num.int-val (math.round (value.as-float x)))
 	} else if name == "int" {
-		ok (int-val (math.to-int (value.as-float x)))
+		ok (value.num.int-val (math.to-int (value.as-float x)))
 	} else if name == "float" {
-		ok (float-val (value.as-float x))
+		ok (value.num.float-val (value.as-float x))
 	} else {
 		err "$(name): unknown function or wrong number of arguments"
 	}
@@ -153,7 +153,7 @@ public def apply-binary = fun name x y {
 	} else if name == "min" {
 		ok (num-min x y)
 	} else if name == "log" {
-		ok (float-val (math.log (value.as-float x) / math.log (value.as-float y)))
+		ok (value.num.float-val (math.log (value.as-float x) / math.log (value.as-float y)))
 	} else {
 		err "$(name): unknown function or wrong number of arguments"
 	}
@@ -162,13 +162,13 @@ public def apply-binary = fun name x y {
 # Tower-aware helpers the math module doesn't cover directly: `math.abs`
 # is int-only, and max/min should keep the winning operand's own type.
 public def num-abs = fun n {
-	when n is int-val i {
-		int-val (math.abs i)
-	} is float-val f {
+	when n is value.num.int-val i {
+		value.num.int-val (math.abs i)
+	} is value.num.float-val f {
 		if f < 0.0 {
-			float-val (negate f)
+			value.num.float-val (negate f)
 		} else {
-			float-val f
+			value.num.float-val f
 		}
 	}
 }
