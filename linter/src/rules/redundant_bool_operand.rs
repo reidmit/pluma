@@ -1,4 +1,4 @@
-use crate::Rule;
+use crate::{Context, Finding, Rule};
 use compiler::ast::{ExprKind, ExprNode, LiteralKind, Operator};
 use compiler::{Diagnostic, Reportable};
 
@@ -14,7 +14,7 @@ impl Rule for RedundantBoolOperand {
 		"redundant-bool-operand"
 	}
 
-	fn check_expr(&self, expr: &ExprNode, out: &mut Vec<Diagnostic>) {
+	fn check_expr(&self, expr: &ExprNode, _ctx: &Context, out: &mut Vec<Finding>) {
 		let ExprKind::BinaryOperation { op, left, right } = &expr.kind else {
 			return;
 		};
@@ -42,7 +42,9 @@ impl Rule for RedundantBoolOperand {
 				!is_and
 			)
 		};
-		out.push(Diagnostic::report_warning(Lint(help)).with_span(expr.range));
+		out.push(Finding::new(
+			Diagnostic::report_warning(Lint(help)).with_span(expr.range),
+		));
 	}
 }
 

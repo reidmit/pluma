@@ -1,4 +1,4 @@
-use crate::Rule;
+use crate::{Context, Finding, Rule};
 use compiler::ast::{ExprKind, ExprNode, LiteralKind, Operator};
 use compiler::{Diagnostic, Reportable};
 
@@ -12,7 +12,7 @@ impl Rule for RedundantBoolComparison {
 		"redundant-bool-comparison"
 	}
 
-	fn check_expr(&self, expr: &ExprNode, out: &mut Vec<Diagnostic>) {
+	fn check_expr(&self, expr: &ExprNode, _ctx: &Context, out: &mut Vec<Finding>) {
 		let ExprKind::BinaryOperation { op, left, right } = &expr.kind else {
 			return;
 		};
@@ -34,9 +34,11 @@ impl Rule for RedundantBoolComparison {
 		let help = if keep_direct {
 			"drop the comparison and use the expression directly."
 		} else {
-			"drop the comparison and use `not <expression>` instead."
+			"drop the comparison and negate the expression (`!<expression>`) instead."
 		};
-		out.push(Diagnostic::report_warning(Lint(help)).with_span(expr.range));
+		out.push(Finding::new(
+			Diagnostic::report_warning(Lint(help)).with_span(expr.range),
+		));
 	}
 }
 

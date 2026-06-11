@@ -1,5 +1,5 @@
-use crate::Rule;
 use crate::eq::bodies_eq;
+use crate::{Context, Finding, Rule};
 use compiler::ast::{ExprKind, ExprNode};
 use compiler::{Diagnostic, Reportable};
 
@@ -13,7 +13,7 @@ impl Rule for IdenticalBranches {
 		"identical-branches"
 	}
 
-	fn check_expr(&self, expr: &ExprNode, out: &mut Vec<Diagnostic>) {
+	fn check_expr(&self, expr: &ExprNode, _ctx: &Context, out: &mut Vec<Finding>) {
 		let ExprKind::If(node) = &expr.kind else {
 			return;
 		};
@@ -23,7 +23,9 @@ impl Rule for IdenticalBranches {
 		if !bodies_eq(&node.body, else_body) {
 			return;
 		}
-		out.push(Diagnostic::report_warning(Lint).with_span(expr.range));
+		out.push(Finding::new(
+			Diagnostic::report_warning(Lint).with_span(expr.range),
+		));
 	}
 }
 

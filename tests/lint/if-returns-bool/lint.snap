@@ -12,7 +12,7 @@ warning[L0004]: This `if` just returns a boolean — use the condition itself.
 
 warning[L0004]: This `if` just returns a boolean — use the condition itself.
   │
-  ├─𜱶 help: replace the whole `if` with `not <condition>`.
+  ├─𜱶 help: replace the whole `if` with the negated condition (`!<condition>`).
   │
 3 │  let inverted = if ready { false } else { true }
   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

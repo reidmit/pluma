@@ -1,4 +1,4 @@
-use crate::Rule;
+use crate::{Context, Finding, Rule};
 use compiler::ast::{ExprKind, ExprNode, LiteralKind, PatternKind};
 use compiler::{Diagnostic, Reportable};
 
@@ -13,7 +13,7 @@ impl Rule for IfReturnsBool {
 		"if-returns-bool"
 	}
 
-	fn check_expr(&self, expr: &ExprNode, out: &mut Vec<Diagnostic>) {
+	fn check_expr(&self, expr: &ExprNode, _ctx: &Context, out: &mut Vec<Finding>) {
 		let ExprKind::If(node) = &expr.kind else {
 			return;
 		};
@@ -41,9 +41,16 @@ impl Rule for IfReturnsBool {
 		let help = if then_val {
 			"replace the whole `if` with its condition."
 		} else {
-			"replace the whole `if` with `not <condition>`."
+			"replace the whole `if` with the negated condition (`!<condition>`)."
 		};
-		out.push(Diagnostic::report_warning(Lint(help)).with_span(expr.range));
+		// Report-only: no autofix. Deleting the `if … {` / `} else { … }` around
+		// the condition is unsafe in `else if` position (the `if` is the entire
+		// `else` arm, and `else <bare-expr>` doesn't parse), and these often want
+		// a human rewrite (e.g. an `or`-chain of byte tests) rather than a bare
+		// condition. Fixing it by hand is the right call.
+		out.push(Finding::new(
+			Diagnostic::report_warning(Lint(help)).with_span(expr.range),
+		));
 	}
 }
 

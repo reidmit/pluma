@@ -35,7 +35,7 @@ fn main() {
 
 		Command::Format { check, paths } => commands::format::format_command(check, paths),
 
-		Command::Lint { paths } => commands::lint::lint_command(paths),
+		Command::Lint { fix, paths } => commands::lint::lint_command(fix, paths),
 
 		Command::Test { filters, dir } => commands::test::test_command(filters, dir),
 

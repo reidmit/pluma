@@ -1,6 +1,6 @@
-use crate::Rule;
+use crate::{Context, Finding, Rule};
 use compiler::ast::{ExprKind, ExprNode, PatternKind};
-use compiler::{Diagnostic, Reportable};
+use compiler::{Diagnostic, Range, Reportable};
 
 /// Flags `let _ = expr` — binding an expression to the wildcard pattern with no
 /// type annotation. The `let _ =` captures nothing, so the statement is
@@ -14,7 +14,7 @@ impl Rule for RedundantLetUnderscore {
 		"redundant-let-underscore"
 	}
 
-	fn check_expr(&self, expr: &ExprNode, out: &mut Vec<Diagnostic>) {
+	fn check_expr(&self, expr: &ExprNode, _ctx: &Context, out: &mut Vec<Finding>) {
 		let ExprKind::Let(let_node) = &expr.kind else {
 			return;
 		};
@@ -24,7 +24,11 @@ impl Rule for RedundantLetUnderscore {
 		if let_node.type_annotation.is_some() {
 			return;
 		}
-		out.push(Diagnostic::report_warning(Lint).with_span(let_node.range));
+		// Fix: delete the `let _ = ` prefix, leaving the value expression in place.
+		let prefix = Range::between(let_node.range.start, let_node.value.range.start);
+		out.push(
+			Finding::new(Diagnostic::report_warning(Lint).with_span(let_node.range)).with_fix(prefix, ""),
+		);
 	}
 }
 

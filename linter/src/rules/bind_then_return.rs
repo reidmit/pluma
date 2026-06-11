@@ -1,4 +1,4 @@
-use crate::Rule;
+use crate::{Context, Finding, Rule};
 use compiler::ast::{ExprKind, ExprNode, PatternKind};
 use compiler::{Diagnostic, Reportable};
 
@@ -13,7 +13,7 @@ impl Rule for BindThenReturn {
 		"bind-then-return"
 	}
 
-	fn check_body(&self, body: &[ExprNode], out: &mut Vec<Diagnostic>) {
+	fn check_body(&self, body: &[ExprNode], _ctx: &Context, out: &mut Vec<Finding>) {
 		let [.., second_last, last] = body else {
 			return;
 		};
@@ -34,7 +34,9 @@ impl Rule for BindThenReturn {
 		if bound.name != returned.name {
 			return;
 		}
-		out.push(Diagnostic::report_warning(Lint).with_span(let_node.range));
+		out.push(Finding::new(
+			Diagnostic::report_warning(Lint).with_span(let_node.range),
+		));
 	}
 }
 

@@ -117,11 +117,17 @@ pub(crate) enum Command {
 	/// Report lint warnings for one or more modules.
 	///
 	/// Parses each file and flags stylistic and correctness smells (e.g. a
-	/// `let _ = expr` that binds nothing). Reports only — never rewrites. Exits
-	/// non-zero if any lint fires, so it can gate CI.
+	/// `let _ = expr` that binds nothing). Exits non-zero if any lint fires, so
+	/// it can gate CI.
 	///
-	/// Pass `-` to read a single module from stdin.
+	/// With `--fix`, applies the autofixable lints in place instead of reporting
+	/// them (a fixed file is reformatted). Pass `-` to read a single module from
+	/// stdin (with `--fix`, the rewritten module is written to stdout).
 	Lint {
+		/// Apply autofixes in place instead of reporting.
+		#[arg(long)]
+		fix: bool,
+
 		/// Files to lint; `-` reads stdin.
 		#[arg(value_name = "PATH")]
 		paths: Vec<String>,

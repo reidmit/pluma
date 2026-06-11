@@ -12,7 +12,7 @@ warning[L0003]: Comparing to a boolean literal is redundant.
 
 warning[L0003]: Comparing to a boolean literal is redundant.
   │
-  ├─𜱶 help: drop the comparison and use `not <expression>` instead.
+  ├─𜱶 help: drop the comparison and negate the expression (`!<expression>`) instead.
   │
 3 │  let negated = ready == false
   │                ^^^^^^^^^^^^^^
@@ -20,7 +20,7 @@ warning[L0003]: Comparing to a boolean literal is redundant.
 
 warning[L0003]: Comparing to a boolean literal is redundant.
   │
-  ├─𜱶 help: drop the comparison and use `not <expression>` instead.
+  ├─𜱶 help: drop the comparison and negate the expression (`!<expression>`) instead.
   │
 4 │  let also = ready != true
   │             ^^^^^^^^^^^^^

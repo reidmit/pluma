@@ -1,4 +1,4 @@
-use crate::Rule;
+use crate::{Context, Finding, Rule};
 use compiler::ast::{ExprKind, ExprNode, PatternKind};
 use compiler::{Diagnostic, Range, Reportable};
 
@@ -13,7 +13,7 @@ impl Rule for RedundantTryUnderscore {
 		"redundant-try-underscore"
 	}
 
-	fn check_expr(&self, expr: &ExprNode, out: &mut Vec<Diagnostic>) {
+	fn check_expr(&self, expr: &ExprNode, _ctx: &Context, out: &mut Vec<Finding>) {
 		let ExprKind::Try(try_node) = &expr.kind else {
 			return;
 		};
@@ -27,7 +27,9 @@ impl Rule for RedundantTryUnderscore {
 		// The node's own range runs through the rest of the block; point the
 		// caret at just the `try _ = <value>` head instead.
 		let span = Range::between(try_node.range.start, try_node.value.range.end);
-		out.push(Diagnostic::report_warning(Lint).with_span(span));
+		// Fix: replace `try _ = ` with `try `, leaving the value in place.
+		let head = Range::between(try_node.range.start, try_node.value.range.start);
+		out.push(Finding::new(Diagnostic::report_warning(Lint).with_span(span)).with_fix(head, "try "));
 	}
 }
 

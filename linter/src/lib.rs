@@ -13,8 +13,45 @@ mod rules;
 mod walk;
 
 use compiler::ast::ExprNode;
-use compiler::{Diagnostic, Module};
+use compiler::{Diagnostic, Module, Point, Range};
 use std::path::{Path, PathBuf};
+
+/// An autofix: replace the source spanning `range` with `replacement`. A rule
+/// attaches one to a [`Finding`] when the violation has a mechanical rewrite
+/// (e.g. dropping a `let _ =` prefix). `pluma lint --fix` applies them.
+#[derive(Clone)]
+pub struct Fix {
+	pub range: Range,
+	pub replacement: String,
+}
+
+/// One lint result: the [`Diagnostic`] to report, plus any autofixes. A finding
+/// usually has zero or one fix; a few rules need two disjoint edits (e.g.
+/// deleting the `if … {` and `} else { … }` around a kept subject).
+pub struct Finding {
+	pub diagnostic: Diagnostic,
+	pub fixes: Vec<Fix>,
+}
+
+impl Finding {
+	/// A finding with no autofix.
+	pub fn new(diagnostic: Diagnostic) -> Self {
+		Finding {
+			diagnostic,
+			fixes: Vec::new(),
+		}
+	}
+
+	/// Attach an edit that replaces `range` with `replacement`. Chainable for a
+	/// fix that needs more than one edit.
+	pub fn with_fix(mut self, range: Range, replacement: impl Into<String>) -> Self {
+		self.fixes.push(Fix {
+			range,
+			replacement: replacement.into(),
+		});
+		self
+	}
+}
 
 /// A single lint rule. The walker offers a rule two kinds of context as it
 /// descends, in source order:
@@ -27,19 +64,56 @@ use std::path::{Path, PathBuf};
 ///   binding immediately followed by its own use. Argument lists and tuple
 ///   elements are *not* bodies, so this only fires on real blocks.
 ///
+/// The lexical context a rule sees at a node: which names are in scope as *local
+/// values* (function parameters, `scope as` handles, `let` bindings). Lets a rule
+/// tell a projection on a runtime value (`s.spawn`, where `s` is a local) from
+/// one on a module or type namespace (`color.named`) — they're the same
+/// `FieldAccess` shape in the parsed AST.
+pub struct Context {
+	frames: Vec<Vec<String>>,
+}
+
+impl Context {
+	fn new() -> Self {
+		Context { frames: Vec::new() }
+	}
+
+	fn push(&mut self, names: Vec<String>) {
+		self.frames.push(names);
+	}
+
+	fn pop(&mut self) {
+		self.frames.pop();
+	}
+
+	/// Bind another name in the current (innermost) frame — used for `let`
+	/// statements, which come into scope mid-block.
+	fn bind(&mut self, name: String) {
+		if let Some(frame) = self.frames.last_mut() {
+			frame.push(name);
+		}
+	}
+
+	/// Whether `name` is bound as a local value anywhere in the enclosing scopes.
+	pub fn is_local(&self, name: &str) -> bool {
+		self.frames.iter().flatten().any(|n| n == name)
+	}
+}
+
 /// Both default to no-ops, so a rule implements only the hook it needs.
 pub trait Rule {
 	/// A stable kebab-case identifier for the rule, e.g. `redundant-let-underscore`.
 	fn name(&self) -> &'static str;
 
-	/// Inspect one expression and push a warning diagnostic for each violation.
-	fn check_expr(&self, expr: &ExprNode, out: &mut Vec<Diagnostic>) {
-		let _ = (expr, out);
+	/// Inspect one expression and push a [`Finding`] for each violation. `ctx`
+	/// carries the local-value bindings in scope at this node.
+	fn check_expr(&self, expr: &ExprNode, ctx: &Context, out: &mut Vec<Finding>) {
+		let _ = (expr, ctx, out);
 	}
 
-	/// Inspect a statement block as a whole and push a warning for each violation.
-	fn check_body(&self, body: &[ExprNode], out: &mut Vec<Diagnostic>) {
-		let _ = (body, out);
+	/// Inspect a statement block as a whole and push a [`Finding`] for each violation.
+	fn check_body(&self, body: &[ExprNode], ctx: &Context, out: &mut Vec<Finding>) {
+		let _ = (body, ctx, out);
 	}
 }
 
@@ -57,12 +131,9 @@ fn rules() -> Vec<Box<dyn Rule>> {
 	]
 }
 
-/// Parse `source` as Pluma and return the lint warnings found in it. On parse
-/// failure, returns the parse diagnostics as `Err` — mirrors
-/// `formatter::format_source`, so callers handle "unparseable" the same way for
-/// both tools. The returned warnings carry spans but no module path; use
-/// [`lint_path`] when you want them anchored to a file for rendering.
-pub fn lint_source(source: &[u8]) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
+/// Parse `source` and collect every [`Finding`]. On parse failure, returns the
+/// parse diagnostics as `Err` — mirrors `formatter::format_source`.
+fn collect(source: &[u8]) -> Result<Vec<Finding>, Vec<Diagnostic>> {
 	let mut diagnostics: Vec<Diagnostic> = Vec::new();
 	let mut module = Module::new("<lint>".to_string(), PathBuf::from("<lint>"));
 	module.parse_from_bytes(source.to_vec(), &mut diagnostics);
@@ -73,9 +144,74 @@ pub fn lint_source(source: &[u8]) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
 
 	let ast = module.ast.as_ref().expect("parser populated ast");
 	let rules = rules();
+	let mut ctx = Context::new();
 	let mut out = Vec::new();
-	walk::walk_module(ast, &rules, &mut out);
+	walk::walk_module(ast, &rules, &mut ctx, &mut out);
 	Ok(out)
+}
+
+/// Parse `source` as Pluma and return the lint warnings found in it. On parse
+/// failure, returns the parse diagnostics as `Err`. The returned warnings carry
+/// spans but no module path; use [`lint_path`] when you want them anchored to a
+/// file for rendering.
+pub fn lint_source(source: &[u8]) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
+	collect(source).map(|findings| findings.into_iter().map(|f| f.diagnostic).collect())
+}
+
+/// Apply every available autofix to `source`, returning the rewritten text — or
+/// `None` when nothing changed. Fixes are applied right-to-left so earlier edits
+/// don't shift later spans; any fix overlapping an already-applied one is
+/// skipped. The result is *not* reformatted — run the formatter afterward to
+/// canonicalize whitespace the rewrites may have left behind.
+pub fn fix_source(source: &[u8]) -> Result<Option<String>, Vec<Diagnostic>> {
+	let fixes: Vec<Fix> = collect(source)?.into_iter().flat_map(|f| f.fixes).collect();
+	if fixes.is_empty() {
+		return Ok(None);
+	}
+
+	let line_starts = line_starts(source);
+	let mut spans: Vec<(usize, usize, String)> = fixes
+		.into_iter()
+		.filter_map(|fix| {
+			let start = offset(&line_starts, fix.range.start)?;
+			let end = offset(&line_starts, fix.range.end)?;
+			(start <= end && end <= source.len()).then_some((start, end, fix.replacement))
+		})
+		.collect();
+	spans.sort_by_key(|(start, ..)| *start);
+
+	let mut result = source.to_vec();
+	let mut next_start = usize::MAX;
+	for (start, end, replacement) in spans.into_iter().rev() {
+		// Skip a fix that overlaps one already applied to its right.
+		if end > next_start {
+			continue;
+		}
+		result.splice(start..end, replacement.into_bytes());
+		next_start = start;
+	}
+
+	match String::from_utf8(result) {
+		Ok(text) => Ok(Some(text)),
+		Err(_) => Err(vec![Diagnostic::error("autofix produced invalid UTF-8")]),
+	}
+}
+
+/// Byte offset of the start of each (0-based) source line.
+fn line_starts(source: &[u8]) -> Vec<usize> {
+	let mut starts = vec![0usize];
+	for (i, &b) in source.iter().enumerate() {
+		if b == b'\n' {
+			starts.push(i + 1);
+		}
+	}
+	starts
+}
+
+/// Absolute byte offset of a `Point`. Columns are byte offsets within their line
+/// (the tokenizer's convention), so this is exact for non-ASCII source too.
+fn offset(line_starts: &[usize], point: Point) -> Option<usize> {
+	line_starts.get(point.line).map(|start| start + point.col)
 }
 
 /// Like [`lint_source`], but stamps each warning with `path` so the diagnostic
