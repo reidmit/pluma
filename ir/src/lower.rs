@@ -1181,6 +1181,11 @@ impl<'a> Lowerer<'a> {
 				if let Some(atom) = self.try_builtin_value_ref(expr, range)? {
 					return Ok(atom);
 				}
+				// A payload-carrying variant constructor used as a value (`some`)
+				// likewise forwards through a closure.
+				if let Some(atom) = self.try_variant_value_ref(expr, range)? {
+					return Ok(atom);
+				}
 				self.lower_identifier(&id.name, range)
 			}
 			ExprKind::Call(call) => self.lower_call(call, range),
@@ -1254,6 +1259,11 @@ impl<'a> Lowerer<'a> {
 				}
 				// A bare builtin used as a value (`math.sqrt`) forwards through a closure.
 				if let Some(atom) = self.try_builtin_value_ref(expr, range)? {
+					return Ok(atom);
+				}
+				// A payload-carrying variant constructor used as a value
+				// (`color.named`) forwards through a closure.
+				if let Some(atom) = self.try_variant_value_ref(expr, range)? {
 					return Ok(atom);
 				}
 				self.lower_namespace(path, range)
@@ -1338,38 +1348,112 @@ impl<'a> Lowerer<'a> {
 		))
 	}
 
-	/// Lower a `NamespaceAccess` path: `module.value` (-> a global),
-	/// `module.Enum.variant` / `Enum.variant` (-> variant construction), or a
-	/// compiler-inserted fully-qualified `mod.name` reference.
-	fn lower_namespace(
+	/// A payload-carrying variant constructor referenced as a first-class *value*
+	/// (point-free `some`, `color.named`): wrap it in a closure of the variant's
+	/// arity that forwards its arguments into the variant construction. A bare
+	/// `MakeVariantCtor` is a plain data struct, not a callable `$closure` — so
+	/// without this a constructor passed to a higher-order function or stored as
+	/// a value traps when invoked. Mirrors `lower_builtin_value_ref`; the applied
+	/// case (`some x`) stays a direct `MakeVariant` via the callee path plus
+	/// `fold_variant_ctor_calls`, so this only fires when the ctor escapes.
+	fn build_variant_ctor_closure(
 		&mut self,
-		path: &[compiler::ast::IdentifierNode],
+		enum_name: &str,
+		variant: &str,
+		arity: usize,
 		range: Range,
 	) -> Result<Atom, String> {
+		let tag = self
+			.variant_tag(enum_name, variant)
+			.ok_or_else(|| format!("unknown variant `{}` of `{}`", variant, enum_name))?;
+		let params: Vec<VarId> = (0..arity as u32).map(VarId).collect();
+		let r_var = VarId(arity as u32);
+		let payload: Vec<Atom> = params.iter().map(|v| Atom::Var(*v)).collect();
+		let wrapper = Function {
+			name: format!("{}.{}@ctor-value", enum_name, variant),
+			module: self.current_module.clone(),
+			params,
+			captures: Vec::new(),
+			is_async: false,
+			poll_fn: None,
+			body: Block(vec![
+				Stmt::synthetic(StmtKind::Let(
+					r_var,
+					Rvalue::MakeVariant {
+						enum_name: enum_name.to_string(),
+						tag,
+						payload,
+					},
+				)),
+				Stmt::synthetic(StmtKind::Return(Atom::Var(r_var))),
+			]),
+			var_reprs: Vec::new(),
+			param_reprs: vec![Repr::Boxed; arity],
+			ret_repr: Repr::Boxed,
+		};
+		let wrapper_fid = self.add_function(wrapper);
+		Ok(self.emit_let(Rvalue::MakeClosure(wrapper_fid, Vec::new()), range))
+	}
+
+	/// If `expr` (an identifier or `Enum.variant` path in *value* position) names
+	/// a payload-carrying variant constructor, lower it to a forwarding closure so
+	/// it works as a first-class value. Returns `None` for nullary variants
+	/// (already a finished value) and non-variants, so the caller falls through to
+	/// the ordinary reference path. Mirrors `try_builtin_value_ref`.
+	fn try_variant_value_ref(
+		&mut self,
+		expr: &ExprNode,
+		range: Range,
+	) -> Result<Option<Atom>, String> {
+		let (enum_name, variant, arity) = match &expr.kind {
+			ExprKind::Identifier(id) => match self.resolve(&id.name) {
+				Ok(Resolved::BareVariant {
+					qualified,
+					variant,
+					arity,
+				}) => (qualified, variant, arity),
+				_ => return Ok(None),
+			},
+			ExprKind::NamespaceAccess(path) => match self.variant_ref_of_namespace(path) {
+				Some(t) => t,
+				None => return Ok(None),
+			},
+			_ => return Ok(None),
+		};
+		if arity == 0 {
+			return Ok(None);
+		}
+		Ok(Some(self.build_variant_ctor_closure(
+			&enum_name, &variant, arity, range,
+		)?))
+	}
+
+	/// Read-only: if `path` names a variant constructor, return its
+	/// `(qualified_enum, variant, arity)`. `None` when it names a value/global or
+	/// doesn't resolve to a variant — a `module.value` global takes precedence, as
+	/// in the analyzer. Shared by `lower_namespace` (which then constructs or
+	/// refs it) and `try_variant_value_ref` (which wraps an escaping ctor).
+	fn variant_ref_of_namespace(
+		&self,
+		path: &[compiler::ast::IdentifierNode],
+	) -> Option<(String, String, usize)> {
 		match path {
 			[module, enum_name, variant] => {
-				let qualified_module = self
-					.imports
-					.get(&module.name)
-					.ok_or_else(|| format!("`{}` is not an imported module", module.name))?
-					.clone();
+				let qualified_module = self.imports.get(&module.name)?;
 				let qualified_enum = format!("{}.{}", qualified_module, enum_name.name);
-				let arity = self.variant_arity(&qualified_enum, &variant.name)?;
-				self.make_variant_ref(&qualified_enum, &variant.name, arity, range)
+				let arity = self.variant_arity(&qualified_enum, &variant.name).ok()?;
+				Some((qualified_enum, variant.name.clone(), arity))
 			}
 			[head, tail] => {
-				// A dotted head is an already-fully-qualified reference (e.g.
-				// `std.task.or-else`), resolved directly against globals.
+				// A dotted head is an already-qualified global, never a variant.
 				if head.name.contains('.') {
-					if let Some(g) = self.globals.lookup(&head.name, &tail.name) {
-						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
-					}
-					return Err(format!("`{}.{}` not found", head.name, tail.name));
+					return None;
 				}
-				// `module.value` — an imported function/value (e.g. `point.distance`).
-				if let Some(qualified_module) = self.imports.get(&head.name).cloned() {
-					if let Some(g) = self.globals.lookup(&qualified_module, &tail.name) {
-						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
+				// `module.value` (an imported function/value) takes precedence over
+				// reading `head` as an enum name.
+				if let Some(qualified_module) = self.imports.get(&head.name) {
+					if self.globals.lookup(qualified_module, &tail.name).is_some() {
+						return None;
 					}
 				}
 				// `Enum.variant` where `head` is an enum in scope unqualified: a
@@ -1380,7 +1464,7 @@ impl<'a> Lowerer<'a> {
 				// Tried in the analyzer's type-scope precedence: a local or prelude
 				// declaration shadows the import. Each candidate falls through if it
 				// lacks the variant, so a shadowed name still resolves.
-				let current = self.current_module.clone();
+				let current = &self.current_module;
 				let mut candidates = vec![
 					format!("{}.{}", current, head.name),
 					format!("__prelude__.{}", head.name),
@@ -1395,8 +1479,44 @@ impl<'a> Lowerer<'a> {
 				for qualified_enum in candidates {
 					if self.enums.contains_key(&qualified_enum) {
 						if let Ok(arity) = self.variant_arity(&qualified_enum, &tail.name) {
-							return self.make_variant_ref(&qualified_enum, &tail.name, arity, range);
+							return Some((qualified_enum, tail.name.clone(), arity));
 						}
+					}
+				}
+				None
+			}
+			_ => None,
+		}
+	}
+
+	/// Lower a `NamespaceAccess` path: `module.value` (-> a global),
+	/// `module.Enum.variant` / `Enum.variant` (-> variant construction), or a
+	/// compiler-inserted fully-qualified `mod.name` reference.
+	fn lower_namespace(
+		&mut self,
+		path: &[compiler::ast::IdentifierNode],
+		range: Range,
+	) -> Result<Atom, String> {
+		// `Enum.variant` / `module.Enum.variant` — variant construction. Resolved
+		// read-only first so the same classification drives value-position ctor
+		// wrapping in `try_variant_value_ref`.
+		if let Some((qualified_enum, variant, arity)) = self.variant_ref_of_namespace(path) {
+			return self.make_variant_ref(&qualified_enum, &variant, arity, range);
+		}
+		match path {
+			[head, tail] => {
+				// A dotted head is an already-fully-qualified reference (e.g.
+				// `std.task.or-else`), resolved directly against globals.
+				if head.name.contains('.') {
+					if let Some(g) = self.globals.lookup(&head.name, &tail.name) {
+						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
+					}
+					return Err(format!("`{}.{}` not found", head.name, tail.name));
+				}
+				// `module.value` — an imported function/value (e.g. `point.distance`).
+				if let Some(qualified_module) = self.imports.get(&head.name).cloned() {
+					if let Some(g) = self.globals.lookup(&qualified_module, &tail.name) {
+						return Ok(self.emit_let(Rvalue::GlobalRef(g), range));
 					}
 				}
 				Err(format!(
