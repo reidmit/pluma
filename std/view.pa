@@ -69,21 +69,15 @@ public enum view {
 # --- core builders ----------------------------------------------------------
 
 # A run of static text (HTML-escaped on render).
-public def text :: fun string -> view = fun s {
-	view.txt s
-}
+public def text :: fun string -> view = view.txt
 
 # A reactive text node: `view.text-of (fun { to-string (signal.get n) })`. On the
 # browser the thunk re-runs (and patches the node) when its signals change; in
 # `to-string` it's called once.
-public def text-of :: fun (fun nothing -> string) -> view = fun f {
-	view.dynamic-text f
-}
+public def text-of :: fun (fun nothing -> string) -> view = view.dynamic-text
 
 # A generic element -- the escape hatch for any tag without its own builder.
-public def element :: fun string (list attribute) (list view) -> view = fun tag attrs kids {
-	view.el tag attrs kids
-}
+public def element :: fun string (list attribute) (list view) -> view = view.el
 
 # --- reactive control flow --------------------------------------------------
 
@@ -97,9 +91,7 @@ public def element :: fun string (list attribute) (list view) -> view = fun tag 
 #     view.dyn (fun {
 #         if signal.get loading { spinner () } else { content () }
 #     })
-public def dyn :: fun (fun nothing -> view) -> view = fun f {
-	view.dyn-node f
-}
+public def dyn :: fun (fun nothing -> view) -> view = view.dyn-node
 
 # The empty view -- renders nothing. The `else` branch of a `view.dyn` when one case
 # shows nothing.
@@ -140,27 +132,19 @@ public def each :: fun (fun nothing -> list a) (fun a -> string) (fun a -> view)
 # --- generic attribute builders ---------------------------------------------
 
 # A raw attribute: `view.attr "data-id" "42"`.
-public def attr :: fun string string -> attribute = fun k v {
-	attribute.static k v
-}
+public def attr :: fun string string -> attribute = attribute.static
 
 # A raw live DOM string property (controlled-input `value`, etc.).
-public def property :: fun string string -> attribute = fun k v {
-	attribute.prop-str k v
-}
+public def property :: fun string string -> attribute = attribute.prop-str
 
 # A raw boolean DOM property.
-public def bool-property :: fun string bool -> attribute = fun k v {
-	attribute.prop-bool k v
-}
+public def bool-property :: fun string bool -> attribute = attribute.prop-bool
 
 # A reactive attribute: re-read the thunk and re-set the attribute when its signals
 # change. `view.bind-attr "class" (fun { if signal.get active { "on" } else { "off" } })`.
 # (The two-way `view.bind` below is for form-control *properties* tied to a signal;
 # this is the one-way reactive *attribute* dual of `view.attr`.)
-public def bind-attr :: fun string (fun nothing -> string) -> attribute = fun k f {
-	attribute.dynamic k f
-}
+public def bind-attr :: fun string (fun nothing -> string) -> attribute = attribute.dynamic
 
 # A reactive live DOM *string property* -- the property dual of `bind-attr`. Use this for
 # what a controlled input needs (`value`, `value` of a `select`/`textarea`): the
@@ -168,16 +152,12 @@ public def bind-attr :: fun string (fun nothing -> string) -> attribute = fun k 
 # edited the field, so `view.bind-attr "value"` (an attribute write) is silently ignored
 # once typing starts. `view.value-of (fun { signal.get draft })` keeps the field's
 # text in sync with -- and resettable from -- a signal.
-public def bind-property :: fun string (fun nothing -> string) -> attribute = fun k f {
-	attribute.prop-str-of k f
-}
+public def bind-property :: fun string (fun nothing -> string) -> attribute = attribute.prop-str-of
 
 # A reactive live DOM *boolean property* (`checked`, `disabled`, ...). The reactive
 # dual of `bool-property`; `view.checked-of (fun { signal.get on })` for a controlled
 # checkbox.
-public def bind-bool-property :: fun string (fun nothing -> bool) -> attribute = fun k f {
-	attribute.prop-bool-of k f
-}
+public def bind-bool-property :: fun string (fun nothing -> bool) -> attribute = attribute.prop-bool-of
 
 # Reactive `value` property of a controlled input: `view.value-of (fun { signal.get draft })`.
 public def value-of :: fun (fun nothing -> string) -> attribute = fun f {
@@ -219,9 +199,7 @@ public def checked :: fun (signal bool) -> attribute = fun s {
 # --- event handlers (effectful) ---------------------------------------------
 
 # Run `handler` (which receives the raw event) when the named event fires.
-public def on :: fun string (fun event -> nothing) -> attribute = fun name handler {
-	attribute.handler name handler
-}
+public def on :: fun string (fun event -> nothing) -> attribute = attribute.handler
 
 # Run `handler` on click (the event is ignored -- it's a plain thunk).
 public def on-click :: fun (fun nothing -> nothing) -> attribute = fun handler {
@@ -264,9 +242,7 @@ public def on-submit :: fun (fun nothing -> nothing) -> attribute = fun handler 
 #     view.div [view.id "app", view.on-mount (fun {
 #         task.spawn (task.map (api.list-todos ()) fun board { signal.set todos board })
 #     })] [...]
-public def on-mount :: fun (fun nothing -> nothing) -> attribute = fun action {
-	attribute.on-mount action
-}
+public def on-mount :: fun (fun nothing -> nothing) -> attribute = attribute.on-mount
 
 # --- to-string: render a view to an HTML string (SSR / headless) -------------
 #
@@ -490,7 +466,7 @@ public def to-string :: fun view -> string = fun v {
 		if is-void tag {
 			"<$(tag)$(attr-str)>"
 		} else {
-			let kids-str = string.join (list.map kids fun k { to-string k }) ""
+			let kids-str = string.join (list.map kids to-string) ""
 			"<$(tag)$(attr-str)>$(kids-str)</$(tag)>"
 		}
 	} is view.dyn-node f {
@@ -968,9 +944,7 @@ public def styled-when :: fun css.ruleset (fun nothing -> bool) -> attribute = f
 # is the `<var>` element builder.) Multiple custom properties on one node merge into
 # its `style`; on the server `to-string` renders the initial value into the inline
 # style, and the client re-applies it via `node.style.setProperty`.
-public def css-var :: fun string (fun nothing -> string) -> attribute = fun name f {
-	attribute.style-var name f
-}
+public def css-var :: fun string (fun nothing -> string) -> attribute = attribute.style-var
 
 public def title :: fun string -> attribute = fun v {
 	attribute.static "title" v

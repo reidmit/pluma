@@ -208,7 +208,7 @@ def reject-status :: local (ref (option int)) = local.new (ref.new none)
 #         is none { rpc.reject 401 }
 #     }
 public def reject :: fun int -> task a = fun status {
-	let _ = ref.set (local.get reject-status) (some status)
+	ref.set (local.get reject-status) (some status)
 	task.fail "rpc-reject"
 }
 

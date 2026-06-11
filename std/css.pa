@@ -60,32 +60,22 @@ public enum decl {
 
 # A hex color. The leading `#` is optional -- `hex "#e11"` and `hex "e11"` both
 # render as `#e11`.
-public def hex :: fun string -> color-value = fun s {
-	color-value.hex s
-}
+public def hex :: fun string -> color-value = color-value.hex
 
 # An opaque RGB color from three 0-255 channels: `rgb 37 99 235` => `rgb(37, 99, 235)`.
-public def rgb :: fun int int int -> color-value = fun r g b {
-	color-value.rgb r g b
-}
+public def rgb :: fun int int int -> color-value = color-value.rgb
 
 # An RGB color with an alpha (0.0-1.0): `rgba 0 0 0 0.5` => `rgba(0, 0, 0, 0.5)`.
-public def rgba :: fun int int int float -> color-value = fun r g b a {
-	color-value.rgba r g b a
-}
+public def rgba :: fun int int int float -> color-value = color-value.rgba
 
 # A named CSS color, passed through verbatim: `named "rebeccapurple"`.
-public def named :: fun string -> color-value = fun s {
-	color-value.named s
-}
+public def named :: fun string -> color-value = color-value.named
 
 # A reference to a CSS custom property (`var(--accent)`) -- the bridge for
 # model-driven values into an otherwise-static extracted rule. The live value is
 # supplied separately (by `view.vars`); here a rule just names it:
 # `css.background (css.var "accent")` => `background: var(--accent)`.
-public def var :: fun string -> color-value = fun name {
-	color-value.var name
-}
+public def var :: fun string -> color-value = color-value.var
 
 # --- lengths ----------------------------------------------------------------
 #
@@ -261,9 +251,7 @@ public def overflow :: fun string -> decl = fun v {
 # A raw property/value pair -- the escape hatch for any property without its own
 # builder: `css.property "grid-template-columns" "1fr 1fr"`. Still us producing the
 # bytes (one declaration), not the untrusted-CSS seam (`css.raw`, deferred).
-public def property :: fun string string -> decl = fun k v {
-	decl.decl k v
-}
+public def property :: fun string string -> decl = decl.decl
 
 # --- serialization ----------------------------------------------------------
 
@@ -381,15 +369,11 @@ public def label :: fun string ruleset -> ruleset = fun name r {
 # A pseudo-class (or pseudo-element) variant: `on "hover" [...]` =>
 # `.<class>:hover { ... }`. Pass the suffix after the colon (`"hover"`, `"focus"`,
 # `"disabled"`); a pseudo-element needs the leading colon yourself (`":before"`).
-public def on :: fun string (list decl) -> decl = fun sel ds {
-	decl.on sel ds
-}
+public def on :: fun string (list decl) -> decl = decl.on
 
 # A media-query variant: `media "(max-width: 600px)" [...]` =>
 # `@media (max-width: 600px) { .<class> { ... } }`.
-public def media :: fun string (list decl) -> decl = fun q ds {
-	decl.media q ds
-}
+public def media :: fun string (list decl) -> decl = decl.media
 
 # Merge several rulesets into one: all their blocks are concatenated, so a later
 # rule's declarations win over an earlier one's (single source order, one hash, one
@@ -409,7 +393,7 @@ public def compose :: fun (list ruleset) -> ruleset = fun rs {
 # you are assembling a `class` string by hand.
 public def class-of :: fun ruleset -> string = fun r {
 	let cls = class-name r
-	let _ = register cls (render-rule cls r)
+	register cls (render-rule cls r)
 	cls
 }
 
@@ -483,21 +467,17 @@ public enum keyframe-set {
 }
 
 # One animation stop: `css.frame "from" [...]`, `css.frame "50%" [...]`.
-public def frame :: fun string (list decl) -> keyframe = fun offset ds {
-	keyframe.frame offset ds
-}
+public def frame :: fun string (list decl) -> keyframe = keyframe.frame
 
 # Bundle stops into an animation value.
-public def keyframes :: fun (list keyframe) -> keyframe-set = fun ks {
-	keyframe-set.stops ks
-}
+public def keyframes :: fun (list keyframe) -> keyframe-set = keyframe-set.stops
 
 # An `animation` declaration that plays `kf` with the given timing
 # (`"1s linear infinite"`), AND registers `kf` as an `@keyframes` block in the
 # collector. `css.animation spin "1s linear infinite"` => `animation: <name> 1s linear infinite`.
 public def animation :: fun keyframe-set string -> decl = fun kf timing {
 	let name = "k$(to-hex (hash-css (canonical-frames kf)))"
-	let _ = register name (render-keyframes name kf)
+	register name (render-keyframes name kf)
 	decl.decl "animation" "$(name) $(timing)"
 }
 
@@ -524,9 +504,7 @@ public enum global-rule {
 }
 
 # A global rule: `css.at ":root" [...]`, `css.at "@font-face" [...]`.
-public def at :: fun string (list decl) -> global-rule = fun selector ds {
-	global-rule.at selector ds
-}
+public def at :: fun string (list decl) -> global-rule = global-rule.at
 
 # Register global rules into the collector (`selector { decls }`, unscoped). Returns
 # nothing -- it's a setup call; run it before `collect`/`style-tag`.
@@ -555,7 +533,7 @@ def register :: fun string string -> nothing = fun cls css {
 # same order serialize identically -> same hash -> same class.
 def canonical :: fun ruleset -> string = fun r {
 	when r is ruleset.blocks _ ds {
-		string.join (list.map ds fun d { canon-decl d }) "|"
+		string.join (list.map ds canon-decl) "|"
 	}
 }
 
@@ -606,9 +584,7 @@ def frames-body :: fun keyframe-set -> string = fun kf {
 
 # A keyframe-set's content, the input to its name hash (distinct frame sets get
 # distinct names).
-def canonical-frames :: fun keyframe-set -> string = fun kf {
-	frames-body kf
-}
+def canonical-frames :: fun keyframe-set -> string = frames-body
 
 def render-keyframes :: fun string keyframe-set -> string = fun name kf {
 	"@keyframes $(name){$(frames-body kf)}"

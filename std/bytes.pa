@@ -176,7 +176,7 @@ public def to-list :: fun bytes -> list int = fun b {
 #     bytes.from-list [256]       # => err "byte out of range (0..256): 256"
 public def from-list :: fun (list int) -> result bytes string = fun xs {
 	let n = list.length xs
-	try _ = check-range xs n 0
+	try check-range xs n 0
 	ok (build n fun i {
 		list.get xs i
 	})
@@ -267,7 +267,7 @@ public def split :: fun bytes bytes -> list bytes = fun b sep {
 		# `k + 1` pieces for `k` separators falls out of pushing the trailing
 		# piece once no further match can start.
 		let out :: list bytes = []
-		let _ = split-into b sep seplen (length b) 0 0 out
+		split-into b sep seplen (length b) 0 0 out
 		out
 	}
 }
@@ -280,10 +280,10 @@ public def split :: fun bytes bytes -> list bytes = fun b sep {
 # input as a single piece.
 def split-into :: fun bytes bytes int int int int (list bytes) -> nothing = fun b sep seplen n i start out {
 	if i + seplen > n {
-		let _ = list.push out (slice b start n)
+		list.push out (slice b start n)
 		()
 	} else if matches-at b sep seplen i {
-		let _ = list.push out (slice b start i)
+		list.push out (slice b start i)
 		split-into b sep seplen n (i + seplen) (i + seplen) out
 	} else {
 		split-into b sep seplen n (i + 1) start out

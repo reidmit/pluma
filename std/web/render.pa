@@ -159,11 +159,7 @@ def class-token :: fun view.attribute -> string = fun a {
 
 def merged-class :: fun (list view.attribute) -> string = fun attrs {
 	let toks = list.filter (list.map attrs class-token) fun t {
-		if string.is-empty t {
-			false
-		} else {
-			true
-		}
+		!string.is-empty t
 	}
 	string.join toks " "
 }
@@ -178,11 +174,7 @@ def has-reactive-class :: fun (list view.attribute) -> bool = fun attrs {
 			false
 		}
 	}
-	if list.is-empty reactive {
-		false
-	} else {
-		true
-	}
+	!list.is-empty reactive
 }
 
 # Build the element's class: one effect when any class attribute is reactive (a

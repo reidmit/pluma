@@ -200,7 +200,7 @@ public def each :: fun (list a) (fun a -> b) -> nothing = fun xs f {
 
 def each-from :: fun (list a) (fun a -> b) int int -> nothing = fun xs f n i {
 	if i < n {
-		let _ = f (get xs i)
+		f (get xs i)
 		each-from xs f n (i + 1)
 	} else {
 		()
@@ -557,11 +557,7 @@ def prefix-len :: fun (list a) (fun a -> bool) int int -> int = fun xs pred n i 
 public def partition :: fun (list a) (fun a -> bool) -> (list a, list a) = fun xs pred {
 	let yes = filter xs pred
 	let no = filter xs fun x {
-		if pred x {
-			false
-		} else {
-			true
-		}
+		!pred x
 	}
 	(yes, no)
 }
@@ -677,7 +673,7 @@ public def sort :: fun (list a) (fun a a -> ordering) -> list a = fun xs cmp {
 		let aux = build n fun i {
 			get xs i
 		}
-		let _ = msort src aux 0 n cmp
+		msort src aux 0 n cmp
 		src
 	}
 }
@@ -820,8 +816,8 @@ def msort :: fun (list a) (list a) int int (fun a a -> ordering) -> nothing = fu
 		()
 	} else {
 		let mid = (lo + hi) / 2
-		let _ = msort src aux lo mid cmp
-		let _ = msort src aux mid hi cmp
+		msort src aux lo mid cmp
+		msort src aux mid hi cmp
 		merge src aux lo mid hi cmp
 	}
 }
@@ -829,7 +825,7 @@ def msort :: fun (list a) (list a) int int (fun a a -> ordering) -> nothing = fu
 # Merge the sorted runs `src[lo..mid)` and `src[mid..hi)` into `aux`,
 # then copy the merged run back over `src[lo..hi)`.
 def merge :: fun (list a) (list a) int int int (fun a a -> ordering) -> nothing = fun src aux lo mid hi cmp {
-	let _ = merge-into src aux lo mid mid hi lo cmp
+	merge-into src aux lo mid mid hi lo cmp
 	copy-run aux src lo hi
 }
 
@@ -845,10 +841,10 @@ def merge-into :: fun (list a) (list a) int int int int int (fun a a -> ordering
 		let l = get src i
 		let r = get src j
 		when cmp l r is ordering.gt {
-			let _ = set aux k r
+			set aux k r
 			merge-into src aux i mid (j + 1) hi (k + 1) cmp
 		} else {
-			let _ = set aux k l
+			set aux k l
 			merge-into src aux (i + 1) mid j hi (k + 1) cmp
 		}
 	}
@@ -860,7 +856,7 @@ def copy-run :: fun (list a) (list a) int int -> nothing = fun src dst from to {
 	if from >= to {
 		()
 	} else {
-		let _ = set dst from (get src from)
+		set dst from (get src from)
 		copy-run src dst (from + 1) to
 	}
 }
@@ -871,7 +867,7 @@ def copy-shift :: fun (list a) (list a) int int int -> nothing = fun src dst fro
 	if from >= to {
 		()
 	} else {
-		let _ = set dst at (get src from)
+		set dst at (get src from)
 		copy-shift src dst (from + 1) to (at + 1)
 	}
 }

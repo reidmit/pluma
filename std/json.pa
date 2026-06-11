@@ -253,17 +253,7 @@ def line-col :: fun bytes int int int int -> (int, int) = fun bs pos i line line
 }
 
 def is-ws :: fun int -> bool = fun b {
-	if b == 32 {
-		true
-	} else if b == 9 {
-		true
-	} else if b == 10 {
-		true
-	} else if b == 13 {
-		true
-	} else {
-		false
-	}
+	b == 32 || b == 9 || b == 10 || b == 13
 }
 
 def skip-ws :: fun bytes int int -> int = fun bs n pos {
@@ -277,15 +267,7 @@ def skip-ws :: fun bytes int int -> int = fun bs n pos {
 }
 
 def is-digit :: fun int -> bool = fun b {
-	if b >= 48 {
-		if b <= 57 {
-			true
-		} else {
-			false
-		}
-	} else {
-		false
-	}
+	b >= 48 && b <= 57
 }
 
 # True when bytes at `pos` match the literal `lit` (used for null/true/false).
@@ -388,21 +370,7 @@ def scan-number :: fun bytes int int -> int = fun bs n pos {
 }
 
 def is-num-char :: fun int -> bool = fun b {
-	if is-digit b {
-		true
-	} else if b == 45 {
-		true
-	} else if b == 43 {
-		true
-	} else if b == 46 {
-		true
-	} else if b == 101 {
-		true
-	} else if b == 69 {
-		true
-	} else {
-		false
-	}
+	is-digit b || b == 45 || b == 43 || b == 46 || b == 101 || b == 69
 }
 
 # A number is a float if its run contains a `.`, `e`, or `E`.

@@ -169,7 +169,7 @@ public def chars :: fun string -> list string = fun s {
 	let out = list.build (count-chars b n 0 0) fun _i {
 		""
 	}
-	let _ = fill-chars b n out 0 0
+	fill-chars b n out 0 0
 	out
 }
 
@@ -183,7 +183,7 @@ def fill-chars :: fun bytes int (list string) int int -> nothing = fun b n out a
 		()
 	} else {
 		let len = char-len (bytes.get b at)
-		let _ = list.set out idx (as-string (bytes.slice b at (at + len)))
+		list.set out idx (as-string (bytes.slice b at (at + len)))
 		fill-chars b n out (at + len) (idx + 1)
 	}
 }
@@ -336,9 +336,7 @@ public def split :: fun string string -> list string = fun s sep {
 		# boundaries, so `as-string` (the unchecked reinterpret) is sound here --
 		# no need to re-validate every piece through `bytes.to-string` and unwrap
 		# the `result` it returns (pure churn at this scale).
-		list.map (bytes.split (to-bytes s) (to-bytes sep)) fun piece {
-			as-string piece
-		}
+		list.map (bytes.split (to-bytes s) (to-bytes sep)) as-string
 	}
 }
 

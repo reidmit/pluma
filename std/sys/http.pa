@@ -168,7 +168,7 @@ def host-part :: fun string -> string = fun address {
 # handlers plus the single waiting acceptor.
 public def serve-on :: fun net.listener (fun request -> task response) -> task nothing = fun server handler {
 	manual scope as s {
-		let _ = s.spawn (accept-one server)
+		s.spawn (accept-one server)
 		serve-loop s server handler
 	}
 }
@@ -197,7 +197,7 @@ def accept-one :: fun net.listener -> task serve-event = fun server {
 # A handler child: run one connection to completion, then report `served`.
 # `handle-one` never fails, so this child never fails the scope.
 def handle-child :: fun net.connection (fun request -> task response) -> task serve-event = fun conn handler {
-	try _ = handle-one conn handler
+	try handle-one conn handler
 	task.return serve-event.served
 }
 
@@ -215,8 +215,8 @@ def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun reques
 	} is some outcome {
 		when outcome is ok ev {
 			when ev is serve-event.arrived conn {
-				let _ = s.spawn (handle-child conn handler)
-				let _ = s.spawn (accept-one server)
+				s.spawn (handle-child conn handler)
+				s.spawn (accept-one server)
 				serve-loop s server handler
 			} is serve-event.served {
 				serve-loop s server handler
@@ -246,11 +246,11 @@ def handle-one :: fun net.connection (fun request -> task response) -> task noth
 			}
 			try resp = handler req
 			when resp.stream-body is some events {
-				try _ = write-all conn (serialize-stream-head resp)
-				try _ = write-events conn events
+				try write-all conn (serialize-stream-head resp)
+				try write-events conn events
 				finish conn
 			} is none {
-				try _ = write-all conn (serialize resp)
+				try write-all conn (serialize resp)
 				finish conn
 			}
 		} is err _ {
@@ -262,7 +262,7 @@ def handle-one :: fun net.connection (fun request -> task response) -> task noth
 }
 
 def finish :: fun net.connection -> task nothing = fun conn {
-	let _ = net.close conn
+	net.close conn
 	task.return ()
 }
 
@@ -434,14 +434,14 @@ def serialize-stream-head :: fun response -> bytes = fun resp {
 # regardless.
 def write-events :: fun net.connection (stream bytes) -> task nothing = fun conn events {
 	try outcome = task.attempt (stream.for-each events fun chunk {
-		try _ = write-all conn (event-next chunk)
+		try write-all conn (event-next chunk)
 		task.return ()
 	})
 	when outcome is ok _ {
-		try _ = write-all conn event-done
+		try write-all conn event-done
 		task.return ()
 	} is err _ {
-		try _ = write-all conn event-fault
+		try write-all conn event-fault
 		task.return ()
 	}
 }
@@ -496,9 +496,9 @@ public def fetch :: fun string method (dict string string) bytes -> task respons
 	let authority = split.0
 	let path = split.1
 	try conn = task.unwrap (net.connect authority)
-	try _ = task.unwrap (write-all conn (serialize-request verb path authority headers body))
+	try task.unwrap (write-all conn (serialize-request verb path authority headers body))
 	try resp = read-response conn
-	let _ = net.close conn
+	net.close conn
 	task.return resp
 }
 
@@ -601,18 +601,18 @@ public def fetch-stream :: fun string method (dict string string) bytes -> strea
 			let split = split-url url
 			try c = net.connect split.0
 			when c is ok conn {
-				try _ = write-all conn (serialize-request verb split.1 split.0 headers body)
+				try write-all conn (serialize-request verb split.1 split.0 headers body)
 				try raw-r = read-until-headers conn (string.to-bytes "")
 				when raw-r is ok raw {
 					let parsed = parse-response-head raw
 					if parsed.status == 200 {
 						task.return (conn, ref.new parsed.body-start)
 					} else {
-						let _ = net.close conn
+						net.close conn
 						task.fail ("http.fetch-stream: status " ++ to-string parsed.status)
 					}
 				} is err e {
-					let _ = net.close conn
+					net.close conn
 					task.fail e
 				}
 			} is err e {
@@ -625,7 +625,7 @@ public def fetch-stream :: fun string method (dict string string) bytes -> strea
 		},
 		close: fun res {
 			let (conn, _buf) = res
-			let _ = net.close conn
+			net.close conn
 			task.return ()
 		},
 	}

@@ -38,21 +38,13 @@ public enum value {
 
 # Smart constructors so callers write `sql.int 5` rather than the qualified variant
 # `sql.value.int 5`. `sql.bool` encodes a boolean the way SQLite expects: 1 or 0.
-public def int :: fun int -> value = fun n {
-	value.int n
-}
+public def int :: fun int -> value = value.int
 
-public def float :: fun float -> value = fun x {
-	value.float x
-}
+public def float :: fun float -> value = value.float
 
-public def text :: fun string -> value = fun s {
-	value.text s
-}
+public def text :: fun string -> value = value.text
 
-public def blob :: fun bytes -> value = fun b {
-	value.blob b
-}
+public def blob :: fun bytes -> value = value.blob
 
 public def null :: value = value.null
 
@@ -174,37 +166,21 @@ public enum predicate {
 	one-of string (list value)
 }
 
-public def eq :: fun string value -> predicate = fun c v {
-	predicate.equal c v
-}
+public def eq :: fun string value -> predicate = predicate.equal
 
-public def ne :: fun string value -> predicate = fun c v {
-	predicate.not-equal c v
-}
+public def ne :: fun string value -> predicate = predicate.not-equal
 
-public def gt :: fun string value -> predicate = fun c v {
-	predicate.greater c v
-}
+public def gt :: fun string value -> predicate = predicate.greater
 
-public def ge :: fun string value -> predicate = fun c v {
-	predicate.greater-eq c v
-}
+public def ge :: fun string value -> predicate = predicate.greater-eq
 
-public def lt :: fun string value -> predicate = fun c v {
-	predicate.less c v
-}
+public def lt :: fun string value -> predicate = predicate.less
 
-public def le :: fun string value -> predicate = fun c v {
-	predicate.less-eq c v
-}
+public def le :: fun string value -> predicate = predicate.less-eq
 
-public def like :: fun string string -> predicate = fun c pat {
-	predicate.like c pat
-}
+public def like :: fun string string -> predicate = predicate.like
 
-public def one-of :: fun string (list value) -> predicate = fun c vs {
-	predicate.one-of c vs
-}
+public def one-of :: fun string (list value) -> predicate = predicate.one-of
 
 # A single ORDER BY term: a column and a direction. (Named `sort`, not `ordering`, because
 # `ordering` is the built-in comparison-result enum.)
@@ -213,13 +189,9 @@ public enum sort {
 	desc string
 }
 
-public def asc :: fun string -> sort = fun c {
-	sort.asc c
-}
+public def asc :: fun string -> sort = sort.asc
 
-public def desc :: fun string -> sort = fun c {
-	sort.desc c
-}
+public def desc :: fun string -> sort = sort.desc
 
 # A SELECT query as plain, inspectable data. You build one by piping the stages below with
 # `|` (each takes the query first, so it threads), then hand it to `std.sql.compile` or a
@@ -425,9 +397,7 @@ public enum column {
 	column string col-type
 }
 
-public def col :: fun string col-type -> column = fun name ty {
-	column.column name ty
-}
+public def col :: fun string col-type -> column = column.column
 
 public def col-name :: fun column -> string = fun c {
 	when c is column.column n _ {
@@ -456,9 +426,7 @@ opaque enum table a {
 #     def users :: table user = sql.table-of "users"
 #         [sql.col "id" sql.col-type.c-int, sql.col "name" sql.col-type.c-text]
 #         decode-user encode-user
-public def table-of :: fun string (list column) (fun row -> result a string) (fun a -> list (string, value)) -> table a = fun name cols decode encode {
-	table.table name cols decode encode
-}
+public def table-of :: fun string (list column) (fun row -> result a string) (fun a -> list (string, value)) -> table a = table.table
 
 public def table-name :: fun (table a) -> string = fun t {
 	when t is table.table n _ _ _ {

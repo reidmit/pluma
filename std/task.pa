@@ -101,9 +101,7 @@ def cancel-sub :: fun int -> nothing = built-in "cancel-sub"
 # Run `t` detached on the scheduler as a root-scoped fiber, returning at once.
 # The canonical "RPC result flows into a signal" move:
 # `task.spawn (task.map (api.add 2 3) (fun n { signal.set sum n }))`.
-public def spawn :: fun (task nothing) -> nothing = fun t {
-	spawn-command t
-}
+public def spawn :: fun (task nothing) -> nothing = spawn-command
 
 # Like `spawn`, but in its own cancellable scope; returns a thunk that cancels it
 # (running the task's `defer`s / a stream's shielded release). Use it to drive a
@@ -233,7 +231,7 @@ def await-all :: fun (list (task a)) -> task (list a) = fun handles {
 def await-into :: fun (list (task a)) (list a) int int -> task (list a) = fun handles acc i n {
 	if i < n {
 		try x = list.get handles i
-		let _ = list.push acc x
+		list.push acc x
 		await-into handles acc (i + 1) n
 	} else {
 		return acc
@@ -268,16 +266,14 @@ public def all :: fun (list (task a)) -> task (list a) = fun ts {
 # successes and failures alike. Each task is `attempt`-wrapped, so none of
 # them ever fails the scope: this always settles the full list.
 public def settle-all :: fun (list (task a)) -> task (list (result a e)) = fun ts {
-	all (list.map ts fun t {
-		attempt t
-	})
+	all (list.map ts attempt)
 }
 
 # Runs every task concurrently and returns the first to *settle* (succeed or
 # fail), cancelling the losers. Fails if `ts` is empty.
 public def race :: fun (list (task a)) -> task a = fun ts {
 	manual scope as s {
-		let _ = list.map ts fun t {
+		list.map ts fun t {
 			s.spawn t
 		}
 		try first = s.next ()
@@ -311,7 +307,7 @@ def drain-any :: fun (manual-scope-handle a) -> task a = fun s {
 # the rest. Failures are skipped; if every task fails, this fails too.
 public def any :: fun (list (task a)) -> task a = fun ts {
 	manual scope as s {
-		let _ = list.map ts fun t {
+		list.map ts fun t {
 			s.spawn t
 		}
 		drain-any s
@@ -347,11 +343,11 @@ def gather :: fun (manual-scope-handle a) (list (task a)) (ref int) (list a) -> 
 		return acc
 	} is some r {
 		try x = lift r
-		let _ = list.push acc x
+		list.push acc x
 		let i = ref.get next
-		let _ = when i < list.length ts is true {
+		when i < list.length ts is true {
 			ref.set next (i + 1)
-			let _ = s.spawn (list.get ts i)
+			s.spawn (list.get ts i)
 			()
 		} is false {
 			()
@@ -365,7 +361,7 @@ def gather :: fun (manual-scope-handle a) (list (task a)) (ref int) (list a) -> 
 # the first failure.
 public def pool :: fun int (list (task a)) -> task (list a) = fun n ts {
 	manual scope as s {
-		let _ = list.map (list.take ts n) fun t {
+		list.map (list.take ts n) fun t {
 			s.spawn t
 		}
 		gather s ts (ref.new n) []

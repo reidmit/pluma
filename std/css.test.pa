@@ -90,7 +90,7 @@ def tests :: test.suite = [
 		]
 	},
 	test.case "render emits base, pseudo, and media blocks under the hashed class" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let r = css.rule [
 			css.color (css.hex "#fff"),
 			css.padding (css.rem 1.0),
@@ -101,7 +101,7 @@ def tests :: test.suite = [
 		assert.equals (css.collect ()) ".$(cls){color: #fff; padding: 1rem}.$(cls):hover{background: #1e51c8}@media (max-width: 600px){.$(cls){padding: 0.5rem}}"
 	},
 	test.case "the collector dedups identical rules and keeps distinct ones" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let r = css.rule [css.color (css.hex "#fff")]
 		let s = css.rule [css.color (css.hex "#000")]
 		let _a = css.class-of r
@@ -111,7 +111,7 @@ def tests :: test.suite = [
 		assert.equals (list.length (string.split (css.collect ()) "\n")) 2
 	},
 	test.case "compose concatenates declarations into one new class" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let bg = css.rule [css.background (css.hex "#2563eb")]
 		let fg = css.rule [css.color (css.hex "#fff")]
 		let merged = css.compose [bg, fg]
@@ -120,7 +120,7 @@ def tests :: test.suite = [
 		assert.equals (css.collect ()) ".$(cls){background: #2563eb; color: #fff}"
 	},
 	test.case "view.styled registers the rule and yields its class" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let primary = css.rule [css.color (css.hex "#fff")]
 		let v = view.button [view.styled primary] [view.text "Save"]
 		let cls = css.class-of primary
@@ -130,7 +130,7 @@ def tests :: test.suite = [
 		]
 	},
 	test.case "style-tag wraps the collected CSS" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let r = css.rule [css.color (css.hex "#fff")]
 		let cls = css.class-of r
 		assert.equals (css.style-tag ()) "<style>.$(cls){color: #fff}</style>"
@@ -155,12 +155,12 @@ def tests :: test.suite = [
 		assert.equals (view.to-string v) "<div id=\"box\" style=\"--accent: #e11\"></div>"
 	},
 	test.case "global registers an unscoped selector rule" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let _g = css.global [css.at ":root" [css.property "--brand" "#2563eb"]]
 		assert.equals (css.collect ()) ":root{--brand: #2563eb}"
 	},
 	test.case "global handles several rules incl. at-rules" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let _g = css.global [
 			css.at "body" [css.margin (css.px 0.0)],
 			css.at "@font-face" [
@@ -175,7 +175,7 @@ def tests :: test.suite = [
 		]
 	},
 	test.case "animation registers @keyframes and names the decl to match" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let spin = css.keyframes [
 			css.frame "from" [css.property "opacity" "0"],
 			css.frame "to" [css.property "opacity" "1"],
@@ -189,7 +189,7 @@ def tests :: test.suite = [
 		]
 	},
 	test.case "identical keyframes dedup to one @keyframes block" fun {
-		let _ = css.reset ()
+		css.reset ()
 		let pulse = css.keyframes [
 			css.frame "0%" [css.property "transform" "scale(1)"],
 			css.frame "100%" [css.property "transform" "scale(2)"],
@@ -206,7 +206,7 @@ def tests :: test.suite = [
 
 		# ...but the same keyframes => one registered @keyframes block
 
-		let _ = css.reset ()
+		css.reset ()
 		let spin = css.keyframes [
 			css.frame "from" [css.property "transform" "rotate(0deg)"],
 			css.frame "to" [css.property "transform" "rotate(360deg)"],

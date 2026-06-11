@@ -80,11 +80,7 @@ def stream-close :: fun int -> task nothing = built-in "rpc-stream-close"
 #         (fun frame { ... })
 public def fetch-stream :: fun string (dict string string) bytes -> stream bytes = fun url headers body {
 	let req = string.join ["POST", url, render-headers headers, hex.encode body] "\t"
-	stream.from-resource {
-		open: fun { stream-open req },
-		next: fun token { stream-next token },
-		close: fun token { stream-close token },
-	}
+	stream.from-resource {open: fun { stream-open req }, next: stream-next, close: stream-close}
 }
 
 # Render headers as `k:v;k:v` for the host to attach to the request.

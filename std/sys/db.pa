@@ -73,7 +73,7 @@ public def open :: fun string -> task connection string = fun path {
 # it confirms teardown finished; a connection is also dropped when the program exits.
 public def close :: fun connection -> task nothing string = fun conn {
 	when conn is connection.handle id {
-		try _ = run-op op-close id "" no-bytes
+		try run-op op-close id "" no-bytes
 		task.return ()
 	}
 }
@@ -112,7 +112,7 @@ def execute-count :: fun connection string (list value) -> task int string = fun
 #     try _ = db.batch conn "create table a (x integer); create table b (y text)"
 public def batch :: fun connection string -> task nothing string = fun conn script {
 	when conn is connection.handle id {
-		try _ = run-op op-batch id script no-bytes
+		try run-op op-batch id script no-bytes
 		task.return ()
 	}
 }
@@ -136,10 +136,10 @@ public def batch :: fun connection string -> task nothing string = fun conn scri
 # usual single-connection-transaction caveat.) A *fault* inside `body` (cancellation, not a
 # failure) abandons the open transaction; SQLite rolls it back when the connection is dropped.
 public def transaction :: fun connection (fun nothing -> task a string) -> task a string = fun conn body {
-	try _ = execute conn "BEGIN" []
+	try execute conn "BEGIN" []
 	try outcome = task.attempt (body ())
 	when outcome is ok v {
-		try _ = execute conn "COMMIT" []
+		try execute conn "COMMIT" []
 		task.return v
 	} is err e {
 		# Surface the body's failure; the rollback's own outcome is best-effort.
@@ -213,7 +213,7 @@ public def limit :: fun (table-query a) int -> table-query a = fun q n {
 # with the table's own decoder.
 public def run :: fun (table-query a) connection -> task (list a) string = fun q conn {
 	when q is table-query.tq t inner {
-		try _ = task.lift (sql.validate-columns (sql.table-column-names t) inner)
+		try task.lift (sql.validate-columns (sql.table-column-names t) inner)
 		fetch inner conn (sql.table-decode t)
 	}
 }
@@ -230,7 +230,7 @@ public def all :: fun connection (table a) -> task (list a) string = fun conn t 
 public def insert :: fun connection (table a) a -> task nothing string = fun conn t value {
 	let cells = (sql.table-encode t) value
 	let (text, binds) = sql.compile-insert (sql.table-name t) cells
-	try _ = execute conn text binds
+	try execute conn text binds
 	task.return ()
 }
 
@@ -240,7 +240,7 @@ public def insert :: fun connection (table a) a -> task nothing string = fun con
 #
 #     try removed = db.delete conn todos [sql.eq "done" (sql.bool true)]
 public def delete :: fun connection (table a) (list predicate) -> task int string = fun conn t filters {
-	try _ = task.lift (sql.validate-column-names (sql.table-column-names t) (sql.predicate-columns filters))
+	try task.lift (sql.validate-column-names (sql.table-column-names t) (sql.predicate-columns filters))
 	let (text, binds) = sql.compile-delete (sql.table-name t) filters
 	execute-count conn text binds
 }
@@ -256,7 +256,7 @@ public def update :: fun connection (table a) (list (string, value)) (list predi
 		c
 	}
 	let used = list.concat set-cols (sql.predicate-columns filters)
-	try _ = task.lift (sql.validate-column-names (sql.table-column-names t) used)
+	try task.lift (sql.validate-column-names (sql.table-column-names t) used)
 	let (text, binds) = sql.compile-update (sql.table-name t) sets filters
 	execute-count conn text binds
 }
@@ -277,13 +277,13 @@ public def update :: fun connection (table a) (list (string, value)) (list predi
 public alias migration {version :: int, up :: string}
 
 public def migrate :: fun connection (list migration) -> task int string = fun conn migrations {
-	try _ = batch conn "create table if not exists \"_pluma_migrations\" (version integer primary key)"
+	try batch conn "create table if not exists \"_pluma_migrations\" (version integer primary key)"
 	try applied = applied-versions conn
 	let ordered = list.sort-by migrations fun m {
 		m.version
 	}
 	let pending = list.filter ordered fun m {
-		list.contains applied m.version == false
+		!list.contains applied m.version
 	}
 	apply-pending conn pending 0
 }

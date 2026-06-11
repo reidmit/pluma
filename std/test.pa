@@ -40,7 +40,7 @@ def esc :: string = bytes.to-string (bytes.build 1 fun _i { 27 }) ?? ""
 # Wrap `s` in the given SGR codes, closed by a single reset (1 = bold, 2 = dim,
 # 31 = red, …), so colored output composes without an early-reset bug.
 def styled :: fun (list int) string -> string = fun codes s {
-	let nums = string.join (list.map codes fun c { to-string c }) ";"
+	let nums = string.join (list.map codes to-string) ";"
 	"$(esc)[$(nums)m$(s)$(esc)[0m"
 }
 
@@ -85,29 +85,19 @@ public alias suite list test
 # --- constructors (the public surface) ---------------------------------------
 
 # A single case: a name and a thunk returning `ok ()` to pass / `err msg` to fail.
-public def case :: fun string (fun nothing -> result nothing string) -> test = fun name body {
-	test.leaf name body
-}
+public def case :: fun string (fun nothing -> result nothing string) -> test = test.leaf
 
 # A named group of nested cases/groups.
-public def group :: fun string (list test) -> test = fun name children {
-	test.nest name children
-}
+public def group :: fun string (list test) -> test = test.nest
 
 # Mark a case or group as skipped — registered and reported, never run.
-public def skip :: fun test -> test = fun node {
-	test.omit node
-}
+public def skip :: fun test -> test = test.omit
 
 # Mark a case or group as focused — if anything is focused, only focused runs.
-public def focus :: fun test -> test = fun node {
-	test.only node
-}
+public def focus :: fun test -> test = test.only
 
 # A pending case: a name with no body yet.
-public def todo :: fun string -> test = fun name {
-	test.pend name
-}
+public def todo :: fun string -> test = test.pend
 
 # --- flattening --------------------------------------------------------------
 

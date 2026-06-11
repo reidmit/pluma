@@ -160,9 +160,7 @@ def drain :: fun nothing -> nothing = fun {
 	} else {
 		let ready = dict.values (ref.get pending)
 		ref.set pending (dict.empty ())
-		list.each ready fun o {
-			fire-run o
-		}
+		list.each ready fire-run
 		drain ()
 	}
 }
@@ -369,9 +367,7 @@ public def set :: fun (signal a) a -> nothing = fun s v {
 			ref.set val v
 			let observers = dict.values (ref.get subs)
 			batch fun {
-				list.each observers fun o {
-					fire-notify o
-				}
+				list.each observers fire-notify
 			}
 		}
 	}
@@ -420,9 +416,7 @@ def register-cleanup :: fun (fun nothing -> nothing) -> nothing = fun d {
 }
 
 # Register a teardown thunk with the current owner (no-op outside an owner).
-public def on-cleanup :: fun (fun nothing -> nothing) -> nothing = fun d {
-	register-cleanup d
-}
+public def on-cleanup :: fun (fun nothing -> nothing) -> nothing = register-cleanup
 
 # Run `body` under a fresh owner labelled `label`; return its result paired with a
 # thunk that disposes every effect/computed/cleanup created under that owner.
@@ -479,9 +473,7 @@ public def computed :: fun (fun nothing -> a) -> signal a = fun body {
 				()
 			} else {
 				ref.set stale true
-				list.each (dict.values (ref.get subs)) fun sub {
-					fire-notify sub
-				}
+				list.each (dict.values (ref.get subs)) fire-notify
 			}
 		}
 	}

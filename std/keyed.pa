@@ -27,6 +27,4 @@ public def by-key = fun r {
 
 # Key by the whole item -- for a list whose elements are themselves the keys (a
 # `list string`, a `list int`): `view.each tags keyed.by-value chip`.
-public def by-value = fun x {
-	to-string x
-}
+public def by-value = to-string

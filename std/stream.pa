@@ -119,7 +119,7 @@ public def from-resource :: fun {
 		when out is some x {
 			task.return (some x)
 		} is none {
-			try _ = stop ()
+			try stop ()
 			task.return none
 		}
 	}
@@ -215,7 +215,7 @@ public def take :: fun (stream a) int -> stream a = fun s n {
 					task.return none
 				}
 			} else {
-				try _ = stop ()
+				try stop ()
 				task.return none
 			}
 		}
@@ -239,7 +239,7 @@ public def take-while :: fun (stream a) (fun a -> bool) -> stream a = fun s keep
 						task.return (some x)
 					} else {
 						ref.set done true
-						try _ = stop ()
+						try stop ()
 						task.return none
 					}
 				} is none {
@@ -258,14 +258,14 @@ public def take-while :: fun (stream a) (fun a -> bool) -> stream a = fun s keep
 # and is shielded, so it survives a cancel mid-consumption.
 public def for-each :: fun (stream a) (fun a -> task nothing) -> task nothing = fun s body {
 	defer task.shielded (release s)
-	try _ = for-each-loop s body
+	try for-each-loop s body
 	task.return ()
 }
 
 def for-each-loop :: fun (stream a) (fun a -> task nothing) -> task nothing = fun s body {
 	try m = next s
 	when m is some x {
-		try _ = body x
+		try body x
 		for-each-loop s body
 	} is none {
 		task.return ()

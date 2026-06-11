@@ -567,13 +567,7 @@ def validate-components :: fun int int int int int int int -> result nothing str
 }
 
 def in-range :: fun int int int -> bool = fun v lo hi {
-	if v < lo {
-		false
-	} else if v > hi {
-		false
-	} else {
-		true
-	}
+	v >= lo && v <= hi
 }
 
 # --- internals: formatting ----------------------------------------------

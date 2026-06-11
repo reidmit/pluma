@@ -30,7 +30,7 @@ def tests :: test.suite = [
 		let xs = list.build 3 fun _i {
 			0
 		}
-		let _ = list.set xs 1 9
+		list.set xs 1 9
 		assert.equals xs [0, 9, 0]
 	},
 	test.case "set is visible through an alias" fun {
@@ -38,14 +38,14 @@ def tests :: test.suite = [
 			0
 		}
 		let ys = xs
-		let _ = list.set xs 0 7
+		list.set xs 0 7
 		assert.equals ys [7, 0]
 	},
 	test.case "set then keep using list ops" fun {
 		let xs = list.build 4 fun i {
 			i
 		}
-		let _ = list.set xs 0 10
+		list.set xs 0 10
 		assert.equals (list.map xs fun n { n * 2 }) [20, 2, 4, 6]
 	},
 	test.case "concat joins two lists" fun {

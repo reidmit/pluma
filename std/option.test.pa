@@ -145,7 +145,7 @@ def tests :: test.suite = [
 		}
 	},
 	test.case "map can change the inner type" fun {
-		when opt.map (some 5) fun n { to-string n } is some s {
+		when opt.map (some 5) to-string is some s {
 			assert.equals s "5"
 		} is none {
 			assert.is-true false
