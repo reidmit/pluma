@@ -494,13 +494,23 @@ pub(crate) enum Helper {
 	/// Shares `build_rpc_stream_open_fn` with the stream open — only the task kind and
 	/// the import differ. The sys host uses the blocking path instead (no helper).
 	WebFetch,
+	/// `__variant_payload(value) -> valarray` — materialize a `$variant`'s inline
+	/// payload (`p0`/`p1`, or `rest` for arity ≥ 3) as a uniform array, for the
+	/// generic consumers (eq/wire/to-string/…) that iterate a payload of
+	/// runtime-unknown arity.
+	VariantPayload,
+	/// `__variant_from_array(i32 vtag, value name, valarray arr) -> value` — build a
+	/// `$variant` from a payload array, splitting it into the inline slots. Used by
+	/// the cold/dynamic construction sites (wire decode, host-result wrappers) that
+	/// already have the payload as an array.
+	VariantFromArray,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 98;
+	pub(crate) const COUNT: usize = 100;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -710,6 +720,10 @@ pub(crate) fn is_net_sync(tag: &str) -> bool {
 #[derive(Clone, Copy)]
 pub(crate) enum Ty {
 	Eq,
+	/// `__variant_payload(value) -> valarray`.
+	VariantPayload,
+	/// `__variant_from_array(i32, value, valarray) -> value`.
+	VariantFromArray,
 	Helper(usize),
 	ArrConcat,
 	BytesConcat,
@@ -742,6 +756,8 @@ impl Ty {
 	pub(crate) fn resolve(self, ft: &mut FuncTypes) -> u32 {
 		match self {
 			Ty::Eq => ft.for_eq(),
+			Ty::VariantPayload => ft.for_variant_payload(),
+			Ty::VariantFromArray => ft.for_variant_from_array(),
 			Ty::Helper(n) => ft.for_helper(n),
 			Ty::ArrConcat => ft.for_arrconcat(),
 			Ty::BytesConcat => ft.for_bytesconcat(),

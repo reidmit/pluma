@@ -23,6 +23,7 @@ mod marshal;
 mod record;
 mod task;
 mod to_string;
+mod variant;
 mod wat;
 mod wire;
 mod wrapper;
@@ -49,8 +50,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::Eq,
 		fn_type: Ty::Eq,
-		deps: &[H::DictEq],
-		build: |c| eq::build_eq_fn(c.self_idx, c.dep(H::DictEq)),
+		deps: &[H::DictEq, H::VariantPayload],
+		build: |c| eq::build_eq_fn(c.self_idx, c.dep(H::DictEq), c.dep(H::VariantPayload)),
 	},
 	HelperDef {
 		id: H::GetField,
@@ -91,6 +92,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::DictEntries,
 			H::MarshalAlloc,
 			H::MarshalLoad,
+			H::VariantPayload,
 		],
 		build: |c| {
 			to_string::build_tostring_fn(
@@ -102,6 +104,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::MarshalAlloc),
 				c.dep(H::MarshalLoad),
 				c.rt.bump,
+				c.dep(H::VariantPayload),
 				c.rt.lits,
 			)
 		},
@@ -189,8 +192,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::Hash,
 		fn_type: Ty::Helper(1),
-		deps: &[],
-		build: |c| dict::build_hash_fn(c.self_idx),
+		deps: &[H::VariantPayload],
+		build: |c| dict::build_hash_fn(c.self_idx, c.dep(H::VariantPayload)),
 	},
 	HelperDef {
 		id: H::DictEmpty,
@@ -314,12 +317,13 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::WireFp,
 		fn_type: Ty::WireMixVal,
-		deps: &[H::WireMixStr, H::WireMixLen],
+		deps: &[H::WireMixStr, H::WireMixLen, H::VariantPayload],
 		build: |c| {
 			wire::build_wire_fp_fn(
 				c.self_idx,
 				c.dep(H::WireMixStr),
 				c.dep(H::WireMixLen),
+				c.dep(H::VariantPayload),
 				c.rt.wire,
 			)
 		},
@@ -370,6 +374,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::WireCtxGet,
 			H::WireEncVariant,
 			H::WireEncDict,
+			H::VariantPayload,
 		],
 		build: |c| {
 			wire::build_wire_enc_fn(
@@ -380,6 +385,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::WireCtxGet),
 				c.dep(H::WireEncVariant),
 				c.dep(H::WireEncDict),
+				c.dep(H::VariantPayload),
 				c.rt.wire,
 			)
 		},
@@ -387,8 +393,14 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::WireEncVariant,
 		fn_type: Ty::WireEnc,
-		deps: &[H::WireEnc, H::WireUvarint],
-		build: |c| wire::build_wire_enc_variant_fn(c.dep(H::WireEnc), c.dep(H::WireUvarint)),
+		deps: &[H::WireEnc, H::WireUvarint, H::VariantPayload],
+		build: |c| {
+			wire::build_wire_enc_variant_fn(
+				c.dep(H::WireEnc),
+				c.dep(H::WireUvarint),
+				c.dep(H::VariantPayload),
+			)
+		},
 	},
 	HelperDef {
 		id: H::WireRByte,
@@ -411,12 +423,18 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::WireDecVariant,
 		fn_type: Ty::Helper(2),
-		deps: &[H::WireRUvarint, H::WireDec, H::WireDisp],
+		deps: &[
+			H::WireRUvarint,
+			H::WireDec,
+			H::WireDisp,
+			H::VariantFromArray,
+		],
 		build: |c| {
 			wire::build_wire_dec_variant_fn(
 				c.dep(H::WireRUvarint),
 				c.dep(H::WireDec),
 				c.dep(H::WireDisp),
+				c.dep(H::VariantFromArray),
 				c.rt.wireg,
 			)
 		},
@@ -432,6 +450,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::WireDecVariant,
 			H::DictEmpty,
 			H::DictInsert,
+			H::VariantPayload,
 		],
 		build: |c| {
 			wire::build_wire_dec_fn(
@@ -443,6 +462,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::WireDecVariant),
 				c.dep(H::DictEmpty),
 				c.dep(H::DictInsert),
+				c.dep(H::VariantPayload),
 				c.rt.wireg,
 				c.rt.wire,
 			)
@@ -451,8 +471,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::WireResult,
 		fn_type: Ty::Helper(1),
-		deps: &[],
-		build: |c| wire::build_wire_result_fn(c.rt.wireg, c.rt.wirelits),
+		deps: &[H::VariantFromArray],
+		build: |c| wire::build_wire_result_fn(c.rt.wireg, c.rt.wirelits, c.dep(H::VariantFromArray)),
 	},
 	HelperDef {
 		id: H::WireBCmp,
@@ -469,6 +489,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::WirePush,
 			H::WireBCmp,
 			H::DictEntries,
+			H::VariantPayload,
 		],
 		build: |c| {
 			wire::build_wire_enc_dict_fn(
@@ -477,6 +498,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::WirePush),
 				c.dep(H::WireBCmp),
 				c.dep(H::DictEntries),
+				c.dep(H::VariantPayload),
 				c.rt.wireg,
 			)
 		},
@@ -540,10 +562,10 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::PollStep,
 		fn_type: Ty::Helper(3),
-		deps: &[H::PollDefersList],
+		deps: &[H::PollDefersList, H::VariantPayload],
 		build: |c| {
 			let arity2 = c.arity(2);
-			task::build_poll_step_fn(c.dep(H::PollDefersList), arity2)
+			task::build_poll_step_fn(c.dep(H::PollDefersList), arity2, c.dep(H::VariantPayload))
 		},
 	},
 	HelperDef {
@@ -952,6 +974,18 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				crate::runtime::task_kind::WEB_FETCH,
 			)
 		},
+	},
+	HelperDef {
+		id: H::VariantPayload,
+		fn_type: Ty::VariantPayload,
+		deps: &[],
+		build: |_| variant::build_variant_payload_fn(),
+	},
+	HelperDef {
+		id: H::VariantFromArray,
+		fn_type: Ty::VariantFromArray,
+		deps: &[],
+		build: |_| variant::build_variant_from_array_fn(),
 	},
 ];
 

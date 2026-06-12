@@ -53,7 +53,11 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 		w.i32(len as i32);
 		w.array_new_data(types::T_BYTES, 0);
 		w.struct_new(types::T_STR);
-		w.array_new_fixed(types::T_VALARRAY, 0);
+		// arity 0, all payload slots null.
+		w.i32(0);
+		w.ref_null(types::T_VALUE);
+		w.ref_null(types::T_VALUE);
+		w.ref_null(types::T_VALARRAY);
 		w.struct_new(types::T_VARIANT);
 		w.ret();
 	};

@@ -94,6 +94,7 @@ pub(crate) fn build_tostring_fn(
 	alloc: u32,
 	load_bytes: u32,
 	bump: u32,
+	variant_payload: u32,
 	lits: ToStringLits,
 ) -> Function {
 	let bv = types::T_BYTES;
@@ -379,10 +380,7 @@ pub(crate) fn build_tostring_fn(
 		w.ref_cast(types::T_STR)
 			.struct_get(types::T_STR, 1)
 			.local_set(acc);
-		w.local_get(v)
-			.ref_cast(types::T_VARIANT)
-			.struct_get(types::T_VARIANT, 3)
-			.local_set(arr);
+		w.local_get(v).call(variant_payload).local_set(arr);
 		w.local_get(arr).array_len().local_set(n);
 		w.i32(0).local_set(i);
 		w.block("brk", |w| {

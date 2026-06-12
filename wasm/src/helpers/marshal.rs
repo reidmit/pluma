@@ -101,7 +101,6 @@ pub(crate) fn build_entry_error_fn(tostring: u32, send: u32) -> Function {
 	let v = w.param(0);
 	let nb = w.local(types::bytes_ref());
 	let n = w.local(ValType::I32);
-	let pl = w.local(types::valarray_ref());
 
 	// Not a variant → not an error.
 	w.local_get(v).value_tag().i32(types::TAG_VARIANT).i32_ne();
@@ -152,17 +151,20 @@ pub(crate) fn build_entry_error_fn(tostring: u32, send: u32) -> Function {
 			w.i32(-1).ret();
 		});
 	});
-	// payload (field 3) must hold exactly one element.
+	// arity (field 3) must be exactly 1 — `result.err e` carries one payload.
 	w.local_get(v)
 		.ref_cast(types::T_VARIANT)
 		.struct_get(types::T_VARIANT, 3)
-		.local_set(pl);
-	w.local_get(pl).array_len().i32(1).i32_ne();
+		.i32(1)
+		.i32_ne();
 	w.if_(|w| {
 		w.i32(-1).ret();
 	});
-	// Render payload[0] via __tostring, copy into scratch, return its length.
-	w.local_get(pl).i32(0).array_get(types::T_VALARRAY);
+	// Render payload[0] — the single inline slot `p0` (field 4) — via __tostring,
+	// copy into scratch, return its length.
+	w.local_get(v)
+		.ref_cast(types::T_VARIANT)
+		.struct_get(types::T_VARIANT, 4);
 	w.call(tostring)
 		.ref_cast(types::T_STR)
 		.struct_get(types::T_STR, 1);

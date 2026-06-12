@@ -89,6 +89,7 @@ pub(crate) fn build_wire_fp_fn(
 	self_idx: u32,
 	mix_str: u32,
 	mix_len: u32,
+	variant_payload: u32,
 	wt: WireTags,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -109,10 +110,7 @@ pub(crate) fn build_wire_fp_fn(
 		.ref_cast(types::T_VARIANT)
 		.struct_get(types::T_VARIANT, 1)
 		.local_set(vtag);
-	w.local_get(schema)
-		.ref_cast(types::T_VARIANT)
-		.struct_get(types::T_VARIANT, 3)
-		.local_set(payload);
+	w.local_get(schema).call(variant_payload).local_set(payload);
 
 	// h = (h ^ kind) * PRIME, written back to h.
 	let mix_byte = |w: &mut Wat, kind: i64| {
@@ -492,6 +490,7 @@ pub(crate) fn build_wire_enc_fn(
 	ctxget: u32,
 	enc_variant: u32,
 	enc_dict: u32,
+	variant_payload: u32,
 	wt: WireTags,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -511,10 +510,7 @@ pub(crate) fn build_wire_enc_fn(
 		.ref_cast(types::T_VARIANT)
 		.struct_get(types::T_VARIANT, 1)
 		.local_set(vtag);
-	w.local_get(schema)
-		.ref_cast(types::T_VARIANT)
-		.struct_get(types::T_VARIANT, 3)
-		.local_set(payload);
+	w.local_get(schema).call(variant_payload).local_set(payload);
 
 	let payload_elem = |w: &mut Wat, idx: i32| {
 		w.local_get(payload).i32(idx).array_get(va);
@@ -713,7 +709,7 @@ pub(crate) fn build_wire_enc_fn(
 /// schema (the `wire` format's variant encoding). `variants` is the enum's variant
 /// `$list` (`$tuple(name, field-schema-list)` per variant); the value's own
 /// `vtag` is the wire tag and the index into `variants`.
-pub(crate) fn build_wire_enc_variant_fn(enc: u32, uvarint: u32) -> Function {
+pub(crate) fn build_wire_enc_variant_fn(enc: u32, uvarint: u32, variant_payload: u32) -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(2);
 	let (variants, val) = (w.param(0), w.param(1));
@@ -745,10 +741,7 @@ pub(crate) fn build_wire_enc_variant_fn(enc: u32, uvarint: u32) -> Function {
 		.struct_get(types::T_LIST, 1)
 		.local_set(fschemas);
 	// pv = (cast $variant val).payload; m = len(fschemas).
-	w.local_get(val)
-		.ref_cast(types::T_VARIANT)
-		.struct_get(types::T_VARIANT, 3)
-		.local_set(pv);
+	w.local_get(val).call(variant_payload).local_set(pv);
 	w.local_get(fschemas).array_len().local_set(m);
 	// for j in 0..m: enc(fschemas[j], pv[j]).
 	w.i32(0).local_set(j);
@@ -917,6 +910,7 @@ pub(crate) fn build_wire_dec_variant_fn(
 	ruvarint: u32,
 	dec: u32,
 	disp: u32,
+	variant_from_array: u32,
 	g: WireGlobals,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -988,11 +982,11 @@ pub(crate) fn build_wire_dec_variant_fn(
 		.local_get(name)
 		.call(disp)
 		.local_set(disp_l);
-	w.i32(types::TAG_VARIANT)
-		.local_get(idx)
+	// Build the variant from the decoded payload array (arbitrary arity).
+	w.local_get(idx)
 		.local_get(disp_l)
 		.local_get(payload)
-		.struct_new(types::T_VARIANT);
+		.call(variant_from_array);
 	w.finish()
 }
 
@@ -1009,6 +1003,7 @@ pub(crate) fn build_wire_dec_fn(
 	dec_variant: u32,
 	dict_empty: u32,
 	dict_insert: u32,
+	variant_payload: u32,
 	g: WireGlobals,
 	wt: WireTags,
 ) -> Function {
@@ -1036,10 +1031,7 @@ pub(crate) fn build_wire_dec_fn(
 		.ref_cast(types::T_VARIANT)
 		.struct_get(types::T_VARIANT, 1)
 		.local_set(vtag);
-	w.local_get(schema)
-		.ref_cast(types::T_VARIANT)
-		.struct_get(types::T_VARIANT, 3)
-		.local_set(payload);
+	w.local_get(schema).call(variant_payload).local_set(payload);
 
 	let payload_elem = |w: &mut Wat, idx: i32| {
 		w.local_get(payload).i32(idx).array_get(va);
@@ -1292,7 +1284,11 @@ pub(crate) fn build_wire_dec_fn(
 /// Build `__wire_result(value v) -> value`: wrap a decoded value in `ok v`, or in
 /// the `wire-error` variant matching `g_err` (`err …`). Runs the trailing-bytes
 /// check first: a fully-decoded value with input left over is `trailing-bytes`.
-pub(crate) fn build_wire_result_fn(g: WireGlobals, lits: WireResultLits) -> Function {
+pub(crate) fn build_wire_result_fn(
+	g: WireGlobals,
+	lits: WireResultLits,
+	variant_from_array: u32,
+) -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(1);
 	let v = w.param(0);
@@ -1318,11 +1314,11 @@ pub(crate) fn build_wire_result_fn(g: WireGlobals, lits: WireResultLits) -> Func
 	// ok path.
 	w.global_get(g.err).i32_eqz();
 	w.if_(|w| {
-		w.i32(types::TAG_VARIANT).i32(lits.ok_tag as i32);
+		w.i32(lits.ok_tag as i32);
 		str_lit(w, lits.ok_name);
 		w.local_get(v)
 			.array_new_fixed(va, 1)
-			.struct_new(types::T_VARIANT)
+			.call(variant_from_array)
 			.ret();
 	});
 	// err path: build the `wire-error` variant e for the error code (1..5), with
@@ -1333,7 +1329,7 @@ pub(crate) fn build_wire_result_fn(g: WireGlobals, lits: WireResultLits) -> Func
 		let has_payload = code == 2 || code == 4;
 		w.global_get(g.err).i32(code).i32_eq();
 		w.if_(|w| {
-			w.i32(types::TAG_VARIANT).i32(etag as i32);
+			w.i32(etag as i32);
 			str_lit(w, ename);
 			if has_payload {
 				w.i32(types::TAG_INT)
@@ -1343,15 +1339,15 @@ pub(crate) fn build_wire_result_fn(g: WireGlobals, lits: WireResultLits) -> Func
 			} else {
 				w.array_new_fixed(va, 0);
 			}
-			w.struct_new(types::T_VARIANT).local_set(e);
+			w.call(variant_from_array).local_set(e);
 		});
 	}
 	// err(e).
-	w.i32(types::TAG_VARIANT).i32(lits.err_tag as i32);
+	w.i32(lits.err_tag as i32);
 	str_lit(&mut w, lits.err_name);
 	w.local_get(e)
 		.array_new_fixed(va, 1)
-		.struct_new(types::T_VARIANT);
+		.call(variant_from_array);
 	w.finish()
 }
 
@@ -1426,6 +1422,7 @@ pub(crate) fn build_wire_enc_dict_fn(
 	push: u32,
 	bcmp: u32,
 	dict_entries: u32,
+	variant_payload: u32,
 	g: WireGlobals,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -1452,9 +1449,7 @@ pub(crate) fn build_wire_enc_dict_fn(
 
 	// key/value schemas = schema.payload[0..2].
 	let schema_payload = |w: &mut Wat, idx: i32| {
-		w.local_get(schema)
-			.ref_cast(types::T_VARIANT)
-			.struct_get(types::T_VARIANT, 3);
+		w.local_get(schema).call(variant_payload);
 		w.i32(idx).array_get(va);
 	};
 	// `(cast $tuple local).elems[idx]`.

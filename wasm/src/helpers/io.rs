@@ -48,7 +48,8 @@ pub(crate) fn build_io_result_fn(
 		|w| {
 			w.i32(types::TAG_VARIANT).i32(lits.err_tag as i32);
 			str_lit(w, lits.err_name);
-			// message = $str(__load_bytes(dst, io_last_error(dst, ERR_CAP))).
+			w.i32(1); // arity
+			// p0 = message = $str(__load_bytes(dst, io_last_error(dst, ERR_CAP))).
 			w.i32(0).global_set(bump);
 			w.i32(ERR_CAP).call(alloc).local_set(dst);
 			w.local_get(dst)
@@ -58,14 +59,19 @@ pub(crate) fn build_io_result_fn(
 			w.i32(types::TAG_STR);
 			w.local_get(dst).local_get(len).call(load_bytes);
 			w.struct_new(types::T_STR);
-			w.array_new_fixed(va, 1).struct_new(types::T_VARIANT);
+			// p1, rest null, then the variant.
+			w.ref_null(types::T_VALUE)
+				.ref_null(va)
+				.struct_new(types::T_VARIANT);
 		},
 		// non-null host return -> `ok payload`.
 		|w| {
 			w.i32(types::TAG_VARIANT).i32(lits.ok_tag as i32);
 			str_lit(w, lits.ok_name);
-			w.local_get(payload)
-				.array_new_fixed(va, 1)
+			w.i32(1); // arity
+			w.local_get(payload) // p0
+				.ref_null(types::T_VALUE)
+				.ref_null(va)
 				.struct_new(types::T_VARIANT);
 		},
 	);

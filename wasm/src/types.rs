@@ -31,7 +31,7 @@ pub const T_BOOL: u32 = 4; // struct { i32 tag, i32 }
 pub const T_STR: u32 = 5; // struct { i32 tag, (ref $bytes) }
 pub const T_VALARRAY: u32 = 6; // array (mut (ref null $value))   — captures / payload backing
 pub const T_CLOSURE: u32 = 7; // struct { i32 tag, i32 fn_index, (ref $valarray) captures }
-pub const T_VARIANT: u32 = 8; // struct { i32 tag, i32 vtag, (ref $str) name, (ref $valarray) payload }
+pub const T_VARIANT: u32 = 8; // struct { i32 tag, i32 vtag, (ref $str) name, i32 arity, p0, p1, (ref null $valarray) rest } — payload inline
 pub const T_CTOR: u32 = 9; // struct { i32 tag, i32 vtag, i32 arity }  — a partial variant ctor
 pub const T_METHODDICT: u32 = 10; // struct { i32 tag, (ref $valarray) methods }
 pub const T_TUPLE: u32 = 11; // struct { i32 tag, (ref $valarray) elems }
@@ -143,6 +143,14 @@ pub fn value_ref() -> ValType {
 	})
 }
 
+/// `(ref $variant)` — a non-null reference to a variant struct.
+pub fn variant_ref() -> ValType {
+	ValType::Ref(RefType {
+		nullable: false,
+		heap_type: HeapType::Concrete(T_VARIANT),
+	})
+}
+
 /// `(ref $ref)` — a non-null reference to a mutable cell struct.
 pub fn ref_ref() -> ValType {
 	ValType::Ref(RefType {
@@ -241,6 +249,12 @@ enum FuncKind {
 	Host(usize, bool),
 	/// The structural-equality runtime helper: `(value, value) -> i32`.
 	Eq,
+	/// `__variant_payload(value) -> valarray` — materialize a `$variant`'s inline
+	/// payload as a uniform array for generic consumers.
+	VariantPayload,
+	/// `__variant_from_array(i32 vtag, value name, valarray arr) -> value` — build a
+	/// `$variant` from a payload array (splitting it into the inline slots).
+	VariantFromArray,
 	/// A runtime helper taking `n` boxed args and returning a boxed value.
 	Helper(usize),
 	/// The array-concat helper: `(valarray, valarray) -> valarray`.
@@ -512,6 +526,16 @@ impl FuncTypes {
 	/// The type index for the structural-equality helper `(value, value) -> i32`.
 	pub fn for_eq(&mut self) -> u32 {
 		self.intern(FuncKind::Eq)
+	}
+
+	/// `__variant_payload(value) -> valarray`.
+	pub fn for_variant_payload(&mut self) -> u32 {
+		self.intern(FuncKind::VariantPayload)
+	}
+
+	/// `__variant_from_array(i32, value, valarray) -> value`.
+	pub fn for_variant_from_array(&mut self) -> u32 {
+		self.intern(FuncKind::VariantFromArray)
 	}
 
 	/// The type index for a runtime helper: `n` boxed args -> boxed value.
@@ -843,14 +867,26 @@ impl FuncTypes {
 			],
 			true,
 		));
-		// 8 $variant — { tag, i32 variant_tag, (ref $str) display-name, (ref $valarray) payload }.
+		// 8 $variant — { tag, i32 variant_tag, (ref $str) display-name, i32 arity,
+		// p0, p1, (ref null $valarray) rest }. The payload is stored *inline*: arity
+		// ≤ 2 keeps its elements in `p0`/`p1` (with `rest` null), so `tree.node l r`,
+		// `option`, and `result` allocate just this one struct — no separate payload
+		// array. Arity ≥ 3 (rare) stores the whole payload in `rest` (and leaves
+		// `p0`/`p1` null), so no element ever needs copying. Generic consumers that
+		// want the payload as a uniform `$valarray` (print/eq/wire) call
+		// `__variant_payload`, which returns `rest` directly when present or
+		// materializes a small array from `p0`/`p1`; the hot construct/match/payload
+		// paths, where the arity is statically known, read the inline slots.
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
 				val_field(ValType::I32, false),
 				val_field(ValType::I32, false),
 				val_field(value_ref(), false),
-				val_field(valarray_ref(), false),
+				val_field(ValType::I32, false),
+				val_field(value_ref(), false),
+				val_field(value_ref(), false),
+				val_field(valarray_ref_null(), false),
 			],
 			true,
 		));
@@ -1040,6 +1076,16 @@ impl FuncTypes {
 					},
 				),
 				FuncKind::Eq => (value_ref(), 2, vec![ValType::I32]),
+				FuncKind::VariantPayload => {
+					types.ty().function([value_ref()], [valarray_ref()]);
+					continue;
+				}
+				FuncKind::VariantFromArray => {
+					types
+						.ty()
+						.function([ValType::I32, value_ref(), valarray_ref()], [value_ref()]);
+					continue;
+				}
 				FuncKind::Helper(n) => (value_ref(), n, vec![value_ref()]),
 				FuncKind::ArrConcat => (valarray_ref(), 2, vec![valarray_ref()]),
 				FuncKind::BytesConcat => (bytes_ref(), 2, vec![bytes_ref()]),

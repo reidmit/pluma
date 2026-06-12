@@ -36,6 +36,43 @@ const FNV_PRIME: i64 = 0x0000_0100_0000_01b3;
 
 const VA: u32 = types::T_VALARRAY;
 
+/// Push a display-name `$str` from its interned `(offset, len)` data-segment slice.
+fn name_str(w: &mut Wat, name: (u32, u32)) {
+	let (off, len) = name;
+	w.i32(types::TAG_STR)
+		.i32(off as i32)
+		.i32(len as i32)
+		.array_new_data(types::T_BYTES, 0)
+		.struct_new(types::T_STR);
+}
+
+/// Build a `none` `$variant` inline (arity 0, all payload slots null).
+fn build_none(w: &mut Wat, opt: OptionLits) {
+	w.i32(types::TAG_VARIANT).i32(opt.none_tag as i32);
+	name_str(w, opt.none_name);
+	w.i32(0)
+		.ref_null(types::T_VALUE)
+		.ref_null(types::T_VALUE)
+		.ref_null(VA)
+		.struct_new(types::T_VARIANT);
+}
+
+/// Push a `some` `$variant`'s header (tag, vtag, name, arity 1); the caller then
+/// pushes the single payload value (`p0`) and calls `finish_some`.
+fn start_some(w: &mut Wat, opt: OptionLits) {
+	w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
+	name_str(w, opt.some_name);
+	w.i32(1);
+}
+
+/// Close a `some` build started by `start_some`, with `p0` already on the stack:
+/// null `p1`/`rest`, then the struct.
+fn finish_some(w: &mut Wat) {
+	w.ref_null(types::T_VALUE)
+		.ref_null(VA)
+		.struct_new(types::T_VARIANT);
+}
+
 // $dict field indices.
 const DICT_ROOT: u32 = 1;
 const DICT_SIZE: u32 = 2;
@@ -239,7 +276,7 @@ fn splice_remove(w: &mut Wat, src: Local, len: Local, idx: Local) -> Local {
 /// recursion). `ref`/`dict` keys (and any unhandled tag) collapse to the
 /// tag-only hash — correct (`__eq` still separates them), just not finely
 /// distributed; such keys are exotic.
-pub(crate) fn build_hash_fn(self_idx: u32) -> Function {
+pub(crate) fn build_hash_fn(self_idx: u32, variant_payload: u32) -> Function {
 	let mut w = Wat::new(1);
 	let v = w.param(0);
 	let ta = w.local(ValType::I32);
@@ -339,10 +376,7 @@ pub(crate) fn build_hash_fn(self_idx: u32) -> Function {
 			.struct_get(types::T_VARIANT, 1)
 			.i64_extend_i32_u();
 		mix(w, h);
-		w.local_get(v)
-			.ref_cast(types::T_VARIANT)
-			.struct_get(types::T_VARIANT, 3)
-			.local_set(arr);
+		w.local_get(v).call(variant_payload).local_set(arr);
 		hash_elems(w, self_idx, arr, n, i, h, mix);
 	});
 	// TUPLE — mix each element's hash.
@@ -1471,28 +1505,17 @@ pub(crate) fn build_dict_lookup_fn(find_idx: u32, opt: OptionLits) -> Function {
 	let (dict, key) = (w.param(0), w.param(1));
 	let e = w.local(types::value_ref());
 
-	let str_lit = |w: &mut Wat, (off, len): (u32, u32)| {
-		w.i32(types::TAG_STR);
-		w.i32(off as i32);
-		w.i32(len as i32);
-		w.array_new_data(types::T_BYTES, 0);
-		w.struct_new(types::T_STR);
-	};
-
 	w.local_get(dict).local_get(key).call(find_idx).local_set(e);
 	w.local_get(e).ref_is_null();
 	w.if_(|w| {
-		w.i32(types::TAG_VARIANT).i32(opt.none_tag as i32);
-		str_lit(w, opt.none_name);
-		w.array_new_fixed(VA, 0).struct_new(types::T_VARIANT);
+		build_none(w, opt);
 		w.ret();
 	});
-	w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
-	str_lit(&mut w, opt.some_name);
+	start_some(&mut w, opt);
 	w.local_get(e)
 		.ref_cast(types::T_DENTRY)
 		.struct_get(types::T_DENTRY, DENTRY_VAL);
-	w.array_new_fixed(VA, 1).struct_new(types::T_VARIANT);
+	finish_some(&mut w);
 	w.finish()
 }
 
@@ -1690,14 +1713,6 @@ pub(crate) fn build_dict_update_fn(
 	let delta = w.local(ValType::I32);
 	let size = w.local(ValType::I32);
 
-	let str_lit = |w: &mut Wat, (off, len): (u32, u32)| {
-		w.i32(types::TAG_STR);
-		w.i32(off as i32);
-		w.i32(len as i32);
-		w.array_new_data(types::T_BYTES, 0);
-		w.struct_new(types::T_STR);
-	};
-
 	w.local_get(key).call(hash_idx).local_set(bhash);
 	w.i32(0).ref_i31().local_set(b0);
 	w.local_get(dict)
@@ -1714,19 +1729,16 @@ pub(crate) fn build_dict_update_fn(
 	w.local_get(found).ref_is_null();
 	w.if_else(
 		|w| {
-			w.i32(types::TAG_VARIANT).i32(opt.none_tag as i32);
-			str_lit(w, opt.none_name);
-			w.array_new_fixed(VA, 0).struct_new(types::T_VARIANT);
+			build_none(w, opt);
 			w.local_set(arg);
 			w.i32(1).local_set(delta);
 		},
 		|w| {
-			w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
-			str_lit(w, opt.some_name);
+			start_some(w, opt);
 			w.local_get(found)
 				.ref_cast(types::T_DENTRY)
 				.struct_get(types::T_DENTRY, DENTRY_VAL);
-			w.array_new_fixed(VA, 1).struct_new(types::T_VARIANT);
+			finish_some(w);
 			w.local_set(arg);
 			w.i32(0).local_set(delta);
 		},

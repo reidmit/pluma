@@ -199,17 +199,16 @@ pub(crate) fn build_list_collect_fn(arity1: u32) -> Function {
 				.struct_get(types::T_CLOSURE, 1);
 			w.call_indirect(arity1);
 			w.local_set(r);
-			// if r's payload is non-empty (some): buf[write] = payload[0]; write += 1.
+			// if r's arity is non-zero (some): buf[write] = payload[0]; write += 1.
 			w.local_get(r)
 				.ref_cast(types::T_VARIANT)
-				.struct_get(types::T_VARIANT, 3)
-				.array_len();
+				.struct_get(types::T_VARIANT, 3);
 			w.if_(|w| {
 				w.local_get(buf).local_get(write);
+				// `some`'s single payload element is the inline slot `p0` (field 4).
 				w.local_get(r)
 					.ref_cast(types::T_VARIANT)
-					.struct_get(types::T_VARIANT, 3);
-				w.i32(0).array_get(types::T_VALARRAY);
+					.struct_get(types::T_VARIANT, 4);
 				w.array_set(types::T_VALARRAY);
 				w.local_get(write).i32(1).i32_add().local_set(write);
 			});

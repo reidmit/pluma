@@ -682,10 +682,94 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::I32Const(tag as i32));
 		self.ins(Instruction::I32Ne);
 		self.ins(Instruction::BrIf(self.br_to(fail_level)));
-		// Bind / recurse on payload fields (variant payload is field 3).
+		// Bind / recurse on payload fields, read from the inline slots. The arity is
+		// the pattern's field count, so the read is a constant-field `struct.get`.
+		let arity = fields.len();
 		for (i, field) in fields.iter().enumerate() {
-			self.bind_at(field, subj, types::T_VARIANT, 3, i, fail_level);
+			self.bind_variant_field(field, subj, arity, i, fail_level);
 		}
+	}
+
+	/// Push payload element `i` of the variant in local `subj` onto the stack. With
+	/// the payload inline, arity ≤ 2 reads `p0`/`p1` (fields 4/5) directly; arity ≥ 3
+	/// reads the `rest` overflow array (field 6). `arity` is statically known at
+	/// every call site (a pattern's field count, or a constructor's declared arity).
+	fn get_variant_elem(&mut self, subj: u32, arity: usize, i: usize) {
+		self.ins(Instruction::LocalGet(subj));
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+			types::T_VARIANT,
+		)));
+		if arity <= 2 {
+			self.ins(Instruction::StructGet {
+				struct_type_index: types::T_VARIANT,
+				field_index: 4 + i as u32,
+			});
+		} else {
+			self.ins(Instruction::StructGet {
+				struct_type_index: types::T_VARIANT,
+				field_index: 6,
+			});
+			self.ins(Instruction::I32Const(i as i32));
+			self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+		}
+	}
+
+	/// Bind (or recursively match) variant payload field `i`, read inline. Mirrors
+	/// `bind_at`, but sources the element from `get_variant_elem`.
+	fn bind_variant_field(
+		&mut self,
+		sub: &ir::Pattern,
+		subj: u32,
+		arity: usize,
+		i: usize,
+		fail: u32,
+	) {
+		match sub {
+			ir::Pattern::Wildcard => {}
+			ir::Pattern::Bind(v) => {
+				let dst = self.local(v.0);
+				self.get_variant_elem(subj, arity, i);
+				self.ins(Instruction::LocalSet(dst));
+			}
+			other => {
+				let tmp = self.fresh_local(types::value_ref());
+				self.get_variant_elem(subj, arity, i);
+				self.ins(Instruction::LocalSet(tmp));
+				self.test_pattern(other, tmp, None, fail);
+			}
+		}
+	}
+
+	/// Construct a `$variant` with its payload inline (the hot path: every user-code
+	/// variant build). Arity ≤ 2 stores the elements in `p0`/`p1` (`rest` null) — one
+	/// struct, no payload array; arity ≥ 3 (rare) stores the whole payload in `rest`.
+	fn emit_make_variant(&mut self, enum_name: &str, tag: u32, payload: &[Atom]) {
+		let n = payload.len();
+		self.ins(Instruction::I32Const(types::TAG_VARIANT));
+		self.ins(Instruction::I32Const(tag as i32));
+		self.string_const(&variant_display(enum_name, tag, self.enums));
+		self.ins(Instruction::I32Const(n as i32));
+		if n <= 2 {
+			for slot in 0..2 {
+				if let Some(a) = payload.get(slot) {
+					self.atom(a);
+				} else {
+					self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
+				}
+			}
+			self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALARRAY)));
+		} else {
+			self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
+			self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
+			for a in payload {
+				self.atom(a);
+			}
+			self.ins(Instruction::ArrayNewFixed {
+				array_type_index: types::T_VALARRAY,
+				array_size: n as u32,
+			});
+		}
+		self.ins(Instruction::StructNew(types::T_VARIANT));
 	}
 
 	fn rvalue(&mut self, rv: &Rvalue) {
@@ -932,17 +1016,7 @@ impl<'a> FnEmitter<'a> {
 				tag,
 				payload,
 			} => {
-				self.ins(Instruction::I32Const(types::TAG_VARIANT));
-				self.ins(Instruction::I32Const(*tag as i32));
-				self.string_const(&variant_display(enum_name, *tag, self.enums));
-				for a in payload {
-					self.atom(a);
-				}
-				self.ins(Instruction::ArrayNewFixed {
-					array_type_index: types::T_VALARRAY,
-					array_size: payload.len() as u32,
-				});
-				self.ins(Instruction::StructNew(types::T_VARIANT));
+				self.emit_make_variant(enum_name, *tag, payload);
 			}
 			Rvalue::MakeVariantCtor { tag, enum_name } => {
 				let arity = self.variant_arity(enum_name, *tag);
@@ -1063,14 +1137,18 @@ impl<'a> FnEmitter<'a> {
 				});
 			}
 			Rvalue::GetPayload(a, i) => {
+				// Payload is inline; without a statically-known arity here, route
+				// through `__variant_payload` (materializes the uniform array) then
+				// index. Cold: the IR currently never produces `GetPayload` (pattern
+				// matching reads inline via `get_variant_elem`).
+				let Some(vp) = self.runtime.idx(Helper::VariantPayload) else {
+					self
+						.diags
+						.push("GetPayload used but __variant_payload not emitted");
+					return;
+				};
 				self.atom(a);
-				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
-					types::T_VARIANT,
-				)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_VARIANT,
-					field_index: 3, // payload (after tag, vtag, name)
-				});
+				self.ins(Instruction::Call(vp));
 				self.ins(Instruction::I32Const(*i as i32));
 				self.ins(Instruction::ArrayGet(types::T_VALARRAY));
 			}
@@ -1142,18 +1220,8 @@ impl<'a> FnEmitter<'a> {
 		}
 		if let Atom::Var(v) = callee {
 			if let Some((enum_name, tag)) = self.var_ctors.get(&v.0).cloned() {
-				// Applying a constructor builds the variant directly.
-				self.ins(Instruction::I32Const(types::TAG_VARIANT));
-				self.ins(Instruction::I32Const(tag as i32));
-				self.string_const(&variant_display(&enum_name, tag, self.enums));
-				for a in args {
-					self.atom(a);
-				}
-				self.ins(Instruction::ArrayNewFixed {
-					array_type_index: types::T_VALARRAY,
-					array_size: args.len() as u32,
-				});
-				self.ins(Instruction::StructNew(types::T_VARIANT));
+				// Applying a constructor builds the variant directly (payload inline).
+				self.emit_make_variant(&enum_name, tag, args);
 				return;
 			}
 		}
@@ -2586,29 +2654,28 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::I32Const(0));
 		self.ins(Instruction::I32LtS);
 		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
-		// none: `$variant { TAG_VARIANT, none_tag, none_name, [] }`.
+		// none: `$variant { TAG_VARIANT, none_tag, none_name, arity 0, …null }`.
 		self.ins(Instruction::I32Const(types::TAG_VARIANT));
 		self.ins(Instruction::I32Const(opt.none_tag as i32));
 		self.str_seg(opt.none_name);
-		self.ins(Instruction::ArrayNewFixed {
-			array_type_index: types::T_VALARRAY,
-			array_size: 0,
-		});
+		self.ins(Instruction::I32Const(0));
+		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
+		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
+		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALARRAY)));
 		self.ins(Instruction::StructNew(types::T_VARIANT));
 		self.ins(Instruction::Else);
-		// some value: `$variant { TAG_VARIANT, some_tag, some_name, [ $str(value) ] }`.
+		// some value: `$variant { …, some_name, arity 1, p0 = $str(value), …null }`.
 		self.ins(Instruction::I32Const(types::TAG_VARIANT));
 		self.ins(Instruction::I32Const(opt.some_tag as i32));
 		self.str_seg(opt.some_name);
+		self.ins(Instruction::I32Const(1));
 		self.ins(Instruction::I32Const(types::TAG_STR));
 		self.ins(Instruction::LocalGet(dst));
 		self.ins(Instruction::LocalGet(len));
 		self.ins(Instruction::Call(load));
 		self.ins(Instruction::StructNew(types::T_STR));
-		self.ins(Instruction::ArrayNewFixed {
-			array_type_index: types::T_VALARRAY,
-			array_size: 1,
-		});
+		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
+		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALARRAY)));
 		self.ins(Instruction::StructNew(types::T_VARIANT));
 		self.ins(Instruction::End);
 	}

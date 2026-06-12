@@ -2317,10 +2317,10 @@ pub(crate) fn build_reap_fiber_fn(
 					.struct_get(types::T_VARIANT, 1);
 				w.i32(act_kind::POLL).i32_eq();
 				w.if_(|w| {
+					// activation payload[1] = `state` — the inline slot `p1` (arity 2).
 					w.local_get(act_el)
 						.ref_cast(types::T_VARIANT)
-						.struct_get(types::T_VARIANT, 3);
-					w.i32(1).array_get(types::T_VALARRAY); // state
+						.struct_get(types::T_VARIANT, 5);
 					w.call(poll_defers_state).drop();
 				});
 				w.local_get(i).i32(1).i32_sub().local_set(i);
@@ -2761,7 +2761,11 @@ pub(crate) fn build_list_append_fn(list_push: u32) -> Function {
 // ==========================================================================
 
 /// `__poll_step(pc, state, resume) -> $tuple(kind, x, y)`: advance one CPS poll.
-pub(crate) fn build_poll_step_fn(poll_defers_list: u32, arity2: u32) -> Function {
+pub(crate) fn build_poll_step_fn(
+	poll_defers_list: u32,
+	arity2: u32,
+	variant_payload: u32,
+) -> Function {
 	let v = types::value_ref();
 	let va = types::valarray_ref();
 	let mut w = Wat::new(3);
@@ -2778,10 +2782,9 @@ pub(crate) fn build_poll_step_fn(poll_defers_list: u32, arity2: u32) -> Function
 	w.call_indirect(arity2);
 	w.local_set(r);
 
-	w.local_get(r)
-		.ref_cast(types::T_VARIANT)
-		.struct_get(types::T_VARIANT, 3)
-		.local_set(rpl);
+	// `rpl` is read with `array_len`, so materialize the inline payload to its true
+	// length (the poll result is arity 1 or 2).
+	w.local_get(r).call(variant_payload).local_set(rpl);
 	w.local_get(r)
 		.ref_cast(types::T_VARIANT)
 		.struct_get(types::T_VARIANT, 1)
@@ -3715,20 +3718,26 @@ fn pop_activation(w: &mut Wat, g: TaskGlobals, a: Local, akind: Local, apl: Loca
 		.ref_cast(types::T_VARIANT)
 		.struct_get(types::T_VARIANT, 1)
 		.local_set(akind);
+	// An activation is always arity 2, so its payload is the two inline slots; rebuild
+	// the `[p0, p1]` array the callers index.
 	w.local_get(a)
 		.ref_cast(types::T_VARIANT)
-		.struct_get(types::T_VARIANT, 3)
-		.local_set(apl);
+		.struct_get(types::T_VARIANT, 4);
+	w.local_get(a)
+		.ref_cast(types::T_VARIANT)
+		.struct_get(types::T_VARIANT, 5);
+	w.array_new_fixed(types::T_VALARRAY, 2).local_set(apl);
 }
 
 /// Push an activation `$variant` `{vtag: kind, payload: [x, y]}` (name unused).
 fn push_activation(w: &mut Wat, kind: i32, x: impl FnOnce(&mut Wat), y: impl FnOnce(&mut Wat)) {
 	w.i32(types::TAG_VARIANT);
 	w.i32(kind);
-	w.ref_null(types::T_VALUE);
-	x(w);
-	y(w);
-	w.array_new_fixed(types::T_VALARRAY, 2);
+	w.ref_null(types::T_VALUE); // name (unused)
+	w.i32(2); // arity
+	x(w); // p0
+	y(w); // p1
+	w.ref_null(types::T_VALARRAY); // rest
 	w.struct_new(types::T_VARIANT);
 }
 
@@ -3747,8 +3756,10 @@ fn push_result(w: &mut Wat, tag: u32, name: (u32, u32), val: impl FnOnce(&mut Wa
 	w.i32(types::TAG_VARIANT);
 	w.i32(tag as i32);
 	str_lit(w, name);
-	val(w);
-	w.array_new_fixed(types::T_VALARRAY, 1);
+	w.i32(1); // arity
+	val(w); // p0
+	w.ref_null(types::T_VALUE); // p1
+	w.ref_null(types::T_VALARRAY); // rest
 	w.struct_new(types::T_VARIANT);
 }
 
@@ -3790,7 +3801,10 @@ fn push_none(w: &mut Wat, lits: TaskLits) {
 	w.i32(types::TAG_VARIANT);
 	w.i32(lits.none_tag as i32);
 	str_lit(w, lits.none_name);
-	w.array_new_fixed(types::T_VALARRAY, 0);
+	w.i32(0); // arity
+	w.ref_null(types::T_VALUE); // p0
+	w.ref_null(types::T_VALUE); // p1
+	w.ref_null(types::T_VALARRAY); // rest
 	w.struct_new(types::T_VARIANT);
 }
 
