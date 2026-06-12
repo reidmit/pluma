@@ -246,9 +246,12 @@ def collect-spans = fun pat input start acc {
 		} else {
 			me + 1
 		}
-		collect-spans pat input nexti [(ms, me, caps), ...acc]
+		# Append in place (`acc` is threaded linearly). Prepending with a spread
+		# instead would rebuild the whole list each match -- O(n^2) over the scan.
+		list.push acc (ms, me, caps)
+		collect-spans pat input nexti acc
 	} is none {
-		list.reverse acc
+		acc
 	}
 }
 
@@ -467,8 +470,10 @@ public def split :: fun regex string -> list string = fun pat s {
 def split-pieces = fun input spans prev acc {
 	if spans is [span, ...rest] {
 		let (ms, me, _caps) = span
-		split-pieces input rest me [slice-str input prev ms, ...acc]
+		list.push acc (slice-str input prev ms)
+		split-pieces input rest me acc
 	} else {
-		list.reverse [slice-str input prev (bytes.length input), ...acc]
+		list.push acc (slice-str input prev (bytes.length input))
+		acc
 	}
 }

@@ -111,14 +111,15 @@ This compares **idiomatic code in each language**, not equivalent machine work:
   compare; the string ops and the entire JSON codec are Pluma too — against the
   other languages' *C-level* sort, string, and JSON routines. That is a deliberate
   idiomatic-vs-idiomatic comparison, and it is where Pluma pays the most.
-- **`regex` is the most extreme idiomatic-vs-idiomatic row.** Pluma's regex engine
-  is a pure-Pluma recursive backtracker (a backtick pattern reifies to a
+- **`regex` is a pure-Pluma engine against C libraries.** Pluma's regex engine is
+  a pure-Pluma recursive backtracker (a backtick pattern reifies to a
   `regex-pattern` tree the matcher walks) — no native engine, no host call, run
   under V8 like everything else. Every competitor here calls a *C* regex library
   (CPython's `re`, CRuby's Onigmo, V8's Irregexp), several with literal-prefix and
-  `memchr`-style scan optimizations a tree-walking backtracker has none of. So
-  this row measures a pure-functional matcher against decades-tuned native code:
-  expect a wide gap, and don't put a hot regex loop on the critical path.
+  `memchr`-style scan optimizations a tree-walking backtracker has none of, so a
+  gap is expected. (The matching itself is cheap; `find-all`'s cost is building
+  one `match` record per hit — keep that in mind before scanning for millions of
+  matches in a hot loop.)
 - **`dict`** is a mutable open-addressing hash table (`insert`/`remove` mutate in
   place and return the map), so the word-frequency tally is O(1) per key, in line
   with the other languages' maps.
