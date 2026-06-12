@@ -20,12 +20,14 @@ mod emit;
 mod helpers;
 mod module;
 mod mono;
+mod opt;
 mod runtime;
 mod scan;
 mod types;
 mod util;
 
 pub use diag::Diagnostics;
+pub use opt::{OptLevel, optimize};
 
 mod diag {
 	/// An accumulated emit failure, attributed where possible. Plural by design

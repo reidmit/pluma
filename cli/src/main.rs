@@ -22,9 +22,10 @@ fn main() {
 			web,
 			out,
 			server_url,
+			optimize,
 			target,
 			path,
-		} => commands::build::build_command(web, out, server_url, target, path),
+		} => commands::build::build_command(web, out, server_url, optimize, target, path),
 
 		Command::Dev {
 			web,

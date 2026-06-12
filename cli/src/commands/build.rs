@@ -11,6 +11,7 @@ pub(crate) fn build_command(
 	web: bool,
 	out_base: Option<String>,
 	server_url: Option<String>,
+	optimize: Option<String>,
 	target: Option<String>,
 	entry_path: String,
 ) {
@@ -21,6 +22,23 @@ pub(crate) fn build_command(
 		std::process::exit(1);
 	}
 
+	// Post-optimize the emitted wasm with Binaryen's wasm-opt. On by default at
+	// `-O3` (the pass is a code-size win and never slower at runtime); `-O <level>`
+	// overrides, and `-O 0` opts out.
+	let opt_level = match optimize.as_deref() {
+		None => Some(wasm::OptLevel::O3),
+		Some("0") => None,
+		Some(s) => match wasm::OptLevel::parse(s) {
+			Some(l) => Some(l),
+			None => {
+				print_error(format!(
+					"unknown -O level {s:?}; use 2/3/4 for speed, s/z for size, or 0 to skip"
+				));
+				std::process::exit(1);
+			}
+		},
+	};
+
 	// Where the generated RPC client stubs point. Default to the server's default
 	// bind; `--server-url` overrides (use "" for same-origin behind a proxy).
 	let server_url = server_url.unwrap_or_else(|| "http://localhost:8080".to_string());
@@ -29,7 +47,7 @@ pub(crate) fn build_command(
 	// artifacts from one source — `server.wasm` + a browser client bundle —
 	// regardless of `--web` (each half has its own).
 	if Compiler::is_fullstack_dir(&entry_path) {
-		build_fullstack(entry_path, out_base, server_url);
+		build_fullstack(entry_path, out_base, server_url, opt_level);
 		return;
 	}
 
@@ -78,6 +96,7 @@ pub(crate) fn build_command(
 			std::process::exit(1);
 		}
 	};
+	let bytes = run_wasm_opt(bytes, opt_level);
 	match target {
 		Target::Sys => {
 			let wasm_path = format!("{base}.wasm");
@@ -105,13 +124,45 @@ pub(crate) fn build_command(
 	}
 }
 
+/// Apply the optional `wasm-opt` pass, reporting the size delta and time spent.
+/// A `None` level is a no-op; a wasm-opt failure is non-fatal — we warn and keep
+/// the unoptimized bytes so the build still produces a runnable artifact.
+fn run_wasm_opt(bytes: Vec<u8>, level: Option<wasm::OptLevel>) -> Vec<u8> {
+	let Some(level) = level else {
+		return bytes;
+	};
+	let before = bytes.len();
+	let start = std::time::Instant::now();
+	match wasm::optimize(&bytes, level) {
+		Ok(opt) => {
+			let after = opt.len();
+			// Signed size change: negative means the module shrank.
+			let pct = 100.0 * (after as f64 - before as f64) / before as f64;
+			println!(
+				"wasm-opt {level:?}: {before} -> {after} bytes ({pct:+.1}%) in {:.2}s",
+				start.elapsed().as_secs_f64()
+			);
+			opt
+		}
+		Err(e) => {
+			print_error(format!("wasm-opt failed ({e}); using unoptimized module"));
+			bytes
+		}
+	}
+}
+
 // FULLSTACK build: from one analyzed program emit two artifacts — a `server.wasm`
 // (the `std/sys/http` server mounting the generated `dispatch`) and a browser client
 // bundle (the generated stubs riding the host `fetch`). One `check()`, one schema
 // fingerprint stamped into both, per-artifact target gating, and the emitter's
 // reachability prune carves each side out of the shared IR (the server-only `remote
 // def` bodies are never reached from the client's `main`, and vice versa).
-fn build_fullstack(entry_path: String, out_base: Option<String>, server_url: String) {
+fn build_fullstack(
+	entry_path: String,
+	out_base: Option<String>,
+	server_url: String,
+	opt_level: Option<wasm::OptLevel>,
+) {
 	let mut compiler = match Compiler::from_fullstack_dir(entry_path.clone()) {
 		Ok(c) => c.with_rpc_base_url(server_url),
 		Err(diagnostics) => {
@@ -156,8 +207,8 @@ fn build_fullstack(entry_path: String, out_base: Option<String>, server_url: Str
 		}
 	};
 
-	let server_bytes = emit_one(&server_module, false);
-	let client_bytes = emit_one(&client_module, true);
+	let server_bytes = run_wasm_opt(emit_one(&server_module, false), opt_level);
+	let client_bytes = run_wasm_opt(emit_one(&client_module, true), opt_level);
 
 	// Artifacts land in an output directory (default `out/`): the server wasm
 	// alongside the browser bundle (app.wasm + loader.js + index.html).

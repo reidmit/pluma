@@ -72,6 +72,11 @@ pub(crate) enum Command {
 		#[arg(long = "server-url", value_name = "URL")]
 		server_url: Option<String>,
 
+		/// Binaryen wasm-opt level. Defaults to `3`; pass 2/3/4 for speed, s/z for
+		/// size, or `0` to skip the pass entirely.
+		#[arg(short = 'O', long = "optimize", value_name = "LEVEL", num_args = 0..=1, default_missing_value = "3")]
+		optimize: Option<String>,
+
 		/// Removed — use `--web` for a browser build, omit it otherwise.
 		#[arg(long, hide = true, value_name = "TARGET")]
 		target: Option<String>,
