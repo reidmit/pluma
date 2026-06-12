@@ -706,12 +706,21 @@ impl<'a> Formatter<'a> {
 			// the trailing comment must be picked up here or it would be hoisted.
 			self.trailing_comment(t.value.range.end.line),
 		];
-		// The continuation expressions are siblings in the enclosing block,
-		// so each is itself a statement and carries the same tail position.
+		// The continuation expressions are siblings in the enclosing block, so
+		// each is itself a statement and carries the same tail position. Like
+		// `format_statements`, each must drain its own leading comments (and
+		// preserve a source blank line) — otherwise a comment above a post-`try`
+		// statement is left unconsumed and gets vacuumed into a later block's body.
+		let mut prev_end = t.value.range.end.line;
 		for e in &t.rest {
 			parts.push(hardline());
+			if self.first_unconsumed_line(e.range.start.line) > prev_end + 1 {
+				parts.push(hardline());
+			}
+			parts.push(self.drain_leading(e.range.start.line));
 			parts.push(self.fmt_prec(e, 0, tail));
 			parts.push(self.trailing_comment(e.range.end.line));
+			prev_end = e.range.end.line;
 		}
 		concat(parts)
 	}

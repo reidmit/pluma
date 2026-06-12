@@ -1,0 +1,15 @@
+# A `try` statement folds every following statement into its continuation, so a
+# comment above a post-`try` statement must still be drained at statement level
+# — not left unconsumed to be vacuumed into a later block's body.
+def main = fun {
+	try first = begin ()
+	# leading comment on a post-try statement
+	print first
+
+	# comment after a blank line, above a lambda-bearing binding
+	let doubled = list.map [1, 2, 3] fun n {
+		n * 2
+	}
+	# trailing note before the last statement
+	print doubled
+}
