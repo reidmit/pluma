@@ -433,6 +433,23 @@ public def hydrate :: fun dom.node (fun nothing -> view) -> task nothing = fun p
 	task.return ()
 }
 
+# --- boot payload: read the server's serialized initial data ------------------
+#
+# The companion to hydration's data side. A server-rendered page renders its view
+# from some data `D`; for the client to hydrate the *same* tree it needs the same
+# `D`. Rather than refetch `D` over RPC (a wasteful round-trip, and a window where
+# the page is visible but not yet interactive), the server embeds it once -- as
+# `hex.encode (wire.encode D)` inside a non-executed
+# `<script id="..." type="application/pluma">` -- and the client reads it back here,
+# synchronously, before building the view. `id` is that script's id.
+#
+# Returns `err` when the element is absent or the bytes don't decode (e.g. a page
+# served as a plain client-only shell), so the caller can fall back to fetching --
+# the same app then works whether or not it was server-rendered.
+public def boot-data :: fun string -> result a wire-error where (wire a) = fun id {
+	wire.decode (hex.decode (dom.element-text id) ?? '')
+}
+
 # Adopt the existing DOM `node` as the realisation of `v`: wire reactivity onto it
 # without creating nodes. Static text and the static/property attributes the
 # server already rendered are left untouched; only reactive parts get effects and

@@ -680,11 +680,15 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients, server_po
 		return;
 	}
 	// Document requests are server-side rendered: fetch the page HTML from the
-	// server subprocess (its GET `/` route) and inject the live-reload client. The
-	// browser hydrates that markup. If the server has no SSR route (a bare RPC
-	// server) or is down, fall back to the plain CSR dev shell.
-	if path == "/" || path == "/index.html" {
-		if let Some(doc) = fetch_ssr_document(server_port) {
+	// server subprocess at the SAME path the browser asked for (so a multi-page app
+	// renders `/species`, `/sightings/42`, … each on the server) and inject the
+	// live-reload client; the browser hydrates that markup. The client bundle's own
+	// files are served locally, so they're never treated as page routes. If the
+	// server has no SSR route for the path (it answers non-200/non-HTML) or is down,
+	// fall back to the plain static handler (the CSR dev shell for `/`, else 404).
+	let is_asset = matches!(path.as_str(), "/loader.js" | "/app.wasm" | "/__livereload");
+	if !is_asset {
+		if let Some(doc) = fetch_ssr_document(server_port, &path) {
 			let injected = doc.replacen("</body>", &format!("{LIVERELOAD_SNIPPET}</body>"), 1);
 			respond(
 				&mut stream,
@@ -698,13 +702,14 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients, server_po
 	serve_static(&path, stream, &served, &clients);
 }
 
-/// Fetch the server subprocess's server-rendered document (GET `/`). Returns the
-/// full HTML on a 200, or `None` if the server is down or `/` isn't a 200 HTML
-/// page (e.g. a fullstack app whose server only mounts `rpc.dispatch`) — the
-/// caller then falls back to the plain CSR dev shell.
-fn fetch_ssr_document(server_port: u16) -> Option<String> {
+/// Fetch the server subprocess's server-rendered document for `path` (`GET {path}`).
+/// Returns the full HTML on a 200, or `None` if the server is down or the path isn't
+/// a 200 HTML page (e.g. a route the server doesn't render, or a bare RPC server that
+/// answers `/` with a 404) — the caller then falls back to the static handler.
+fn fetch_ssr_document(server_port: u16, path: &str) -> Option<String> {
 	let mut up = TcpStream::connect(("127.0.0.1", server_port)).ok()?;
-	let req = format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{server_port}\r\nConnection: close\r\n\r\n");
+	let req =
+		format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{server_port}\r\nConnection: close\r\n\r\n");
 	up.write_all(req.as_bytes()).ok()?;
 	up.flush().ok()?;
 	let mut raw = Vec::new();

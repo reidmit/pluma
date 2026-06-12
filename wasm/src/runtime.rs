@@ -1181,13 +1181,20 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		// `dom_kind`); the `arity`/`returns_value` here drive only the "is this a host
 		// builtin?" classification — node handles cross as `externref` and strings as
 		// scratch, which the generic host path can't shape.
-		"dom-body" => Some(HostSig {
+		// `dom-window` returns the page's `window` (an externref) just like `dom-body`
+		// returns `<body>`; the location/history helpers pass it to their imports.
+		"dom-body" | "dom-window" => Some(HostSig {
 			arity: 0,
 			returns_value: true,
 		}),
+		// The location readers (`location.pathname`/`.search`/`.hash`) take the window
+		// node and probe-read a string back — the same shape as `dom-get-value`.
 		"dom-create-element"
 		| "dom-create-text"
 		| "dom-get-value"
+		| "dom-location-path"
+		| "dom-location-search"
+		| "dom-location-hash"
 		| "event-target-value"
 		| "event-target-checked" => Some(HostSig {
 			arity: 1,
@@ -1202,12 +1209,17 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 2,
 			returns_value: true,
 		}),
-		"dom-append-child" | "dom-set-text" | "dom-remove-child" | "dom-remove-attribute" => {
-			Some(HostSig {
-				arity: 2,
-				returns_value: false,
-			})
-		}
+		// `dom-push-state`/`dom-replace-state` take the window node + a URL string and
+		// return nothing — the same node-plus-one-string shape as `dom-set-text`.
+		"dom-append-child"
+		| "dom-set-text"
+		| "dom-remove-child"
+		| "dom-remove-attribute"
+		| "dom-push-state"
+		| "dom-replace-state" => Some(HostSig {
+			arity: 2,
+			returns_value: false,
+		}),
 		"dom-set-attribute" | "dom-replace-child" | "dom-insert-before" | "dom-add-listener"
 		// the property setters: node + name + (string | bool). Same arity/shape as
 		// `dom-set-attribute` (the bool rides as the i32 third arg). `dom-set-style-property`
@@ -1224,7 +1236,9 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 2,
 			returns_value: false,
 		}),
-		"dom-dev-store-get" => Some(HostSig {
+		// `dom-dev-store-get` and `dom-element-text` both take one key/id string and
+		// probe a value string back — the same shape.
+		"dom-dev-store-get" | "dom-element-text" => Some(HostSig {
 			arity: 1,
 			returns_value: true,
 		}),
@@ -1378,12 +1392,21 @@ pub(crate) enum DomKind {
 /// Classify a `std/web/dom` host builtin emitted via `emit_dom`. `None` for non-dom tags.
 pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 	Some(match tag {
-		"dom-body" => DomKind::Body,
+		"dom-body" | "dom-window" => DomKind::Body,
 		"dom-create-element" | "dom-create-text" => DomKind::Make,
 		"dom-append-child" => DomKind::Append,
 		"dom-set-attribute" => DomKind::SetAttr,
-		"dom-set-text" => DomKind::SetText,
-		"dom-get-value" | "event-target-value" | "event-target-checked" => DomKind::GetValue,
+		// `history.pushState`/`replaceState`: window node + a URL string, no result —
+		// the same emit shape as `dom-set-text` (the host body differs).
+		"dom-set-text" | "dom-push-state" | "dom-replace-state" => DomKind::SetText,
+		// `location.pathname`/`.search`/`.hash`: window node in, string probed back out
+		// — the `dom-get-value` shape (the host reads `location.*` instead of `.value`).
+		"dom-get-value"
+		| "dom-location-path"
+		| "dom-location-search"
+		| "dom-location-hash"
+		| "event-target-value"
+		| "event-target-checked" => DomKind::GetValue,
 		"dom-add-listener" => DomKind::Listen,
 		"dom-remove-child" => DomKind::Append2,
 		"dom-replace-child" | "dom-insert-before" => DomKind::Extern3,
@@ -1396,7 +1419,9 @@ pub(crate) fn dom_kind(tag: &str) -> Option<DomKind> {
 		"dom-set-style-property" => DomKind::SetProp,
 		"dom-set-bool-property" => DomKind::SetBoolProp,
 		"dom-dev-store-set" => DomKind::DevStoreSet,
-		"dom-dev-store-get" => DomKind::DevStoreGet,
+		// `dom-element-text` reads an element's text by id — a key-string-in,
+		// value-string-out probe, exactly the `dev-store-get` shape.
+		"dom-dev-store-get" | "dom-element-text" => DomKind::DevStoreGet,
 		_ => return None,
 	})
 }

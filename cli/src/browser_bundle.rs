@@ -103,6 +103,15 @@ const pluma = {
   "dom-set-style-property": (n, np, nl, vp, vl) => { n.style.setProperty(readStr(np, nl), readStr(vp, vl)); },
   "dom-set-text": (n, p, l) => { n.textContent = readStr(p, l); },
   "dom-get-value": (n, dst, cap) => writeStr(dst, cap, (n && n.value) || ""),
+  // std/web/dom location & history. The page's `window` flows back as the node
+  // handle these share with the `add-listener`/`get-value` machinery; the node arg
+  // is `window` itself and ignored where the browser API is global.
+  "dom-window": () => window,
+  "dom-location-path": (n, dst, cap) => writeStr(dst, cap, location.pathname),
+  "dom-location-search": (n, dst, cap) => writeStr(dst, cap, location.search),
+  "dom-location-hash": (n, dst, cap) => writeStr(dst, cap, location.hash),
+  "dom-push-state": (n, p, l) => { history.pushState(null, "", readStr(p, l)); },
+  "dom-replace-state": (n, p, l) => { history.replaceState(null, "", readStr(p, l)); },
   // event accessors (the event externref flows in as the handler's arg).
   "event-target-value": (e, dst, cap) => writeStr(dst, cap, (e && e.target && e.target.value) || ""),
   // `checked` rides the same string-probe shape as `target-value`: "true"/"false",
@@ -126,6 +135,13 @@ const pluma = {
     let v = "";
     try { v = localStorage.getItem(readStr(kp, kl)) || ""; } catch (e) {}
     return writeStr(dst, cap, v);
+  },
+  // Read an element's text content by id — the channel a server-rendered page uses
+  // to hand its initial data to the client (a `<script type="application/...">` boot
+  // payload), so hydration needs no extra round-trip. "" if the element is absent.
+  "dom-element-text": (idp, idl, dst, cap) => {
+    const el = document.getElementById(readStr(idp, idl));
+    return writeStr(dst, cap, (el && el.textContent) || "");
   },
   // std/sys/io error/overflow channels, shared by std/web/fetch's marshalled read.
   "io-last-error": (dst, cap) => writeStr(dst, cap, lastError),

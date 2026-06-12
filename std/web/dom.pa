@@ -92,6 +92,14 @@ public def set-text :: fun node string -> nothing = built-in "dom-set-text"
 # Read an input node's current `.value` (the empty string if it has none).
 public def get-value :: fun node -> string = built-in "dom-get-value"
 
+# Read the text content of the element with the given id (the empty string if there
+# is no such element). Distinct from `get-value`, which reads a form control's live
+# value; this reads any element's text -- most usefully a server-rendered boot
+# payload (`<script id="..." type="application/pluma">...</script>`), the channel an
+# SSR'd page uses to hand the client its initial data so hydration needs no refetch.
+# `std/web/render`'s `boot-data` wraps this with the hex + `wire` decode.
+public def element-text :: fun string -> string = built-in "dom-element-text"
+
 # The `i`-th child node of `parent` (0-based, in document order). Used by
 # `render.hydrate` to walk a server-rendered tree alongside the `view`: the view
 # tree and the SSR'd DOM are 1:1 in document order, so child `i` of an element's
@@ -129,5 +137,64 @@ public def dev-store-get :: fun string -> string = built-in "dom-dev-store-get"
 #     dom.on-click btn (fun _e { dom.set-text label "clicked" })
 public def on-click :: fun node (fun event -> nothing) -> nothing = fun n handler {
 	let _id = add-listener n "click" handler
+	()
+}
+
+# --- location & history -----------------------------------------------------
+#
+# Reading the current URL and driving client-side navigation. A multi-page app
+# boots one `app.wasm` on every route, so its entry reads `path ()` to learn which
+# page the server rendered and hydrate the matching view. `push-state` +
+# `on-pop-state` add in-app navigation without a full reload.
+
+# The page's `window`, as an opaque handle. Private: the helpers below pass it to
+# their host imports (location/history are `window` globals in the browser); app
+# code uses those helpers, never the raw handle.
+def window :: fun nothing -> node = built-in "dom-window"
+
+# The current URL's path (`location.pathname`), e.g. `"/items/42"`. The entry point
+# of a multi-page client uses it to pick which page to hydrate.
+public def path :: fun nothing -> string = fun {
+	location-path (window ())
+}
+
+def location-path :: fun node -> string = built-in "dom-location-path"
+
+# The query string with its leading `?` (`location.search`), or `""` if absent.
+public def query :: fun nothing -> string = fun {
+	location-search (window ())
+}
+
+def location-search :: fun node -> string = built-in "dom-location-search"
+
+# The fragment with its leading `#` (`location.hash`), or `""` if absent.
+public def hash :: fun nothing -> string = fun {
+	location-hash (window ())
+}
+
+def location-hash :: fun node -> string = built-in "dom-location-hash"
+
+# Navigate to `url` by pushing a new history entry, *without* a page reload
+# (`history.pushState`). The app re-renders the new route itself; pair with
+# `on-pop-state` so the browser's back/forward buttons stay in sync.
+public def push-state :: fun string -> nothing = fun url {
+	push-state-on (window ()) url
+}
+
+def push-state-on :: fun node string -> nothing = built-in "dom-push-state"
+
+# Replace the current history entry's URL with `url`, no reload
+# (`history.replaceState`) -- a navigation that leaves no back-button step.
+public def replace-state :: fun string -> nothing = fun url {
+	replace-state-on (window ()) url
+}
+
+def replace-state-on :: fun node string -> nothing = built-in "dom-replace-state"
+
+# Run `handler` on every back/forward navigation (the `popstate` event). The
+# handler reads the new URL with `path ()` and re-renders accordingly. The
+# listener lives for the page; its event carries no payload a handler needs.
+public def on-pop-state :: fun (fun event -> nothing) -> nothing = fun handler {
+	let _id = add-listener (window ()) "popstate" handler
 	()
 }
