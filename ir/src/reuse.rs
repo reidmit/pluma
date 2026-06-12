@@ -43,6 +43,7 @@ pub fn report(program: &IrProgram) -> Vec<ReuseNote> {
 	let mut notes = Vec::new();
 	for f in &program.functions {
 		report_fn(f, &mut notes);
+		report_list_fn(f, &mut notes);
 	}
 	notes
 }
@@ -109,10 +110,13 @@ fn insert_sites(b: &Block) -> Vec<u32> {
 	out
 }
 
-/// Rewrite proven-safe `dict.insert` accumulators to the transient in-place insert.
+/// Rewrite proven-safe value-semantics accumulators to in-place mutation: the
+/// `dict.insert` transient, and the `[...acc, v]` list spread-append (which would
+/// otherwise rebuild the whole backing array each iteration — O(n²) over the scan).
 pub fn reuse(program: &mut IrProgram) {
 	for f in &mut program.functions {
 		reuse_fn(f);
+		list_reuse_fn(f);
 	}
 }
 
@@ -628,6 +632,566 @@ fn rewrite_rvalue(rv: &mut Rvalue, eligible: &HashSet<u32>, token: VarId) {
 	}
 }
 
+// ==========================================================================
+// List append reuse — `[...acc, v]` in a loop-carried accumulator.
+//
+// A spread literal copies: `acc' = [...acc, v]` builds a fresh backing array of
+// length+1 and copies every element, so threading it through a loop is O(n²) over
+// the accumulation (the JSON/regex `find-all` footgun). `list.push` appends in
+// place (amortized O(1)) by mutating the `$list` struct's array+length fields — but
+// only an author who knows the list is uniquely owned can reach for it.
+//
+// This pass proves that ownership statically for the same loopify accumulator shape
+// dict reuse handles, then rewrites `[...acc, e1..en]` (a *leading* spread of the
+// accumulator, trailing plain elements) to in-place `list.push`es. Two things make
+// it sound:
+//   * Every use of `acc` is the leading spread of such an append or the return path
+//     — no alias can observe the in-place growth — and `acc` is only ever reassigned
+//     from its own appends (never a foreign, possibly-shared list).
+//   * One `[...acc]` clone before the loop takes ownership of the initial value, so
+//     even if the caller still holds the list it passed in, the pushes mutate our
+//     private copy. The clone is O(initial length) — free for the empty-list start
+//     an accumulator almost always has.
+// Prepend (`[v, ...acc]`) can't append in place (it would shift every element), so
+// it stays a copy: `classify_makelist` reports it as an escape and the pass declines.
+// "When unsure, copy" — getting it wrong is silent heap corruption.
+// --------------------------------------------------------------------------
+
+fn list_reuse_fn(f: &mut Function) {
+	// The loopify shape — a `Loop` with a trailing `Return(Var(result))`. Dict reuse
+	// may have prepended a token `Let`, so locate the loop rather than demand it at [0].
+	let Some((loop_idx, result)) = loop_shape(&f.body) else {
+		return;
+	};
+	let StmtKind::Loop(loop_body) = &f.body.0[loop_idx].kind else {
+		unreachable!()
+	};
+
+	let reassigned = assigned_in_block(loop_body);
+	let params = f.params.clone();
+	let mut eligible: Vec<u32> = Vec::new();
+	for p in &params {
+		if !reassigned.contains(&p.0) {
+			continue;
+		}
+		if list_eligible(f, p.0, result, loop_body) {
+			eligible.push(p.0);
+		}
+	}
+	if eligible.is_empty() {
+		return;
+	}
+
+	let range = f.body.0[loop_idx].range;
+	let elig_set: HashSet<u32> = eligible.iter().copied().collect();
+	let StmtKind::Loop(loop_body) = &mut f.body.0[loop_idx].kind else {
+		unreachable!()
+	};
+	rewrite_list_block(loop_body, &elig_set);
+	// Clone each accumulator once before the loop so the pushes mutate a freshly-owned
+	// array. `[...acc]` is a copy; for the usual empty start it costs nothing.
+	for &acc in &eligible {
+		f.body.0.insert(
+			loop_idx,
+			Stmt::new(
+				StmtKind::Let(
+					VarId(acc),
+					Rvalue::MakeList(vec![ListItem::Spread(Atom::Var(VarId(acc)))]),
+				),
+				range,
+			),
+		);
+	}
+}
+
+/// Analyze (without rewriting) every `[...acc, …]` append site and report whether the
+/// pass would push in place or copy — the list counterpart to `report_fn`, feeding the
+/// same soundness harness.
+fn report_list_fn(f: &Function, notes: &mut Vec<ReuseNote>) {
+	let Some((loop_idx, result)) = loop_shape(&f.body) else {
+		return;
+	};
+	let StmtKind::Loop(loop_body) = &f.body.0[loop_idx].kind else {
+		unreachable!()
+	};
+	let reassigned = assigned_in_block(loop_body);
+	for acc in append_sites(&f.body) {
+		let reused = reassigned.contains(&acc)
+			&& f.params.iter().any(|p| p.0 == acc)
+			&& list_eligible(f, acc, result, loop_body);
+		notes.push(ReuseNote {
+			module: f.module.clone(),
+			reused,
+		});
+	}
+}
+
+/// The accumulator var of every `[...acc, …]` leading-spread append in `b`.
+fn append_sites(b: &Block) -> Vec<u32> {
+	let mut out = Vec::new();
+	fn walk(b: &Block, out: &mut Vec<u32>) {
+		for s in &b.0 {
+			if let StmtKind::Let(_, Rvalue::MakeList(items)) = &s.kind {
+				if let Some(ListItem::Spread(Atom::Var(x))) = items.first() {
+					if matches!(classify_makelist(items, x.0), MlUse::Append) {
+						out.push(x.0);
+					}
+				}
+			}
+			match &s.kind {
+				StmtKind::If(_, t, e) => {
+					walk(t, out);
+					walk(e, out);
+				}
+				StmtKind::Switch { arms, default, .. } => {
+					for (_, blk) in arms {
+						walk(blk, out);
+					}
+					walk(default, out);
+				}
+				StmtKind::Match { arms, .. } => {
+					for arm in arms {
+						walk(&arm.body, out);
+					}
+				}
+				StmtKind::Loop(blk) => walk(blk, out),
+				_ => {}
+			}
+		}
+	}
+	walk(b, &mut out);
+	out
+}
+
+/// Locate the loopify shape: the index of the (single) `Loop` and the `result` var of
+/// a trailing `Return(Var(result))`. Tolerates `Let` prologues before the loop.
+fn loop_shape(body: &Block) -> Option<(usize, u32)> {
+	let n = body.0.len();
+	if n < 2 {
+		return None;
+	}
+	let StmtKind::Return(Atom::Var(r)) = &body.0[n - 1].kind else {
+		return None;
+	};
+	let loop_idx = body
+		.0
+		.iter()
+		.position(|s| matches!(s.kind, StmtKind::Loop(_)))?;
+	if loop_idx >= n - 1 {
+		return None;
+	}
+	Some((loop_idx, r.0))
+}
+
+/// How a `MakeList` mentions the accumulator `acc`.
+enum MlUse {
+	/// `[...acc, e1..en]` — a leading spread of `acc`, then plain elements that don't
+	/// reference `acc` (possibly zero: a bare `[...acc]`). The rewritable append.
+	Append,
+	/// `acc` appears, but not as a clean leading append — a prepend (`[v, ...acc]`),
+	/// a non-leading spread, `acc` as an element, etc. Must stay a copy.
+	Escape,
+	/// `acc` does not appear.
+	Absent,
+}
+
+fn classify_makelist(items: &[ListItem], acc: u32) -> MlUse {
+	let reads_acc = |a: &Atom| matches!(a, Atom::Var(v) if v.0 == acc);
+	let appears = items.iter().any(|it| match it {
+		ListItem::Elem(a) | ListItem::Spread(a) => reads_acc(a),
+	});
+	if !appears {
+		return MlUse::Absent;
+	}
+	if let Some(ListItem::Spread(a)) = items.first() {
+		if reads_acc(a)
+			&& items[1..]
+				.iter()
+				.all(|it| matches!(it, ListItem::Elem(e) if !reads_acc(e)))
+		{
+			return MlUse::Append;
+		}
+	}
+	MlUse::Escape
+}
+
+fn is_append_consume(kind: &StmtKind, acc: u32) -> bool {
+	matches!(
+		kind,
+		StmtKind::Let(_, Rvalue::MakeList(items))
+			if matches!(classify_makelist(items, acc), MlUse::Append)
+	)
+}
+
+fn list_eligible(f: &Function, acc: u32, result: u32, loop_body: &Block) -> bool {
+	// (a) No escape: every read of `acc` is a leading-spread append or the return copy.
+	let mut scan = ListUseScan {
+		acc,
+		result,
+		ok: true,
+		consumes: 0,
+	};
+	scan.block(&f.body);
+	if !scan.ok || scan.consumes == 0 {
+		return false;
+	}
+	// (b) Dead-after: each append is the last read of `acc` before it's reassigned.
+	if !list_dead_after_ok(loop_body, acc) {
+		return false;
+	}
+	// (c) Each append's result flows only into `acc`'s reassignment.
+	let reads = read_counts(f);
+	let results = collect_append_results(loop_body, acc);
+	if !results
+		.iter()
+		.all(|&r| result_flows_to_d(f, r, acc, &reads))
+	{
+		return false;
+	}
+	// (d) `acc` is only ever reassigned from its own appends — never a foreign list.
+	// This is what lets the single upfront clone keep `acc` uniquely owned throughout.
+	acc_only_from_appends(f, acc, &results, &reads)
+}
+
+/// Classify every read of `acc` across the function: a leading-spread append consume,
+/// the return-path copy, or an escape (anything that may retain or alias it).
+struct ListUseScan {
+	acc: u32,
+	result: u32,
+	ok: bool,
+	consumes: usize,
+}
+
+impl ListUseScan {
+	fn is_acc(&self, a: &Atom) -> bool {
+		matches!(a, Atom::Var(v) if v.0 == self.acc)
+	}
+
+	fn escape_if_acc(&mut self, a: &Atom) {
+		if self.is_acc(a) {
+			self.ok = false;
+		}
+	}
+
+	fn block(&mut self, b: &Block) {
+		for s in &b.0 {
+			match &s.kind {
+				StmtKind::Let(v, rv) => self.rvalue(rv, v.0 == self.result),
+				StmtKind::Discard(rv) => self.rvalue(rv, false),
+				// Returning the final accumulator hands an owned list to the caller; the
+				// pass stops mutating it, so this is not an escape (same as dict reuse).
+				StmtKind::Return(_) => {}
+				StmtKind::PushDefer(a) => self.escape_if_acc(a),
+				StmtKind::If(c, t, e) => {
+					self.escape_if_acc(c);
+					self.block(t);
+					self.block(e);
+				}
+				StmtKind::Switch {
+					scrutinee,
+					arms,
+					default,
+				} => {
+					self.escape_if_acc(scrutinee);
+					for (_, blk) in arms {
+						self.block(blk);
+					}
+					self.block(default);
+				}
+				StmtKind::Match { subject, arms } => {
+					self.escape_if_acc(subject);
+					for arm in arms {
+						self.block(&arm.body);
+					}
+				}
+				StmtKind::Loop(blk) => self.block(blk),
+				StmtKind::Break | StmtKind::Continue | StmtKind::RunDefer(_) => {}
+			}
+		}
+	}
+
+	/// `is_result_target` is true for the RHS of `Let(result, …)` — the one place a
+	/// bare `Use(Var(acc))` (loopify's copy of a returned accumulator) is allowed.
+	fn rvalue(&mut self, rv: &Rvalue, is_result_target: bool) {
+		match rv {
+			Rvalue::Use(a) => {
+				if self.is_acc(a) && !is_result_target {
+					self.ok = false;
+				}
+			}
+			Rvalue::MakeList(items) => match classify_makelist(items, self.acc) {
+				MlUse::Append => self.consumes += 1,
+				MlUse::Escape => self.ok = false,
+				MlUse::Absent => {}
+			},
+			// Every other rvalue: any mention of `acc` may retain or alias it — reject.
+			other => {
+				let acc = self.acc;
+				let mut escapes = false;
+				rvalue_atoms(other, &mut |a| {
+					if matches!(a, Atom::Var(v) if v.0 == acc) {
+						escapes = true;
+					}
+				});
+				if escapes {
+					self.ok = false;
+				}
+			}
+		}
+	}
+}
+
+/// The `r` of every `Let(r, [...acc, …])` append in `b` (recursively).
+fn collect_append_results(b: &Block, acc: u32) -> Vec<u32> {
+	let mut out = Vec::new();
+	fn walk(b: &Block, acc: u32, out: &mut Vec<u32>) {
+		for s in &b.0 {
+			if let StmtKind::Let(r, _) = &s.kind {
+				if is_append_consume(&s.kind, acc) {
+					out.push(r.0);
+				}
+			}
+			match &s.kind {
+				StmtKind::If(_, t, e) => {
+					walk(t, acc, out);
+					walk(e, acc, out);
+				}
+				StmtKind::Switch { arms, default, .. } => {
+					for (_, blk) in arms {
+						walk(blk, acc, out);
+					}
+					walk(default, acc, out);
+				}
+				StmtKind::Match { arms, .. } => {
+					for arm in arms {
+						walk(&arm.body, acc, out);
+					}
+				}
+				StmtKind::Loop(blk) => walk(blk, acc, out),
+				_ => {}
+			}
+		}
+	}
+	walk(b, acc, &mut out);
+	out
+}
+
+/// Each `[...acc, …]` append must be the last read of `acc` (in its block) before
+/// `acc` is reassigned — so the in-place push isn't observed by a later read of the
+/// old value. Mirrors dict reuse's `dead_after_ok` for the append consume.
+fn list_dead_after_ok(b: &Block, acc: u32) -> bool {
+	for (i, s) in b.0.iter().enumerate() {
+		if is_append_consume(&s.kind, acc) {
+			let mut reassigned = false;
+			for later in &b.0[i + 1..] {
+				if let StmtKind::Let(v, _) = &later.kind {
+					if v.0 == acc {
+						reassigned = true;
+						break;
+					}
+				}
+				if stmt_reads_var(&later.kind, acc) {
+					return false;
+				}
+			}
+			if !reassigned {
+				return false;
+			}
+		}
+		match &s.kind {
+			StmtKind::If(_, t, e) => {
+				if !list_dead_after_ok(t, acc) || !list_dead_after_ok(e, acc) {
+					return false;
+				}
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, blk) in arms {
+					if !list_dead_after_ok(blk, acc) {
+						return false;
+					}
+				}
+				if !list_dead_after_ok(default, acc) {
+					return false;
+				}
+			}
+			StmtKind::Match { arms, .. } => {
+				for arm in arms {
+					if !list_dead_after_ok(&arm.body, acc) {
+						return false;
+					}
+				}
+			}
+			StmtKind::Loop(blk) => {
+				if !list_dead_after_ok(blk, acc) {
+					return false;
+				}
+			}
+			_ => {}
+		}
+	}
+	true
+}
+
+/// Every reassignment `Let(acc, rhs)` must take `rhs` from `acc`'s own append results
+/// (through loopify's single-use copy staging) — never a foreign list that could be
+/// aliased. Without this, the upfront clone wouldn't guarantee continued ownership.
+fn acc_only_from_appends(
+	f: &Function,
+	acc: u32,
+	results: &[u32],
+	reads: &std::collections::HashMap<u32, usize>,
+) -> bool {
+	// Forward closure of single-use `Let(x, Use(Var(s)))` copies from the append results.
+	let mut owned: HashSet<u32> = results.iter().copied().collect();
+	let copies = all_copies(&f.body);
+	loop {
+		let mut added = false;
+		for &(x, s) in &copies {
+			if owned.contains(&s) && reads.get(&s).copied().unwrap_or(0) == 1 && owned.insert(x) {
+				added = true;
+			}
+		}
+		if !added {
+			break;
+		}
+	}
+	// Every write of `acc` must be a `Use` of an owned (append-derived) var.
+	let mut ok = true;
+	fn walk(b: &Block, acc: u32, owned: &HashSet<u32>, ok: &mut bool) {
+		for s in &b.0 {
+			if let StmtKind::Let(v, rhs) = &s.kind {
+				if v.0 == acc && !matches!(rhs, Rvalue::Use(Atom::Var(src)) if owned.contains(&src.0)) {
+					*ok = false;
+				}
+			}
+			match &s.kind {
+				StmtKind::If(_, t, e) => {
+					walk(t, acc, owned, ok);
+					walk(e, acc, owned, ok);
+				}
+				StmtKind::Switch { arms, default, .. } => {
+					for (_, blk) in arms {
+						walk(blk, acc, owned, ok);
+					}
+					walk(default, acc, owned, ok);
+				}
+				StmtKind::Match { arms, .. } => {
+					for arm in arms {
+						walk(&arm.body, acc, owned, ok);
+					}
+				}
+				StmtKind::Loop(blk) => walk(blk, acc, owned, ok),
+				_ => {}
+			}
+		}
+	}
+	walk(&f.body, acc, &owned, &mut ok);
+	ok
+}
+
+/// Every `Let(x, Use(Var(s)))` copy in the function, as `(x, s)`.
+fn all_copies(b: &Block) -> Vec<(u32, u32)> {
+	let mut out = Vec::new();
+	fn walk(b: &Block, out: &mut Vec<(u32, u32)>) {
+		for s in &b.0 {
+			if let StmtKind::Let(x, Rvalue::Use(Atom::Var(src))) = &s.kind {
+				out.push((x.0, src.0));
+			}
+			match &s.kind {
+				StmtKind::If(_, t, e) => {
+					walk(t, out);
+					walk(e, out);
+				}
+				StmtKind::Switch { arms, default, .. } => {
+					for (_, blk) in arms {
+						walk(blk, out);
+					}
+					walk(default, out);
+				}
+				StmtKind::Match { arms, .. } => {
+					for arm in arms {
+						walk(&arm.body, out);
+					}
+				}
+				StmtKind::Loop(blk) => walk(blk, out),
+				_ => {}
+			}
+		}
+	}
+	walk(b, &mut out);
+	out
+}
+
+/// If `items` is `[...acc, e1..en]` with `acc` eligible, return `(acc, [e1..en])`.
+fn append_consume_of_eligible(
+	items: &[ListItem],
+	eligible: &HashSet<u32>,
+) -> Option<(u32, Vec<Atom>)> {
+	let ListItem::Spread(Atom::Var(acc)) = items.first()? else {
+		return None;
+	};
+	if !eligible.contains(&acc.0) {
+		return None;
+	}
+	let mut elems = Vec::with_capacity(items.len() - 1);
+	for it in &items[1..] {
+		match it {
+			ListItem::Elem(a) => elems.push(a.clone()),
+			ListItem::Spread(_) => return None,
+		}
+	}
+	Some((acc.0, elems))
+}
+
+/// Rewrite each `Let(r, [...acc, e1..en])` of an eligible `acc` to in-place pushes
+/// (`list.push acc ei`) followed by `Let(r, Use(acc))` — `r` is the same growing list.
+fn rewrite_list_block(b: &mut Block, eligible: &HashSet<u32>) {
+	let mut out = Vec::with_capacity(b.0.len());
+	for mut s in b.0.drain(..) {
+		match &mut s.kind {
+			StmtKind::If(_, t, e) => {
+				rewrite_list_block(t, eligible);
+				rewrite_list_block(e, eligible);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, blk) in arms {
+					rewrite_list_block(blk, eligible);
+				}
+				rewrite_list_block(default, eligible);
+			}
+			StmtKind::Match { arms, .. } => {
+				for arm in arms {
+					rewrite_list_block(&mut arm.body, eligible);
+				}
+			}
+			StmtKind::Loop(blk) => rewrite_list_block(blk, eligible),
+			_ => {}
+		}
+		let rng = s.range;
+		if let StmtKind::Let(r, Rvalue::MakeList(items)) = &s.kind {
+			if let Some((acc, elems)) = append_consume_of_eligible(items, eligible) {
+				let r = *r;
+				for e in elems {
+					out.push(Stmt::new(
+						StmtKind::Discard(Rvalue::Call(
+							Callee::Builtin("list-push".into(), Repr::Boxed),
+							vec![Atom::Var(VarId(acc)), e],
+						)),
+						rng,
+					));
+				}
+				out.push(Stmt::new(
+					StmtKind::Let(r, Rvalue::Use(Atom::Var(VarId(acc)))),
+					rng,
+				));
+				continue;
+			}
+		}
+		out.push(s);
+	}
+	b.0 = out;
+}
+
 // --------------------------------------------------------------------------
 // Small structural helpers.
 // --------------------------------------------------------------------------
@@ -982,6 +1546,224 @@ mod tests {
 			count_tag(&f.body, "dict-insert-into"),
 			0,
 			"aliasing must block reuse"
+		);
+	}
+
+	// ---- list append reuse ----
+
+	/// A loopify-shaped list accumulator over params `acc=0, i=1`. The consume is
+	/// `Let(4, MakeList(consume_items))`; `extra` is spliced after it (to inject an
+	/// escape). Mirrors `accumulator` but threads a list, not a dict.
+	fn list_accumulator(consume_items: Vec<ListItem>, extra: Vec<Stmt>) -> Function {
+		let mut rec = vec![st(StmtKind::Let(VarId(4), Rvalue::MakeList(consume_items)))];
+		rec.extend(extra);
+		rec.extend([
+			st(StmtKind::Let(VarId(5), Rvalue::Use(Atom::Var(VarId(4))))), // stage acc'
+			st(StmtKind::Let(
+				VarId(6),
+				Rvalue::Bin(
+					BinOp::SubInt,
+					Atom::Var(VarId(1)),
+					Atom::Const(Const::Int(1)),
+				),
+			)),
+			st(StmtKind::Let(VarId(7), Rvalue::Use(Atom::Var(VarId(6))))), // stage i'
+			st(StmtKind::Let(VarId(0), Rvalue::Use(Atom::Var(VarId(5))))), // acc := acc'
+			st(StmtKind::Let(VarId(1), Rvalue::Use(Atom::Var(VarId(7))))), // i := i'
+			st(StmtKind::Continue),
+		]);
+		let loop_body = Block(vec![
+			st(StmtKind::Let(
+				VarId(2),
+				Rvalue::Bin(
+					BinOp::EqI64,
+					Atom::Var(VarId(1)),
+					Atom::Const(Const::Int(0)),
+				),
+			)),
+			st(StmtKind::Match {
+				subject: Atom::Var(VarId(2)),
+				arms: vec![
+					MatchArm {
+						pattern: Pattern::Literal(Const::Bool(true)),
+						body: Block(vec![
+							st(StmtKind::Let(VarId(3), Rvalue::Use(Atom::Var(VarId(0))))),
+							st(StmtKind::Break),
+						]),
+					},
+					MatchArm {
+						pattern: Pattern::Wildcard,
+						body: Block(rec),
+					},
+				],
+			}),
+		]);
+		Function {
+			name: "acc".into(),
+			module: "main".into(),
+			params: vec![VarId(0), VarId(1)],
+			captures: vec![],
+			is_async: false,
+			poll_fn: None,
+			body: Block(vec![
+				st(StmtKind::Loop(loop_body)),
+				st(StmtKind::Return(Atom::Var(VarId(3)))),
+			]),
+			var_reprs: vec![],
+			param_reprs: vec![],
+			ret_repr: Repr::Boxed,
+		}
+	}
+
+	/// `[...acc, v]` — the leading-spread append the pass rewrites.
+	fn append() -> Vec<ListItem> {
+		vec![
+			ListItem::Spread(Atom::Var(VarId(0))),
+			ListItem::Elem(Atom::Const(Const::Int(7))),
+		]
+	}
+
+	/// True when `f`'s body opens with a `[...acc]` clone prologue for VarId(0).
+	fn has_clone_prologue(f: &Function) -> bool {
+		f.body.0.iter().any(|s| {
+			matches!(&s.kind, StmtKind::Let(v, Rvalue::MakeList(items))
+				if v.0 == 0
+					&& matches!(items.as_slice(), [ListItem::Spread(Atom::Var(a))] if a.0 == 0))
+		})
+	}
+
+	/// Count builtin calls tagged `want` anywhere in `b`, whether bound (`Let`) or
+	/// discarded for effect (`Discard`) — the in-place `list.push` is a `Discard`.
+	fn count_builtin(b: &Block, want: &str) -> usize {
+		let mut n = 0;
+		let hit = |rv: &Rvalue| matches!(rv, Rvalue::Call(Callee::Builtin(tag, _), _) if tag == want);
+		for s in &b.0 {
+			match &s.kind {
+				StmtKind::Let(_, rv) | StmtKind::Discard(rv) if hit(rv) => n += 1,
+				_ => {}
+			}
+			match &s.kind {
+				StmtKind::Loop(blk) => n += count_builtin(blk, want),
+				StmtKind::Match { arms, .. } => {
+					for arm in arms {
+						n += count_builtin(&arm.body, want);
+					}
+				}
+				StmtKind::If(_, t, e) => n += count_builtin(t, want) + count_builtin(e, want),
+				_ => {}
+			}
+		}
+		n
+	}
+
+	/// Count `MakeList`s anywhere in `b` whose first item is `Spread` (appends/clones).
+	fn count_spread_lists(b: &Block) -> usize {
+		let mut n = 0;
+		for s in &b.0 {
+			if let StmtKind::Let(_, Rvalue::MakeList(items)) = &s.kind {
+				if matches!(items.first(), Some(ListItem::Spread(_))) {
+					n += 1;
+				}
+			}
+			match &s.kind {
+				StmtKind::Loop(blk) => n += count_spread_lists(blk),
+				StmtKind::Match { arms, .. } => {
+					for arm in arms {
+						n += count_spread_lists(&arm.body);
+					}
+				}
+				StmtKind::If(_, t, e) => n += count_spread_lists(t) + count_spread_lists(e),
+				_ => {}
+			}
+		}
+		n
+	}
+
+	#[test]
+	fn rewrites_list_append_accumulator() {
+		let f = reuse_one(list_accumulator(append(), vec![]));
+		// One `[...acc]` clone before the loop takes ownership.
+		assert!(has_clone_prologue(&f), "expected a clone prologue");
+		// The append inside the loop became an in-place push of the single element.
+		assert_eq!(
+			count_builtin(&f.body, "list-push"),
+			1,
+			"the appended element should become a list.push"
+		);
+		// The only spread-`MakeList` left is the clone prologue — the in-loop append is gone.
+		assert_eq!(
+			count_spread_lists(&f.body),
+			1,
+			"the in-loop spread-append must be replaced by pushes"
+		);
+	}
+
+	#[test]
+	fn rewrites_multi_element_append() {
+		// `[...acc, a, b]` → two pushes, then `acc` flows on.
+		let items = vec![
+			ListItem::Spread(Atom::Var(VarId(0))),
+			ListItem::Elem(Atom::Const(Const::Int(7))),
+			ListItem::Elem(Atom::Const(Const::Int(9))),
+		];
+		let f = reuse_one(list_accumulator(items, vec![]));
+		assert!(has_clone_prologue(&f));
+		assert_eq!(
+			count_builtin(&f.body, "list-push"),
+			2,
+			"one push per element"
+		);
+	}
+
+	#[test]
+	fn declines_on_prepend() {
+		// `[v, ...acc]` can't append in place (it shifts every element) — stay a copy.
+		let prepend = vec![
+			ListItem::Elem(Atom::Const(Const::Int(7))),
+			ListItem::Spread(Atom::Var(VarId(0))),
+		];
+		let f = reuse_one(list_accumulator(prepend, vec![]));
+		assert_eq!(
+			count_builtin(&f.body, "list-push"),
+			0,
+			"prepend is not rewritten"
+		);
+		assert!(
+			!has_clone_prologue(&f),
+			"no clone when nothing is rewritten"
+		);
+	}
+
+	#[test]
+	fn declines_when_list_escapes() {
+		// The accumulator (VarId 0) is also stored in another list — a live alias — so
+		// the in-place push would be observable. Reuse must decline.
+		let escape = vec![st(StmtKind::Let(
+			VarId(8),
+			Rvalue::MakeList(vec![ListItem::Elem(Atom::Var(VarId(0)))]),
+		))];
+		let f = reuse_one(list_accumulator(append(), escape));
+		assert_eq!(
+			count_builtin(&f.body, "list-push"),
+			0,
+			"aliasing must block reuse"
+		);
+		assert!(!has_clone_prologue(&f));
+	}
+
+	#[test]
+	fn declines_when_append_result_escapes() {
+		// The appended list (VarId 4) is stored elsewhere — the retained copy would be
+		// corrupted by a later in-place push. Reuse must decline.
+		let escape = vec![st(StmtKind::Let(
+			VarId(8),
+			Rvalue::MakeList(vec![ListItem::Elem(Atom::Var(VarId(4)))]),
+		))];
+		let f = reuse_one(list_accumulator(append(), escape));
+		assert_eq!(
+			count_builtin(&f.body, "list-push"),
+			0,
+			"escape must block reuse"
 		);
 	}
 }

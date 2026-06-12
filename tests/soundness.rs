@@ -406,6 +406,123 @@ def main = fun {
 		.into(),
 	);
 
+	// ---- FIRE: list spread-append accumulators (exercise the in-place push path) ----
+
+	// The headline list shape: `[...acc, v]` threaded through a tail-recursive loop. The
+	// naive idiom — no manual `list.push` — must be rewritten to in-place pushes yet stay
+	// observationally identical to the O(n²) copy baseline.
+	add(
+		"clean-list-append",
+		Fire::Yes,
+		r#"use std/list
+def build = fun acc i {
+	if i == 0 { acc } else { build [...acc, i * i] (i - 1) }
+}
+def main = fun {
+	let xs = build [] 20
+	print (list.length xs)
+	print (list.get xs 0)
+	print (list.get xs 19)
+	print (list.fold xs 0 fun a x { a + x })
+}
+"#
+		.into(),
+	);
+
+	// More than one trailing element per append (`[...acc, a, b]`) — one push each.
+	add(
+		"multi-element-list-append",
+		Fire::Yes,
+		r#"use std/list
+def build = fun acc i {
+	if i == 0 { acc } else { build [...acc, i, i + 100] (i - 1) }
+}
+def main = fun {
+	let xs = build [] 5
+	print (list.length xs)
+	print (list.get xs 0)
+	print (list.get xs 9)
+}
+"#
+		.into(),
+	);
+
+	// The initial accumulator is a list the caller still holds AND reads back. The upfront
+	// `[...acc]` clone must take ownership so the in-place pushes never touch `base` — the
+	// sharpest test that the clone is necessary. If it were missing, reuse-on would mutate
+	// `base` and diverge from the copy baseline.
+	add(
+		"list-append-on-existing",
+		Fire::Yes,
+		r#"use std/list
+def build = fun acc i {
+	if i == 0 { acc } else { build [...acc, i] (i - 1) }
+}
+def main = fun {
+	let base = [100, 200]
+	let more = build base 5
+	print (list.length base)
+	print (list.length more)
+	print (list.get base 0)
+	print (list.get base 1)
+	print (list.get more 0)
+	print (list.get more 6)
+}
+"#
+		.into(),
+	);
+
+	// ---- DECLINE: the accumulator (or its append result) escapes / is read ----
+
+	// Each append result is stored into a list of snapshots — every snapshot must keep its
+	// own length (1, 2, 3, …). If the result-escape check regressed and reuse fired, all
+	// snapshots would alias one in-place-grown list and report the final length.
+	add(
+		"list-append-snapshots-escape",
+		Fire::No,
+		r#"use std/list
+def build = fun acc snaps i {
+	if i == 0 {
+		snaps
+	} else {
+		let acc2 = [...acc, i]
+		build acc2 [acc2, ...snaps] (i - 1)
+	}
+}
+def main = fun {
+	let snaps = build [] [] 4
+	print (list.length snaps)
+	list.each snaps (fun s { print (list.length s) })
+}
+"#
+		.into(),
+	);
+
+	// A borrowing `list.length` of the accumulator inside the loop. Unlike dict reuse
+	// (which allows borrows), list append reuse is conservative and declines here — a safe
+	// copy, and a guard that loosening it stays observationally transparent.
+	add(
+		"list-length-in-loop",
+		Fire::No,
+		r#"use std/list
+def build = fun acc i {
+	if i == 0 {
+		acc
+	} else {
+		let n = list.length acc
+		build [...acc, n] (i - 1)
+	}
+}
+def main = fun {
+	let xs = build [] 6
+	print (list.length xs)
+	print (list.get xs 0)
+	print (list.get xs 5)
+}
+"#
+		.into(),
+	);
+
 	cases
 }
 
