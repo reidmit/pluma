@@ -1,0 +1,15 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+/ OK 200
+/about OK 200
+/boom BROKEN 500
+/missing MISSING 404
+/redirect -> 301
+/slow TIMEOUT
+checked 6, 3 healthy, 3 broken
+== stderr ==

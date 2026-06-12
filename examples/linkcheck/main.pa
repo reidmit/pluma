@@ -1,0 +1,194 @@
+# A parallel link-checker.
+#
+# Every URL is fetched concurrently, but with two governors: a bounded worker
+# pool (so a thousand links don't open a thousand sockets at once) and a
+# per-request timeout (so one hung host can't stall the whole run). Each fetch
+# is classified into an `outcome` and the results are gathered into a report.
+#
+# With URLs on the command line it checks the real web:
+#
+#     pluma run examples/linkcheck https://example.com https://example.com/nope
+#
+# With no arguments it checks a bundled demo server whose routes are rigged to
+# cover every interesting outcome -- live, redirect, missing, server error, and
+# one deliberately-slow route that trips the timeout -- so the run is
+# self-contained and deterministic.
+
+use std/dict
+use std/list
+use std/string
+use std/task
+use std/sys/http
+use std/sys/net
+use std/sys/process
+
+# How a single link turned out. 2xx/3xx are healthy; everything else is a break.
+enum outcome {
+	live int
+	moved int
+	missing int
+	broken int
+	timed-out
+	unreachable string
+}
+
+def classify :: fun int -> outcome = fun status {
+	if status >= 200 && status < 300 {
+		outcome.live status
+	} else if status >= 300 && status < 400 {
+		outcome.moved status
+	} else if status >= 400 && status < 500 {
+		outcome.missing status
+	} else {
+		outcome.broken status
+	}
+}
+
+def healthy :: fun outcome -> bool = fun o {
+	when o is outcome.live _ {
+		true
+	} is outcome.moved _ {
+		true
+	} else {
+		false
+	}
+}
+
+# Render one outcome as a fixed-width status badge.
+def badge :: fun outcome -> string = fun o {
+	when o is outcome.live s {
+		"OK $(to-string s)"
+	} is outcome.moved s {
+		"-> $(to-string s)"
+	} is outcome.missing s {
+		"MISSING $(to-string s)"
+	} is outcome.broken s {
+		"BROKEN $(to-string s)"
+	} is outcome.timed-out {
+		"TIMEOUT"
+	} is outcome.unreachable msg {
+		"UNREACHABLE ($(msg))"
+	}
+}
+
+# Check one URL. This task is total: every failure mode -- a timeout, a refused
+# connection, a malformed reply -- is folded into an `outcome` rather than
+# failing the task, so the pool gathers a result for every link instead of
+# aborting the batch on the first dead host. The URL is paired with its outcome
+# because `task.pool` yields results in completion order, not input order.
+def check :: fun duration string -> task (string, outcome) e = fun limit url {
+	let fetched = task.with-timeout limit (http.fetch url http.method.get (dict.empty ()) (string.to-bytes ""))
+	try settled = task.attempt fetched
+	when settled is ok resp {
+		task.return (url, classify resp.status)
+	} is err msg {
+		let o = if msg == "timeout" {
+			outcome.timed-out
+		} else {
+			outcome.unreachable msg
+		}
+		task.return (url, o)
+	}
+}
+
+# Fan the checks out across at most `workers` concurrent fetches.
+def run-checks :: fun int duration (list string) -> task (list (string, outcome)) e = fun workers limit urls {
+	task.pool workers (list.map urls fun url {
+		check limit url
+	})
+}
+
+def spaces :: fun int -> string = fun n {
+	if n <= 0 {
+		""
+	} else {
+		" " ++ spaces (n - 1)
+	}
+}
+
+def pad-right :: fun string int -> string = fun s width {
+	let gap = width - string.length s
+	if gap <= 0 {
+		s
+	} else {
+		s ++ spaces gap
+	}
+}
+
+def report :: fun (list (string, outcome)) -> nothing = fun results {
+	let width = list.fold results 0 fun acc pair {
+		let len = string.length pair.0
+		if len > acc {
+			len
+		} else {
+			acc
+		}
+	}
+	list.each results fun pair {
+		print "$(pad-right pair.0 width)  $(badge pair.1)"
+	}
+	let healthy-count = list.length (list.filter results fun pair {
+		healthy pair.1
+	})
+	let total = list.length results
+	let broken = total - healthy-count
+	print ""
+	print "checked $(to-string total), $(to-string healthy-count) healthy, $(to-string broken) broken"
+}
+
+# --- demo server: a miniature web with one of every interesting failure ---
+
+def demo-handler :: fun http.request -> task http.response = fun req {
+	if string.contains req.path "slow" {
+		try _ = task.sleep 1s
+		task.return (http.text 200 "eventually")
+	} else if string.contains req.path "redirect" {
+		task.return (http.text 301 "moved")
+	} else if string.contains req.path "missing" {
+		task.return (http.not-found ())
+	} else if string.contains req.path "boom" {
+		task.return (http.text 500 "kaboom")
+	} else {
+		task.return (http.text 200 "hello")
+	}
+}
+
+def demo-paths :: list string = ["/", "/about", "/redirect", "/missing", "/boom", "/slow"]
+
+def run-demo :: fun nothing -> task int string = fun {
+	if net.listen "127.0.0.1:0" is ok server {
+		if net.local-addr server is ok addr {
+			let base = "http://" ++ addr
+			let urls = list.map demo-paths fun p {
+				base ++ p
+			}
+			scope as s {
+				let _ = s.spawn (http.serve-on server demo-handler)
+				# Short timeout so the 1s `/slow` route deterministically trips it.
+				try results = run-checks 3 250ms urls
+				s.cancel ()
+				let _ = report results
+				task.return 0
+			}
+		} else {
+			print "could not read demo server address"
+			task.return 1
+		}
+	} else {
+		print "could not start demo server"
+		task.return 1
+	}
+}
+
+def main = fun {
+	let urls = process.args ()
+	if list.is-empty urls {
+		print "no URLs given -- checking bundled demo server"
+		print ""
+		run-demo ()
+	} else {
+		try results = run-checks 8 5s urls
+		let _ = report results
+		task.return 0
+	}
+}

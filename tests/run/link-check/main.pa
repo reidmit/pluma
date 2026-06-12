@@ -1,0 +1,135 @@
+# Concurrency regression guard, distilled from `examples/linkcheck`: a bounded
+# worker pool (`task.pool`) fetches several routes off one in-process server at
+# once, each fetch under a per-request timeout (`task.with-timeout`), and every
+# outcome -- including the connection that deliberately blows the deadline -- is
+# folded into a total result instead of failing the batch.
+#
+# Determinism: the pool yields results in completion order, so the report is
+# keyed by the (fixed) request path and sorted before printing. The `/slow`
+# route sleeps well past the 250ms timeout, so its TIMEOUT is not a race.
+
+use std/dict
+use std/list
+use std/string
+use std/task
+use std/sys/http
+use std/sys/net
+
+enum outcome {
+	live int
+	moved int
+	missing int
+	broken int
+	timed-out
+	unreachable string
+}
+
+def classify :: fun int -> outcome = fun status {
+	if status >= 200 && status < 300 {
+		outcome.live status
+	} else if status >= 300 && status < 400 {
+		outcome.moved status
+	} else if status >= 400 && status < 500 {
+		outcome.missing status
+	} else {
+		outcome.broken status
+	}
+}
+
+def healthy :: fun outcome -> bool = fun o {
+	when o is outcome.live _ {
+		true
+	} is outcome.moved _ {
+		true
+	} else {
+		false
+	}
+}
+
+def badge :: fun outcome -> string = fun o {
+	when o is outcome.live s {
+		"OK $(to-string s)"
+	} is outcome.moved s {
+		"-> $(to-string s)"
+	} is outcome.missing s {
+		"MISSING $(to-string s)"
+	} is outcome.broken s {
+		"BROKEN $(to-string s)"
+	} is outcome.timed-out {
+		"TIMEOUT"
+	} is outcome.unreachable msg {
+		"UNREACHABLE ($(msg))"
+	}
+}
+
+# Fetch one route. Total: timeouts and transport failures become outcomes, and
+# the (deterministic) path -- not the ephemeral host:port -- rides along as the
+# report key.
+def check :: fun string string -> task (string, outcome) e = fun base path {
+	let fetched = task.with-timeout 250ms (http.fetch (base ++ path) http.method.get (dict.empty ()) (string.to-bytes ""))
+	try settled = task.attempt fetched
+	when settled is ok resp {
+		task.return (path, classify resp.status)
+	} is err msg {
+		let o = if msg == "timeout" {
+			outcome.timed-out
+		} else {
+			outcome.unreachable msg
+		}
+		task.return (path, o)
+	}
+}
+
+def handler :: fun http.request -> task http.response = fun req {
+	if string.contains req.path "slow" {
+		try _ = task.sleep 1s
+		task.return (http.text 200 "eventually")
+	} else if string.contains req.path "redirect" {
+		task.return (http.text 301 "moved")
+	} else if string.contains req.path "missing" {
+		task.return (http.not-found ())
+	} else if string.contains req.path "boom" {
+		task.return (http.text 500 "kaboom")
+	} else {
+		task.return (http.text 200 "hello")
+	}
+}
+
+def paths :: list string = ["/", "/about", "/redirect", "/missing", "/boom", "/slow"]
+
+def report :: fun (list (string, outcome)) -> nothing = fun results {
+	let sorted = list.sort-by results fun pair {
+		pair.0
+	}
+	list.each sorted fun pair {
+		print "$(pair.0) $(badge pair.1)"
+	}
+	let healthy-count = list.length (list.filter results fun pair {
+		healthy pair.1
+	})
+	let total = list.length results
+	print "checked $(to-string total), $(to-string healthy-count) healthy, $(to-string (total - healthy-count)) broken"
+}
+
+def main = fun {
+	if net.listen "127.0.0.1:0" is ok server {
+		if net.local-addr server is ok addr {
+			let base = "http://" ++ addr
+			scope as s {
+				let _ = s.spawn (http.serve-on server handler)
+				try results = task.pool 3 (list.map paths fun p {
+					check base p
+				})
+				s.cancel ()
+				let _ = report results
+				task.return 0
+			}
+		} else {
+			print "local-addr failed"
+			task.return 1
+		}
+	} else {
+		print "listen failed"
+		task.return 1
+	}
+}

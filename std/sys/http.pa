@@ -492,18 +492,23 @@ def status-names :: dict int string = dict.from-entries [
 #     try resp = http.fetch "http://127.0.0.1:8080/echo"
 #         post (dict.empty ()) (string.to-bytes "hi")
 public def fetch :: fun string method (dict string string) bytes -> task response string = fun url verb headers body {
-	let split = split-url url
-	let authority = split.0
-	let path = split.1
-	try conn = task.unwrap (net.connect authority)
-	try task.unwrap (write-all conn (serialize-request verb path authority headers body))
-	try resp = read-response conn
-	net.close conn
-	task.return resp
+	if string.starts-with url "https://" {
+		task.fail "https is not supported: the net stack is TCP-only, with no TLS"
+	} else {
+		let split = split-url url
+		let authority = split.0
+		let path = split.1
+		try conn = task.unwrap (net.connect authority)
+		try task.unwrap (write-all conn (serialize-request verb path authority headers body))
+		try resp = read-response conn
+		net.close conn
+		task.return resp
+	}
 }
 
-# Splits "http://host:port/a/b?x" into `("host:port", "/a/b?x")`. A missing
-# path defaults to "/"; the `http://` scheme prefix is stripped if present.
+# Splits "http://host:port/a/b?x" into `("host:port", "/a/b?x")`. The `http://`
+# scheme prefix is stripped if present, a missing path defaults to "/", and a
+# missing port defaults to 80 -- `net.connect` requires an explicit `host:port`.
 def split-url :: fun string -> (string, string) = fun url {
 	let after-scheme = if string.starts-with url "http://" {
 		string.drop url 7
@@ -511,7 +516,12 @@ def split-url :: fun string -> (string, string) = fun url {
 		url
 	}
 	let segs = string.split after-scheme "/"
-	let authority = list.head segs ?? after-scheme
+	let raw-authority = list.head segs ?? after-scheme
+	let authority = if string.contains raw-authority ":" {
+		raw-authority
+	} else {
+		raw-authority ++ ":80"
+	}
 	let path = "/" ++ string.join (list.drop segs 1) "/"
 	(authority, path)
 }
