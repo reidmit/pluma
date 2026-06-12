@@ -23,6 +23,7 @@ mod marshal;
 mod record;
 mod task;
 mod to_string;
+mod tuple;
 mod variant;
 mod wat;
 mod wire;
@@ -50,8 +51,15 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::Eq,
 		fn_type: Ty::Eq,
-		deps: &[H::DictEq, H::VariantPayload],
-		build: |c| eq::build_eq_fn(c.self_idx, c.dep(H::DictEq), c.dep(H::VariantPayload)),
+		deps: &[H::DictEq, H::VariantPayload, H::TupleElems],
+		build: |c| {
+			eq::build_eq_fn(
+				c.self_idx,
+				c.dep(H::DictEq),
+				c.dep(H::VariantPayload),
+				c.dep(H::TupleElems),
+			)
+		},
 	},
 	HelperDef {
 		id: H::GetField,
@@ -93,6 +101,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::MarshalAlloc,
 			H::MarshalLoad,
 			H::VariantPayload,
+			H::TupleElems,
 		],
 		build: |c| {
 			to_string::build_tostring_fn(
@@ -105,6 +114,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::MarshalLoad),
 				c.rt.bump,
 				c.dep(H::VariantPayload),
+				c.dep(H::TupleElems),
 				c.rt.lits,
 			)
 		},
@@ -192,8 +202,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::Hash,
 		fn_type: Ty::Helper(1),
-		deps: &[H::VariantPayload],
-		build: |c| dict::build_hash_fn(c.self_idx, c.dep(H::VariantPayload)),
+		deps: &[H::VariantPayload, H::TupleElems],
+		build: |c| dict::build_hash_fn(c.self_idx, c.dep(H::VariantPayload), c.dep(H::TupleElems)),
 	},
 	HelperDef {
 		id: H::DictEmpty,
@@ -317,13 +327,19 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::WireFp,
 		fn_type: Ty::WireMixVal,
-		deps: &[H::WireMixStr, H::WireMixLen, H::VariantPayload],
+		deps: &[
+			H::WireMixStr,
+			H::WireMixLen,
+			H::VariantPayload,
+			H::TupleElems,
+		],
 		build: |c| {
 			wire::build_wire_fp_fn(
 				c.self_idx,
 				c.dep(H::WireMixStr),
 				c.dep(H::WireMixLen),
 				c.dep(H::VariantPayload),
+				c.dep(H::TupleElems),
 				c.rt.wire,
 			)
 		},
@@ -355,14 +371,14 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::WireCtxPut,
 		fn_type: Ty::Helper(2),
-		deps: &[],
-		build: |c| wire::build_wire_ctxput_fn(c.rt.wireg),
+		deps: &[H::TupleFromArray],
+		build: |c| wire::build_wire_ctxput_fn(c.dep(H::TupleFromArray), c.rt.wireg),
 	},
 	HelperDef {
 		id: H::WireCtxGet,
 		fn_type: Ty::Helper(1),
-		deps: &[H::Eq],
-		build: |c| wire::build_wire_ctxget_fn(c.dep(H::Eq), c.rt.wireg),
+		deps: &[H::Eq, H::TupleElems],
+		build: |c| wire::build_wire_ctxget_fn(c.dep(H::Eq), c.dep(H::TupleElems), c.rt.wireg),
 	},
 	HelperDef {
 		id: H::WireEnc,
@@ -375,6 +391,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::WireEncVariant,
 			H::WireEncDict,
 			H::VariantPayload,
+			H::TupleElems,
 		],
 		build: |c| {
 			wire::build_wire_enc_fn(
@@ -386,6 +403,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::WireEncVariant),
 				c.dep(H::WireEncDict),
 				c.dep(H::VariantPayload),
+				c.dep(H::TupleElems),
 				c.rt.wire,
 			)
 		},
@@ -393,12 +411,13 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::WireEncVariant,
 		fn_type: Ty::WireEnc,
-		deps: &[H::WireEnc, H::WireUvarint, H::VariantPayload],
+		deps: &[H::WireEnc, H::WireUvarint, H::VariantPayload, H::TupleElems],
 		build: |c| {
 			wire::build_wire_enc_variant_fn(
 				c.dep(H::WireEnc),
 				c.dep(H::WireUvarint),
 				c.dep(H::VariantPayload),
+				c.dep(H::TupleElems),
 			)
 		},
 	},
@@ -428,6 +447,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::WireDec,
 			H::WireDisp,
 			H::VariantFromArray,
+			H::TupleElems,
 		],
 		build: |c| {
 			wire::build_wire_dec_variant_fn(
@@ -435,6 +455,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::WireDec),
 				c.dep(H::WireDisp),
 				c.dep(H::VariantFromArray),
+				c.dep(H::TupleElems),
 				c.rt.wireg,
 			)
 		},
@@ -451,6 +472,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::DictEmpty,
 			H::DictInsert,
 			H::VariantPayload,
+			H::TupleElems,
+			H::TupleFromArray,
 		],
 		build: |c| {
 			wire::build_wire_dec_fn(
@@ -463,6 +486,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::DictEmpty),
 				c.dep(H::DictInsert),
 				c.dep(H::VariantPayload),
+				c.dep(H::TupleElems),
+				c.dep(H::TupleFromArray),
 				c.rt.wireg,
 				c.rt.wire,
 			)
@@ -490,6 +515,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::WireBCmp,
 			H::DictEntries,
 			H::VariantPayload,
+			H::TupleElems,
+			H::TupleFromArray,
 		],
 		build: |c| {
 			wire::build_wire_enc_dict_fn(
@@ -499,6 +526,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::WireBCmp),
 				c.dep(H::DictEntries),
 				c.dep(H::VariantPayload),
+				c.dep(H::TupleElems),
+				c.dep(H::TupleFromArray),
 				c.rt.wireg,
 			)
 		},
@@ -986,6 +1015,18 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::VariantFromArray,
 		deps: &[],
 		build: |_| variant::build_variant_from_array_fn(),
+	},
+	HelperDef {
+		id: H::TupleElems,
+		fn_type: Ty::TupleElems,
+		deps: &[],
+		build: |_| tuple::build_tuple_elems_fn(),
+	},
+	HelperDef {
+		id: H::TupleFromArray,
+		fn_type: Ty::TupleFromArray,
+		deps: &[],
+		build: |_| tuple::build_tuple_from_array_fn(),
 	},
 ];
 

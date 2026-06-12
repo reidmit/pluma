@@ -368,9 +368,10 @@ impl<'a> FnEmitter<'a> {
 			Literal(c) => self.test_literal(c, subj, fail_level),
 			Variant { tag, fields, .. } => self.test_variant(*tag, fields, subj, fail_level),
 			Tuple(elems) => {
-				// A tuple's arity is fixed by its type — no tag/length check.
+				// A tuple's arity is fixed by its type — no tag/length check. Elements
+				// are read from the inline slots.
 				for (i, sub) in elems.iter().enumerate() {
-					self.bind_at(sub, subj, types::T_TUPLE, 1, i, fail_level);
+					self.bind_tuple_elem(sub, subj, i, fail_level);
 				}
 			}
 			List { items, rest } => {
@@ -740,6 +741,75 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
+	/// Construct a `$tuple` with its elements inline. Arity ≤ 3 stores them in
+	/// `e0`/`e1`/`e2` (`rest` null) — one struct, no elems array; arity ≥ 4 keeps the
+	/// first three inline and the overflow in `rest`.
+	fn emit_make_tuple(&mut self, elems: &[Atom]) {
+		let n = elems.len();
+		self.ins(Instruction::I32Const(types::TAG_TUPLE));
+		self.ins(Instruction::I32Const(n as i32));
+		for slot in 0..3 {
+			if let Some(a) = elems.get(slot) {
+				self.atom(a);
+			} else {
+				self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
+			}
+		}
+		if n <= 3 {
+			self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALARRAY)));
+		} else {
+			for a in &elems[3..] {
+				self.atom(a);
+			}
+			self.ins(Instruction::ArrayNewFixed {
+				array_type_index: types::T_VALARRAY,
+				array_size: (n - 3) as u32,
+			});
+		}
+		self.ins(Instruction::StructNew(types::T_TUPLE));
+	}
+
+	/// Push tuple element `i` of the tuple in local `subj`. Elements are inline at a
+	/// fixed position: field `2 + i` for `i < 3`, else the `rest` overflow (field 5).
+	/// The position depends only on `i`, so the arity need not be known here.
+	fn get_tuple_elem(&mut self, subj: u32, i: usize) {
+		self.ins(Instruction::LocalGet(subj));
+		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+			types::T_TUPLE,
+		)));
+		if i < 3 {
+			self.ins(Instruction::StructGet {
+				struct_type_index: types::T_TUPLE,
+				field_index: 2 + i as u32,
+			});
+		} else {
+			self.ins(Instruction::StructGet {
+				struct_type_index: types::T_TUPLE,
+				field_index: 5,
+			});
+			self.ins(Instruction::I32Const((i - 3) as i32));
+			self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+		}
+	}
+
+	/// Bind (or recursively match) tuple element `i`, read inline. Mirrors `bind_at`.
+	fn bind_tuple_elem(&mut self, sub: &ir::Pattern, subj: u32, i: usize, fail: u32) {
+		match sub {
+			ir::Pattern::Wildcard => {}
+			ir::Pattern::Bind(v) => {
+				let dst = self.local(v.0);
+				self.get_tuple_elem(subj, i);
+				self.ins(Instruction::LocalSet(dst));
+			}
+			other => {
+				let tmp = self.fresh_local(types::value_ref());
+				self.get_tuple_elem(subj, i);
+				self.ins(Instruction::LocalSet(tmp));
+				self.test_pattern(other, tmp, None, fail);
+			}
+		}
+	}
+
 	/// Construct a `$variant` with its payload inline (the hot path: every user-code
 	/// variant build). Arity ≤ 2 stores the elements in `p0`/`p1` (`rest` null) — one
 	/// struct, no payload array; arity ≥ 3 (rare) stores the whole payload in `rest`.
@@ -1025,11 +1095,7 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::I32Const(arity as i32));
 				self.ins(Instruction::StructNew(types::T_CTOR));
 			}
-			Rvalue::MakeTuple(elems) => {
-				self.ins(Instruction::I32Const(types::TAG_TUPLE));
-				self.elems_array(elems);
-				self.ins(Instruction::StructNew(types::T_TUPLE));
-			}
+			Rvalue::MakeTuple(elems) => self.emit_make_tuple(elems),
 			Rvalue::MakeList(items) => self.make_list(items),
 			Rvalue::MakeRecord(fields) => {
 				// Sort by field name for a canonical layout; names + values parallel.
@@ -1153,16 +1219,25 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::ArrayGet(types::T_VALARRAY));
 			}
 			Rvalue::GetElement(a, i) => {
+				// Elements are inline at a fixed position: field `2 + i` for `i < 3`,
+				// else the `rest` overflow. No arity needed (position is set by `i`).
 				self.atom(a);
 				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
 					types::T_TUPLE,
 				)));
-				self.ins(Instruction::StructGet {
-					struct_type_index: types::T_TUPLE,
-					field_index: 1, // elems array (after tag)
-				});
-				self.ins(Instruction::I32Const(*i as i32));
-				self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+				if *i < 3 {
+					self.ins(Instruction::StructGet {
+						struct_type_index: types::T_TUPLE,
+						field_index: 2 + *i,
+					});
+				} else {
+					self.ins(Instruction::StructGet {
+						struct_type_index: types::T_TUPLE,
+						field_index: 5,
+					});
+					self.ins(Instruction::I32Const((*i - 3) as i32));
+					self.ins(Instruction::ArrayGet(types::T_VALARRAY));
+				}
 			}
 			Rvalue::GlobalRef(g) => {
 				if let Some(slot) = self.gmap.get(&g.0).cloned() {

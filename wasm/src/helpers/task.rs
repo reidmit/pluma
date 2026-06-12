@@ -618,6 +618,10 @@ pub(crate) fn build_rpc_stream_open_fn(
 	// DONE=0, FAULTED=0]).
 	w.global_get(chans);
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	empty_list(&mut w); // QUEUE
 	box_i(&mut w, |w| {
 		w.i32(0);
@@ -685,6 +689,10 @@ pub(crate) fn build_spawn_command_fn(list_append: u32, g: TaskGlobals) -> Functi
 	// fibers.append(new fiber { scope=ROOT_SCOPE, runs_scope=none }).
 	w.global_get(g.fibers);
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	fiber_fields(
 		&mut w,
 		|w| {
@@ -737,6 +745,10 @@ pub(crate) fn build_spawn_sub_fn(list_append: u32, g: TaskGlobals) -> Function {
 	w.local_set(sid);
 	w.global_get(g.scopes);
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	scope_fields(
 		&mut w,
 		|w| {
@@ -757,6 +769,10 @@ pub(crate) fn build_spawn_sub_fn(list_append: u32, g: TaskGlobals) -> Function {
 	w.local_set(bf);
 	w.global_get(g.fibers);
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	fiber_fields(
 		&mut w,
 		|w| {
@@ -855,7 +871,8 @@ pub(crate) fn build_local_get_fn(g: TaskGlobals) -> Function {
 			// elems = this node's [cell, val, next].
 			w.local_get(env)
 				.ref_cast(types::T_TUPLE)
-				.struct_get(types::T_TUPLE, 1)
+				.struct_get(types::T_TUPLE, 5)
+				.ref_cast(types::T_VALARRAY)
 				.local_set(elems);
 			// frame cell == the queried cell? → take its value and stop.
 			w.local_get(elems).i32(0).array_get(types::T_VALARRAY);
@@ -895,6 +912,10 @@ pub(crate) fn build_local_enter_fn(g: TaskGlobals) -> Function {
 	// fibers[cur].ENV = $tuple[cell, val, old].
 	set_fld(&mut w, g.fibers, cur, fiber::ENV, |w| {
 		w.i32(types::TAG_TUPLE);
+		w.i32(0); // arity unused for internal records (read via rest)
+		w.ref_null(types::T_VALUE);
+		w.ref_null(types::T_VALUE);
+		w.ref_null(types::T_VALUE);
 		w.local_get(cell);
 		w.local_get(val);
 		w.local_get(old);
@@ -1202,7 +1223,8 @@ pub(crate) fn build_pump_fn(
 					w.call(drain_next).local_set(dn);
 					w.local_get(dn)
 						.ref_cast(types::T_TUPLE)
-						.struct_get(types::T_TUPLE, 1);
+						.struct_get(types::T_TUPLE, 5)
+						.ref_cast(types::T_VALARRAY);
 					w.i32(0).array_get(types::T_VALARRAY);
 					unbox_i(w);
 					w.i32_eqz(); // action == 0 -> produce, else park.
@@ -1210,7 +1232,8 @@ pub(crate) fn build_pump_fn(
 						|w| {
 							w.local_get(dn)
 								.ref_cast(types::T_TUPLE)
-								.struct_get(types::T_TUPLE, 1);
+								.struct_get(types::T_TUPLE, 5)
+								.ref_cast(types::T_VALARRAY);
 							w.i32(1).array_get(types::T_VALARRAY);
 							w.local_set(fval);
 							w.i32(focus::OK).local_set(fkind);
@@ -1729,6 +1752,10 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	w.local_set(sid);
 	w.global_get(g.scopes);
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	scope_fields(
 		&mut w,
 		|w| {
@@ -1770,6 +1797,10 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	w.local_set(bf);
 	w.global_get(g.fibers);
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	fiber_fields(
 		&mut w,
 		|w| {
@@ -1826,6 +1857,10 @@ pub(crate) fn build_sched_spawn_fn(list_append: u32, g: TaskGlobals) -> Function
 	// fibers.append(new child fiber { scope=sid, runs_scope=none }).
 	w.global_get(g.fibers);
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	fiber_fields(
 		&mut w,
 		|w| {
@@ -2683,7 +2718,8 @@ pub(crate) fn build_sched_cancel_after_fn(list_append: u32, g: TaskGlobals) -> F
 fn timer_at(w: &mut Wat, arr: Local, i: Local) {
 	w.local_get(arr).local_get(i).array_get(types::T_VALARRAY);
 	w.ref_cast(types::T_TUPLE)
-		.struct_get(types::T_TUPLE, 1)
+		.struct_get(types::T_TUPLE, 5)
+		.ref_cast(types::T_VALARRAY)
 		.i32(0)
 		.array_get(types::T_VALARRAY);
 	w.ref_cast(types::T_INT).struct_get(types::T_INT, 1);
@@ -3018,7 +3054,8 @@ fn elem(w: &mut Wat, arr: Local, i: i32) {
 fn tuple_elem(w: &mut Wat, tup: Local, i: i32) {
 	w.local_get(tup)
 		.ref_cast(types::T_TUPLE)
-		.struct_get(types::T_TUPLE, 1)
+		.struct_get(types::T_TUPLE, 5)
+		.ref_cast(types::T_VALARRAY)
 		.i32(i)
 		.array_get(types::T_VALARRAY);
 }
@@ -3063,6 +3100,10 @@ fn box_i64(w: &mut Wat, push: impl FnOnce(&mut Wat)) {
 /// Push a timer entry `$tuple(box at:i64, box kind:i32, box arg:i32)`.
 fn timer_entry(w: &mut Wat, at: impl FnOnce(&mut Wat), kind: i32, arg: impl FnOnce(&mut Wat)) {
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	box_i64(w, at);
 	box_i(w, |w| {
 		w.i32(kind);
@@ -3112,7 +3153,9 @@ fn fld(w: &mut Wat, _g: TaskGlobals, table: u32, id: Local, field: u32) {
 		.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1);
 	w.local_get(id).array_get(types::T_VALARRAY);
-	w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+	w.ref_cast(types::T_TUPLE)
+		.struct_get(types::T_TUPLE, 5)
+		.ref_cast(types::T_VALARRAY);
 	w.i32(field as i32).array_get(types::T_VALARRAY);
 }
 
@@ -3128,7 +3171,9 @@ fn set_fld(w: &mut Wat, table: u32, id: Local, field: u32, push: impl FnOnce(&mu
 		.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1);
 	w.local_get(id).array_get(types::T_VALARRAY);
-	w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
+	w.ref_cast(types::T_TUPLE)
+		.struct_get(types::T_TUPLE, 5)
+		.ref_cast(types::T_VALARRAY);
 	w.i32(field as i32);
 	push(w);
 	w.array_set(types::T_VALARRAY);
@@ -3199,6 +3244,10 @@ fn scope_fields(
 /// Push a fresh root-fiber `$tuple` onto the stack (for `run_task`'s seed).
 fn push_fiber(w: &mut Wat, scope_id: i64, runs_scope: i64) {
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	fiber_fields(
 		w,
 		|w| {
@@ -3215,6 +3264,10 @@ fn push_fiber(w: &mut Wat, scope_id: i64, runs_scope: i64) {
 fn push_scope(w: &mut Wat, manual: i64, awaiter: i64, body: u32) {
 	let _ = body;
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	box_i(w, |w| {
 		w.i32(manual as i32);
 	}); // MANUAL
@@ -3248,6 +3301,10 @@ fn push_scope(w: &mut Wat, manual: i64, awaiter: i64, body: u32) {
 /// Push a ready-deque entry `$tuple(fid, focus_kind, val)`.
 fn push_ready_entry(w: &mut Wat, fid: u32, fk: i32, val: impl FnOnce(&mut Wat)) {
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	box_i(w, |w| {
 		w.i32(fid as i32);
 	});
@@ -3270,6 +3327,10 @@ fn ready_push(
 ) {
 	w.global_get(g.ready);
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	box_i(w, |w| {
 		w.local_get(fid);
 	});
@@ -3320,6 +3381,10 @@ fn ready_push_outcome(
 /// Build an outcome `$tuple(boxed kind, val)` (for the `completed` queue).
 fn mk_outcome(w: &mut Wat, kind: Local, val: Local) {
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	box_i(w, |w| {
 		w.local_get(kind);
 	});
@@ -3672,7 +3737,8 @@ fn poll_after(
 ) {
 	w.local_get(ps)
 		.ref_cast(types::T_TUPLE)
-		.struct_get(types::T_TUPLE, 1)
+		.struct_get(types::T_TUPLE, 5)
+		.ref_cast(types::T_VALARRAY)
 		.local_set(pspl);
 	w.local_get(pspl)
 		.i32(0)
@@ -3744,6 +3810,10 @@ fn push_activation(w: &mut Wat, kind: i32, x: impl FnOnce(&mut Wat), y: impl FnO
 /// Push a 3-tuple `(box kind, x, y)` — the `__poll_step` result shape.
 fn push_tuple3(w: &mut Wat, kind: i64, x: impl FnOnce(&mut Wat), y: impl FnOnce(&mut Wat)) {
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	w.i32(types::TAG_INT).i64(kind).struct_new(types::T_INT);
 	x(w);
 	y(w);
@@ -3785,6 +3855,10 @@ fn str_lit(w: &mut Wat, (off, len): (u32, u32)) {
 /// Push a `$tuple(box action, val)` — the `__drain_next` result shape.
 fn action_tuple(w: &mut Wat, action: i64, val: impl FnOnce(&mut Wat)) {
 	w.i32(types::TAG_TUPLE);
+	w.i32(0); // arity unused for internal records (read via rest)
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
+	w.ref_null(types::T_VALUE);
 	w.i32(types::TAG_INT).i64(action).struct_new(types::T_INT);
 	val(w);
 	w.array_new_fixed(types::T_VALARRAY, 2);
@@ -3814,7 +3888,8 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 	let k = w.local(ValType::I32);
 	w.local_get(oc)
 		.ref_cast(types::T_TUPLE)
-		.struct_get(types::T_TUPLE, 1)
+		.struct_get(types::T_TUPLE, 5)
+		.ref_cast(types::T_VALARRAY)
 		.i32(0)
 		.array_get(types::T_VALARRAY);
 	unbox_i(w);
@@ -3826,7 +3901,8 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 			push_result(w, lits.ok_tag, lits.ok_name, |w| {
 				w.local_get(oc)
 					.ref_cast(types::T_TUPLE)
-					.struct_get(types::T_TUPLE, 1)
+					.struct_get(types::T_TUPLE, 5)
+					.ref_cast(types::T_VALARRAY)
 					.i32(1)
 					.array_get(types::T_VALARRAY);
 			});
@@ -3839,7 +3915,8 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 					push_result(w, lits.err_tag, lits.err_name, |w| {
 						w.local_get(oc)
 							.ref_cast(types::T_TUPLE)
-							.struct_get(types::T_TUPLE, 1)
+							.struct_get(types::T_TUPLE, 5)
+							.ref_cast(types::T_VALARRAY)
 							.i32(1)
 							.array_get(types::T_VALARRAY);
 					});

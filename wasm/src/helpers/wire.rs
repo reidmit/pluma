@@ -90,6 +90,7 @@ pub(crate) fn build_wire_fp_fn(
 	mix_str: u32,
 	mix_len: u32,
 	variant_payload: u32,
+	tuple_elems: u32,
 	wt: WireTags,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -225,9 +226,7 @@ pub(crate) fn build_wire_fp_fn(
 				w.local_get(i).local_get(n).i32_ge_u().br_if("brk");
 				// pe = (cast $tuple elems[i]).field1.
 				w.local_get(elems).local_get(i).array_get(va);
-				w.ref_cast(types::T_TUPLE)
-					.struct_get(types::T_TUPLE, 1)
-					.local_set(pe);
+				w.call(tuple_elems).local_set(pe);
 				// h = mix_str(h, pe[0]).
 				w.local_get(h);
 				w.local_get(pe).i32(0).array_get(va);
@@ -263,9 +262,7 @@ pub(crate) fn build_wire_fp_fn(
 				w.local_get(i).local_get(n).i32_ge_u().br_if("brk");
 				// pe = (cast $tuple variants[i]).field1  (name, field-list).
 				w.local_get(elems).local_get(i).array_get(va);
-				w.ref_cast(types::T_TUPLE)
-					.struct_get(types::T_TUPLE, 1)
-					.local_set(pe);
+				w.call(tuple_elems).local_set(pe);
 				// h = mix_str(h, pe[0])  (variant name).
 				w.local_get(h);
 				w.local_get(pe).i32(0).array_get(va);
@@ -402,7 +399,7 @@ pub(crate) fn build_wire_uvarint_fn(push: u32) -> Function {
 /// Build `__wire_ctxput(value qualified, value variants) -> value`: register the
 /// inline enum `(qualified, variants)` in the recursive-enum registry `g_ctx`
 /// (append, growing by doubling), returning `variants` for convenience.
-pub(crate) fn build_wire_ctxput_fn(g: WireGlobals) -> Function {
+pub(crate) fn build_wire_ctxput_fn(tuple_from_array: u32, g: WireGlobals) -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(2);
 	let (qual, vars) = (w.param(0), w.param(1));
@@ -429,11 +426,10 @@ pub(crate) fn build_wire_ctxput_fn(g: WireGlobals) -> Function {
 	});
 	// g_ctx[g_ctxlen] = tuple(qualified, variants).
 	w.global_get(g.ctx).global_get(g.ctxlen);
-	w.i32(types::TAG_TUPLE)
-		.local_get(qual)
+	w.local_get(qual)
 		.local_get(vars)
 		.array_new_fixed(va, 2)
-		.struct_new(types::T_TUPLE);
+		.call(tuple_from_array);
 	w.array_set(va);
 	// g_ctxlen += 1.
 	w.global_get(g.ctxlen).i32(1).i32_add().global_set(g.ctxlen);
@@ -445,7 +441,7 @@ pub(crate) fn build_wire_ctxput_fn(g: WireGlobals) -> Function {
 /// Build `__wire_ctxget(value qualified) -> value`: linear-scan `g_ctx` for the
 /// entry whose name `__eq` `qualified`, returning its variants `$list` (or null
 /// if unregistered — the decoder treats null as a malformed back-reference).
-pub(crate) fn build_wire_ctxget_fn(eq: u32, g: WireGlobals) -> Function {
+pub(crate) fn build_wire_ctxget_fn(eq: u32, tuple_elems: u32, g: WireGlobals) -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(1);
 	let qual = w.param(0);
@@ -458,9 +454,7 @@ pub(crate) fn build_wire_ctxget_fn(eq: u32, g: WireGlobals) -> Function {
 			w.local_get(i).global_get(g.ctxlen).i32_ge_u().br_if("brk");
 			// entry = (cast $tuple g_ctx[i]).elems.
 			w.global_get(g.ctx).local_get(i).array_get(va);
-			w.ref_cast(types::T_TUPLE)
-				.struct_get(types::T_TUPLE, 1)
-				.local_set(entry);
+			w.call(tuple_elems).local_set(entry);
 			// if __eq(entry[0], qualified): return entry[1].
 			w.local_get(entry).i32(0).array_get(va);
 			w.local_get(qual).call(eq);
@@ -491,6 +485,7 @@ pub(crate) fn build_wire_enc_fn(
 	enc_variant: u32,
 	enc_dict: u32,
 	variant_payload: u32,
+	tuple_elems: u32,
 	wt: WireTags,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -627,10 +622,7 @@ pub(crate) fn build_wire_enc_fn(
 		w.ref_cast(types::T_LIST)
 			.struct_get(types::T_LIST, 1)
 			.local_set(schemas);
-		w.local_get(val)
-			.ref_cast(types::T_TUPLE)
-			.struct_get(types::T_TUPLE, 1)
-			.local_set(elems);
+		w.local_get(val).call(tuple_elems).local_set(elems);
 		w.local_get(schemas).array_len().local_set(n);
 		w.i32(0).local_set(i);
 		w.block("brk", |w| {
@@ -665,10 +657,7 @@ pub(crate) fn build_wire_enc_fn(
 				w.local_get(i).local_get(n).i32_ge_u().br_if("brk");
 				// schema = (cast $tuple schemas[i]).elems[1].
 				w.local_get(schemas).local_get(i).array_get(va);
-				w.ref_cast(types::T_TUPLE)
-					.struct_get(types::T_TUPLE, 1)
-					.i32(1)
-					.array_get(va);
+				w.call(tuple_elems).i32(1).array_get(va);
 				w.local_get(elems).local_get(i).array_get(va);
 				w.call(self_idx);
 				w.local_get(i).i32(1).i32_add().local_set(i);
@@ -709,7 +698,12 @@ pub(crate) fn build_wire_enc_fn(
 /// schema (the `wire` format's variant encoding). `variants` is the enum's variant
 /// `$list` (`$tuple(name, field-schema-list)` per variant); the value's own
 /// `vtag` is the wire tag and the index into `variants`.
-pub(crate) fn build_wire_enc_variant_fn(enc: u32, uvarint: u32, variant_payload: u32) -> Function {
+pub(crate) fn build_wire_enc_variant_fn(
+	enc: u32,
+	uvarint: u32,
+	variant_payload: u32,
+	tuple_elems: u32,
+) -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(2);
 	let (variants, val) = (w.param(0), w.param(1));
@@ -733,10 +727,7 @@ pub(crate) fn build_wire_enc_variant_fn(enc: u32, uvarint: u32, variant_payload:
 	w.local_get(vvtag).i64_extend_i32_u().call(uvarint);
 	// fschemas = (cast $list (cast $tuple varelems[vvtag]).elems[1]).elems.
 	w.local_get(varelems).local_get(vvtag).array_get(va);
-	w.ref_cast(types::T_TUPLE)
-		.struct_get(types::T_TUPLE, 1)
-		.i32(1)
-		.array_get(va);
+	w.call(tuple_elems).i32(1).array_get(va);
 	w.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
 		.local_set(fschemas);
@@ -911,6 +902,7 @@ pub(crate) fn build_wire_dec_variant_fn(
 	dec: u32,
 	disp: u32,
 	variant_from_array: u32,
+	tuple_elems: u32,
 	g: WireGlobals,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -955,9 +947,7 @@ pub(crate) fn build_wire_dec_variant_fn(
 	// tup = (cast $tuple varelems[idx]).elems; name = tup[0]; fsl = (cast $list
 	// tup[1]).elems; k = len.
 	w.local_get(varelems).local_get(idx).array_get(va);
-	w.ref_cast(types::T_TUPLE)
-		.struct_get(types::T_TUPLE, 1)
-		.local_set(tup);
+	w.call(tuple_elems).local_set(tup);
 	w.local_get(tup).i32(0).array_get(va).local_set(name);
 	w.local_get(tup).i32(1).array_get(va);
 	w.ref_cast(types::T_LIST)
@@ -1004,6 +994,8 @@ pub(crate) fn build_wire_dec_fn(
 	dict_empty: u32,
 	dict_insert: u32,
 	variant_payload: u32,
+	tuple_elems: u32,
+	tuple_from_array: u32,
 	g: WireGlobals,
 	wt: WireTags,
 ) -> Function {
@@ -1180,10 +1172,7 @@ pub(crate) fn build_wire_dec_fn(
 				w.br("lp");
 			});
 		});
-		w.i32(types::TAG_TUPLE)
-			.local_get(out)
-			.struct_new(types::T_TUPLE)
-			.ret();
+		w.local_get(out).call(tuple_from_array).ret();
 	});
 	// record: decode each field in schema (name-sorted) order; build the parallel
 	// names/values arrays so the `$record` is name-sorted like `MakeRecord`.
@@ -1201,9 +1190,7 @@ pub(crate) fn build_wire_dec_fn(
 			w.loop_("lp", |w| {
 				w.local_get(i).local_get(n).i32_ge_u().br_if("brk");
 				w.local_get(fields).local_get(i).array_get(va);
-				w.ref_cast(types::T_TUPLE)
-					.struct_get(types::T_TUPLE, 1)
-					.local_set(ft);
+				w.call(tuple_elems).local_set(ft);
 				// names[i] = ft[0].
 				w.local_get(names).local_get(i);
 				w.local_get(ft).i32(0).array_get(va).array_set(va);
@@ -1423,6 +1410,8 @@ pub(crate) fn build_wire_enc_dict_fn(
 	bcmp: u32,
 	dict_entries: u32,
 	variant_payload: u32,
+	tuple_elems: u32,
+	tuple_from_array: u32,
 	g: WireGlobals,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -1454,9 +1443,7 @@ pub(crate) fn build_wire_enc_dict_fn(
 	};
 	// `(cast $tuple local).elems[idx]`.
 	let tuple_elem = |w: &mut Wat, local: Local, idx: i32| {
-		w.local_get(local)
-			.ref_cast(types::T_TUPLE)
-			.struct_get(types::T_TUPLE, 1);
+		w.local_get(local).call(tuple_elems);
 		w.i32(idx).array_get(va);
 	};
 
@@ -1484,9 +1471,7 @@ pub(crate) fn build_wire_enc_dict_fn(
 			w.local_get(i).local_get(n).i32_ge_u().br_if("p1");
 			// entry = entries[i].elems.
 			w.local_get(entries).local_get(i).array_get(va);
-			w.ref_cast(types::T_TUPLE)
-				.struct_get(types::T_TUPLE, 1)
-				.local_set(entry);
+			w.call(tuple_elems).local_set(entry);
 			// start = g_len; enc(ksch, entry[0]); keylen = g_len - start.
 			w.global_get(g.len).local_set(start);
 			w.local_get(ksch);
@@ -1504,12 +1489,11 @@ pub(crate) fn build_wire_enc_dict_fn(
 			w.local_get(start).global_set(g.len);
 			// pairs[i] = tuple( $bytes-value(kb), entry[1] ).
 			w.local_get(pairs).local_get(i);
-			w.i32(types::TAG_TUPLE);
 			w.i32(types::TAG_BYTES)
 				.local_get(kb)
 				.struct_new(types::T_STR);
 			w.local_get(entry).i32(1).array_get(va);
-			w.array_new_fixed(va, 2).struct_new(types::T_TUPLE);
+			w.array_new_fixed(va, 2).call(tuple_from_array);
 			w.array_set(va);
 			w.local_get(i).i32(1).i32_add().local_set(i);
 			w.br("p1l");
@@ -1530,10 +1514,7 @@ pub(crate) fn build_wire_enc_dict_fn(
 					w.local_get(j).i32(0).i32_lt_s().br_if("ins");
 					// key(j) = (cast $tuple pairs[j]).elems[0].
 					w.local_get(pairs).local_get(j).array_get(va);
-					w.ref_cast(types::T_TUPLE)
-						.struct_get(types::T_TUPLE, 1)
-						.i32(0)
-						.array_get(va);
+					w.call(tuple_elems).i32(0).array_get(va);
 					w.local_get(curkey).call(bcmp);
 					w.i32(0).i32_le_s().br_if("ins");
 					// pairs[j+1] = pairs[j].

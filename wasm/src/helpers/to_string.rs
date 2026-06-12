@@ -95,6 +95,7 @@ pub(crate) fn build_tostring_fn(
 	load_bytes: u32,
 	bump: u32,
 	variant_payload: u32,
+	tuple_elems: u32,
 	lits: ToStringLits,
 ) -> Function {
 	let bv = types::T_BYTES;
@@ -335,10 +336,7 @@ pub(crate) fn build_tostring_fn(
 	// TUPLE -> "(e, ...)".
 	w.local_get(ta).i32(types::TAG_TUPLE).i32_eq();
 	w.if_(|w| {
-		w.local_get(v)
-			.ref_cast(types::T_TUPLE)
-			.struct_get(types::T_TUPLE, 1)
-			.local_set(arr);
+		w.local_get(v).call(tuple_elems).local_set(arr);
 		w.local_get(arr).array_len().local_set(n);
 		elems_loop(w, arr, lits.lparen, lits.rparen, false);
 	});
@@ -436,8 +434,9 @@ pub(crate) fn build_tostring_fn(
 		let entry_elem = |w: &mut Wat, field: i32| {
 			w.local_get(acc);
 			w.local_get(arr).local_get(i).array_get(types::T_VALARRAY);
-			w.ref_cast(types::T_TUPLE).struct_get(types::T_TUPLE, 1);
-			w.i32(field).array_get(types::T_VALARRAY);
+			// entry is a `(k, v)` tuple — element `field` (0/1) is the inline slot `2+field`.
+			w.ref_cast(types::T_TUPLE)
+				.struct_get(types::T_TUPLE, (2 + field) as u32);
 			w.call(self_idx)
 				.ref_cast(types::T_STR)
 				.struct_get(types::T_STR, 1); // -> $str bytes

@@ -151,6 +151,14 @@ pub fn variant_ref() -> ValType {
 	})
 }
 
+/// `(ref $tuple)` — a non-null reference to a tuple struct.
+pub fn tuple_ref() -> ValType {
+	ValType::Ref(RefType {
+		nullable: false,
+		heap_type: HeapType::Concrete(T_TUPLE),
+	})
+}
+
 /// `(ref $ref)` — a non-null reference to a mutable cell struct.
 pub fn ref_ref() -> ValType {
 	ValType::Ref(RefType {
@@ -255,6 +263,12 @@ enum FuncKind {
 	/// `__variant_from_array(i32 vtag, value name, valarray arr) -> value` — build a
 	/// `$variant` from a payload array (splitting it into the inline slots).
 	VariantFromArray,
+	/// `__tuple_elems(value) -> valarray` — materialize a `$tuple`'s inline elements
+	/// as a uniform array for generic consumers.
+	TupleElems,
+	/// `__tuple_from_array(valarray) -> value` — build a `$tuple` from an elements
+	/// array (splitting it into the inline slots).
+	TupleFromArray,
 	/// A runtime helper taking `n` boxed args and returning a boxed value.
 	Helper(usize),
 	/// The array-concat helper: `(valarray, valarray) -> valarray`.
@@ -536,6 +550,16 @@ impl FuncTypes {
 	/// `__variant_from_array(i32, value, valarray) -> value`.
 	pub fn for_variant_from_array(&mut self) -> u32 {
 		self.intern(FuncKind::VariantFromArray)
+	}
+
+	/// `__tuple_elems(value) -> valarray`.
+	pub fn for_tuple_elems(&mut self) -> u32 {
+		self.intern(FuncKind::TupleElems)
+	}
+
+	/// `__tuple_from_array(valarray) -> value`.
+	pub fn for_tuple_from_array(&mut self) -> u32 {
+		self.intern(FuncKind::TupleFromArray)
 	}
 
 	/// The type index for a runtime helper: `n` boxed args -> boxed value.
@@ -909,12 +933,27 @@ impl FuncTypes {
 			],
 			true,
 		));
-		// 11 $tuple — { tag, (ref $valarray) elems } (fixed arity).
+		// 11 $tuple — { tag, i32 arity, e0, e1, e2, (ref null $valarray) rest }. Like
+		// `$variant`, the elements live *inline*: element `i` is at field `2 + i` for
+		// `i < 3`, and any beyond go in the `rest` overflow array (null for arity ≤ 3).
+		// Position is fixed by the index alone (not the arity), so `GetElement(t, i)`
+		// reads a constant field without knowing the arity. A pair/triple — the common
+		// shapes, incl. every `dict.entries` `(k, v)` — allocates just this one struct,
+		// no separate elems array. Generic consumers that iterate an arity-unknown
+		// tuple (eq/wire/to-string) call `__tuple_elems` to materialize a `$valarray`.
+		// The inline element fields are *mutable*: user tuples are immutable (enforced
+		// in the language), but the async scheduler uses a `$tuple` as the in-place
+		// mutable record backing an RPC channel (`QUEUE/HEAD/WAITER/…`), which it
+		// updates via `struct.set` on the inline slots (and `array.set` on `rest`).
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
 				val_field(ValType::I32, false),
-				val_field(valarray_ref(), false),
+				val_field(ValType::I32, false),
+				val_field(value_ref(), true),
+				val_field(value_ref(), true),
+				val_field(value_ref(), true),
+				val_field(valarray_ref_null(), false),
 			],
 			true,
 		));
@@ -1084,6 +1123,14 @@ impl FuncTypes {
 					types
 						.ty()
 						.function([ValType::I32, value_ref(), valarray_ref()], [value_ref()]);
+					continue;
+				}
+				FuncKind::TupleElems => {
+					types.ty().function([value_ref()], [valarray_ref()]);
+					continue;
+				}
+				FuncKind::TupleFromArray => {
+					types.ty().function([valarray_ref()], [value_ref()]);
 					continue;
 				}
 				FuncKind::Helper(n) => (value_ref(), n, vec![value_ref()]),

@@ -504,13 +504,20 @@ pub(crate) enum Helper {
 	/// the cold/dynamic construction sites (wire decode, host-result wrappers) that
 	/// already have the payload as an array.
 	VariantFromArray,
+	/// `__tuple_elems(value) -> valarray` — materialize a `$tuple`'s inline elements
+	/// (`e0`/`e1`/`e2`, plus `rest` for arity ≥ 4) as a uniform array, for the generic
+	/// consumers (eq/wire/to-string) that iterate an arity-unknown tuple.
+	TupleElems,
+	/// `__tuple_from_array(valarray) -> value` — build a `$tuple` from an elements
+	/// array, splitting it into the inline slots. The cold/dynamic construction sites.
+	TupleFromArray,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 100;
+	pub(crate) const COUNT: usize = 102;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -724,6 +731,10 @@ pub(crate) enum Ty {
 	VariantPayload,
 	/// `__variant_from_array(i32, value, valarray) -> value`.
 	VariantFromArray,
+	/// `__tuple_elems(value) -> valarray`.
+	TupleElems,
+	/// `__tuple_from_array(valarray) -> value`.
+	TupleFromArray,
 	Helper(usize),
 	ArrConcat,
 	BytesConcat,
@@ -758,6 +769,8 @@ impl Ty {
 			Ty::Eq => ft.for_eq(),
 			Ty::VariantPayload => ft.for_variant_payload(),
 			Ty::VariantFromArray => ft.for_variant_from_array(),
+			Ty::TupleElems => ft.for_tuple_elems(),
+			Ty::TupleFromArray => ft.for_tuple_from_array(),
 			Ty::Helper(n) => ft.for_helper(n),
 			Ty::ArrConcat => ft.for_arrconcat(),
 			Ty::BytesConcat => ft.for_bytesconcat(),

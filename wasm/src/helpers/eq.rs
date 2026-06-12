@@ -10,7 +10,12 @@ use wasm_encoder::{Function, ValType};
 /// (so `nan != nan`), byte-exact strings. `self_idx` is `__eq`'s own wasm index
 /// (for the variant-payload recursion). Tuples/lists/records are not yet handled
 /// (they trap — a clear signal to implement them, not a silent wrong answer).
-pub(crate) fn build_eq_fn(self_idx: u32, dict_eq_idx: u32, variant_payload: u32) -> Function {
+pub(crate) fn build_eq_fn(
+	self_idx: u32,
+	dict_eq_idx: u32,
+	variant_payload: u32,
+	tuple_elems: u32,
+) -> Function {
 	let mut w = Wat::new(2);
 	let (a, b) = (w.param(0), w.param(1));
 	let ta = w.local(ValType::I32);
@@ -198,7 +203,29 @@ pub(crate) fn build_eq_fn(self_idx: u32, dict_eq_idx: u32, variant_payload: u32)
 	// (same type ⇒ same name-sorted fields, so positional value compare suffices).
 	w.local_get(ta).i32(types::TAG_TUPLE).i32_eq();
 	w.if_(|w| {
-		cmp_array(w, types::T_TUPLE, 1, None);
+		// Elements are inline; materialize both and compare element-wise.
+		w.local_get(a).call(tuple_elems).local_set(pa);
+		w.local_get(b).call(tuple_elems).local_set(pb);
+		w.local_get(pa).array_len().local_set(n);
+		w.local_get(pb).array_len().local_get(n).i32_ne();
+		w.if_(|w| {
+			w.i32(0).ret();
+		});
+		w.i32(0).local_set(i);
+		w.block("brk", |w| {
+			w.loop_("lp", |w| {
+				w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
+				w.local_get(pa).local_get(i).array_get(types::T_VALARRAY);
+				w.local_get(pb).local_get(i).array_get(types::T_VALARRAY);
+				w.call(self_idx).i32_eqz();
+				w.if_(|w| {
+					w.i32(0).ret();
+				});
+				w.local_get(i).i32(1).i32_add().local_set(i);
+				w.br("lp");
+			});
+		});
+		w.i32(1).ret();
 	});
 	w.local_get(ta).i32(types::TAG_LIST).i32_eq();
 	w.if_(|w| {

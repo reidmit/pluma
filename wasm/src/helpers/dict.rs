@@ -94,7 +94,6 @@ const DENTRY_HASH: u32 = 3;
 const LIST_ELEMS: u32 = 1;
 const LIST_LEN: u32 = 2;
 // $tuple field index.
-const TUPLE_ELEMS: u32 = 1;
 // $closure field index (the indirect fn slot).
 const CLOSURE_FN: u32 = 1;
 
@@ -114,9 +113,11 @@ fn make_dentry(w: &mut Wat, key: Local, value: Local, hash: Local) {
 /// Push a `$tuple(a, b)` (a 2-element `(key, value)` entry for `dict.entries`).
 fn tuple2(w: &mut Wat, a: Local, b: Local) {
 	w.i32(types::TAG_TUPLE);
-	w.local_get(a);
-	w.local_get(b);
-	w.array_new_fixed(VA, 2);
+	w.i32(2); // arity
+	w.local_get(a); // e0
+	w.local_get(b); // e1
+	w.ref_null(types::T_VALUE); // e2
+	w.ref_null(VA); // rest
 	w.struct_new(types::T_TUPLE);
 }
 
@@ -276,7 +277,7 @@ fn splice_remove(w: &mut Wat, src: Local, len: Local, idx: Local) -> Local {
 /// recursion). `ref`/`dict` keys (and any unhandled tag) collapse to the
 /// tag-only hash — correct (`__eq` still separates them), just not finely
 /// distributed; such keys are exotic.
-pub(crate) fn build_hash_fn(self_idx: u32, variant_payload: u32) -> Function {
+pub(crate) fn build_hash_fn(self_idx: u32, variant_payload: u32, tuple_elems: u32) -> Function {
 	let mut w = Wat::new(1);
 	let v = w.param(0);
 	let ta = w.local(ValType::I32);
@@ -382,10 +383,7 @@ pub(crate) fn build_hash_fn(self_idx: u32, variant_payload: u32) -> Function {
 	// TUPLE — mix each element's hash.
 	w.local_get(ta).i32(types::TAG_TUPLE).i32_eq();
 	w.if_(|w| {
-		w.local_get(v)
-			.ref_cast(types::T_TUPLE)
-			.struct_get(types::T_TUPLE, 1)
-			.local_set(arr);
+		w.local_get(v).call(tuple_elems).local_set(arr);
 		hash_elems(w, self_idx, arr, n, i, h, mix);
 	});
 	// LIST — mix each element's hash, over the logical length (field 2).
@@ -1421,7 +1419,6 @@ pub(crate) fn build_dict_from_entries_fn(
 	let n = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
 	let tup = w.local(types::value_ref());
-	let telems = w.local(types::valarray_ref());
 	let k = w.local(types::value_ref());
 	let v = w.local(types::value_ref());
 	let size = w.local(ValType::I32);
@@ -1444,12 +1441,15 @@ pub(crate) fn build_dict_from_entries_fn(
 		w.loop_("lp", |w| {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
 			w.local_get(elems).local_get(i).array_get(VA).local_set(tup);
+			// entry is a `(k, v)` pair — read the inline slots (fields 2, 3).
 			w.local_get(tup)
 				.ref_cast(types::T_TUPLE)
-				.struct_get(types::T_TUPLE, TUPLE_ELEMS)
-				.local_set(telems);
-			w.local_get(telems).i32(0).array_get(VA).local_set(k);
-			w.local_get(telems).i32(1).array_get(VA).local_set(v);
+				.struct_get(types::T_TUPLE, 2)
+				.local_set(k);
+			w.local_get(tup)
+				.ref_cast(types::T_TUPLE)
+				.struct_get(types::T_TUPLE, 3)
+				.local_set(v);
 			// root = tinsert(root, k, v, hash(k), 0, token).
 			w.local_get(root).local_get(k).local_get(v);
 			w.local_get(k).call(hash_idx);
@@ -1810,7 +1810,6 @@ pub(crate) fn build_dict_eq_fn(eq_idx: u32, find_idx: u32, entries_idx: u32) -> 
 	let es = w.local(types::value_ref());
 	let elems = w.local(types::valarray_ref());
 	let tup = w.local(types::value_ref());
-	let telems = w.local(types::valarray_ref());
 	let k = w.local(types::value_ref());
 	let v = w.local(types::value_ref());
 	let eb = w.local(types::value_ref());
@@ -1841,12 +1840,15 @@ pub(crate) fn build_dict_eq_fn(eq_idx: u32, find_idx: u32, entries_idx: u32) -> 
 		w.loop_("elp", |w| {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("ebrk");
 			w.local_get(elems).local_get(i).array_get(VA).local_set(tup);
+			// entry is a `(k, v)` pair — read the inline slots (fields 2, 3).
 			w.local_get(tup)
 				.ref_cast(types::T_TUPLE)
-				.struct_get(types::T_TUPLE, TUPLE_ELEMS)
-				.local_set(telems);
-			w.local_get(telems).i32(0).array_get(VA).local_set(k);
-			w.local_get(telems).i32(1).array_get(VA).local_set(v);
+				.struct_get(types::T_TUPLE, 2)
+				.local_set(k);
+			w.local_get(tup)
+				.ref_cast(types::T_TUPLE)
+				.struct_get(types::T_TUPLE, 3)
+				.local_set(v);
 			// eb = find(b, k); absent → unequal.
 			w.local_get(b).local_get(k).call(find_idx).local_set(eb);
 			w.local_get(eb).ref_is_null();
@@ -1891,7 +1893,6 @@ pub(crate) fn build_dict_map_fn(
 	let n = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
 	let tup = w.local(types::value_ref());
-	let telems = w.local(types::valarray_ref());
 	let k = w.local(types::value_ref());
 	let v = w.local(types::value_ref());
 	let nv = w.local(types::value_ref());
@@ -1915,12 +1916,15 @@ pub(crate) fn build_dict_map_fn(
 		w.loop_("mlp", |w| {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("mbrk");
 			w.local_get(elems).local_get(i).array_get(VA).local_set(tup);
+			// entry is a `(k, v)` pair — read the inline slots (fields 2, 3).
 			w.local_get(tup)
 				.ref_cast(types::T_TUPLE)
-				.struct_get(types::T_TUPLE, TUPLE_ELEMS)
-				.local_set(telems);
-			w.local_get(telems).i32(0).array_get(VA).local_set(k);
-			w.local_get(telems).i32(1).array_get(VA).local_set(v);
+				.struct_get(types::T_TUPLE, 2)
+				.local_set(k);
+			w.local_get(tup)
+				.ref_cast(types::T_TUPLE)
+				.struct_get(types::T_TUPLE, 3)
+				.local_set(v);
 			// nv = f(v).
 			w.local_get(f).ref_cast(types::T_CLOSURE);
 			w.local_get(v);
@@ -1965,7 +1969,6 @@ pub(crate) fn build_dict_filter_fn(
 	let i = w.local(ValType::I32);
 	let cnt = w.local(ValType::I32);
 	let tup = w.local(types::value_ref());
-	let telems = w.local(types::valarray_ref());
 	let k = w.local(types::value_ref());
 	let v = w.local(types::value_ref());
 
@@ -1989,12 +1992,15 @@ pub(crate) fn build_dict_filter_fn(
 		w.loop_("flp", |w| {
 			w.local_get(i).local_get(n).i32_ge_s().br_if("fbrk");
 			w.local_get(elems).local_get(i).array_get(VA).local_set(tup);
+			// entry is a `(k, v)` pair — read the inline slots (fields 2, 3).
 			w.local_get(tup)
 				.ref_cast(types::T_TUPLE)
-				.struct_get(types::T_TUPLE, TUPLE_ELEMS)
-				.local_set(telems);
-			w.local_get(telems).i32(0).array_get(VA).local_set(k);
-			w.local_get(telems).i32(1).array_get(VA).local_set(v);
+				.struct_get(types::T_TUPLE, 2)
+				.local_set(k);
+			w.local_get(tup)
+				.ref_cast(types::T_TUPLE)
+				.struct_get(types::T_TUPLE, 3)
+				.local_set(v);
 			// keep = f(k, v).
 			w.local_get(f).ref_cast(types::T_CLOSURE);
 			w.local_get(k).local_get(v);
