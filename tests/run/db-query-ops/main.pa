@@ -1,0 +1,84 @@
+# Boolean predicate trees (`sql.any`/`sql.all`/`sql.not`) and paging (`db.limit`/`db.offset`)
+# against a real in-memory SQLite, so the compiled WHERE/LIMIT/OFFSET actually selects the
+# right rows -- not just that the SQL text renders (that's `std/sql.test.pa`). Also checks
+# that column validation reaches *inside* a combinator (an unknown column nested under `any`
+# is still caught before SQLite sees it).
+use std/list
+use std/sql
+use std/string
+use std/task
+use std/sys/db
+
+alias item {id :: int, name :: string, kind :: string, qty :: int}
+
+def decode-item :: fun row -> result item string = fun r {
+	try id = sql.get-int r "id"
+	try name = sql.get-text r "name"
+	try kind = sql.get-text r "kind"
+	try qty = sql.get-int r "qty"
+	ok {id, name, kind, qty}
+}
+
+def encode-item :: fun item -> list (string, value) = fun it {
+	[
+		("id", sql.int it.id),
+		("name", sql.text it.name),
+		("kind", sql.text it.kind),
+		("qty", sql.int it.qty),
+	]
+}
+
+def items :: table item = sql.table-of "items" [
+	sql.col "id" sql.col-type.c-int,
+	sql.col "name" sql.col-type.c-text,
+	sql.col "kind" sql.col-type.c-text,
+	sql.col "qty" sql.col-type.c-int,
+] decode-item encode-item
+
+def names :: fun (list item) -> string = fun xs {
+	string.join (list.map xs fun it { it.name }) ", "
+}
+
+def main = fun {
+	try conn = db.open ":memory:"
+	try _ddl = db.execute conn (sql.create-table items) []
+	try _1 = db.insert conn items {id: 1, name: "apple", kind: "fruit", qty: 5}
+	try _2 = db.insert conn items {id: 2, name: "beet", kind: "veg", qty: 2}
+	try _3 = db.insert conn items {id: 3, name: "cherry", kind: "fruit", qty: 9}
+	try _4 = db.insert conn items {id: 4, name: "daikon", kind: "veg", qty: 7}
+	try _5 = db.insert conn items {id: 5, name: "elderberry", kind: "fruit", qty: 1}
+
+	# any: fruit OR qty >= 7  -> apple, cherry, daikon, elderberry
+	try a = db.from items |> db.filter (sql.any [
+		sql.eq "kind" (sql.text "fruit"),
+		sql.ge "qty" (sql.int 7),
+	]) |> db.order-by (sql.asc "id") |> db.run conn
+	print "any(fruit, qty>=7): $(names a)"
+
+	# all + not: fruit AND NOT(qty < 3)  -> apple, cherry
+	try b = db.from items |> db.filter (sql.all [
+		sql.eq "kind" (sql.text "fruit"),
+		sql.not (sql.lt "qty" (sql.int 3)),
+	]) |> db.order-by (sql.asc "id") |> db.run conn
+	print "fruit and not(qty<3): $(names b)"
+
+	# paging: order by qty desc, skip the top one, take the next two
+	try page = db.from items |> db.order-by (sql.desc "qty") |> db.limit 2 |> db.offset 1 |> db.run conn
+	print "page(skip 1, take 2 by qty desc): $(names page)"
+
+	# offset with no limit: skip the first two by id
+	try rest = db.from items |> db.order-by (sql.asc "id") |> db.offset 2 |> db.run conn
+	print "offset 2 (no limit): $(names rest)"
+
+	# validation still reaches inside a combinator
+	try bad = task.attempt (db.from items |> db.filter (sql.any [
+		sql.eq "kind" (sql.text "fruit"),
+		sql.gt "nope" (sql.int 0),
+	]) |> db.run conn)
+	when bad is ok _ {
+		print "unexpected ok"
+	} is err e {
+		print "validate: $(e)"
+	}
+	task.return 0
+}

@@ -208,6 +208,13 @@ public def limit :: fun (table-query a) int -> table-query a = fun q n {
 	}
 }
 
+# Skips the first `n` rows (pairs with `db.limit` for paging).
+public def offset :: fun (table-query a) int -> table-query a = fun q n {
+	when q is table-query.tq t inner {
+		table-query.tq t (sql.offset inner n)
+	}
+}
+
 # Runs a typed query: first validates that every filtered/ordered column exists in the
 # schema (a crisp error returned *before* hitting SQLite), then runs and decodes each row
 # with the table's own decoder.

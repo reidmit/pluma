@@ -164,6 +164,9 @@ public enum predicate {
 	less-eq string value
 	like string string
 	one-of string (list value)
+	all (list predicate)
+	any (list predicate)
+	negate predicate
 }
 
 public def eq :: fun string value -> predicate = predicate.equal
@@ -181,6 +184,21 @@ public def le :: fun string value -> predicate = predicate.less-eq
 public def like :: fun string string -> predicate = predicate.like
 
 public def one-of :: fun string (list value) -> predicate = predicate.one-of
+
+# Boolean combinators over predicates, so a filter is a tree, not just a flat AND-list.
+# `all` AND-joins, `any` OR-joins, `not` negates -- each parenthesized when it lowers, so
+# precedence is explicit. An empty `all` is `1` (TRUE -- matches every row); an empty `any`
+# is `0` (FALSE -- matches none), mirroring the empty-`one-of` convention. A top-level
+# `filter` list is still AND-joined, so these only matter when you need OR or NOT *inside*
+# a condition:
+#
+#     sql.from "users" | sql.filter (sql.any [sql.eq "role" (sql.text "admin"), sql.gt "age" (sql.int 17)])
+#     # => ... WHERE ("role" = ? OR "age" > ?)
+public def all :: fun (list predicate) -> predicate = predicate.all
+
+public def any :: fun (list predicate) -> predicate = predicate.any
+
+public def not :: fun predicate -> predicate = predicate.negate
 
 # A single ORDER BY term: a column and a direction. (Named `sort`, not `ordering`, because
 # `ordering` is the built-in comparison-result enum.)
@@ -202,11 +220,12 @@ public alias query {
 	filter :: list predicate,
 	order :: list sort,
 	limit :: option int,
+	offset :: option int,
 }
 
-# Seeds a query against table `t`: all columns, no filter, no order, no limit.
+# Seeds a query against table `t`: all columns, no filter, no order, no limit, no offset.
 public def from :: fun string -> query = fun t {
-	{from: t, select: [], filter: [], order: [], limit: none}
+	{from: t, select: [], filter: [], order: [], limit: none, offset: none}
 }
 
 # Restricts the columns returned. With no `select`, the query reads `SELECT *`.
@@ -230,6 +249,12 @@ public def order-by :: fun query sort -> query = fun q o {
 # Caps the number of rows returned.
 public def limit :: fun query int -> query = fun q n {
 	{...q, limit: some n}
+}
+
+# Skips the first `n` rows. SQLite only honours OFFSET alongside a LIMIT, so an offset with
+# no `limit` compiles to `LIMIT -1` (SQLite's "no limit" sentinel) plus the offset.
+public def offset :: fun query int -> query = fun q n {
+	{...q, offset: some n}
 }
 
 # --- compilation ---------------------------------------------------------------
@@ -259,9 +284,15 @@ public def compile :: fun query -> (string, list value) = fun q {
 	} else {
 		" ORDER BY " ++ string.join (list.map q.order lower-ord) ", "
 	}
-	let (limit-sql, limit-params) = when q.limit is some n {
-		(" LIMIT ?", [value.int n])
-	} is none {
+	# SQLite rejects a bare OFFSET, so an offset with no limit rides `LIMIT -1` (its
+	# unbounded sentinel). Binds line up with the text: limit before offset.
+	let (limit-sql, limit-params) = when (q.limit, q.offset) is (some l, some o) {
+		(" LIMIT ? OFFSET ?", [value.int l, value.int o])
+	} is (some l, none) {
+		(" LIMIT ?", [value.int l])
+	} is (none, some o) {
+		(" LIMIT -1 OFFSET ?", [value.int o])
+	} is (none, none) {
 		("", [])
 	}
 	(head ++ where-sql ++ order-sql ++ limit-sql, list.concat where-params limit-params)
@@ -351,6 +382,25 @@ def lower-pred :: fun predicate -> (string, list value) = fun p {
 			let holes = string.join (list.map vs fun _v { "?" }) ", "
 			(quote-ident c ++ " IN (" ++ holes ++ ")", vs)
 		}
+	} is predicate.all ps {
+		lower-group ps " AND " "1"
+	} is predicate.any ps {
+		lower-group ps " OR " "0"
+	} is predicate.negate inner {
+		let (sql, params) = lower-pred inner
+		("NOT (" ++ sql ++ ")", params)
+	}
+}
+
+# Lowers a list of predicates into one parenthesized boolean group joined by `connective`
+# (` AND ` / ` OR `). An empty group lowers to `empty` -- the literal that's the connective's
+# identity (`1` for AND, `0` for OR) -- so it's always well-formed SQL, never a stray `()`.
+def lower-group :: fun (list predicate) string string -> (string, list value) = fun ps connective empty {
+	if list.length ps == 0 {
+		(empty, [])
+	} else {
+		let lowered = list.map ps lower-pred
+		("(" ++ string.join (list.map lowered fst) connective ++ ")", list.flat-map lowered snd)
 	}
 }
 
@@ -516,9 +566,10 @@ public def validate-columns :: fun (list string) query -> result nothing string 
 }
 
 # The columns a list of predicates references, in order -- so a mutation runner can validate a
-# WHERE clause (and SET columns) against a table's schema.
+# WHERE clause (and SET columns) against a table's schema. Combinators (`all`/`any`/`not`)
+# contribute every column their children touch, so validation reaches into nested conditions.
 public def predicate-columns :: fun (list predicate) -> list string = fun ps {
-	list.map ps pred-column
+	list.flat-map ps pred-columns
 }
 
 # Checks that every name in `used` appears in `allowed`, returning `err` naming the first one
@@ -536,23 +587,29 @@ public def validate-column-names :: fun (list string) (list string) -> result no
 	}
 }
 
-def pred-column :: fun predicate -> string = fun p {
+def pred-columns :: fun predicate -> list string = fun p {
 	when p is predicate.equal c _ {
-		c
+		[c]
 	} is predicate.not-equal c _ {
-		c
+		[c]
 	} is predicate.greater c _ {
-		c
+		[c]
 	} is predicate.greater-eq c _ {
-		c
+		[c]
 	} is predicate.less c _ {
-		c
+		[c]
 	} is predicate.less-eq c _ {
-		c
+		[c]
 	} is predicate.like c _ {
-		c
+		[c]
 	} is predicate.one-of c _ {
-		c
+		[c]
+	} is predicate.all ps {
+		predicate-columns ps
+	} is predicate.any ps {
+		predicate-columns ps
+	} is predicate.negate inner {
+		pred-columns inner
 	}
 }
 

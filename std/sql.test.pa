@@ -146,6 +146,52 @@ def tests :: test.suite = [
 		let q = sql.from "t" |> sql.filter (sql.gt "age" (sql.int 17)) |> sql.limit 50
 		check q "SELECT * FROM \"t\" WHERE \"age\" > ? LIMIT ?" [sql.int 17, sql.int 50]
 	},
+	test.case "limit + offset bind in order" fun {
+		let q = sql.from "t" |> sql.limit 50 |> sql.offset 100
+		check q "SELECT * FROM \"t\" LIMIT ? OFFSET ?" [sql.int 50, sql.int 100]
+	},
+	test.case "offset with no limit rides LIMIT -1" fun {
+		let q = sql.from "t" |> sql.offset 100
+		check q "SELECT * FROM \"t\" LIMIT -1 OFFSET ?" [sql.int 100]
+	},
+	test.case "any OR-joins its terms in parens" fun {
+		let q = sql.from "users" |> sql.filter (sql.any [
+			sql.eq "role" (sql.text "admin"),
+			sql.gt "age" (sql.int 17),
+		])
+		check q "SELECT * FROM \"users\" WHERE (\"role\" = ? OR \"age\" > ?)" [
+			sql.text "admin",
+			sql.int 17,
+		]
+	},
+	test.case "all AND-joins inside a parenthesized group" fun {
+		let q = sql.from "t" |> sql.filter (sql.all [
+			sql.eq "a" (sql.int 1),
+			sql.eq "b" (sql.int 2),
+		])
+		check q "SELECT * FROM \"t\" WHERE (\"a\" = ? AND \"b\" = ?)" [sql.int 1, sql.int 2]
+	},
+	test.case "not negates a predicate" fun {
+		let q = sql.from "t" |> sql.filter (sql.not (sql.eq "a" (sql.int 1)))
+		check q "SELECT * FROM \"t\" WHERE NOT (\"a\" = ?)" [sql.int 1]
+	},
+	test.case "combinators nest, threading binds left to right" fun {
+		let q = sql.from "t" |> sql.filter (sql.any [
+			sql.all [sql.eq "a" (sql.int 1), sql.gt "b" (sql.int 2)],
+			sql.not (sql.eq "c" (sql.int 3)),
+		])
+		check q "SELECT * FROM \"t\" WHERE ((\"a\" = ? AND \"b\" > ?) OR NOT (\"c\" = ?))" [
+			sql.int 1,
+			sql.int 2,
+			sql.int 3,
+		]
+	},
+	test.case "an empty any is 0 (FALSE), an empty all is 1 (TRUE)" fun {
+		assert.all [
+			check (sql.from "t" |> sql.filter (sql.any [])) "SELECT * FROM \"t\" WHERE 0" [],
+			check (sql.from "t" |> sql.filter (sql.all [])) "SELECT * FROM \"t\" WHERE 1" [],
+		]
+	},
 	test.case "a full query assembles every clause in order" fun {
 		let q = sql.from "users" |> sql.select [
 			"id",

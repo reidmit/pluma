@@ -1,0 +1,13 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+any(fruit, qty>=7): apple, cherry, daikon, elderberry
+fruit and not(qty<3): apple, cherry
+page(skip 1, take 2 by qty desc): daikon, apple
+offset 2 (no limit): cherry, daikon, elderberry
+validate: no such column 'nope'
+== stderr ==
