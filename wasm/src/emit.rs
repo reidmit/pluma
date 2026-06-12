@@ -46,6 +46,11 @@ pub(crate) struct FnEmitter<'a> {
 	/// `MakeRecord` arg is built nominal. This function's own params are seeded
 	/// from its entry (via `compute_nominal`).
 	param_shapes: &'a HashMap<u32, Vec<Option<ir::RecordShape>>>,
+	/// Each function's return `Repr`, indexed by `FuncId.0`. A direct tail call
+	/// (`return_call`) is valid only when this function's return repr equals the
+	/// callee's; on a mismatch (numeric monomorphization made them differ) the tail
+	/// call is downgraded to a plain call so the coercer's bridging `Return` runs.
+	callee_rets: &'a [Repr],
 	strpool: &'a StrPool,
 	diags: &'a mut Diagnostics,
 	/// VarId.0 -> wasm local index. Wasm local 0 is the implicit closure env.
@@ -84,6 +89,7 @@ impl<'a> FnEmitter<'a> {
 		enums: &'a EnumTable,
 		ftypes: &'a mut FuncTypes,
 		param_shapes: &'a HashMap<u32, Vec<Option<ir::RecordShape>>>,
+		callee_rets: &'a [Repr],
 		extra_params: u32,
 		diags: &'a mut Diagnostics,
 	) -> Self {
@@ -126,6 +132,7 @@ impl<'a> FnEmitter<'a> {
 			var_ctors,
 			nominal,
 			param_shapes,
+			callee_rets,
 			strpool,
 			diags,
 			locals,
@@ -854,6 +861,14 @@ impl<'a> FnEmitter<'a> {
 				// then shape-aware args. A tail call would `return_call` past the
 				// trailing `Return`, skipping `defer` cleanups, so downgrade to an
 				// ordinary call in a defer-bearing function (mirrors `TailCall`).
+				// `return_call` also requires the callee's return type to match this
+				// function's; numeric monomorphization can make them differ (an unboxed
+				// caller tail-calling a boxed callee, or vice-versa), so downgrade then
+				// too and let the coercer's trailing `Return` bridge the reprs.
+				let ret_matches = self
+					.callee_rets
+					.get(fid.0 as usize)
+					.is_none_or(|r| *r == self.f.ret_repr);
 				self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
 				let callee_shapes = self.param_shapes.get(&fid.0);
 				for (i, a) in args.iter().enumerate() {
@@ -866,7 +881,7 @@ impl<'a> FnEmitter<'a> {
 						self.atom(a);
 					}
 				}
-				if self.defers_local.is_none() {
+				if self.defers_local.is_none() && ret_matches {
 					self.ins(Instruction::ReturnCall(w));
 				} else {
 					self.ins(Instruction::Call(w));
@@ -877,8 +892,11 @@ impl<'a> FnEmitter<'a> {
 				// A tail call would `return_call` past the trailing `Return`, skipping
 				// any `defer` cleanups — so in a defer-bearing function, downgrade it
 				// to an ordinary call and let the `Return` run the cleanups (TCO is
-				// suppressed while a frame has pending cleanups).
-				let tail = self.defers_local.is_none();
+				// suppressed while a frame has pending cleanups). An indirect call yields
+				// a boxed value, so `return_call_indirect` is only type-valid when this
+				// function also returns boxed; a monomorphized unboxed-return caller
+				// downgrades and lets the coercer's `Return` box the result.
+				let tail = self.defers_local.is_none() && self.f.ret_repr == Repr::Boxed;
 				self.call_value(callee, args, tail);
 			}
 			Rvalue::MakeClosure(fid, caps) => {

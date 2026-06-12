@@ -113,7 +113,14 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 	// nominal). Returns the per-clone param shapes the emitter consumes. Runs before
 	// the repr pass so clones get their `var_reprs`/coercions too.
 	let param_shapes = mono::specialize_record_shapes(&mut p);
-	let sigs = ir::repr::Sigs::uniform();
+	// Numeric monomorphization: an eligible direct-only function keeps its recorded
+	// param/return reprs (so a concrete `fib : int -> int` takes an i64 param and
+	// returns an i64, with no box/unbox at the call boundary); every function that
+	// escapes as a first-class value is forced back to the uniform-boxed contract so
+	// its indirect calls still agree. `Sigs::from_program` then reads the filtered
+	// signatures, and the coercion pass makes each direct call site match.
+	monomorphize_signatures(&mut p);
+	let sigs = ir::repr::Sigs::from_program(&p);
 	for f in &mut p.functions {
 		f.var_reprs = ir::repr::infer_reprs(f, &sigs);
 		ir::repr::insert_coercions(f, &sigs);
@@ -169,6 +176,66 @@ impl Reach {
 		}
 		let _ = funcs;
 		Self { globals, order }
+	}
+}
+
+// --------------------------------------------------------------------------
+// Numeric-signature monomorphization. A function keeps its recorded
+// (`param_reprs`, `ret_repr`) unboxed signature only when *every* use of it is a
+// resolved direct call — i.e. it never escapes as a first-class closure value, so
+// no indirect (uniform-boxed) call site can disagree with the unboxed convention.
+// A function escapes iff a *reachable* function builds a closure over it: its
+// capture-free backing thunk (`MakeClosure(fid, [])`) is itself reachable exactly
+// when the function's global is loaded somewhere (passed to `map`, stored, …);
+// a direct-only function's thunk is dead after `resolve_direct_calls` pruned the
+// loads, so it never appears. The program entry is excluded too — the synthetic
+// `__task_entry` wrapper calls it with the uniform-boxed convention.
+// --------------------------------------------------------------------------
+
+fn monomorphize_signatures(p: &mut IrProgram) {
+	let reach = Reach::compute(p);
+	let mut escaped: HashSet<u32> = HashSet::new();
+	for &fid in &reach.order {
+		collect_closure_targets(&p.functions[fid as usize].body, &mut escaped);
+	}
+	let entry = p.entry.0;
+	for (i, f) in p.functions.iter_mut().enumerate() {
+		let eligible = i as u32 != entry && !escaped.contains(&(i as u32));
+		if !eligible {
+			f.param_reprs = vec![ir::Repr::Boxed; f.params.len()];
+			f.ret_repr = ir::Repr::Boxed;
+		}
+	}
+}
+
+/// Collect every `FuncId` a block builds a closure over (`MakeClosure`) — the
+/// functions that escape as first-class values.
+fn collect_closure_targets(b: &Block, out: &mut HashSet<u32>) {
+	for s in &b.0 {
+		match &s.kind {
+			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => {
+				if let Rvalue::MakeClosure(f, _) = rv {
+					out.insert(f.0);
+				}
+			}
+			StmtKind::If(_, t, e) => {
+				collect_closure_targets(t, out);
+				collect_closure_targets(e, out);
+			}
+			StmtKind::Switch { arms, default, .. } => {
+				for (_, b) in arms {
+					collect_closure_targets(b, out);
+				}
+				collect_closure_targets(default, out);
+			}
+			StmtKind::Match { arms, .. } => {
+				for a in arms {
+					collect_closure_targets(&a.body, out);
+				}
+			}
+			StmtKind::Loop(b) => collect_closure_targets(b, out),
+			_ => {}
+		}
 	}
 }
 

@@ -138,7 +138,7 @@ pub struct Function {
 /// `I64`/`F64`/`I32` to native locals and `Boxed` to a GC reference. Assigned per
 /// `VarId` by `repr::infer_reprs` and bridged by the `Box`/`Unbox` rvalues the
 /// coercion pass inserts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Repr {
 	/// A heap reference / uniform `Value` — every polymorphic or compound value.
 	Boxed,

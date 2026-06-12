@@ -11,6 +11,8 @@
 // `print`/`debug` glue reads them to format a value. Keep `tag` in sync with the
 // host's value formatter (`host/src/v8host.rs`).
 
+use crate::util::repr_valtype;
+use ir::Repr;
 use wasm_encoder::{
 	AbstractHeapType, CompositeInnerType, CompositeType, FieldType, HeapType, RefType, StorageType,
 	StructType, SubType, TypeSection, ValType,
@@ -425,6 +427,12 @@ pub struct ShapeInfo {
 enum Pending {
 	Func(FuncKind),
 	Shape(u32),
+	/// A monomorphized Pluma function type: a leading boxed `env` param, then one
+	/// param per recorded `Repr` (an unboxed i64/f64/i32 where the function takes a
+	/// concrete scalar), and the result `Repr`. Used for eligible direct-only
+	/// functions so a hot numeric callee passes/returns raw scalars instead of
+	/// boxing at every call boundary.
+	Sig(Vec<Repr>, Repr),
 }
 
 pub struct FuncTypes {
@@ -434,6 +442,8 @@ pub struct FuncTypes {
 	shape_keys: std::collections::HashMap<Vec<String>, ShapeInfo>,
 	/// Count of distinct shapes interned so far — assigns the next `shape_id`.
 	shape_count: u32,
+	/// `(param reprs, ret repr)` -> its interned function-type index (dedup).
+	sig_keys: std::collections::HashMap<(Vec<Repr>, Repr), u32>,
 }
 
 impl FuncTypes {
@@ -443,7 +453,23 @@ impl FuncTypes {
 			pending: Vec::new(),
 			shape_keys: std::collections::HashMap::new(),
 			shape_count: 0,
+			sig_keys: std::collections::HashMap::new(),
 		}
+	}
+
+	/// The type index for a monomorphized Pluma function with the given param/ret
+	/// reprs: `(env, p0..pn) -> ret`, each scalar `Repr` an unboxed i64/f64/i32 and
+	/// each `Boxed` a `$value` ref (so an all-`Boxed` signature is layout-identical
+	/// to `for_arity`, but interned separately). Idempotent on a repeated signature.
+	pub fn for_signature(&mut self, params: &[Repr], ret: Repr) -> u32 {
+		let key = (params.to_vec(), ret);
+		if let Some(&i) = self.sig_keys.get(&key) {
+			return i;
+		}
+		let idx = T_FIRST_FUNC + self.pending.len() as u32;
+		self.sig_keys.insert(key, idx);
+		self.pending.push(Pending::Sig(params.to_vec(), ret));
+		idx
 	}
 
 	fn intern(&mut self, k: FuncKind) -> u32 {
@@ -981,6 +1007,15 @@ impl FuncTypes {
 		for p in &self.pending {
 			let k = match p {
 				Pending::Func(k) => *k,
+				Pending::Sig(params, ret) => {
+					// `(env, p0..pn) -> ret`: a leading boxed env (direct calls pass null),
+					// then each param's repr, then the result repr.
+					let ps: Vec<ValType> = std::iter::once(value_ref())
+						.chain(params.iter().map(|r| repr_valtype(*r)))
+						.collect();
+					types.ty().function(ps, [repr_valtype(*ret)]);
+					continue;
+				}
 				Pending::Shape(n) => {
 					let mut fields = vec![
 						val_field(ValType::I32, false),

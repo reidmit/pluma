@@ -391,13 +391,32 @@ impl Module {
 			import_sec.import("pluma", tag, wasm_encoder::EntityType::Function(ty));
 		}
 
+		// Each function's return repr, indexed by `FuncId.0` — the emitter reads it to
+		// decide whether a direct tail call's `return_call` is type-valid (matching
+		// caller/callee return reprs) or must downgrade to a plain call.
+		let callee_rets: Vec<ir::Repr> = p.functions.iter().map(|f| f.ret_repr).collect();
+
 		let mut functions = FunctionSection::new();
 		let mut code = CodeSection::new();
 		for &fid in &reach.order {
 			let f = &p.functions[fid as usize];
 			let arity = wasm_arity(fid, f.params.len());
 			let extra_params = (arity - f.params.len()) as u32;
-			functions.function(ftypes.for_arity(arity));
+			// A numerically-monomorphized function (kept its unboxed `param_reprs`/
+			// `ret_repr` because it's direct-only) gets a signature-typed wasm function;
+			// every other function keeps the uniform arity-keyed boxed type. An eligible
+			// function is never a zero-arg closure, so `extra_params` is 0 here.
+			let sig_reprs: Vec<ir::Repr> = (0..f.params.len())
+				.map(|i| f.param_reprs.get(i).copied().unwrap_or(ir::Repr::Boxed))
+				.collect();
+			let unboxed = extra_params == 0
+				&& (f.ret_repr != ir::Repr::Boxed || sig_reprs.iter().any(|r| *r != ir::Repr::Boxed));
+			let ty = if unboxed {
+				ftypes.for_signature(&sig_reprs, f.ret_repr)
+			} else {
+				ftypes.for_arity(arity)
+			};
+			functions.function(ty);
 			let mut em = FnEmitter::new(
 				f,
 				fid,
@@ -410,6 +429,7 @@ impl Module {
 				&p.enums,
 				&mut ftypes,
 				param_shapes,
+				&callee_rets,
 				extra_params,
 				diags,
 			);
