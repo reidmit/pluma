@@ -1,0 +1,61 @@
+# Two streaming subscriptions consumed CONCURRENTLY over the wire, guarding the
+# v1 "one stream per connection" path: each `rpc.call-stream` opens its own
+# `fetch-stream` connection, so two live subscriptions must multiplex without
+# crossing frames. The consumers sleep per element to force interleaving; the
+# per-stream sums are deterministic regardless of arrival order, which is the
+# point -- no frame is lost or delivered to the wrong subscription.
+#
+# `route-fp` is the fingerprint for `fun int -> stream int`, shared by both
+# endpoints (it's per-shape, not per-name). If the fingerprint algorithm
+# changes, update it here and re-accept the snapshot.
+use std/dict
+use std/rpc
+use std/stream
+use std/task
+use std/sys/http
+use std/sys/net
+use api
+
+def route-fp :: string = "3785672902669336212"
+
+def decode-ints :: fun (stream bytes) -> stream int = fun frames {
+	stream.map-task frames fun b {
+		let decoded :: result int wire-error = wire.decode b
+		rpc.lift decoded
+	}
+}
+
+def sum-sub :: fun string int -> task int string = fun route n {
+	let s = decode-ints (rpc.call-stream route route-fp (wire.encode n))
+	stream.fold s 0 fun acc x {
+		try _ = task.sleep 2ms
+		task.return (acc + x)
+	}
+}
+
+def main = fun {
+	if net.listen "127.0.0.1:0" is ok server {
+		if net.local-addr server is ok addr {
+			scope as s {
+				let _ = s.spawn (http.serve-on server rpc.dispatch)
+				rpc.configure-stream fun route body headers {
+					http.fetch-stream ("http://" ++ addr ++ "/rpc/" ++ route) http.method.post headers body
+				}
+				let ha = s.spawn (sum-sub "api.slow" 5)
+				let hb = s.spawn (sum-sub "api.ticks" 6)
+				try a = ha
+				try b = hb
+				print "slow sum  = $(to-string a)"
+				print "ticks sum = $(to-string b)"
+				s.cancel ()
+				task.return 0
+			}
+		} else {
+			print "local-addr failed"
+			task.return 1
+		}
+	} else {
+		print "listen failed"
+		task.return 1
+	}
+}
