@@ -18,26 +18,23 @@
 #                                              separately. V8's generational GC is
 #                                              what makes Pluma's boxed-value IR
 #                                              fast here.
+#   pluma-src  `pluma run <prog>.pa`        — the same thing from source: every run
+#                                              re-does the full pipeline (tokenize →
+#                                              parse → analyze → IR → wasm) and then
+#                                              executes, in one process. The gap
+#                                              over `pluma-v8` is the compile cost
+#                                              you pay per `pluma run` of a source
+#                                              file — the dev-loop reality, where
+#                                              `pluma-v8` is the deploy reality.
 #   python3    python3 <prog>.py            — CPython, a bytecode interpreter.
 #   ruby       ruby <prog>.rb               — CRuby (MRI), a bytecode interpreter.
 #   node       node <prog>.js               — V8, a JIT.
 #   bun        bun <prog>.js                — JavaScriptCore, a *different* JIT —
 #                                              the one cross-engine JS data point.
 #   deno       deno run <prog>.js           — V8 again (same engine as node).
-#   luajit     luajit <prog>.lua            — LuaJIT, a tracing JIT (the speed
-#                                              ceiling on the compute rows).
-#   haskell    ghc -O2 once, then run the   — GHC native code, the lazy-functional
-#              compiled binary                 cousin. Compiled once like pluma;
-#                                              the build cost is reported
-#                                              separately, the per-run time is
-#                                              execution only.
 #
 # Pluma's WasmGC/V8 output is the reference every other column is diffed against,
 # so a row is only trusted once all the languages agree byte-for-byte.
-#
-# Not every language implements every benchmark: `luajit` and `haskell` skip
-# `json` (neither ships a JSON codec in its standard library, so an idiomatic
-# port would mean pulling in a third-party one). Missing ports read as `n/a`.
 #
 # Usage:  competition/run.sh [RUNS]      (default RUNS=5)
 
@@ -62,6 +59,7 @@ BENCHES=(
 	"10-nbody:nbody:nbody:n-body float sim"
 	"11-sieve:sieve:sieve:sieve of Eratosthenes"
 	"12-json:jsonrt:json:JSON round-trip"
+	"13-regex:regex:regex:regex scan + extract"
 )
 
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -156,27 +154,6 @@ build_wasm() {
 	echo "$t"
 }
 
-# Compile a Haskell <src> to native code at <bin> with -O2 (intermediates land in
-# <odir>). Prints the build's wall-clock seconds, "n/a" if there's no source or no
-# ghc, or "ERR" if compilation failed.
-build_hs() {
-	local src="$1" bin="$2" odir="$3" err t
-	if [ ! -f "$src" ] || ! have ghc; then
-		echo "n/a"
-		return 1
-	fi
-	err="$(mktemp)"
-	timed_run /dev/null "$err" ghc -O2 -outputdir "$odir" -o "$bin" "$src"
-	if [ "$?" -ne 0 ]; then
-		rm -f "$err"
-		echo "ERR"
-		return 1
-	fi
-	t="$(awk '/^real/ { print $2 }' "$err")"
-	rm -f "$err"
-	echo "$t"
-}
-
 # Pretty ratio "x.y×" of $1/$2, or "—" if either is non-numeric.
 ratio() {
 	if [[ "$1" =~ ^[0-9.]+$ && "$2" =~ ^[0-9.]+$ ]]; then
@@ -191,28 +168,24 @@ if [ ! -x "$PLUMA" ]; then
 	exit 1
 fi
 
-echo "Pluma (WasmGC/V8) vs Python, Ruby, Node, Bun, Deno, LuaJIT, Haskell  —  best of $RUNS runs, seconds (lower is better)"
+echo "Pluma (WasmGC/V8) vs Python, Ruby, Node, Bun, Deno  —  best of $RUNS runs, seconds (lower is better)"
 echo
-printf '%-12s %8s %8s %6s %6s %6s %6s %7s %8s %9s   %s\n' \
-	"benchmark" "pluma-v8" "python3" "ruby" "node" "bun" "deno" "luajit" "haskell" "vs best" "output"
-printf '%s\n' "--------------------------------------------------------------------------------------------------"
+printf '%-12s %8s %9s %8s %6s %6s %6s %6s %9s   %s\n' \
+	"benchmark" "pluma-v8" "pluma-src" "python3" "ruby" "node" "bun" "deno" "vs best" "output"
+printf '%s\n' "----------------------------------------------------------------------------------------"
 
 pv8o="$(mktemp)"
+psrco="$(mktemp)"
 pyo="$(mktemp)"
 rbo="$(mktemp)"
 jso="$(mktemp)"
 buno="$(mktemp)"
 denoo="$(mktemp)"
-luao="$(mktemp)"
-hso="$(mktemp)"
 WASMDIR="$(mktemp -d)"
-HSBIN="$(mktemp -d)"
-HSOBJ="$(mktemp -d)"
 
-md_rows=""       # accumulated markdown table rows for RESULTS.md
+md_rows=""    # accumulated markdown table rows for RESULTS.md
 mismatch="no"
-build_total=0    # summed one-time compile-to-wasm cost across all benchmarks
-hs_build_total=0 # summed one-time ghc -O2 compile cost across all benchmarks
+build_total=0 # summed one-time compile-to-wasm cost across all benchmarks
 
 for entry in "${BENCHES[@]}"; do
 	dir="${entry%%:*}"
@@ -236,23 +209,16 @@ for entry in "${BENCHES[@]}"; do
 		pv8="$(min_time "$pv8o" "$PLUMA" run "$WASMDIR/$base.wasm")"
 	fi
 
-	# `haskell`: compile once with ghc -O2 (build cost reported separately), then
-	# time the native binary — the compiled analogue of the pluma-v8 column.
-	hbt="$(build_hs "$d/$base.hs" "$HSBIN/$base" "$HSOBJ")"
-	if [[ "$hbt" =~ ^[0-9.]+$ ]]; then
-		hs_build_total="$(awk "BEGIN { print $hs_build_total + $hbt }")"
-		ht="$(min_time "$hso" "$HSBIN/$base")"
-	else
-		ht="n/a"
-		: >"$hso"
-	fi
+	# `pluma-src`: `pluma run <source>` — compiles from source *and* executes every
+	# invocation, so its time folds the full tokenize/parse/analyze/IR/wasm pipeline
+	# into each run. The delta over `pluma-v8` is what compiling the source costs.
+	psrct="$(min_time "$psrco" "$PLUMA" run "$d/$base")"
 
 	pyt="$(time_src "$pyo" "$d/$base.py" python3 "$d/$base.py")"
 	rbt="$(time_src "$rbo" "$d/$base.rb" ruby "$d/$base.rb")"
 	jt="$(time_src "$jso" "$d/$base.js" node "$d/$base.js")"
 	bunt="$(time_src "$buno" "$d/$base.js" bun "$d/$base.js")"
 	denot="$(time_src "$denoo" "$d/$base.js" deno run --quiet "$d/$base.js")"
-	luat="$(time_src "$luao" "$d/$base.lua" luajit "$d/$base.lua")"
 
 	# Verify every competitor that ran produced the same output as the WasmGC/V8
 	# artifact (the reference). If the v8 build/run failed there is no oracle to
@@ -261,7 +227,7 @@ for entry in "${BENCHES[@]}"; do
 		status="no-ref"
 	else
 		status="ok"
-		for f in "$pyo" "$rbo" "$jso" "$buno" "$denoo" "$luao" "$hso"; do
+		for f in "$psrco" "$pyo" "$rbo" "$jso" "$buno" "$denoo"; do
 			if [ -s "$f" ] && ! diff -q "$pv8o" "$f" >/dev/null 2>&1; then
 				status="MISMATCH"
 				mismatch="yes"
@@ -270,21 +236,20 @@ for entry in "${BENCHES[@]}"; do
 	fi
 
 	# Fastest of all the competitors, and how the deploy artifact compares to it.
-	best_other="$(printf '%s\n' "$pyt" "$rbt" "$jt" "$bunt" "$denot" "$luat" "$ht" |
+	best_other="$(printf '%s\n' "$pyt" "$rbt" "$jt" "$bunt" "$denot" |
 		awk '/^[0-9.]+$/ { if (m == "" || $1 < m) m = $1 } END { print (m == "" ? "n/a" : m) }')"
 	# `vs best` is the deploy reality — the artifact you ship vs the fastest column.
 	vs_v8="$(ratio "$pv8" "$best_other")"
 
-	printf '%-12s %8s %8s %6s %6s %6s %6s %7s %8s %9s   %s\n' \
-		"$label" "$pv8" "$pyt" "$rbt" "$jt" "$bunt" "$denot" "$luat" "$ht" "$vs_v8" "$status"
-	md_rows+="| \`$label\` | $desc | $pv8 | $pyt | $rbt | $jt | $bunt | $denot | $luat | $ht | $vs_v8 | $status |"$'\n'
+	printf '%-12s %8s %9s %8s %6s %6s %6s %6s %9s   %s\n' \
+		"$label" "$pv8" "$psrct" "$pyt" "$rbt" "$jt" "$bunt" "$denot" "$vs_v8" "$status"
+	md_rows+="| \`$label\` | $desc | $pv8 | $psrct | $pyt | $rbt | $jt | $bunt | $denot | $vs_v8 | $status |"$'\n'
 done
 
-rm -f "$pv8o" "$pyo" "$rbo" "$jso" "$buno" "$denoo" "$luao" "$hso"
-rm -rf "$WASMDIR" "$HSBIN" "$HSOBJ"
+rm -f "$pv8o" "$psrco" "$pyo" "$rbo" "$jso" "$buno" "$denoo"
+rm -rf "$WASMDIR"
 
 build_total="$(awk "BEGIN { printf \"%.2f\", $build_total }")"
-hs_build_total="$(awk "BEGIN { printf \"%.2f\", $hs_build_total }")"
 
 # ---- Write the markdown report -------------------------------------------------
 os="$(uname -sm)"
@@ -294,13 +259,11 @@ rb_ver="$(ruby --version 2>&1 | awk '{ print $1, $2 }')"
 node_ver="$(node --version 2>&1 | head -1)"
 bun_ver="$(bun --version 2>&1 | head -1)"
 deno_ver="$(deno --version 2>&1 | head -1)"
-luajit_ver="$(luajit -v 2>&1 | head -1 | awk '{ print $1, $2 }')"
-ghc_ver="$(ghc --numeric-version 2>&1 | head -1)"
 overall="every implementation agreed on every output"
 [ "$mismatch" = "yes" ] && overall="**one or more benchmarks produced mismatched output — results are not comparable**"
 
 {
-	echo "# Pluma vs Python, Ruby, Node, Bun, Deno, LuaJIT, and Haskell — benchmark results"
+	echo "# Pluma vs Python, Ruby, Node, Bun, and Deno — benchmark results"
 	echo
 	echo "_Best of $RUNS runs, wall-clock seconds (lower is better). Generated $(date '+%Y-%m-%d %H:%M:%S %Z')._"
 	echo
@@ -317,17 +280,20 @@ overall="every implementation agreed on every output"
 	echo "| node | $node_ver |"
 	echo "| bun | $bun_ver |"
 	echo "| deno | $deno_ver |"
-	echo "| luajit | $luajit_ver |"
-	echo "| ghc | $ghc_ver |"
 	echo
 	echo "## Results"
 	echo
-	echo "| benchmark | exercises | pluma-v8 | python3 | ruby | node | bun | deno | luajit | haskell | vs best | output |"
-	echo "|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|:--:|"
+	echo "| benchmark | exercises | pluma-v8 | pluma-src | python3 | ruby | node | bun | deno | vs best | output |"
+	echo "|---|---|--:|--:|--:|--:|--:|--:|--:|--:|:--:|"
 	printf '%s' "$md_rows"
 	echo
+	echo "\`pluma-v8\` runs a prebuilt WasmGC artifact (\`pluma run <out>.wasm\`); \`pluma-src\` runs from source"
+	echo "(\`pluma run <prog>.pa\`), so its time folds the full tokenize/parse/analyze/IR/wasm pipeline into every"
+	echo "run — the gap between the two columns is that compile cost. \`vs best\` compares the deploy artifact"
+	echo "(\`pluma-v8\`) against the fastest other language."
+	echo
 	echo "One-time build cost, summed across all ${#BENCHES[@]} benchmarks and **not** included in the per-run times above:"
-	echo "Pluma compile-to-WasmGC **${build_total}s**; Haskell \`ghc -O2\` **${hs_build_total}s**."
+	echo "Pluma compile-to-WasmGC **${build_total}s**."
 	echo
 	echo "Regenerate with \`competition/run.sh [RUNS]\`."
 } >"$REPORT"

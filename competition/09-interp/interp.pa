@@ -13,15 +13,15 @@ enum expr {
 # All arithmetic is mod 1000003 so every operand stays a small non-negative
 # integer (exact in float64), so every language agrees bit-for-bit.
 def eval = fun e {
-	when e is lit v {
+	when e is expr.lit v {
 		v
-	} is add l r {
+	} is expr.add l r {
 		(eval l + eval r) % 1000003
-	} is sub l r {
+	} is expr.sub l r {
 		(eval l - eval r + 1000003) % 1000003
-	} is mul l r {
+	} is expr.mul l r {
 		eval l * eval r % 1000003
-	} is neg x {
+	} is expr.neg x {
 		(1000003 - eval x) % 1000003
 	}
 }

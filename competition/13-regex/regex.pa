@@ -1,0 +1,31 @@
+# Scan a large body of generated text with a regular expression — the pure-Pluma
+# backtracking matcher (no native regex engine) against every other language's
+# C-level regex. Each line carries three `key=digits` pairs separated by text
+# that almost-matches (a bare word, then `=`-less noise) so the matcher does real
+# backtracking on the failing starts, not just clean hits.
+#
+# Output is two integers: the number of matches found, and the summed byte-length
+# of every match, taken mod 1000000007. Length is ASCII so it agrees across
+# byte-, char-, and UTF-16-indexed engines.
+
+use std/list
+use std/regex
+use std/string
+
+def line = fun i {
+	let a = i * 7 % 100000
+	let b = i * 13 % 100000
+	let c = i * 31 % 100000
+	"user=$(to-string a) noise word here id=$(to-string b) and ok=$(to-string c)"
+}
+
+def main = fun {
+	let text = string.join (list.build 12000 line) "\n"
+	let ms = regex.find-all `<key: letter+> "=" <val: digit+>` text
+	let count = list.length ms
+	let total = list.fold ms 0 fun acc m {
+		(acc + m.end - m.start) % 1000000007
+	}
+	print (to-string count)
+	print (to-string total)
+}
