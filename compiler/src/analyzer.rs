@@ -95,6 +95,14 @@ pub struct Analyzer<'compiler> {
 	// fingerprint), produced by `validate_remote_endpoint` post-solve and drained
 	// by the compiler into `Compiler::rpc_endpoints` for the lowerer.
 	endpoint_meta: Vec<crate::rpc::RpcEndpointMeta>,
+	// The solved substitution for the module currently being analyzed, stashed
+	// once unification finishes so the post-solve passes that derive `wire` shapes
+	// (`build_wire_shape`, reached from discharge and from `remote def` validation)
+	// can resolve variant payloads. An alias used as an enum variant payload is
+	// stored in `enum_defs` as the alias's still-unsolved type var; applying this
+	// resolves it to the real type without mutating the shared `enum_defs` that
+	// construction/exhaustiveness checks read. `None` outside a solved module.
+	solved_subst: Option<Substitution>,
 	// Per-def class constraints from resolve_forwarded — one entry per
 	// dict param of the def's scheme. Used to build cross-module
 	// `value_constraints` exports so importing modules can stitch in
@@ -552,6 +560,7 @@ impl<'compiler> Analyzer<'compiler> {
 			fresh_class_constraints: Vec::new(),
 			remote_endpoints: Vec::new(),
 			endpoint_meta: Vec::new(),
+			solved_subst: None,
 			def_value_constraints: HashMap::new(),
 			def_where_clauses: HashMap::new(),
 			prelude_exports: None,
@@ -879,6 +888,10 @@ impl<'compiler> Analyzer<'compiler> {
 					dispatch_cell: c.dispatch_cell,
 				});
 			}
+			// Stash the solved substitution so the wire-shape derivation reached from
+			// `discharge` (and, below, from `remote def` validation) can resolve enum
+			// variant payloads that are alias type vars. Cleared at the end of `analyze`.
+			self.solved_subst = Some(substitution.clone());
 			let _d0 = std::time::Instant::now();
 			self.discharge(&class_constraints);
 			_t_discharge = _d0.elapsed();
@@ -926,6 +939,10 @@ impl<'compiler> Analyzer<'compiler> {
 			};
 			self.validate_remote_endpoint(range, &name, &resolved);
 		}
+
+		// Done with the post-solve wire-shape derivations; drop the stashed
+		// substitution so nothing reads a stale one before the next module solves.
+		self.solved_subst = None;
 
 		// Build the module's exports. Values come from the inferred types of
 		// each top-level expr def. Aliases are resolved by applying the
@@ -1017,9 +1034,24 @@ impl<'compiler> Analyzer<'compiler> {
 										.variants
 										.iter()
 										.map(|(n, params)| {
+											// Resolve the solved substitution *before* canonicalizing the
+											// enum's own params. A variant payload that is an alias was
+											// captured as the alias's fresh type var (aliases resolve to
+											// their underlying type only by later unification); applying
+											// the substitution turns it into the concrete payload, so an
+											// importer derives `wire` (and reads the real shape) for an
+											// enum like `e { v (list some-alias) }` rather than seeing a
+											// dangling var. The enum's generic params aren't in the
+											// substitution, so `canonicalize` still maps them to Var(0..).
 											let mapped = params
 												.iter()
-												.map(|p| canonicalize.apply_to_type(p))
+												.map(|p| {
+													let solved = match &substitution {
+														Some(s) => s.apply_to_type(p),
+														None => p.clone(),
+													};
+													canonicalize.apply_to_type(&solved)
+												})
 												.collect();
 											(n.clone(), mapped)
 										})
@@ -7307,7 +7339,14 @@ impl<'compiler> Analyzer<'compiler> {
 				for (vname, payloads) in &variants_src {
 					let mut fields = Vec::with_capacity(payloads.len());
 					for p in payloads {
-						let concrete = subst_type(p, &mapping);
+						// First substitute the enum's own generic params, then resolve any
+						// remaining vars against the solved substitution — a variant payload
+						// that is a type alias is stored here as the alias's unsolved var, and
+						// it isn't an enum param, so only the solved substitution resolves it.
+						let mut concrete = subst_type(p, &mapping);
+						if let Some(s) = &self.solved_subst {
+							concrete = s.apply_to_type(&concrete);
+						}
 						fields.push(self.build_wire_shape(&concrete, visiting)?);
 					}
 					variants.push((vname.clone(), fields));

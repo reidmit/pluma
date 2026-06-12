@@ -1,0 +1,46 @@
+# An enum whose variant payloads are type *aliases* (a record alias, and a list of
+# one) must derive `wire`. An alias binds to a fresh type var at registration and is
+# resolved to its underlying type only by later unification, so the payload is stored
+# as that var; `wire`-shape derivation resolves it against the solved substitution.
+# Same-module here — the variant is both defined and encoded in this file.
+
+use std/hex
+use std/list
+
+alias point {x :: int, y :: string}
+
+enum shape {
+	dot point
+	path (list point)
+	blank
+}
+
+def roundtrip :: fun shape -> result shape wire-error = fun s {
+	wire.decode (wire.encode s)
+}
+
+def describe :: fun shape -> string = fun s {
+	when s is shape.dot p {
+		"dot $(to-string p.x) $(p.y)"
+	} is shape.path ps {
+		"path of $(to-string (list.length ps))"
+	} is shape.blank {
+		"blank"
+	}
+}
+
+def check :: fun shape -> string = fun s {
+	when roundtrip s is ok back {
+		describe back
+	} is err _e {
+		"decode failed"
+	}
+}
+
+def main = fun {
+	let dot = shape.dot {x: 7, y: "north"}
+	print "raw: $(hex.encode (wire.encode dot))"
+	print (check dot)
+	print (check (shape.path [{x: 1, y: "a"}, {x: 2, y: "b"}]))
+	print (check shape.blank)
+}

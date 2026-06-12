@@ -24,6 +24,7 @@ pub struct TupleRowSolution {
 	pub tail: Option<usize>,
 }
 
+#[derive(Clone)]
 pub struct Substitution {
 	pub solutions: HashMap<usize, Type>,
 	// Solutions for record row variables — distinct namespace from `solutions`.

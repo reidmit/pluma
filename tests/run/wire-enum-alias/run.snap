@@ -1,0 +1,12 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+raw: 000e056e6f727468
+dot 7 north
+path of 2
+blank
+== stderr ==
