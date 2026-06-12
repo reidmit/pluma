@@ -1,0 +1,45 @@
+# The RPC contract — compiled into BOTH artifacts. On the server each `remote def`
+# body is the real handler: it opens the database and runs the query. On the client
+# the compiler replaces the body with a transport stub (encode args → POST
+# /rpc/<name> → decode reply), so `api.list-sightings ()` reads like a local async
+# call on both ends. Because the database work lives only inside these bodies,
+# `std/sys/db` never enters the browser build (the stub makes it unreachable).
+
+use std/task
+use db
+use model
+
+# The Logbook feed.
+public remote def list-sightings :: fun nothing -> task (list model.sighting) = fun {
+	db.with-db fun conn {
+		db.recent conn
+	}
+}
+
+# The Field Guide tally (server-side GROUP BY).
+public remote def tally :: fun nothing -> task (list model.species-stat) = fun {
+	db.with-db fun conn {
+		db.tally conn
+	}
+}
+
+# One sighting and its notes.
+public remote def get-detail :: fun int -> task (option model.detail) = fun id {
+	db.with-db fun conn {
+		db.detail conn id
+	}
+}
+
+# Log a new sighting; returns the stored row (with its assigned id + date).
+public remote def add-sighting :: fun model.draft -> task model.sighting = fun d {
+	db.with-db fun conn {
+		db.insert-sighting conn d
+	}
+}
+
+# Add a note to a sighting; returns the stored note.
+public remote def add-note :: fun int string -> task (option model.note) = fun id body {
+	db.with-db fun conn {
+		db.insert-note conn id body
+	}
+}

@@ -1,0 +1,71 @@
+# The server half. One `std/sys/http` server does two jobs:
+#   - GET <page>  → the server-side-rendered document for that route. It fetches the
+#                   page's data in-process (the `remote def`s are the real handlers
+#                   here), renders the shared `ui.app` to HTML, and ships a fully
+#                   styled, data-filled first paint the client then hydrates.
+#   - /rpc/*      → `rpc.dispatch`, the route table the compiler synthesises from
+#                   `api.pa`'s `remote def`s.
+#
+# `pluma build` emits this to `server.wasm`; `pluma dev` runs it as a subprocess,
+# proxying `/rpc/*` to it and forwarding each page request for SSR.
+
+use std/css
+use std/hex
+use std/rpc
+use std/signal
+use std/string
+use std/task
+use std/view
+use std/sys/http
+use model
+use route
+use ui
+
+def handler :: fun http.request -> task http.response = fun req {
+	if string.starts-with req.path "/rpc/" {
+		rpc.dispatch req
+	} else {
+		let r = route.parse req.path
+		task.map (ui.load-data r) fun data {
+			http.html (status-for r) (document r data)
+		}
+	}
+}
+
+def status-for :: fun route -> int = fun r {
+	when r is route.unknown {
+		404
+	} else {
+		200
+	}
+}
+
+# Render the page to a full HTML document. The body is built first so that walking
+# the view registers every `view.styled` rule in the collector; `css.style-tag ()`
+# then inlines exactly those used rules into the <head>. `<base href="/">` keeps the
+# loader's relative `app.wasm` fetch resolving from the root on nested routes like
+# `/sightings/42`.
+#
+# The `pluma-boot` script carries this page's data to the client as a `wire`-encoded,
+# hex-wrapped payload (hex needs no HTML-escaping). The client decodes it and hydrates
+# from it directly — no refetch over RPC. It sits in <head>, outside the hydrated body
+# root, so it doesn't perturb the view/DOM index alignment.
+def document :: fun route model.page-data -> string = fun r data {
+	let route-sig = signal.new r
+	let data-sig = signal.new data
+	let body = view.to-string (ui.app route-sig data-sig no-nav)
+	let boot = hex.encode (wire.encode data)
+	"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><base href=\"/\"><title>Aviary · Field Logbook</title><style>$(reset-css)</style>$(css.style-tag ())<script id=\"pluma-boot\" type=\"application/pluma\">$(boot)</script></head><body>$(body)<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+}
+
+# Navigation only happens in the browser; during SSR the handlers never run, so the
+# server passes a callback that does nothing.
+def no-nav :: fun route -> nothing = fun _r {
+	()
+}
+
+def reset-css :: string = "*{box-sizing:border-box}html,body{margin:0}"
+
+def main = fun {
+	http.serve "127.0.0.1:8080" handler
+}

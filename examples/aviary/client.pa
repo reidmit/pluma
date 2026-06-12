@@ -1,0 +1,63 @@
+# The browser half. It boots by hydrating the document the server rendered for the
+# current URL, then takes over navigation client-side.
+#
+#   1. Read the current path (`dom.path ()`), parse the route, and fetch that page's
+#      data — the same data the server already rendered — so the view the client
+#      builds matches the server's DOM exactly. Then `render.hydrate` adopts those
+#      nodes (wiring handlers + reactive bits) instead of rebuilding them.
+#   2. `navigate` makes in-app links soft: `pushState` the new URL and refetch the
+#      page's data into the signals, so the page region swaps without a full reload.
+#   3. `on-pop-state` keeps the browser's back/forward buttons in sync.
+#
+# Direct visits and reloads still go through the server (each route is SSR'd), so
+# every page is server-rendered on entry and hydrated here.
+
+use std/signal
+use std/task
+use std/view
+use std/web/dom
+use std/web/render
+use model
+use route
+use ui
+
+# Switch to route `r`: show its shell immediately (so nav feels instant), then fetch
+# its data into the signal the views read. Used for in-app navigation, which has no
+# embedded payload (only the initial server-rendered page does).
+def go :: fun (signal route) (signal model.page-data) route -> nothing = fun route-sig data-sig r {
+	signal.set route-sig r
+	task.spawn (task.map (ui.load-data r) fun data {
+		signal.set data-sig data
+	})
+}
+
+# Wire up the live signals, navigation, and back/forward, then hydrate the server's
+# DOM. Shared by both boot paths.
+def start :: fun route model.page-data -> task nothing = fun r0 data0 {
+	let route-sig = signal.new r0
+	let data-sig = signal.new data0
+	let navigate = fun r {
+		dom.push-state (route.to-path r)
+		go route-sig data-sig r
+	}
+	dom.on-pop-state fun _e {
+		go route-sig data-sig (route.parse (dom.path ()))
+	}
+	render.hydrate (dom.body ()) fun {
+		ui.app route-sig data-sig navigate
+	}
+}
+
+def main = fun {
+	let r0 = route.parse (dom.path ())
+	# The fast path: the server embedded this page's data, so decode it and hydrate
+	# immediately — no round-trip. If it's missing (a plain client-only shell, e.g. the
+	# dev server fell back to CSR), fetch the data over RPC first instead.
+	when render.boot-data "pluma-boot" is ok data0 {
+		start r0 data0
+	} is err _e {
+		task.then (ui.load-data r0) fun data0 {
+			start r0 data0
+		}
+	}
+}

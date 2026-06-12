@@ -1,0 +1,85 @@
+# The page routes, shared by every artifact. This module is eponymous: its
+# principal type is `route`, so `use route` brings the bare type into scope and
+# `route.logbook` / `route.parse` read naturally on both sides.
+#
+# `parse` turns a URL path (`dom.path ()` on the client, `req.path` on the server)
+# into a `route`; `to-path` is its inverse, used for `<a href>`s and `pushState`.
+
+use std/list
+use std/string
+
+public enum route {
+	logbook
+	field-guide
+	sighting int
+	unknown
+}
+
+# Path → route. Splitting on "/" and dropping the empty segments folds "/",
+# "/species" and "/sightings/42" into one rule regardless of trailing slashes.
+public def parse :: fun string -> route = fun raw {
+	let parts = list.filter (string.split raw "/") fun seg {
+		!string.is-empty seg
+	}
+	let n = list.length parts
+	if n == 0 {
+		route.logbook
+	} else if n == 1 {
+		if list.get parts 0 == "species" {
+			route.field-guide
+		} else {
+			route.unknown
+		}
+	} else if n == 2 {
+		if list.get parts 0 == "sightings" {
+			when string.to-int (list.get parts 1) is ok id {
+				route.sighting id
+			} is err _e {
+				route.unknown
+			}
+		} else {
+			route.unknown
+		}
+	} else {
+		route.unknown
+	}
+}
+
+# Route → the canonical path the server renders and the client navigates to.
+public def to-path :: fun route -> string = fun r {
+	when r is route.logbook {
+		"/"
+	} is route.field-guide {
+		"/species"
+	} is route.sighting id {
+		"/sightings/$(to-string id)"
+	} is route.unknown {
+		"/"
+	}
+}
+
+# Whether two routes share a nav section — used to light up the active nav link.
+# A sighting-detail page matches neither top-level link, so nothing lights up there.
+public def same-section :: fun route route -> bool = fun a b {
+	when a is route.logbook {
+		when b is route.logbook {
+			true
+		} else {
+			false
+		}
+	} is route.field-guide {
+		when b is route.field-guide {
+			true
+		} else {
+			false
+		}
+	} is route.sighting _ai {
+		when b is route.sighting _bi {
+			true
+		} else {
+			false
+		}
+	} is route.unknown {
+		false
+	}
+}

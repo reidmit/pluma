@@ -1,0 +1,134 @@
+# The server-only data layer: SQLite schema, seed, and the typed queries the RPC
+# handlers call. It uses `std/sys/db` (the off-thread SQLite worker) and `std/sql`
+# (injection-proof value binding). Nothing here is reachable from the browser — the
+# `remote def`s in `api.pa` that call these become network stubs on the client, so
+# this whole module is pruned from the web build.
+
+use std/list
+use std/sql
+use std/task
+use std/sys/db
+use model
+
+def db-path :: string = "aviary.db"
+
+# Schema as idempotent, versioned migrations — applied on every connection, but each
+# version runs at most once (tracked in a migrations table by `db.migrate`).
+def schema :: list db.migration = [
+	{
+		version: 1,
+		up: "CREATE TABLE sightings (id INTEGER PRIMARY KEY AUTOINCREMENT, species TEXT NOT NULL, place TEXT NOT NULL, seen INTEGER NOT NULL, observed TEXT NOT NULL)",
+	},
+	{
+		version: 2,
+		up: "CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, sighting_id INTEGER NOT NULL, body TEXT NOT NULL)",
+	},
+]
+
+# A handful of starter rows so a fresh database isn't empty. `date('now', ...)` lets
+# SQLite stamp the observed date, so the seed needs no clock from Pluma.
+def seed-sql :: string = "INSERT INTO sightings (species, place, seen, observed) VALUES ('Cedar Waxwing', 'Riverside Park', 6, date('now','-4 days')); INSERT INTO sightings (species, place, seen, observed) VALUES ('Great Blue Heron', 'Mill Pond', 1, date('now','-3 days')); INSERT INTO sightings (species, place, seen, observed) VALUES ('American Goldfinch', 'Community Garden', 4, date('now','-2 days')); INSERT INTO sightings (species, place, seen, observed) VALUES ('Cedar Waxwing', 'Orchard Trail', 11, date('now','-1 days')); INSERT INTO sightings (species, place, seen, observed) VALUES ('Belted Kingfisher', 'Mill Pond', 2, date('now')); INSERT INTO notes (sighting_id, body) VALUES (1, 'A loose flock stripping berries from a juniper.'); INSERT INTO notes (sighting_id, body) VALUES (2, 'Stalking the shallows at dawn, motionless for minutes.');"
+
+# Open the database, bring the schema up to date, seed it if empty, run `body`, and
+# close. Every handler runs inside one of these, so each request is self-contained
+# (the pinned SQLite worker serialises them, so there's no lock contention).
+public def with-db :: fun (fun db.connection -> task a string) -> task a string = fun body {
+	try conn = db.open db-path
+	try _ = db.migrate conn schema
+	try _ = seed-if-empty conn
+	try out = body conn
+	try _ = db.close conn
+	task.return out
+}
+
+def seed-if-empty :: fun db.connection -> task nothing string = fun conn {
+	try rows = db.execute conn "SELECT COUNT(*) AS n FROM sightings" []
+	let n = when list.head rows is some r {
+		sql.get-int r "n" ?? 0
+	} is none {
+		0
+	}
+	if n == 0 {
+		db.batch conn seed-sql
+	} else {
+		task.return ()
+	}
+}
+
+# Decode one `sightings` row into the wire record. `??` supplies a default if a
+# column is missing or the wrong type, so a decode never fails the whole request.
+def to-sighting :: fun sql.row -> model.sighting = fun r {
+	{
+		id: sql.get-int r "id" ?? 0,
+		species: sql.get-text r "species" ?? "?",
+		place: sql.get-text r "place" ?? "?",
+		count: sql.get-int r "seen" ?? 0,
+		date: sql.get-text r "observed" ?? "",
+	}
+}
+
+# Every sighting, newest first.
+public def recent :: fun db.connection -> task (list model.sighting) string = fun conn {
+	try rows = db.execute conn "SELECT id, species, place, seen, observed FROM sightings ORDER BY id DESC" []
+	task.return (list.map rows to-sighting)
+}
+
+# The Field Guide tally: per-species counts, ranked by total birds. A GROUP BY that
+# would be tedious and error-prone to assemble by hand on the client.
+public def tally :: fun db.connection -> task (list model.species-stat) string = fun conn {
+	try rows = db.execute conn "SELECT species, COUNT(*) AS sightings, SUM(seen) AS birds FROM sightings GROUP BY species ORDER BY birds DESC, species ASC" []
+	task.return (list.map rows fun r {
+		{
+			species: sql.get-text r "species" ?? "?",
+			sightings: sql.get-int r "sightings" ?? 0,
+			birds: sql.get-int r "birds" ?? 0,
+		}
+	})
+}
+
+# One sighting and its notes, or `none` if the id is unknown.
+public def detail :: fun db.connection int -> task (option model.detail) string = fun conn id {
+	try rows = db.execute conn "SELECT id, species, place, seen, observed FROM sightings WHERE id = ?" [
+		sql.int id,
+	]
+	when list.head rows is some r {
+		try nrows = db.execute conn "SELECT id, body FROM notes WHERE sighting_id = ? ORDER BY id" [
+			sql.int id,
+		]
+		let notes = list.map nrows fun nr {
+			{id: sql.get-int nr "id" ?? 0, body: sql.get-text nr "body" ?? ""}
+		}
+		task.return (some {sighting: to-sighting r, notes})
+	} is none {
+		task.return none
+	}
+}
+
+# Insert a sighting and hand back the stored row (id + server-stamped date) via
+# SQLite's `RETURNING`, so the client can drop it straight into the list.
+public def insert-sighting :: fun db.connection model.draft -> task model.sighting string = fun conn d {
+	try rows = db.execute conn "INSERT INTO sightings (species, place, seen, observed) VALUES (?, ?, ?, date('now')) RETURNING id, species, place, seen, observed" [
+		sql.text d.species,
+		sql.text d.place,
+		sql.int d.count,
+	]
+	when list.head rows is some r {
+		task.return (to-sighting r)
+	} is none {
+		task.fail "could not insert sighting"
+	}
+}
+
+# Append a note to a sighting, returning the stored note (or `none` if the parent id
+# is unknown — though the FK isn't enforced here, an empty RETURNING would say so).
+public def insert-note :: fun db.connection int string -> task (option model.note) string = fun conn id body {
+	try rows = db.execute conn "INSERT INTO notes (sighting_id, body) VALUES (?, ?) RETURNING id, body" [
+		sql.int id,
+		sql.text body,
+	]
+	when list.head rows is some r {
+		task.return (some {id: sql.get-int r "id" ?? 0, body: sql.get-text r "body" ?? ""})
+	} is none {
+		task.return none
+	}
+}

@@ -1,0 +1,28 @@
+# The data the app moves around — the records that cross the RPC wire and the
+# `page-data` sum the views render. Pure types, no imports, so both the server and
+# the browser share one definition.
+
+# One logged bird sighting.
+public alias sighting {id :: int, species :: string, place :: string, count :: int, date :: string}
+
+# A free-text note attached to a sighting.
+public alias note {id :: int, body :: string}
+
+# A row of the Field Guide tally: how a species adds up across every sighting.
+public alias species-stat {species :: string, sightings :: int, birds :: int}
+
+# A sighting plus its notes — the detail page's payload.
+public alias detail {sighting :: sighting, notes :: list note}
+
+# The form payload for logging a new sighting (the server assigns id + date).
+public alias draft {species :: string, place :: string, count :: int}
+
+# What a page needs to render, tagged by which page it is. `load-data` fetches the
+# right variant for a route; the view layer matches on it. Local to the app (it
+# never crosses the wire — each variant's contents do, via their own endpoint).
+public enum page-data {
+	logbook-data (list sighting)
+	guide-data (list species-stat)
+	detail-data detail
+	missing
+}
