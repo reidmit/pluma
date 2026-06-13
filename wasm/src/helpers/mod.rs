@@ -1058,6 +1058,18 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		deps: &[],
 		build: |_| bytes::build_join_fn(),
 	},
+	HelperDef {
+		id: H::HtmlEscapeText,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |_| bytes::build_html_escape_fn(false),
+	},
+	HelperDef {
+		id: H::HtmlEscapeAttr,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |_| bytes::build_html_escape_fn(true),
+	},
 ];
 
 /// The helper a builtin tag lowers to, if any. These are the builtins implemented
@@ -1084,6 +1096,9 @@ pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 		// `string.join` / `bytes.join`: the single-pass join helper (both element
 		// kinds share the `$str` struct, so one helper serves both).
 		"string-join" | "bytes-join" => H::Join,
+		// Single-pass HTML escapers (text escapes `& < >`, attr also escapes `"`).
+		"html-escape-text" => H::HtmlEscapeText,
+		"html-escape-attr" => H::HtmlEscapeAttr,
 		// dict table ops (see `helpers/dict.rs`): construct / mutate / probe the
 		// mutable open-addressing table.
 		"dict-empty" => H::DictEmpty,

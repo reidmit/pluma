@@ -272,29 +272,12 @@ def is-void :: fun string -> bool = fun tag {
 	list.contains void-tags tag
 }
 
-# Replace `pat` with `repl` only when `pat` actually occurs -- the `contains`
-# scan is allocation-free, so clean text (the common case) skips `replace`'s
-# split+join entirely.
-def replace-if :: fun string string string -> string = fun s pat repl {
-	if string.contains s pat {
-		string.replace s pat repl
-	} else {
-		s
-	}
-}
+# HTML-escape text content (`& < >`) and attribute values (also `"`) in one pass
+# over the bytes -- one allocation, no intermediate strings, versus a chain of
+# `string.replace` split+joins.
+def escape-text :: fun string -> string = built-in "html-escape-text"
 
-def escape-text :: fun string -> string = fun s {
-	let a = replace-if s "&" "&amp;"
-	let b = replace-if a "<" "&lt;"
-	replace-if b ">" "&gt;"
-}
-
-def escape-attr :: fun string -> string = fun s {
-	let a = replace-if s "&" "&amp;"
-	let b = replace-if a "<" "&lt;"
-	let c = replace-if b ">" "&gt;"
-	replace-if c "\"" "&quot;"
-}
+def escape-attr :: fun string -> string = built-in "html-escape-attr"
 
 # Render one attribute, EXCEPT the `style`- and `class`-contributing ones -- those
 # are gathered separately (`style-fragment` / `class-fragment`) and merged into a
@@ -441,21 +424,45 @@ def render-attrs :: fun (list attribute) -> string = fun attrs {
 def render-attrs-nonempty :: fun (list attribute) -> string = fun attrs {
 	let class-frags = fragments attrs class-fragment
 	let style-frags = fragments attrs style-fragment
-	let first-class = first-contributor attrs class-fragment
-	let first-style = first-contributor attrs style-fragment
-	# Render in source order: each attribute emits its own markup, EXCEPT the merged
-	# `class`/`style`, which lands once at its first contributor (later contributors --
-	# and the gathered handlers -- emit nothing via `render-attr`). No single attribute
-	# feeds both, so the two first-contributor positions never collide.
-	string.join (list.map (list.enumerate attrs) fun p {
-		if at-index first-class p.0 {
-			" class=\"$(escape-attr (string.join class-frags " "))\""
-		} else if at-index first-style p.0 {
-			" style=\"$(escape-attr (string.join style-frags "; "))\""
+	# Fast path -- the overwhelmingly common case: at most one `class` and at most
+	# one `style` contributor, so nothing needs merging. Render each attribute in
+	# order with its sole `class`/`style` inlined, skipping the `first-contributor`
+	# scans and the `enumerate` the merge path below needs. Output is identical:
+	# joining a single fragment is that fragment.
+	if (list.length class-frags < 2) && (list.length style-frags < 2) {
+		string.join (list.map attrs render-attr-solo) ""
+	} else {
+		let first-class = first-contributor attrs class-fragment
+		let first-style = first-contributor attrs style-fragment
+		# Render in source order: each attribute emits its own markup, EXCEPT the merged
+		# `class`/`style`, which lands once at its first contributor (later contributors --
+		# and the gathered handlers -- emit nothing via `render-attr`). No single attribute
+		# feeds both, so the two first-contributor positions never collide.
+		string.join (list.map (list.enumerate attrs) fun p {
+			if at-index first-class p.0 {
+				" class=\"$(escape-attr (string.join class-frags " "))\""
+			} else if at-index first-style p.0 {
+				" style=\"$(escape-attr (string.join style-frags "; "))\""
+			} else {
+				render-attr p.1
+			}
+		}) ""
+	}
+}
+
+# Render one attribute with a sole `class`/`style` contributor inlined (the fast
+# path, where there's at most one of each so no merging applies). A non-class/style
+# attribute falls through to `render-attr`.
+def render-attr-solo :: fun attribute -> string = fun a {
+	when class-fragment a is some v {
+		" class=\"$(escape-attr v)\""
+	} else {
+		when style-fragment a is some s {
+			" style=\"$(escape-attr s)\""
 		} else {
-			render-attr p.1
+			render-attr a
 		}
-	}) ""
+	}
 }
 
 # The index of the first attribute that contributes a `class`/`style` fragment, if any.

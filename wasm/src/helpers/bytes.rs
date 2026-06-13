@@ -1,7 +1,7 @@
 // Bytes helpers: tabulating builder + byte-array concat
 // (`__bytes_build`, `__bytesconcat`).
 
-use crate::helpers::wat::Wat;
+use crate::helpers::wat::{Local, Wat};
 use crate::types;
 use wasm_encoder::{Function, ValType};
 
@@ -156,6 +156,153 @@ pub(crate) fn build_join_fn() -> Function {
 	});
 
 	w.local_get(dst);
+	w.finish()
+}
+
+// HTML special characters and the entities they escape to.
+const C_AMP: i32 = b'&' as i32;
+const C_LT: i32 = b'<' as i32;
+const C_GT: i32 = b'>' as i32;
+const C_QUOT: i32 = b'"' as i32;
+const E_AMP: &[u8] = b"&amp;";
+const E_LT: &[u8] = b"&lt;";
+const E_GT: &[u8] = b"&gt;";
+const E_QUOT: &[u8] = b"&quot;";
+
+/// `out_len += escaped-byte-length(b)` — the pass-1 sizing branch.
+fn escape_size(w: &mut Wat, b: Local, out_len: Local, quotes: bool) {
+	let add = |w: &mut Wat, k: i32| {
+		w.local_get(out_len).i32(k).i32_add().local_set(out_len);
+	};
+	w.local_get(b).i32(C_AMP).i32_eq().if_else(
+		|w| add(w, E_AMP.len() as i32),
+		|w| {
+			w.local_get(b).i32(C_LT).i32_eq().if_else(
+				|w| add(w, E_LT.len() as i32),
+				|w| {
+					w.local_get(b).i32(C_GT).i32_eq().if_else(
+						|w| add(w, E_GT.len() as i32),
+						|w| {
+							if quotes {
+								w.local_get(b)
+									.i32(C_QUOT)
+									.i32_eq()
+									.if_else(|w| add(w, E_QUOT.len() as i32), |w| add(w, 1));
+							} else {
+								add(w, 1);
+							}
+						},
+					);
+				},
+			);
+		},
+	);
+}
+
+/// Append `lit`'s bytes to `out` at cursor `j`, advancing `j`.
+fn put_lit(w: &mut Wat, out: Local, j: Local, lit: &[u8]) {
+	for &c in lit {
+		w.local_get(out)
+			.local_get(j)
+			.i32(c as i32)
+			.array_set(types::T_BYTES);
+		w.local_get(j).i32(1).i32_add().local_set(j);
+	}
+}
+
+/// Append the raw byte in `b` to `out` at cursor `j`, advancing `j`.
+fn put_byte(w: &mut Wat, out: Local, j: Local, b: Local) {
+	w.local_get(out)
+		.local_get(j)
+		.local_get(b)
+		.array_set(types::T_BYTES);
+	w.local_get(j).i32(1).i32_add().local_set(j);
+}
+
+/// Write `b`'s escaped form into `out` at cursor `j` — the pass-2 fill branch.
+fn escape_write(w: &mut Wat, b: Local, out: Local, j: Local, quotes: bool) {
+	w.local_get(b).i32(C_AMP).i32_eq().if_else(
+		|w| put_lit(w, out, j, E_AMP),
+		|w| {
+			w.local_get(b).i32(C_LT).i32_eq().if_else(
+				|w| put_lit(w, out, j, E_LT),
+				|w| {
+					w.local_get(b).i32(C_GT).i32_eq().if_else(
+						|w| put_lit(w, out, j, E_GT),
+						|w| {
+							if quotes {
+								w.local_get(b)
+									.i32(C_QUOT)
+									.i32_eq()
+									.if_else(|w| put_lit(w, out, j, E_QUOT), |w| put_byte(w, out, j, b));
+							} else {
+								put_byte(w, out, j, b);
+							}
+						},
+					);
+				},
+			);
+		},
+	);
+}
+
+/// Build `__html_escape{_attr}(s) -> string`: HTML-escape `s` in a single linear
+/// pass — `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`, plus `"`→`&quot;` in attribute mode
+/// (`quotes`). Two passes over the bytes: one sizes the output exactly, one fills
+/// it — one allocation, no intermediate strings (versus the chain of `replace`
+/// split+joins it replaces). `quotes` is baked in at build time, so text mode emits
+/// no `"` branch.
+pub(crate) fn build_html_escape_fn(quotes: bool) -> Function {
+	let bv = types::T_BYTES;
+	let mut w = Wat::new(1);
+	let s = w.param(0);
+	let src = w.local(types::bytes_ref());
+	let n = w.local(ValType::I32);
+	let out_len = w.local(ValType::I32);
+	let out = w.local(types::bytes_ref());
+	let i = w.local(ValType::I32);
+	let j = w.local(ValType::I32);
+	let b = w.local(ValType::I32);
+
+	// src = s.bytes; n = array.len(src).
+	w.local_get(s)
+		.ref_cast(types::T_STR)
+		.struct_get(types::T_STR, 1)
+		.local_set(src);
+	w.local_get(src).array_len().local_set(n);
+
+	// Pass 1: out_len = Σ escaped-length(src[i]).
+	w.i32(0).local_set(out_len);
+	w.i32(0).local_set(i);
+	w.block("sz_brk", |w| {
+		w.loop_("sz_lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("sz_brk");
+			w.local_get(src).local_get(i).array_get_u(bv).local_set(b);
+			escape_size(w, b, out_len, quotes);
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("sz_lp");
+		});
+	});
+
+	// out = new bytes(out_len).
+	w.local_get(out_len).array_new_default(bv).local_set(out);
+
+	// Pass 2: write each byte/entity into `out` at cursor `j`.
+	w.i32(0).local_set(j);
+	w.i32(0).local_set(i);
+	w.block("fl_brk", |w| {
+		w.loop_("fl_lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("fl_brk");
+			w.local_get(src).local_get(i).array_get_u(bv).local_set(b);
+			escape_write(w, b, out, j, quotes);
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("fl_lp");
+		});
+	});
+
+	w.i32(types::TAG_STR)
+		.local_get(out)
+		.struct_new(types::T_STR);
 	w.finish()
 }
 

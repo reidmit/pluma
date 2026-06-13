@@ -1680,6 +1680,8 @@ impl<'a> FnEmitter<'a> {
 			|| tag == "cancel-sub"
 			|| tag == "rpc-stream-open"
 			|| tag == "rpc-stream-close"
+			|| tag == "html-escape-text"
+			|| tag == "html-escape-attr"
 		{
 			let helper = match tag {
 				"list-build" => self.runtime.idx(Helper::ListBuild),
@@ -1692,6 +1694,8 @@ impl<'a> FnEmitter<'a> {
 				// aborts it. Both build a Pure `$task` (the scheduler runs it later).
 				"rpc-stream-open" => self.runtime.idx(Helper::RpcStreamOpen),
 				"rpc-stream-close" => self.runtime.idx(Helper::RpcStreamClose),
+				"html-escape-text" => self.runtime.idx(Helper::HtmlEscapeText),
+				"html-escape-attr" => self.runtime.idx(Helper::HtmlEscapeAttr),
 				_ => self.runtime.idx(Helper::BytesBuild),
 			};
 			match helper {

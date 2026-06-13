@@ -524,13 +524,17 @@ pub(crate) enum Helper {
 	/// binary-tree `concat` join (O(k) intermediate allocations) on the hot string-
 	/// building paths (SSR, interpolation, serialization).
 	Join,
+	/// `__html_escape(s) -> string` — single-pass HTML text escape (`& < >`).
+	HtmlEscapeText,
+	/// `__html_escape_attr(s) -> string` — like `HtmlEscapeText`, also escaping `"`.
+	HtmlEscapeAttr,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 104;
+	pub(crate) const COUNT: usize = 106;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
