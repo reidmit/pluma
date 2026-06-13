@@ -268,14 +268,25 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::LocalSet(dl));
 			}
 			StmtKind::If(cond, t, e) => {
+				// Lower as the equivalent two-arm match (true → then, else → else):
+				// each branch ends in an unconditional `br` to a shared end block. That
+				// `br` truncates the stack to the end block's height, discarding any
+				// value a branch body leaves above it — the same discipline `match_stmt`
+				// relies on. A plain `if`/`else` (BlockType::Empty) would instead demand
+				// both branch blocks be exactly stack-neutral, which some lowered bodies
+				// (e.g. an `if` synthesized in a position whose arms leave a transient on
+				// the stack) are not.
+				let end_level = self.open_block();
+				let else_level = self.open_block();
 				self.atom(cond);
-				self.ins(Instruction::If(wasm_encoder::BlockType::Empty));
-				self.depth += 1;
+				self.ins(Instruction::I32Eqz);
+				self.ins(Instruction::BrIf(self.br_to(else_level)));
 				self.block(t);
-				self.ins(Instruction::Else);
+				self.ins(Instruction::Br(self.br_to(end_level)));
+				self.close_block(); // else_level: control lands here when !cond
 				self.block(e);
-				self.ins(Instruction::End);
-				self.depth -= 1;
+				self.ins(Instruction::Br(self.br_to(end_level)));
+				self.close_block(); // end_level
 			}
 			StmtKind::Loop(b) => {
 				let break_level = self.open_block();

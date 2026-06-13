@@ -85,10 +85,17 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 	//    a direct call); coercion makes boxing explicit so the emitter reads
 	//    i64/f64/i32 vs GC-ref straight off `var_reprs`.
 	let mut p = program.clone();
-	// Async lowering FIRST: cps-transform awaiting functions into poll fns and
-	// rewrite their bodies into `$task` constructors (so the Await-bodies never
-	// reach the emitter). Every program is driven by the scheduler — a fully sync
-	// `main` just returns a plain value the entry wrapper hands straight back.
+	// Fold boolean-literal matches (`if cond`/`while cond` lower to a `Match` on
+	// `cond` against `true`) into a two-way `If` on the unboxed condition — so the
+	// condition is never boxed into a `$bool` just for the matcher to read it
+	// straight back. Runs before async lowering so the CPS transform splits a clean
+	// `If` (which it handles natively) rather than a bool `Match`, and before loopify
+	// (which loopifies `If`-dispatched tail recursion identically to `Match`).
+	ir::simplify::fold_bool_matches(&mut p);
+	// Async lowering: cps-transform awaiting functions into poll fns and rewrite
+	// their bodies into `$task` constructors (so the Await-bodies never reach the
+	// emitter). Every program is driven by the scheduler — a fully sync `main` just
+	// returns a plain value the entry wrapper hands straight back.
 	async_lower::lower(&mut p);
 	ir::resolve::resolve_direct_calls(&mut p);
 	// Turn self-tail-recursion into a `Loop` over the params. Behavior-neutral; the

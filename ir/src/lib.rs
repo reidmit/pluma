@@ -27,6 +27,7 @@ pub mod lower;
 pub mod repr;
 pub mod resolve;
 pub mod reuse;
+pub mod simplify;
 pub mod types;
 
 pub use lower::{lower, lower_entry, lower_tests};

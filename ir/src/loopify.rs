@@ -45,37 +45,30 @@ fn loopify_fn(self_id: FuncId, f: &mut Function) {
 	if n == 0 {
 		return;
 	}
-	// The body is `head…, Match{…}` optionally followed by the dead `Return(Unit)`
-	// epilogue that tail-lowering appends. Locate the dispatching match.
+	// The body is `head…, <dispatch>` optionally followed by the dead `Return(Unit)`
+	// epilogue that tail-lowering appends. The dispatch is the catch-all `Match` a
+	// `when`/multi-arm `if` lowers to, or the two-way `If` a boolean `if`/`while`
+	// lowers to (after `simplify::fold_bool_matches`). Locate it.
 	let dispatch = if n >= 2
 		&& matches!(f.body.0[n - 1].kind, StmtKind::Return(_))
-		&& matches!(f.body.0[n - 2].kind, StmtKind::Match { .. })
+		&& is_dispatch(&f.body.0[n - 2].kind)
 	{
 		n - 2
-	} else if matches!(f.body.0[n - 1].kind, StmtKind::Match { .. }) {
+	} else if is_dispatch(&f.body.0[n - 1].kind) {
 		n - 1
 	} else {
 		return;
 	};
 
-	let StmtKind::Match { arms, .. } = &f.body.0[dispatch].kind else {
-		return;
-	};
 	let arity = f.params.len();
 
-	// Dry-run check (no mutation): every arm transformable, the match exhaustive
-	// (final arm a catch-all), at least one self-tail-call, and *every* self-tail-call
-	// in the body sits in a recognized recursive terminator.
-	if !matches!(arms.last().map(|a| &a.pattern), Some(Pattern::Wildcard)) {
-		return;
-	}
-	let mut recognized = 0usize;
-	for arm in arms {
-		match check_block(self_id, &arm.body, arity) {
-			Some(rec) => recognized += rec,
-			None => return,
-		}
-	}
+	// Dry-run check (no mutation): every branch transformable, at least one
+	// self-tail-call, and *every* self-tail-call in the body sits in a recognized
+	// recursive terminator.
+	let recognized = match check_dispatch(self_id, &f.body.0[dispatch].kind, arity) {
+		Some(rec) => rec,
+		None => return,
+	};
 	if recognized == 0 || recognized != count_self_tailcalls(self_id, &f.body) {
 		return;
 	}
@@ -85,32 +78,58 @@ fn loopify_fn(self_id: FuncId, f: &mut Function) {
 	let result = VarId(next);
 	next += 1;
 
-	// Transform each arm's terminators, then assemble `Loop { head…, Match }` and
-	// return the loop's result. `head` (which computes the match subject) is moved
-	// inside the loop so it recomputes against the reassigned params each iteration.
+	// Transform the dispatch's terminators, then assemble `Loop { head…, dispatch }`
+	// and return the loop's result. `head` (which computes the dispatch subject /
+	// condition) is moved inside the loop so it recomputes against the reassigned
+	// params each iteration.
 	let params = f.params.clone();
 	let mut body = std::mem::replace(&mut f.body.0, Vec::new());
 	body.truncate(dispatch + 1); // drop the dead `Return(Unit)` epilogue, if any
 	let dispatch_stmt = body.pop().unwrap();
-	let head = body; // stmts before the match
+	let head = body; // stmts before the dispatch
 	let range = dispatch_stmt.range;
-	let StmtKind::Match { subject, arms } = dispatch_stmt.kind else {
-		unreachable!("checked above");
-	};
-	let arms = arms
-		.into_iter()
-		.map(|arm| MatchArm {
-			pattern: arm.pattern,
-			body: transform_block(self_id, arm.body, &params, result, &mut next),
-		})
-		.collect();
+	let transformed = transform_block(
+		self_id,
+		Block(vec![dispatch_stmt]),
+		&params,
+		result,
+		&mut next,
+	);
 
 	let mut loop_body = head;
-	loop_body.push(Stmt::new(StmtKind::Match { subject, arms }, range));
+	loop_body.extend(transformed.0);
 	f.body.0 = vec![
 		Stmt::new(StmtKind::Loop(Block(loop_body)), range),
 		Stmt::new(StmtKind::Return(Atom::Var(result)), range),
 	];
+}
+
+/// A dispatch is a terminator that branches: the catch-all `Match` or the two-way
+/// `If` a loopifiable tail-recursive function ends in.
+fn is_dispatch(kind: &StmtKind) -> bool {
+	matches!(kind, StmtKind::Match { .. } | StmtKind::If(..))
+}
+
+/// Dry-run a dispatch terminator: the number of recognized self-tail-call
+/// terminators across its branches, or `None` if any branch is unrecognized (or a
+/// `Match` is non-exhaustive — its final arm not a catch-all).
+fn check_dispatch(self_id: FuncId, kind: &StmtKind, arity: usize) -> Option<usize> {
+	match kind {
+		StmtKind::If(_, t, e) => {
+			Some(check_block(self_id, t, arity)? + check_block(self_id, e, arity)?)
+		}
+		StmtKind::Match { arms, .. } => {
+			if !matches!(arms.last().map(|a| &a.pattern), Some(Pattern::Wildcard)) {
+				return None;
+			}
+			let mut rec = 0;
+			for arm in arms {
+				rec += check_block(self_id, &arm.body, arity)?;
+			}
+			Some(rec)
+		}
+		_ => None,
+	}
 }
 
 /// Is `block` a transformable terminator tree? Returns the number of recognized
@@ -137,21 +156,9 @@ fn check_block(self_id: FuncId, block: &Block, arity: usize) -> Option<usize> {
 	match &stmts[n - 1].kind {
 		// Base terminator.
 		StmtKind::Return(_) => Some(0),
-		// Nested dispatch: recurse. `If` is always two-way (exhaustive); a nested
-		// `Match` must be a catch-all match like the top-level one.
-		StmtKind::If(_, t, e) => {
-			Some(check_block(self_id, t, arity)? + check_block(self_id, e, arity)?)
-		}
-		StmtKind::Match { arms, .. } => {
-			if !matches!(arms.last().map(|a| &a.pattern), Some(Pattern::Wildcard)) {
-				return None;
-			}
-			let mut rec = 0;
-			for arm in arms {
-				rec += check_block(self_id, &arm.body, arity)?;
-			}
-			Some(rec)
-		}
+		// Nested dispatch: recurse through its branches (`If` is always two-way and
+		// exhaustive; a nested `Match` must be catch-all like the top-level one).
+		k @ (StmtKind::If(..) | StmtKind::Match { .. }) => check_dispatch(self_id, k, arity),
 		_ => None,
 	}
 }
@@ -487,7 +494,7 @@ mod tests {
 			entry: FuncId(0),
 			test_suites: vec![],
 			param_shapes: std::collections::HashMap::new(),
-		extra_nominal: std::collections::HashMap::new(),
+			extra_nominal: std::collections::HashMap::new(),
 		};
 		loopify(&mut p);
 		p.functions.pop().unwrap()
