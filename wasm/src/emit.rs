@@ -208,11 +208,11 @@ impl<'a> FnEmitter<'a> {
 				// A record producer bound to a nominal var builds a `$shapeN` struct
 				// (constant-index reads); otherwise the rvalue emits its uniform form.
 				match rv {
-					Rvalue::MakeRecord(fields) if self.nominal.contains_key(&v.0) => {
+					Rvalue::MakeRecord(fields, _) if self.nominal.contains_key(&v.0) => {
 						let shape = self.nominal[&v.0].clone();
 						self.make_record_nominal(&shape, fields);
 					}
-					Rvalue::RecordUpdate { base, fields } if self.nominal.contains_key(&v.0) => {
+					Rvalue::RecordUpdate { base, fields, .. } if self.nominal.contains_key(&v.0) => {
 						let shape = self.nominal[&v.0].clone();
 						self.record_update_nominal(&shape, base, fields);
 					}
@@ -417,7 +417,7 @@ impl<'a> FnEmitter<'a> {
 				// length check, and `...rest` builds the uniform `$record` of the
 				// leftover fields (closing the WASM gap on the nominal path).
 				if let Some(sshape) = subj_shape {
-					let st = self.ftypes.intern_shape(&sshape.fields).type_idx;
+					let st = self.ftypes.intern_shape(&sshape).type_idx;
 					if let ir::RecordRest::Bind(v) = rest {
 						let matched: HashSet<&str> = fields.iter().map(|(n, _)| n.as_str()).collect();
 						let rest_fields: Vec<&String> = sshape
@@ -436,7 +436,7 @@ impl<'a> FnEmitter<'a> {
 						});
 						for n in &rest_fields {
 							let slot = sshape.slot_of(n).unwrap();
-							self.nominal_field(subj, st, slot);
+							self.nominal_field_boxed(subj, st, slot, sshape.field_reprs[slot]);
 						}
 						self.ins(Instruction::ArrayNewFixed {
 							array_type_index: types::T_VALARRAY,
@@ -451,7 +451,7 @@ impl<'a> FnEmitter<'a> {
 						}
 						let slot = sshape.slot_of(name).expect("nominal pattern field present");
 						let tmp = self.fresh_local(types::value_ref());
-						self.nominal_field(subj, st, slot);
+						self.nominal_field_boxed(subj, st, slot, sshape.field_reprs[slot]);
 						self.ins(Instruction::LocalSet(tmp));
 						self.test_pattern(sub, tmp, None, fail_level);
 					}
@@ -545,6 +545,20 @@ impl<'a> FnEmitter<'a> {
 			struct_type_index: st,
 			field_index: 2 + slot as u32,
 		});
+	}
+
+	/// Read field `slot` off nominal record `subj:st` and leave a *boxed* `$value`:
+	/// an unboxed `F64` slot is boxed into a `$float` so it can flow into a uniform
+	/// `$valarray` or a boxed pattern binding; a `Boxed` slot is already a value.
+	fn nominal_field_boxed(&mut self, subj: u32, st: u32, slot: usize, repr: ir::Repr) {
+		if repr == ir::Repr::F64 {
+			// Box order mirrors `Rvalue::Box(F64)`: tag, then the `f64`, then `struct.new`.
+			self.ins(Instruction::I32Const(types::TAG_FLOAT));
+			self.nominal_field(subj, st, slot);
+			self.ins(Instruction::StructNew(types::T_FLOAT));
+		} else {
+			self.nominal_field(subj, st, slot);
+		}
 	}
 
 	/// Push element `i` of the `$valarray` in field `field` of struct `subj:sty`.
@@ -1097,7 +1111,7 @@ impl<'a> FnEmitter<'a> {
 			}
 			Rvalue::MakeTuple(elems) => self.emit_make_tuple(elems),
 			Rvalue::MakeList(items) => self.make_list(items),
-			Rvalue::MakeRecord(fields) => {
+			Rvalue::MakeRecord(fields, _) => {
 				// Sort by field name for a canonical layout; names + values parallel.
 				let mut sorted: Vec<(&String, &Atom)> = fields.iter().map(|(n, a)| (n, a)).collect();
 				sorted.sort_by(|a, b| a.0.cmp(b.0));
@@ -1125,7 +1139,7 @@ impl<'a> FnEmitter<'a> {
 				if let Atom::Var(v) = r {
 					if let Some(rshape) = self.nominal.get(&v.0).cloned() {
 						if let Some(slot) = rshape.slot_of(name) {
-							let st = self.ftypes.intern_shape(&rshape.fields).type_idx;
+							let st = self.ftypes.intern_shape(&rshape).type_idx;
 							self.atom_raw(r);
 							self.ins(Instruction::RefCastNonNull(HeapType::Concrete(st)));
 							self.ins(Instruction::StructGet {
@@ -1154,7 +1168,7 @@ impl<'a> FnEmitter<'a> {
 				self.string_const(name);
 				self.ins(Instruction::Call(getfield));
 			}
-			Rvalue::RecordUpdate { base, fields } => {
+			Rvalue::RecordUpdate { base, fields, .. } => {
 				let Some(update) = self.runtime.idx(Helper::RecordUpdate) else {
 					self
 						.diags
@@ -3434,9 +3448,12 @@ impl<'a> FnEmitter<'a> {
 	/// `lift` a nominal record in local `rec` to the uniform `$record`: build the
 	/// name-sorted `names` array (constant field-name strings) and a parallel
 	/// `values` array read out of the struct's inline fields, then `struct.new
-	/// $record`. Leaves one `(ref $record)` on the stack; reads nothing else.
+	/// $record`. An unboxed (`F64`) field is boxed into a `$float` here, since the
+	/// uniform `$valarray` holds boxed `$value`s — this is where the boxing a hot
+	/// field read avoided gets paid, only at the generic boundary. Leaves one
+	/// `(ref $record)` on the stack; reads nothing else.
 	fn emit_lift(&mut self, rec: u32, shape: &ir::RecordShape) {
-		let st = self.ftypes.intern_shape(&shape.fields).type_idx;
+		let st = self.ftypes.intern_shape(&shape).type_idx;
 		let k = shape.fields.len() as u32;
 		self.ins(Instruction::I32Const(types::TAG_RECORD));
 		for name in &shape.fields {
@@ -3447,12 +3464,7 @@ impl<'a> FnEmitter<'a> {
 			array_size: k,
 		});
 		for i in 0..k {
-			self.ins(Instruction::LocalGet(rec));
-			self.ins(Instruction::RefCastNonNull(HeapType::Concrete(st)));
-			self.ins(Instruction::StructGet {
-				struct_type_index: st,
-				field_index: 2 + i,
-			});
+			self.nominal_field_boxed(rec, st, i as usize, shape.field_reprs[i as usize]);
 		}
 		self.ins(Instruction::ArrayNewFixed {
 			array_type_index: types::T_VALARRAY,
@@ -3467,7 +3479,7 @@ impl<'a> FnEmitter<'a> {
 	/// `$record`, keeping field reads uniform). The result is a `(ref $shapeN)`,
 	/// storable in a `(ref null $value)` local (it's a `$value` subtype).
 	fn make_record_nominal(&mut self, shape: &ir::RecordShape, fields: &[(String, Atom)]) {
-		let st = self.ftypes.intern_shape(&shape.fields);
+		let st = self.ftypes.intern_shape(&shape);
 		let mut sorted: Vec<(&String, &Atom)> = fields.iter().map(|(n, a)| (n, a)).collect();
 		sorted.sort_by(|a, b| a.0.cmp(b.0));
 		self.ins(Instruction::I32Const(types::TAG_RECORD));
@@ -3489,7 +3501,7 @@ impl<'a> FnEmitter<'a> {
 		base: &Atom,
 		fields: &[(String, Atom)],
 	) {
-		let st = self.ftypes.intern_shape(&shape.fields);
+		let st = self.ftypes.intern_shape(&shape);
 		let base_local = match base {
 			Atom::Var(v) => self.local(v.0),
 			// A record base is always a var; fall back to the uniform path otherwise.

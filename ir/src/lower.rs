@@ -214,7 +214,11 @@ impl<'a> Lowerer<'a> {
 		// backend maps each repr to a native/GC-ref local.
 		let mut functions = self.functions;
 		for f in &mut functions {
-			f.var_reprs = crate::repr::infer_reprs(f, &crate::repr::Sigs::uniform());
+			f.var_reprs = crate::repr::infer_reprs(
+				f,
+				&crate::repr::Sigs::uniform(),
+				&std::collections::HashMap::new(),
+			);
 		}
 		let enums = self.enums;
 		let globals = self.globals.finish();
@@ -1214,7 +1218,8 @@ impl<'a> Lowerer<'a> {
 					let atom = self.lower_expr(value)?;
 					ir_fields.push((name.name.clone(), atom));
 				}
-				Ok(self.emit_let(Rvalue::MakeRecord(ir_fields), range))
+				let shape = record_shape_of(&expr.ty);
+				Ok(self.emit_let(Rvalue::MakeRecord(ir_fields, shape), range))
 			}
 			ExprKind::RecordUpdate { base, fields } => {
 				let base_atom = self.lower_expr(base)?;
@@ -1223,10 +1228,12 @@ impl<'a> Lowerer<'a> {
 					let atom = self.lower_expr(value)?;
 					ir_fields.push((name.name.clone(), atom));
 				}
+				let shape = record_shape_of(&expr.ty);
 				Ok(self.emit_let(
 					Rvalue::RecordUpdate {
 						base: base_atom,
 						fields: ir_fields,
+						shape,
 					},
 					range,
 				))
@@ -2868,10 +2875,13 @@ impl<'a> Lowerer<'a> {
 			let rec = fresh_let(
 				body,
 				next,
-				Rvalue::MakeRecord(vec![
-					("name".to_string(), Atom::Const(Const::Str(display))),
-					("tests".to_string(), Atom::Var(tests)),
-				]),
+				Rvalue::MakeRecord(
+					vec![
+						("name".to_string(), Atom::Const(Const::Str(display))),
+						("tests".to_string(), Atom::Var(tests)),
+					],
+					None,
+				),
 			);
 			items.push(ListItem::Elem(Atom::Var(rec)));
 		}
@@ -3147,9 +3157,23 @@ fn binop_for(op: &Operator, is_float: bool) -> Option<BinOp> {
 fn record_shape_of(ty: &Type) -> Option<RecordShape> {
 	match ty {
 		Type::Record(fields, None) => {
-			let mut names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
-			names.sort();
-			Some(RecordShape { fields: names })
+			// Name-sort, then carry each field's storage repr in the same order.
+			// v1 only unboxes `float` fields (always heap-boxed otherwise, so the
+			// win is unambiguous); everything else stays `Boxed`.
+			let mut sorted: Vec<&(String, Type)> = fields.iter().collect();
+			sorted.sort_by(|a, b| a.0.cmp(&b.0));
+			let names: Vec<String> = sorted.iter().map(|(n, _)| n.clone()).collect();
+			let field_reprs: Vec<Repr> = sorted
+				.iter()
+				.map(|(_, t)| match t {
+					Type::Float => Repr::F64,
+					_ => Repr::Boxed,
+				})
+				.collect();
+			Some(RecordShape {
+				fields: names,
+				field_reprs,
+			})
 		}
 		_ => None,
 	}

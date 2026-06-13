@@ -359,13 +359,13 @@ fn rvalue_vars(rv: &Rvalue, bump: &mut impl FnMut(VarId)) {
 				a(x);
 			}
 		}
-		Rvalue::RecordUpdate { base, fields } => {
+		Rvalue::RecordUpdate { base, fields, .. } => {
 			a(base);
 			for (_, x) in fields {
 				a(x);
 			}
 		}
-		Rvalue::MakeRecord(fields) => {
+		Rvalue::MakeRecord(fields, _) => {
 			for (_, x) in fields {
 				a(x);
 			}

@@ -91,7 +91,7 @@ pub(crate) fn scan_rvalue_strings(rv: &Rvalue, pool: &mut StrPool, enums: &EnumT
 	}
 	// Record field names become `$str` constants too (not atoms).
 	match rv {
-		Rvalue::MakeRecord(fields) | Rvalue::RecordUpdate { fields, .. } => {
+		Rvalue::MakeRecord(fields, _) | Rvalue::RecordUpdate { fields, .. } => {
 			for (n, _) in fields {
 				pool.intern(n);
 			}
@@ -158,8 +158,8 @@ pub(crate) fn for_each_atom(rv: &Rvalue, f: &mut impl FnMut(&Atom)) {
 			f(c);
 			args.iter().for_each(f);
 		}
-		Rvalue::MakeRecord(fields) => fields.iter().for_each(|(_, a)| f(a)),
-		Rvalue::RecordUpdate { base, fields } => {
+		Rvalue::MakeRecord(fields, _) => fields.iter().for_each(|(_, a)| f(a)),
+		Rvalue::RecordUpdate { base, fields, .. } => {
 			f(base);
 			fields.iter().for_each(|(_, a)| f(a));
 		}
@@ -416,10 +416,14 @@ fn collect_nominal_records(
 ) {
 	for s in &b.0 {
 		match &s.kind {
-			StmtKind::Let(v, Rvalue::MakeRecord(fields)) if read.contains(&v.0) => {
-				let mut names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
-				names.sort();
-				out.insert(v.0, ir::RecordShape { fields: names });
+			StmtKind::Let(v, Rvalue::MakeRecord(fields, shape)) if read.contains(&v.0) => {
+				// Prefer the typed shape threaded by lowering (it carries per-field
+				// reprs); fall back to an all-boxed shape for a synthetic record built
+				// without a type in hand.
+				let shape = shape.clone().unwrap_or_else(|| {
+					ir::RecordShape::boxed_from_names(fields.iter().map(|(n, _)| n.clone()).collect())
+				});
+				out.insert(v.0, shape);
 			}
 			StmtKind::Let(
 				v,

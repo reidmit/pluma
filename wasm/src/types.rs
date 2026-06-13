@@ -454,7 +454,10 @@ pub struct ShapeInfo {
 /// type-index space starting at `T_FIRST_FUNC`, assigned in interning order.
 enum Pending {
 	Func(FuncKind),
-	Shape(u32),
+	/// A record-shape struct, carrying each field's storage repr (in name-sorted
+	/// order) so `encode` lays out an `F64` field as a native `f64` slot and a
+	/// `Boxed` field as a `$value` ref.
+	Shape(Vec<Repr>),
 	/// A monomorphized Pluma function type: a leading boxed `env` param, then one
 	/// param per recorded `Repr` (an unboxed i64/f64/i32 where the function takes a
 	/// concrete scalar), and the result `Repr`. Used for eligible direct-only
@@ -466,8 +469,11 @@ enum Pending {
 pub struct FuncTypes {
 	keys: std::collections::HashMap<FuncKind, u32>,
 	pending: Vec<Pending>,
-	/// name-sorted field set -> its interned struct info (dedup + lookup).
-	shape_keys: std::collections::HashMap<Vec<String>, ShapeInfo>,
+	/// shape (name-sorted fields + their reprs) -> its interned struct info. Keyed
+	/// by the full shape, not just names: `{x: float}` and `{x: int}` have the
+	/// same field set but distinct layouts (unboxed `f64` vs boxed slot), so they
+	/// must intern to distinct structs.
+	shape_keys: std::collections::HashMap<ir::RecordShape, ShapeInfo>,
 	/// Count of distinct shapes interned so far — assigns the next `shape_id`.
 	shape_count: u32,
 	/// `(param reprs, ret repr)` -> its interned function-type index (dedup).
@@ -513,16 +519,16 @@ impl FuncTypes {
 	/// Intern the nominal struct type for a record *shape* (a name-sorted field
 	/// set). Idempotent: the same field set always maps to the same struct type and
 	/// `shape_id`. The fields must already be name-sorted (matching `MakeRecord`).
-	pub fn intern_shape(&mut self, fields: &[String]) -> ShapeInfo {
-		if let Some(info) = self.shape_keys.get(fields) {
+	pub fn intern_shape(&mut self, shape: &ir::RecordShape) -> ShapeInfo {
+		if let Some(info) = self.shape_keys.get(shape) {
 			return *info;
 		}
 		let type_idx = T_FIRST_FUNC + self.pending.len() as u32;
 		let shape_id = self.shape_count;
 		let info = ShapeInfo { type_idx, shape_id };
-		self.shape_keys.insert(fields.to_vec(), info);
+		self.shape_keys.insert(shape.clone(), info);
 		self.shape_count += 1;
-		self.pending.push(Pending::Shape(fields.len() as u32));
+		self.pending.push(Pending::Shape(shape.field_reprs.clone()));
 		info
 	}
 
@@ -1091,12 +1097,14 @@ impl FuncTypes {
 					types.ty().function(ps, [repr_valtype(*ret)]);
 					continue;
 				}
-				Pending::Shape(n) => {
+				Pending::Shape(reprs) => {
 					let mut fields = vec![
 						val_field(ValType::I32, false),
 						val_field(ValType::I32, false),
 					];
-					fields.extend(std::iter::repeat(val_field(value_ref(), false)).take(*n as usize));
+					// One slot per field at its storage repr: `F64` is an unboxed `f64`
+					// (read without chasing a `$float` box), everything else a `$value` ref.
+					fields.extend(reprs.iter().map(|r| val_field(repr_valtype(*r), false)));
 					types
 						.ty()
 						.subtype(&struct_subtype(Some(T_VALUE), fields, true));

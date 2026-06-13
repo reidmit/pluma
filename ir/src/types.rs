@@ -320,12 +320,39 @@ pub enum RecordRest {
 pub struct RecordShape {
 	/// Field names in canonical name-sorted order (matching `MakeRecord`).
 	pub fields: Vec<String>,
+	/// The storage repr of each field, parallel to `fields`. `F64` marks a field
+	/// stored unboxed (a native `f64` slot in the `$shapeN` struct, read without
+	/// chasing a `$float` box); `Boxed` is the uniform `$value` slot. Part of the
+	/// shape's *identity*: two records with the same field names but different
+	/// field reprs are distinct nominal structs (so `{x: float}` and `{x: int}`
+	/// never share a layout). Derived from the analyzer's field types by
+	/// `record_shape_of`; sites that reconstruct a shape from `MakeRecord` field
+	/// names alone (no types in hand) use `boxed_from_names` (all-`Boxed`).
+	pub field_reprs: Vec<Repr>,
 }
 
 impl RecordShape {
 	/// The constant slot index of `field` within this shape, if present.
 	pub fn slot_of(&self, field: &str) -> Option<usize> {
 		self.fields.iter().position(|f| f == field)
+	}
+
+	/// The storage repr of `field`, if present.
+	pub fn repr_of(&self, field: &str) -> Option<Repr> {
+		self.slot_of(field).map(|i| self.field_reprs[i])
+	}
+
+	/// A shape over name-sorted `names` with every field `Boxed` — the uniform
+	/// layout. Used where a shape is reconstructed from `MakeRecord` field names
+	/// without the field types (synthetic records, `scan`/`mono` fallbacks); it
+	/// reproduces the pre-unboxing all-boxed `$shapeN`.
+	pub fn boxed_from_names(mut names: Vec<String>) -> Self {
+		names.sort();
+		let field_reprs = vec![Repr::Boxed; names.len()];
+		RecordShape {
+			fields: names,
+			field_reprs,
+		}
 	}
 }
 
@@ -388,15 +415,20 @@ pub enum Rvalue {
 	/// Allocate a closure: a code pointer plus captured values, in
 	/// `Function::captures` order.
 	MakeClosure(FuncId, Vec<Atom>),
-	/// Build a record from (field-name, value) pairs. Provisional: record-slot
-	/// lowering (a later pass) replaces field names with static slot indices.
-	MakeRecord(Vec<(String, Atom)>),
+	/// Build a record from (field-name, value) pairs. The optional `RecordShape`
+	/// is the closed shape of the result (name-sorted fields + their storage
+	/// reprs), threaded by lowering from the literal's type; `None` for a
+	/// synthetic record built without a type in hand. The backend uses it to lay
+	/// out the nominal `$shapeN` struct and store each field at its repr.
+	MakeRecord(Vec<(String, Atom)>, Option<RecordShape>),
 	/// Record update `{ ...base, f: v }`: copy `base` and override each named
 	/// field. The analyzer guarantees every override field already exists on
-	/// `base` (update-only, type-preserving), so the result has `base`'s shape.
+	/// `base` (update-only, type-preserving), so the result has `base`'s shape —
+	/// carried in `shape` (same meaning as `MakeRecord`'s).
 	RecordUpdate {
 		base: Atom,
 		fields: Vec<(String, Atom)>,
+		shape: Option<RecordShape>,
 	},
 	/// Read a record field by name. The optional `RecordShape` is the statically-
 	/// resolved closed shape of the receiver (its name-sorted field set), threaded

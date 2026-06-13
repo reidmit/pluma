@@ -121,9 +121,13 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 	// signatures, and the coercion pass makes each direct call site match.
 	monomorphize_signatures(&mut p);
 	let sigs = ir::repr::Sigs::from_program(&p);
-	for f in &mut p.functions {
-		f.var_reprs = ir::repr::infer_reprs(f, &sigs);
-		ir::repr::insert_coercions(f, &sigs);
+	for (fid, f) in p.functions.iter_mut().enumerate() {
+		// The per-function nominal-record map (same one the emitter recomputes), so
+		// the coercion pass reads/stores each unboxed (`F64`) record field at its slot
+		// repr instead of boxing — keeping repr inference in step with emission.
+		let nominal = scan::compute_nominal(f, fid as u32, &param_shapes);
+		f.var_reprs = ir::repr::infer_reprs(f, &sigs, &nominal);
+		ir::repr::insert_coercions(f, &sigs, &nominal);
 	}
 
 	// 2. Dead-code elimination: only functions/globals reachable from the entry.

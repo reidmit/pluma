@@ -488,13 +488,13 @@ impl UseScan {
 					self.escape_if_d(a);
 				}
 			}
-			Rvalue::RecordUpdate { base, fields } => {
+			Rvalue::RecordUpdate { base, fields, .. } => {
 				self.escape_if_d(base);
 				for (_, a) in fields {
 					self.escape_if_d(a);
 				}
 			}
-			Rvalue::MakeRecord(fields) => {
+			Rvalue::MakeRecord(fields, _) => {
 				for (_, a) in fields {
 					self.escape_if_d(a);
 				}
@@ -1274,13 +1274,13 @@ fn rvalue_atoms(rv: &Rvalue, a: &mut impl FnMut(&Atom)) {
 				a(x);
 			}
 		}
-		Rvalue::RecordUpdate { base, fields } => {
+		Rvalue::RecordUpdate { base, fields, .. } => {
 			a(base);
 			for (_, x) in fields {
 				a(x);
 			}
 		}
-		Rvalue::MakeRecord(fields) => {
+		Rvalue::MakeRecord(fields, _) => {
 			for (_, x) in fields {
 				a(x);
 			}

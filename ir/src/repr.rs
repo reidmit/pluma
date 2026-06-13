@@ -143,7 +143,7 @@ impl Sigs {
 /// which are processed contiguously here, so a single forward pass with a `seen`
 /// set merges them; nested joins resolve inner-first naturally (an inner `if`'s
 /// arms finish before the outer arm's trailing `Use` of its result is reached).
-pub fn infer_reprs(f: &Function, sigs: &Sigs) -> Vec<Repr> {
+pub fn infer_reprs(f: &Function, sigs: &Sigs, nominal: &HashMap<u32, RecordShape>) -> Vec<Repr> {
 	let joins = find_join_vars(f);
 	let mut reprs = vec![Repr::Boxed; var_upper_bound(f)];
 	// In mono mode, eligible functions carry unboxed param reprs; seed them so an
@@ -157,7 +157,7 @@ pub fn infer_reprs(f: &Function, sigs: &Sigs) -> Vec<Repr> {
 		}
 	}
 	let mut merged = HashSet::new();
-	assign_block(&f.body, &mut reprs, &joins, &mut merged, sigs);
+	assign_block(&f.body, &mut reprs, &joins, &mut merged, sigs, nominal);
 	// A parameter's local type is fixed by the function's signature — the entry
 	// value arrives in that repr — so its `var_repr` must match it, regardless of
 	// what the body assigns. This matters only when the body *reassigns* a param
@@ -181,11 +181,12 @@ fn assign_block(
 	joins: &HashSet<u32>,
 	merged: &mut HashSet<u32>,
 	sigs: &Sigs,
+	nominal: &HashMap<u32, RecordShape>,
 ) {
 	for stmt in &b.0 {
 		match &stmt.kind {
 			StmtKind::Let(v, rv) => {
-				let produced = result_repr(rv, reprs, sigs);
+				let produced = result_repr(rv, reprs, sigs, nominal);
 				reprs[v.0 as usize] = if joins.contains(&v.0) {
 					// Merge this arm's contribution: first arm sets the repr;
 					// subsequent arms keep it if they agree, else fall back to Boxed.
@@ -201,21 +202,21 @@ fn assign_block(
 				};
 			}
 			StmtKind::If(_, t, e) => {
-				assign_block(t, reprs, joins, merged, sigs);
-				assign_block(e, reprs, joins, merged, sigs);
+				assign_block(t, reprs, joins, merged, sigs, nominal);
+				assign_block(e, reprs, joins, merged, sigs, nominal);
 			}
 			StmtKind::Switch { arms, default, .. } => {
 				for (_, b) in arms {
-					assign_block(b, reprs, joins, merged, sigs);
+					assign_block(b, reprs, joins, merged, sigs, nominal);
 				}
-				assign_block(default, reprs, joins, merged, sigs);
+				assign_block(default, reprs, joins, merged, sigs, nominal);
 			}
 			StmtKind::Match { arms, .. } => {
 				for arm in arms {
-					assign_block(&arm.body, reprs, joins, merged, sigs);
+					assign_block(&arm.body, reprs, joins, merged, sigs, nominal);
 				}
 			}
-			StmtKind::Loop(b) => assign_block(b, reprs, joins, merged, sigs),
+			StmtKind::Loop(b) => assign_block(b, reprs, joins, merged, sigs, nominal),
 			// These bind no value. Pattern-bound vars (inside `Match` arms) stay
 			// at their `Boxed` default.
 			StmtKind::Discard(_)
@@ -230,7 +231,12 @@ fn assign_block(
 
 /// The repr an rvalue's *result* takes, given the reprs already assigned to its
 /// operand vars.
-pub fn result_repr(rv: &Rvalue, reprs: &[Repr], sigs: &Sigs) -> Repr {
+pub fn result_repr(
+	rv: &Rvalue,
+	reprs: &[Repr],
+	sigs: &Sigs,
+	nominal: &HashMap<u32, RecordShape>,
+) -> Repr {
 	match rv {
 		Rvalue::Bin(op, _, _) => binop_result_repr(*op),
 		Rvalue::Not(_) => Repr::I32,
@@ -247,6 +253,14 @@ pub fn result_repr(rv: &Rvalue, reprs: &[Repr], sigs: &Sigs) -> Repr {
 		// pass inserts a `Box` only where the result is actually consumed boxed; a
 		// polymorphic-returning builtin already carries `Boxed`, so it's unchanged.
 		Rvalue::Call(Callee::Builtin(_, ret), _) => *ret,
+		// Reading an unboxed (`F64`) field off a *nominal* record yields the field
+		// raw — no `$float` box to chase. The receiver must be nominal *in this
+		// function* (in `nominal`), since a uniform receiver reads boxed via
+		// `__getfield`; the field's repr lives on the nominal shape.
+		Rvalue::GetField(Atom::Var(v), name, _) => nominal
+			.get(&v.0)
+			.and_then(|s| s.repr_of(name))
+			.unwrap_or(Repr::Boxed),
 		// Everything that yields a heap value or a polymorphic value.
 		Rvalue::Call(..)
 		| Rvalue::CallClosure(..)
@@ -301,6 +315,12 @@ fn binop_operand_repr(op: BinOp) -> Repr {
 	}
 }
 
+/// The repr a record field operand must be coerced to: the field's storage repr
+/// when the record is nominal (`shape` is `Some`), else `Boxed` (uniform record).
+fn field_req_repr(shape: Option<&RecordShape>, name: &str) -> Repr {
+	shape.and_then(|s| s.repr_of(name)).unwrap_or(Repr::Boxed)
+}
+
 fn atom_repr(a: &Atom, reprs: &[Repr]) -> Repr {
 	match a {
 		Atom::Var(v) => reprs.get(v.0 as usize).copied().unwrap_or(Repr::Boxed),
@@ -327,7 +347,12 @@ fn const_repr(c: &Const) -> Repr {
 /// *requirement*, calling `f(atom, required_repr)`. `Use` is a move (its result
 /// repr is its operand's, so no coercion); `Box`/`Unbox` are coercions already;
 /// callee positions (`Call`'s `Callee`, `GlobalRef`, …) carry no atom operand.
-fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mut Atom, Repr)) {
+fn for_each_required_operand(
+	rv: &mut Rvalue,
+	sigs: &Sigs,
+	result_shape: Option<&RecordShape>,
+	mut f: impl FnMut(&mut Atom, Repr),
+) {
 	match rv {
 		Rvalue::Bin(op, a, b) => {
 			let r = binop_operand_repr(*op);
@@ -359,15 +384,18 @@ fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mu
 				f(a, Repr::Boxed);
 			}
 		}
-		Rvalue::MakeRecord(fields) => {
-			for (_, a) in fields {
-				f(a, Repr::Boxed);
+		// A *nominal* record stores each field at its slot's repr (an unboxed `F64`
+		// where the field is a float), so each field operand must match that repr;
+		// a uniform record (no `result_shape`) stores every field boxed.
+		Rvalue::MakeRecord(fields, _) => {
+			for (n, a) in fields {
+				f(a, field_req_repr(result_shape, n));
 			}
 		}
-		Rvalue::RecordUpdate { base, fields } => {
+		Rvalue::RecordUpdate { base, fields, .. } => {
 			f(base, Repr::Boxed);
-			for (_, a) in fields {
-				f(a, Repr::Boxed);
+			for (n, a) in fields {
+				f(a, field_req_repr(result_shape, n));
 			}
 		}
 		Rvalue::MakeVariant { payload, .. } => {
@@ -406,10 +434,10 @@ fn for_each_required_operand(rv: &mut Rvalue, sigs: &Sigs, mut f: impl FnMut(&mu
 /// splicing `Box`/`Unbox` rvalues at each mismatch. After this, `validate_reprs`
 /// holds and the function is WASM-ready. Idempotent in effect: re-running inserts
 /// nothing (every operand already matches).
-pub fn insert_coercions(f: &mut Function, sigs: &Sigs) {
+pub fn insert_coercions(f: &mut Function, sigs: &Sigs, nominal: &HashMap<u32, RecordShape>) {
 	let mut reprs = std::mem::take(&mut f.var_reprs);
 	if reprs.is_empty() {
-		reprs = infer_reprs(f, sigs);
+		reprs = infer_reprs(f, sigs, nominal);
 	}
 	// Make sure fresh coercion vars start past every existing var.
 	let needed = var_upper_bound(f);
@@ -432,6 +460,7 @@ pub fn insert_coercions(f: &mut Function, sigs: &Sigs) {
 		reprs,
 		sigs,
 		self_ret,
+		nominal,
 	};
 	let body = std::mem::replace(&mut f.body, Block(Vec::new()));
 	f.body = ctx.block(body);
@@ -443,6 +472,10 @@ struct Coercer<'a> {
 	sigs: &'a Sigs,
 	/// The repr this function returns to its callers (its own `Sigs::ret`).
 	self_ret: Repr,
+	/// Per-`VarId` nominal record shape (with field reprs) for this function — so a
+	/// `MakeRecord`/`RecordUpdate` bound to a nominal var coerces each field to its
+	/// slot repr, and a `GetField` off a nominal receiver reads at the field repr.
+	nominal: &'a HashMap<u32, RecordShape>,
 }
 
 impl Coercer<'_> {
@@ -502,14 +535,17 @@ impl Coercer<'_> {
 					StmtKind::Let(v, rv)
 				} else {
 					let sigs = self.sigs;
-					for_each_required_operand(&mut rv, sigs, |a, r| self.coerce(a, r, &mut pre, range));
+					let result_shape = self.nominal.get(&v.0);
+					for_each_required_operand(&mut rv, sigs, result_shape, |a, r| {
+						self.coerce(a, r, &mut pre, range)
+					});
 					// Coerce the OUTPUT too. Normally `infer_reprs` set `v`'s repr to this
 					// rvalue's natural repr, so this is a no-op. But a var with multiple
 					// defs of *different* natural reprs that isn't a join var (e.g. the CPS
 					// poll fn's dispatch var: `GetField` of `__tag` (boxed) in the entry,
 					// then `Use(Const::Int)` (i64) in loop arms) settles on one repr — so
 					// the other def needs a Box/Unbox to match `v`'s local type.
-					let natural = result_repr(&rv, &self.reprs, sigs);
+					let natural = result_repr(&rv, &self.reprs, sigs, self.nominal);
 					let target = self.reprs[v.0 as usize];
 					if natural == target {
 						StmtKind::Let(v, rv)
@@ -524,7 +560,11 @@ impl Coercer<'_> {
 			}
 			StmtKind::Discard(mut rv) => {
 				let sigs = self.sigs;
-				for_each_required_operand(&mut rv, sigs, |a, r| self.coerce(a, r, &mut pre, range));
+				// A discarded result is never nominal (unused → not read as a record),
+				// so its record fields stay boxed (uniform).
+				for_each_required_operand(&mut rv, sigs, None, |a, r| {
+					self.coerce(a, r, &mut pre, range)
+				});
 				StmtKind::Discard(rv)
 			}
 			StmtKind::Return(mut a) => {
@@ -587,7 +627,10 @@ pub fn validate_reprs(f: &Function, sigs: &Sigs) -> Result<(), String> {
 	} else {
 		Repr::Boxed
 	};
-	check_block(&f.body, &f.var_reprs, &f.name, sigs, self_ret)
+	// Validation is a test-only readiness check; its fixtures carry no nominal
+	// records, so an empty shape map (every field boxed) is the right baseline.
+	let nominal = HashMap::new();
+	check_block(&f.body, &f.var_reprs, &f.name, sigs, self_ret, &nominal)
 }
 
 fn check_block(
@@ -596,27 +639,28 @@ fn check_block(
 	fname: &str,
 	sigs: &Sigs,
 	self_ret: Repr,
+	nominal: &HashMap<u32, RecordShape>,
 ) -> Result<(), String> {
 	for stmt in &b.0 {
 		match &stmt.kind {
 			StmtKind::Let(v, rv) => {
 				let got = reprs.get(v.0 as usize).copied().unwrap_or(Repr::Boxed);
-				let want = result_repr(rv, reprs, sigs);
+				let want = result_repr(rv, reprs, sigs, nominal);
 				if got != want {
 					return Err(format!(
 						"{fname}: var {} recorded {got:?} but its rvalue produces {want:?}",
 						v.0
 					));
 				}
-				check_rvalue(rv, reprs, fname, sigs)?;
+				check_rvalue(rv, reprs, fname, sigs, nominal.get(&v.0))?;
 			}
-			StmtKind::Discard(rv) => check_rvalue(rv, reprs, fname, sigs)?,
+			StmtKind::Discard(rv) => check_rvalue(rv, reprs, fname, sigs, None)?,
 			StmtKind::Return(a) => require(a, self_ret, reprs, fname, "return")?,
 			StmtKind::PushDefer(a) => require(a, Repr::Boxed, reprs, fname, "defer")?,
 			StmtKind::If(cond, t, e) => {
 				require(cond, Repr::I32, reprs, fname, "if-cond")?;
-				check_block(t, reprs, fname, sigs, self_ret)?;
-				check_block(e, reprs, fname, sigs, self_ret)?;
+				check_block(t, reprs, fname, sigs, self_ret, nominal)?;
+				check_block(e, reprs, fname, sigs, self_ret, nominal)?;
 			}
 			StmtKind::Switch {
 				scrutinee,
@@ -625,29 +669,35 @@ fn check_block(
 			} => {
 				require(scrutinee, Repr::Boxed, reprs, fname, "switch")?;
 				for (_, b) in arms {
-					check_block(b, reprs, fname, sigs, self_ret)?;
+					check_block(b, reprs, fname, sigs, self_ret, nominal)?;
 				}
-				check_block(default, reprs, fname, sigs, self_ret)?;
+				check_block(default, reprs, fname, sigs, self_ret, nominal)?;
 			}
 			StmtKind::Match { subject, arms } => {
 				require(subject, Repr::Boxed, reprs, fname, "match")?;
 				for arm in arms {
-					check_block(&arm.body, reprs, fname, sigs, self_ret)?;
+					check_block(&arm.body, reprs, fname, sigs, self_ret, nominal)?;
 				}
 			}
-			StmtKind::Loop(b) => check_block(b, reprs, fname, sigs, self_ret)?,
+			StmtKind::Loop(b) => check_block(b, reprs, fname, sigs, self_ret, nominal)?,
 			StmtKind::Break | StmtKind::Continue | StmtKind::RunDefer(_) => {}
 		}
 	}
 	Ok(())
 }
 
-fn check_rvalue(rv: &Rvalue, reprs: &[Repr], fname: &str, sigs: &Sigs) -> Result<(), String> {
+fn check_rvalue(
+	rv: &Rvalue,
+	reprs: &[Repr],
+	fname: &str,
+	sigs: &Sigs,
+	result_shape: Option<&RecordShape>,
+) -> Result<(), String> {
 	// Reuse the coercion visitor on a throwaway clone: it never mutates here, it
 	// just reports the first operand whose repr disagrees with its requirement.
 	let mut rv = rv.clone();
 	let mut err = None;
-	for_each_required_operand(&mut rv, sigs, |a, req| {
+	for_each_required_operand(&mut rv, sigs, result_shape, |a, req| {
 		let actual = atom_repr(a, reprs);
 		if err.is_none() && actual != req {
 			err = Some(format!(
@@ -744,12 +794,12 @@ fn rvalue_vars(rv: &Rvalue, bump: &mut impl FnMut(VarId)) {
 				atom_var(a, bump);
 			}
 		}
-		Rvalue::MakeRecord(fields) => {
+		Rvalue::MakeRecord(fields, _) => {
 			for (_, a) in fields {
 				atom_var(a, bump);
 			}
 		}
-		Rvalue::RecordUpdate { base, fields } => {
+		Rvalue::RecordUpdate { base, fields, .. } => {
 			atom_var(base, bump);
 			for (_, a) in fields {
 				atom_var(a, bump);
@@ -957,7 +1007,7 @@ mod tests {
 				Stmt::new(StmtKind::Return(Atom::Var(t)), syn()),
 			],
 		);
-		f.var_reprs = infer_reprs(&f, &Sigs::uniform());
+		f.var_reprs = infer_reprs(&f, &Sigs::uniform(), &HashMap::new());
 		assert_eq!(f.var_reprs[0], Repr::Boxed); // param n
 		assert_eq!(f.var_reprs[1], Repr::I64); // n - 1
 	}
@@ -981,8 +1031,8 @@ mod tests {
 				Stmt::new(StmtKind::Return(Atom::Var(t)), syn()),
 			],
 		);
-		f.var_reprs = infer_reprs(&f, &Sigs::uniform());
-		insert_coercions(&mut f, &Sigs::uniform());
+		f.var_reprs = infer_reprs(&f, &Sigs::uniform(), &HashMap::new());
+		insert_coercions(&mut f, &Sigs::uniform(), &HashMap::new());
 
 		// Body is now: Unbox(n)->u ; Let t = u - 1 ; Box(t)->b ; Return b.
 		let kinds: Vec<&StmtKind> = f.body.0.iter().map(|s| &s.kind).collect();
@@ -1005,9 +1055,9 @@ mod tests {
 			vec![x],
 			vec![Stmt::new(StmtKind::Return(Atom::Var(x)), syn())],
 		);
-		f.var_reprs = infer_reprs(&f, &Sigs::uniform());
+		f.var_reprs = infer_reprs(&f, &Sigs::uniform(), &HashMap::new());
 		let before = f.body.0.len();
-		insert_coercions(&mut f, &Sigs::uniform());
+		insert_coercions(&mut f, &Sigs::uniform(), &HashMap::new());
 		assert_eq!(f.body.0.len(), before, "no coercions expected");
 		validate_reprs(&f, &Sigs::uniform()).expect("identity validates");
 	}
@@ -1028,9 +1078,9 @@ mod tests {
 				Stmt::new(StmtKind::Return(Atom::Var(r)), syn()),
 			],
 		);
-		f.var_reprs = infer_reprs(&f, &Sigs::uniform());
+		f.var_reprs = infer_reprs(&f, &Sigs::uniform(), &HashMap::new());
 		assert_eq!(f.var_reprs[2], Repr::I32);
-		insert_coercions(&mut f, &Sigs::uniform());
+		insert_coercions(&mut f, &Sigs::uniform(), &HashMap::new());
 		validate_reprs(&f, &Sigs::uniform()).expect("comparison validates");
 		// Both operands (boxed params) get unboxed to I64.
 		let unboxes = f

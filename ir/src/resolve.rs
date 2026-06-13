@@ -442,8 +442,8 @@ fn used_vars(f: &Function) -> HashSet<u32> {
 				note(c);
 				args.iter().for_each(note);
 			}
-			Rvalue::MakeRecord(fields) => fields.iter().for_each(|(_, a)| note(a)),
-			Rvalue::RecordUpdate { base, fields } => {
+			Rvalue::MakeRecord(fields, _) => fields.iter().for_each(|(_, a)| note(a)),
+			Rvalue::RecordUpdate { base, fields, .. } => {
 				note(base);
 				fields.iter().for_each(|(_, a)| note(a));
 			}

@@ -156,10 +156,11 @@ fn makerecord_shapes(f: &ir::Function) -> HashMap<u32, RecordShape> {
 	fn walk(b: &Block, m: &mut HashMap<u32, RecordShape>) {
 		for s in &b.0 {
 			match &s.kind {
-				StmtKind::Let(v, Rvalue::MakeRecord(fields)) => {
-					let mut names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
-					names.sort();
-					m.insert(v.0, RecordShape { fields: names });
+				StmtKind::Let(v, Rvalue::MakeRecord(fields, shape)) => {
+					let shape = shape.clone().unwrap_or_else(|| {
+						RecordShape::boxed_from_names(fields.iter().map(|(n, _)| n.clone()).collect())
+					});
+					m.insert(v.0, shape);
 				}
 				StmtKind::If(_, t, e) => {
 					walk(t, m);

@@ -68,7 +68,7 @@ pub(crate) fn lower(p: &mut IrProgram) {
 
 		let body = Block(vec![
 			Stmt::synthetic(StmtKind::Let(pc, Rvalue::MakeClosure(poll, caps))),
-			Stmt::synthetic(StmtKind::Let(st, Rvalue::MakeRecord(fields))),
+			Stmt::synthetic(StmtKind::Let(st, Rvalue::MakeRecord(fields, None))),
 			Stmt::synthetic(StmtKind::Let(
 				t,
 				Rvalue::MakeVariant {
