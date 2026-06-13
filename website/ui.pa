@@ -23,7 +23,10 @@ def hero-grid :: css.ruleset = css.rule [
 	css.property "grid-template-columns" "1.05fr 1fr",
 	css.gap (css.rem 3.0),
 	css.align-items "center",
-	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr", css.gap (css.rem 2.5)],
+	css.media "(max-width: 860px)" [
+		css.property "grid-template-columns" "1fr",
+		css.gap (css.rem 2.5),
+	],
 ]
 
 def eyebrow :: css.ruleset = css.rule [
@@ -51,17 +54,22 @@ def lead :: css.ruleset = css.rule [
 	css.property "margin-bottom" "2rem",
 ]
 
-def cta-row :: css.ruleset = css.rule [css.display "flex", css.gap (css.rem 0.8), css.property "flex-wrap" "wrap"]
+def cta-row :: css.ruleset = css.rule [
+	css.display "flex",
+	css.gap (css.rem 0.8),
+	css.property "flex-wrap" "wrap",
+]
 
 # --- code card (interactive tabs) -------------------------------------------
 
+# `min-width: 0` here because grid items default to `min-width: auto`, so the
+# wide <pre> would otherwise blow the column out past the viewport instead of
+# shrinking and letting the <pre> scroll.
 def code-card :: css.ruleset = css.rule [
 	css.background (css.hex theme.code-bg),
 	css.border-radius (css.px 14.0),
 	css.property "box-shadow" "0 24px 60px -20px rgba(28, 26, 38, 0.45)",
 	css.overflow "hidden",
-	# Grid items default to `min-width: auto`, so the wide <pre> would blow the
-	# column out past the viewport; this lets it shrink and the <pre> scroll.
 	css.property "min-width" "0",
 ]
 
@@ -106,7 +114,10 @@ def code-block :: css.ruleset = css.rule [
 
 def section :: css.ruleset = css.rule [css.property "padding" "4rem 0"]
 
-def section-head :: css.ruleset = css.rule [css.property "max-width" "40rem", css.property "margin-bottom" "2.5rem"]
+def section-head :: css.ruleset = css.rule [
+	css.property "max-width" "40rem",
+	css.property "margin-bottom" "2.5rem",
+]
 
 def section-title :: css.ruleset = css.rule [
 	css.property "font-family" theme.serif,
@@ -117,7 +128,10 @@ def section-title :: css.ruleset = css.rule [
 	css.property "margin-bottom" "0.7rem",
 ]
 
-def section-sub :: css.ruleset = css.rule [css.font-size (css.rem 1.1), css.color (css.hex theme.muted)]
+def section-sub :: css.ruleset = css.rule [
+	css.font-size (css.rem 1.1),
+	css.color (css.hex theme.muted),
+]
 
 def feature-grid :: css.ruleset = css.rule [
 	css.display "grid",
@@ -139,7 +153,10 @@ def feature-card :: css.ruleset = css.rule [
 	],
 ]
 
-def feature-icon :: css.ruleset = css.rule [css.font-size (css.rem 1.7), css.property "margin-bottom" "0.8rem"]
+def feature-icon :: css.ruleset = css.rule [
+	css.font-size (css.rem 1.7),
+	css.property "margin-bottom" "0.8rem",
+]
 
 def feature-title :: css.ruleset = css.rule [
 	css.font-size (css.rem 1.08),
@@ -147,7 +164,10 @@ def feature-title :: css.ruleset = css.rule [
 	css.property "margin-bottom" "0.4rem",
 ]
 
-def feature-text :: css.ruleset = css.rule [css.color (css.hex theme.muted), css.font-size (css.rem 0.96)]
+def feature-text :: css.ruleset = css.rule [
+	css.color (css.hex theme.muted),
+	css.font-size (css.rem 0.96),
+]
 
 # --- meta strip (the live RPC demo) -----------------------------------------
 
@@ -160,10 +180,7 @@ def strip :: css.ruleset = css.rule [
 	css.property "margin" "2rem 0 4rem",
 ]
 
-def strip-eyebrow :: css.ruleset = css.compose [
-	eyebrow,
-	css.rule [css.color (css.hex "#c4a8ee")],
-]
+def strip-eyebrow :: css.ruleset = css.compose [eyebrow, css.rule [css.color (css.hex "#c4a8ee")]]
 
 def strip-title :: css.ruleset = css.rule [
 	css.property "font-family" theme.serif,
@@ -260,7 +277,9 @@ def hero-section :: fun nothing -> view = using view {
 						.text "Pluma is a small, statically-typed functional language with full type inference — and a fullstack framework that compiles to WebAssembly. Your API and your UI, the same syntax, the same backend.",
 					],
 					.div [.styled cta-row] [
-						.a [.styled theme.btn-primary, .href "/reference"] [.text "Read the reference"],
+						.a [.styled theme.btn-primary, .href "/reference"] [
+							.text "Read the reference",
+						],
 						.a [.styled theme.btn-ghost, .href theme.repo] [.text "View source →"],
 					],
 				],
@@ -323,9 +342,7 @@ def meta-section :: fun (signal int) -> view = using view {
 						signal.set loved n
 					})
 				},
-			] [
-				.text-of fun { "♥ loved " ++ to-string (signal.get loved) ++ " times" },
-			],
+			] [.text-of fun { "♥ loved " ++ to-string (signal.get loved) ++ " times" }],
 		]
 	}
 }

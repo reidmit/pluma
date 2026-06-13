@@ -13,9 +13,9 @@ use std/string
 use std/web/dom
 use std/web/render
 use std/web/sandbox
-use ui
-use reference
 use playground
+use reference
+use ui
 
 # A shared snippet rides in the URL fragment as URL-safe base64 of its UTF-8 bytes.
 def encode-source :: fun string -> string = fun src {
@@ -23,8 +23,8 @@ def encode-source :: fun string -> string = fun src {
 }
 
 def decode-source :: fun string -> string = fun token {
-	when (base64.url-decode token) is ok b {
-		when (bytes.to-string b) is ok s {
+	when base64.url-decode token is ok b {
+		when bytes.to-string b is ok s {
 			s
 		} is err _ {
 			""
@@ -56,7 +56,9 @@ def main = fun {
 	} else if dom.path () == "/playground" {
 		# Inject the real browser capabilities here — this is the one place
 		# `std/web/sandbox` + the URL helpers are named, so they only land in the client.
-		render.hydrate (dom.body ()) (fun { playground.page sandbox.run-hex load-shared share-source })
+		render.hydrate (dom.body ()) fun {
+			playground.page sandbox.run-hex load-shared share-source
+		}
 	} else {
 		render.hydrate (dom.body ()) ui.page
 	}

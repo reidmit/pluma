@@ -27,20 +27,15 @@ use theme
 # `\n`/`\t` strings (a literal `$(` would interpolate when *this* file compiles,
 # so the one example that shows interpolation splices it in via `theme.dol`).
 
-def ex-list :: string =
-	"use std/list\n\n# Edit this, then press Run.\ndef main = fun {\n\tlet xs = [1, 2, 3, 4, 5]\n\tprint \"numbers:\"\n\tprint xs\n\tprint \"doubled:\"\n\tprint (list.map xs fun n { n * 2 })\n\tprint \"kept > 2:\"\n\tprint (list.filter xs fun n { n > 2 })\n}\n"
+def ex-list :: string = "use std/list\n\n# Edit this, then press Run.\ndef main = fun {\n\tlet xs = [1, 2, 3, 4, 5]\n\tprint \"numbers:\"\n\tprint xs\n\tprint \"doubled:\"\n\tprint (list.map xs fun n { n * 2 })\n\tprint \"kept > 2:\"\n\tprint (list.filter xs fun n { n > 2 })\n}\n"
 
-def ex-fact :: string =
-	"# Plain recursion — the type is inferred, no annotations needed.\ndef fact = fun n {\n\tif n <= 1 { 1 } else { n * fact (n - 1) }\n}\n\ndef main = fun {\n\tprint (fact 5)\n\tprint (fact 10)\n}\n"
+def ex-fact :: string = "# Plain recursion — the type is inferred, no annotations needed.\ndef fact = fun n {\n\tif n <= 1 { 1 } else { n * fact (n - 1) }\n}\n\ndef main = fun {\n\tprint (fact 5)\n\tprint (fact 10)\n}\n"
 
-def ex-enum :: string =
-	"# An enum, matched with `when` (checked for exhaustiveness).\nenum shape {\n\tcircle float\n\trect float float\n}\n\ndef area = fun s {\n\twhen s is shape.circle r {\n\t\t3.14159 * r * r\n\t} is shape.rect w h {\n\t\tw * h\n\t}\n}\n\ndef main = fun {\n\tprint (area (shape.circle 2.0))\n\tprint (area (shape.rect 3.0 4.0))\n}\n"
+def ex-enum :: string = "# An enum, matched with `when` (checked for exhaustiveness).\nenum shape {\n\tcircle float\n\trect float float\n}\n\ndef area = fun s {\n\twhen s is shape.circle r {\n\t\t3.14159 * r * r\n\t} is shape.rect w h {\n\t\tw * h\n\t}\n}\n\ndef main = fun {\n\tprint (area (shape.circle 2.0))\n\tprint (area (shape.rect 3.0 4.0))\n}\n"
 
-def ex-trait :: string =
-	"# One name, many types — a trait with an instance.\ntrait to-text a {\n\tto-text :: a -> string\n}\n\nimplement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}\n\ndef main = fun {\n\tprint (to-text true)\n\tprint (to-text false)\n}\n"
+def ex-trait :: string = "# One name, many types — a trait with an instance.\ntrait to-text a {\n\tto-text :: a -> string\n}\n\nimplement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}\n\ndef main = fun {\n\tprint (to-text true)\n\tprint (to-text false)\n}\n"
 
-def ex-record :: string =
-	"# Records are structural; " ++ theme.dol ++ "(...) interpolates into a string.\ndef main = fun {\n\tlet user = { name: \"Ada\", age: 36 }\n\tprint \"" ++ theme.dol ++ "(user.name) is " ++ theme.dol ++ "(to-string user.age)\"\n}\n"
+def ex-record :: string = "# Records are structural; " ++ theme.dol ++ "(...) interpolates into a string.\ndef main = fun {\n\tlet user = { name: \"Ada\", age: 36 }\n\tprint \"" ++ theme.dol ++ "(user.name) is " ++ theme.dol ++ "(to-string user.age)\"\n}\n"
 
 # (label, source). The first is what loads on first paint.
 def examples :: list (string, string) = [
@@ -71,7 +66,10 @@ def placeholder :: string = "Press Run to compile this program on the server and
 
 def wrap :: css.ruleset = css.rule [css.property "padding" "3rem 0 4rem"]
 
-def head :: css.ruleset = css.rule [css.property "max-width" "44rem", css.property "margin-bottom" "2rem"]
+def head :: css.ruleset = css.rule [
+	css.property "max-width" "44rem",
+	css.property "margin-bottom" "2rem",
+]
 
 def title :: css.ruleset = css.rule [
 	css.property "font-family" theme.serif,
@@ -92,11 +90,11 @@ def grid :: css.ruleset = css.rule [
 	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr"],
 ]
 
+# `min-width: 0` here because grid items default to `min-width: auto`; without it
+# the wide code blows the column out past the viewport instead of scrolling inside.
 def col :: css.ruleset = css.rule [
 	css.display "flex",
 	css.property "flex-direction" "column",
-	# Grid items default to `min-width: auto`; without this the wide code blows the
-	# column out past the viewport instead of scrolling inside it.
 	css.property "min-width" "0",
 ]
 
@@ -183,21 +181,24 @@ def hint :: css.ruleset = css.rule [css.color (css.hex theme.faint), css.font-si
 # client). All of this lives inside the click handler, so it only ever fires after
 # hydration — the server never invokes it.
 
-def execute :: fun (fun string -> result string string) (signal string) (signal string) -> nothing =
-	fun run src out {
-		signal.set out "Compiling…"
-		task.spawn (task.map (api.compile-snippet (signal.get src)) fun compiled {
-			when compiled is ok hex {
-				when (run hex) is ok printed {
-					signal.set out (if printed == "" { "(the program printed nothing)" } else { printed })
-				} is err message {
-					signal.set out message
+def execute :: fun (fun string -> result string string) (signal string) (signal string) -> nothing = fun run src out {
+	signal.set out "Compiling…"
+	task.spawn (task.map (api.compile-snippet (signal.get src)) fun compiled {
+		when compiled is ok hex {
+			when run hex is ok printed {
+				signal.set out if printed == "" {
+					"(the program printed nothing)"
+				} else {
+					printed
 				}
 			} is err message {
 				signal.set out message
 			}
-		})
-	}
+		} is err message {
+			signal.set out message
+		}
+	})
+}
 
 # --- page -------------------------------------------------------------------
 
@@ -210,7 +211,11 @@ public def page :: fun (fun string -> result string string) (fun nothing -> stri
 	fun run initial share {
 		let _ = theme.install-globals ()
 		let start = initial ()
-		let src = signal.new (if start == "" { ex-list } else { start })
+		let src = signal.new if start == "" {
+			ex-list
+		} else {
+			start
+		}
 		let out = signal.new placeholder
 		let shared = signal.new false
 		.div [.id "app"] [
@@ -239,14 +244,14 @@ public def page :: fun (fun string -> result string string) (fun nothing -> stri
 							.textarea [.id "source", .styled editor, .value src] [],
 						],
 						.div [.styled col] [
-							.div [.styled col-head] [
-								.span [.styled lbl] [.text "Output"],
-							],
+							.div [.styled col-head] [.span [.styled lbl] [.text "Output"]],
 							.pre [.styled pane] [.text-of fun { signal.get out }],
 						],
 					],
 					.div [.styled run-row] [
-						.button [.styled theme.btn-primary, .on-click fun { execute run src out }] [.text "Run ▸"],
+						.button [.styled theme.btn-primary, .on-click fun { execute run src out }] [
+							.text "Run ▸",
+						],
 						.button [
 							.styled theme.btn-ghost,
 							.on-click fun {
@@ -254,13 +259,15 @@ public def page :: fun (fun string -> result string string) (fun nothing -> stri
 								signal.set shared true
 							},
 						] [.text "Share"],
-						.span [.styled hint] [.text-of fun {
-							if signal.get shared {
-								"Link copied to your clipboard."
-							} else {
-								"Console programs only for now — file, network, and DOM access aren't wired up in the sandbox."
-							}
-						}],
+						.span [.styled hint] [
+							.text-of fun {
+								if signal.get shared {
+									"Link copied to your clipboard."
+								} else {
+									"Console programs only for now — file, network, and DOM access aren't wired up in the sandbox."
+								}
+							},
+						],
 					],
 				],
 				theme.site-footer (),

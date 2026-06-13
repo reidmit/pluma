@@ -11,20 +11,33 @@ use std/view
 # Pluma's brand is warm paper + a quill-ink purple (pluma == feather/quill).
 
 public def paper :: string = "#fdfcfa"
+
 public def ink :: string = "#1f1d1a"
+
 public def muted :: string = "#6b655d"
+
 public def faint :: string = "#a8a39b"
+
 public def accent :: string = "#6d4aa3"
+
 public def accent-deep :: string = "#553a82"
+
 public def border :: string = "#e9e4dc"
+
 public def card-bg :: string = "#ffffff"
+
 public def code-bg :: string = "#1c1a26"
+
 public def code-fg :: string = "#e8e4f3"
+
 public def code-dim :: string = "#928bb4"
+
 public def code-soft :: string = "#f4f1ea"
 
 public def sans :: string = "'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif"
+
 public def serif :: string = "'Source Serif 4', Georgia, 'Times New Roman', serif"
+
 public def mono :: string = "'Source Code Pro', ui-monospace, 'SF Mono', Menlo, monospace"
 
 public def repo :: string = "https://github.com/reidmit/pluma"
