@@ -78,6 +78,45 @@ const floatToStr = (n, ptr, cap) => {
   return writeStr(ptr, cap, s);
 };
 
+// std/regex — match with the browser's own RegExp engine (mirrors the sys host's
+// cb_regex_find_all). Both strings are read as latin1 (one byte = one UTF-16 code
+// unit) so RegExp's code-unit offsets coincide with Pluma's byte offsets; the
+// result is a packed little-endian i32 span buffer — per match `[start, end,
+// g1s, g1e, ...]`, `-1,-1` for a group that didn't fire — delivered like an io
+// read (stashed for io-copyout when it overflows `cap`). The `d` flag exposes the
+// per-group offsets; an empty match advances one code unit. On a RegExp exception
+// (an invalid translated pattern) it records the error and returns zero matches.
+const latin1 = new TextDecoder("latin1");
+const regexFindAll = (pp, pl, ip, il, dst, cap) => {
+  let out;
+  try {
+    const mem = u8();
+    const src = latin1.decode(mem.subarray(pp, pp + pl));
+    const subject = latin1.decode(mem.subarray(ip, ip + il));
+    const re = new RegExp(src, "gd");
+    const spans = [];
+    let m;
+    while ((m = re.exec(subject)) !== null) {
+      spans.push(m.index, m.index + m[0].length);
+      const ind = m.indices;
+      for (let g = 1; g < m.length; g++) {
+        const gi = ind[g];
+        if (gi) spans.push(gi[0], gi[1]); else spans.push(-1, -1);
+      }
+      if (m[0].length === 0) re.lastIndex++;
+    }
+    out = Int32Array.from(spans);
+  } catch (e) {
+    lastError = "regex match failed";
+    out = new Int32Array(0);
+  }
+  const bytes = new Uint8Array(out.buffer, out.byteOffset, out.byteLength);
+  const n = bytes.length;
+  if (n <= (cap < 0 ? 0 : cap)) u8().set(bytes, dst);
+  else readStash = bytes.slice();
+  return n;
+};
+
 const pluma = {
   float_to_str: floatToStr,
   // std/web/dom — node handles are opaque JS DOM nodes flowing through wasm $extern boxes.
@@ -143,9 +182,12 @@ const pluma = {
     const el = document.getElementById(readStr(idp, idl));
     return writeStr(dst, cap, (el && el.textContent) || "");
   },
-  // std/sys/io error/overflow channels, shared by std/web/fetch's marshalled read.
+  // std/sys/io error/overflow channels, shared by std/web/fetch's marshalled read
+  // and std/regex's span buffer.
   "io-last-error": (dst, cap) => writeStr(dst, cap, lastError),
   "io-copyout": (dst) => { u8().set(readStash, dst); readStash = new Uint8Array(0); },
+  // std/regex — match with the browser's RegExp (see regexFindAll above).
+  "regex-find-all": regexFindAll,
   // std/web/fetch — the browser HTTP transport for RPC.
   // The request is "POST\t<url>\t<headers>\t<hex-body>"; the reply pushed back onto the
   // channel `token` is one `next` event of "<status>\t<hex-body>" bytes, then `done`
