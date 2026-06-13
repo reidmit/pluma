@@ -10,7 +10,7 @@ use cli::{Cli, Command};
 
 fn main() {
 	match Cli::parse().command {
-		Command::Version => println!("v{}", compiler::VERSION),
+		Command::Version => println!("v{}", env!("PLUMA_VERSION")),
 
 		Command::Run {
 			hmr,

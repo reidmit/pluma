@@ -27,8 +27,11 @@ pub use stdlib::{lookup_stdlib_source, stdlib_sources};
 pub use tokenizer::*;
 pub use tokens::Token;
 
-// `0.1.0-<short-sha>` in a git checkout, bare `0.1.0` from a tarball — baked by build.rs.
-pub const VERSION: &str = env!("PLUMA_VERSION");
+// The crate version (`0.1.0`). The `cli` crate appends the git short SHA for its
+// own `--version` display; this bare value is what versions the LSP's on-disk
+// stdlib cache, so it deliberately stays SHA-free (refreshes per release, not per
+// commit) and adds no git-watching build script to this hub crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BINARY_NAME: &str = "pluma";
 pub const LANGUAGE_NAME: &str = "Pluma";
 

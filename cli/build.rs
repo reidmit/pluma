@@ -4,6 +4,12 @@ use std::process::Command;
 // Cargo.toml (`CARGO_PKG_VERSION`) and, when building inside a git checkout,
 // append the short commit SHA — e.g. `0.1.0-a1b2c3d`. Building from a source
 // tarball (no git) falls back to the bare crate version.
+//
+// This lives in the `cli` crate (a leaf binary nothing depends on) on purpose:
+// `rerun-if-changed=.git/HEAD` reruns this script on every commit/checkout, and
+// the resulting env-var change recompiles the owning crate. Owning it here keeps
+// that recompile confined to `cli`; in the hub `compiler` crate it would cascade
+// through every downstream crate (ir/wasm/host/lsp/tests) on each commit.
 fn main() {
 	let base = env!("CARGO_PKG_VERSION");
 

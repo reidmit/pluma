@@ -18,7 +18,7 @@ const HELP_STYLES: Styles = Styles::styled()
 #[derive(Parser)]
 #[command(
 	name = "pluma",
-	version = compiler::VERSION,
+	version = env!("PLUMA_VERSION"),
 	about,
 	styles = HELP_STYLES,
 	// `pluma` with no arguments prints help instead of erroring.
