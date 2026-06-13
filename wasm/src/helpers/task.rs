@@ -325,8 +325,20 @@ fn emit_init_sched_state(
 	w.local_set(root_task);
 	let root_fid = w.local(ValType::I32);
 	w.i32(0).local_set(root_fid);
-	ready_push(w, g, list_append, root_fid, focus::START, |w| {
-		w.local_get(root_task);
+	// Only enqueue `main`'s result as the root task when it actually is one
+	// (`render.mount`/`hydrate` return `task nothing`). A bare side-effecting
+	// `main` returns `nothing`, whose effects already ran synchronously in
+	// `seed_root` above; enqueuing a non-task would trap the scheduler's
+	// task-cast. Spawns made during `main` are already on `ready` and still run.
+	// Mirrors the sys-host entry's TAG_TASK guard (`build_task_entry_fn`).
+	w.local_get(root_task)
+		.value_tag()
+		.i32(types::TAG_TASK)
+		.i32_eq();
+	w.if_(|w| {
+		ready_push(w, g, list_append, root_fid, focus::START, |w| {
+			w.local_get(root_task);
+		});
 	});
 }
 
