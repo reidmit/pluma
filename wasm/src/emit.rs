@@ -1727,6 +1727,30 @@ impl<'a> FnEmitter<'a> {
 			}
 			return;
 		}
+		// string.join / bytes.join : glue a list of parts with a separator in a single
+		// pass (`__join`), then stamp the result kind's tag. `$str` and `$bytes` share
+		// the wasm struct, so the only difference is the runtime tag.
+		if tag == "string-join" || tag == "bytes-join" {
+			match self.runtime.idx(Helper::Join) {
+				Some(j) => {
+					let out_tag = if tag == "string-join" {
+						types::TAG_STR
+					} else {
+						types::TAG_BYTES
+					};
+					self.ins(Instruction::I32Const(out_tag));
+					self.atom(&args[0]); // the list of parts (boxed)
+					self.atom(&args[1]); // the separator (boxed)
+					self.ins(Instruction::Call(j));
+					self.ins(Instruction::StructNew(types::T_STR));
+				}
+				None => {
+					self.diags.push(format!("`{tag}` needs __join"));
+					self.push_nothing();
+				}
+			}
+			return;
+		}
 		// dict trie ops → synthetic helpers. insert/lookup/remove receive a hash
 		// method-dict as `args[0]` (the `where (hash k)` evidence); the wasm dict
 		// keys on a structural `__hash` (consistent with `__eq`) computed inside the

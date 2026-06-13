@@ -296,26 +296,11 @@ public def ends-with :: fun string string -> bool = fun haystack suffix {
 #
 #     string.join ["a", "b", "c"] ", "   # => "a, b, c"
 #     string.join ["a", "b", "c"] ""     # => "abc"
-public def join :: fun (list string) string -> string = fun parts sep {
-	let k = list.length parts
-	if k == 0 {
-		""
-	} else {
-		join-range parts sep 0 k
-	}
-}
-
-# Joins `parts[lo..hi)` with one `sep` between each adjacent pair, halving
-# the range and concatenating the joined halves -- O(total log k) rather
-# than the O(k * total) of a left-to-right fold.
-def join-range :: fun (list string) string int int -> string = fun parts sep lo hi {
-	if hi - lo == 1 {
-		list.get parts lo
-	} else {
-		let mid = (lo + hi) / 2
-		join-range parts sep lo mid ++ sep ++ join-range parts sep mid hi
-	}
-}
+# Glues every part into one string in a single pass: sums the lengths, allocates
+# the result once, and blits each part with `sep` between -- O(total) copying and
+# one allocation (versus the O(k) intermediate strings a `concat` fold or tree
+# would build). The hot path for SSR, interpolation, and serialization.
+public def join :: fun (list string) string -> string = built-in "string-join"
 
 # Breaks a string into a list of pieces, splitting at every occurrence
 # of `separator`. Two separators in a row leave an empty string between

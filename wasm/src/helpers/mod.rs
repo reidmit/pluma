@@ -1052,6 +1052,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		deps: &[],
 		build: |c| record::build_denominalize_fn(&c.ftypes.shapes_for_lift(), c.strpool),
 	},
+	HelperDef {
+		id: H::Join,
+		fn_type: Ty::Join,
+		deps: &[],
+		build: |_| bytes::build_join_fn(),
+	},
 ];
 
 /// The helper a builtin tag lowers to, if any. These are the builtins implemented
@@ -1075,6 +1081,9 @@ pub(crate) fn helper_for_tag(tag: &str) -> Option<Helper> {
 		"bytes-build" => H::BytesBuild,
 		// `bytes.concat` reuses the `__bytesconcat` helper.
 		"bytes-concat" => H::BytesConcat,
+		// `string.join` / `bytes.join`: the single-pass join helper (both element
+		// kinds share the `$str` struct, so one helper serves both).
+		"string-join" | "bytes-join" => H::Join,
 		// dict table ops (see `helpers/dict.rs`): construct / mutate / probe the
 		// mutable open-addressing table.
 		"dict-empty" => H::DictEmpty,

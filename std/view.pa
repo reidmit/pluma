@@ -272,17 +272,28 @@ def is-void :: fun string -> bool = fun tag {
 	list.contains void-tags tag
 }
 
+# Replace `pat` with `repl` only when `pat` actually occurs -- the `contains`
+# scan is allocation-free, so clean text (the common case) skips `replace`'s
+# split+join entirely.
+def replace-if :: fun string string string -> string = fun s pat repl {
+	if string.contains s pat {
+		string.replace s pat repl
+	} else {
+		s
+	}
+}
+
 def escape-text :: fun string -> string = fun s {
-	let a = string.replace s "&" "&amp;"
-	let b = string.replace a "<" "&lt;"
-	string.replace b ">" "&gt;"
+	let a = replace-if s "&" "&amp;"
+	let b = replace-if a "<" "&lt;"
+	replace-if b ">" "&gt;"
 }
 
 def escape-attr :: fun string -> string = fun s {
-	let a = string.replace s "&" "&amp;"
-	let b = string.replace a "<" "&lt;"
-	let c = string.replace b ">" "&gt;"
-	string.replace c "\"" "&quot;"
+	let a = replace-if s "&" "&amp;"
+	let b = replace-if a "<" "&lt;"
+	let c = replace-if b ">" "&gt;"
+	replace-if c "\"" "&quot;"
 }
 
 # Render one attribute, EXCEPT the `style`- and `class`-contributing ones -- those
@@ -408,16 +419,26 @@ def style-fragment :: fun attribute -> option string = fun a {
 
 # Collect, in order, the `some` values an attribute-to-fragment function yields.
 def fragments :: fun (list attribute) (fun attribute -> option string) -> list string = fun attrs frag {
-	list.fold attrs [] fun acc a {
+	let out :: list string = []
+	let _ = list.each attrs fun a {
 		when frag a is some s {
-			list.concat acc [s]
+			list.push out s
 		} else {
-			acc
+			()
 		}
 	}
+	out
 }
 
 def render-attrs :: fun (list attribute) -> string = fun attrs {
+	if list.is-empty attrs {
+		""
+	} else {
+		render-attrs-nonempty attrs
+	}
+}
+
+def render-attrs-nonempty :: fun (list attribute) -> string = fun attrs {
 	let class-frags = fragments attrs class-fragment
 	let style-frags = fragments attrs style-fragment
 	let first-class = first-contributor attrs class-fragment

@@ -228,27 +228,11 @@ def digit :: fun int -> string = fun d {
 # each pair.
 #
 #     bytes.join ['a', 'b', 'c'] '-'   # => 'a-b-c'
-public def join :: fun (list bytes) bytes -> bytes = fun parts sep {
-	let k = list.length parts
-	if k == 0 {
-		''
-	} else {
-		join-range parts sep 0 k
-	}
-}
-
-# Joins `parts[lo..hi)` with one `sep` between each adjacent pair. Splits
-# the range in half and concatenates the two joined halves with a single
-# separator between them -- O(total log k) copying, versus the O(k *
-# total) a left-to-right `concat` fold would cost.
-def join-range :: fun (list bytes) bytes int int -> bytes = fun parts sep lo hi {
-	if hi - lo == 1 {
-		list.get parts lo
-	} else {
-		let mid = (lo + hi) / 2
-		concat (concat (join-range parts sep lo mid) sep) (join-range parts sep mid hi)
-	}
-}
+# Glues every part into one byte array in a single pass: sums the lengths,
+# allocates the result once, and blits each part with `sep` between -- O(total)
+# copying and one allocation (versus the O(k) intermediate arrays a `concat` fold
+# or tree would build).
+public def join :: fun (list bytes) bytes -> bytes = built-in "bytes-join"
 
 # Breaks the bytes into pieces at every occurrence of `separator`.
 #

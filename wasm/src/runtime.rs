@@ -519,13 +519,18 @@ pub(crate) enum Helper {
 	/// `TAG_SHAPE`) to the uniform `$record`, so the name-scanning generic consumers
 	/// can handle every record uniformly; passes any other value through unchanged.
 	Denominalize,
+	/// `__join(parts, sep) -> bytes` — single-pass `string.join`/`bytes.join`: sum
+	/// the lengths, allocate once, blit each part with `sep` between. Replaces the
+	/// binary-tree `concat` join (O(k) intermediate allocations) on the hot string-
+	/// building paths (SSR, interpolation, serialization).
+	Join,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 103;
+	pub(crate) const COUNT: usize = 104;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -748,6 +753,7 @@ pub(crate) enum Ty {
 	Helper(usize),
 	ArrConcat,
 	BytesConcat,
+	Join,
 	WireMixVal,
 	WireMixLen,
 	WirePush,
@@ -785,6 +791,7 @@ impl Ty {
 			Ty::Helper(n) => ft.for_helper(n),
 			Ty::ArrConcat => ft.for_arrconcat(),
 			Ty::BytesConcat => ft.for_bytesconcat(),
+			Ty::Join => ft.for_join(),
 			Ty::WireMixVal => ft.for_wire_mix_val(),
 			Ty::WireMixLen => ft.for_wire_mix_len(),
 			Ty::WirePush => ft.for_wire_push(),

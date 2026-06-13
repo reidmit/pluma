@@ -43,6 +43,122 @@ pub(crate) fn build_bytes_build_fn(arity1: u32) -> Function {
 	w.finish()
 }
 
+/// Build `__join(parts, sep) -> bytes`: glue a `$list` of strings/bytes into one
+/// byte array with `sep` between adjacent parts, in a single pass. Sums every
+/// part's (and separator's) length, allocates the result once, and blits each
+/// piece into place — O(total) copy and exactly one allocation, versus the
+/// binary-tree `concat` join's O(total·log k) copy and O(k) intermediate
+/// allocations. `$str` and `$bytes` share the `$str` struct, so this serves both
+/// `string.join` and `bytes.join`; the caller stamps the result tag.
+pub(crate) fn build_join_fn() -> Function {
+	let bv = types::T_BYTES;
+	let mut w = Wat::new(2);
+	let (list, sep) = (w.param(0), w.param(1));
+	let elems = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32); // part count (list's logical length)
+	let sepb = w.local(types::bytes_ref()); // sep's backing `$bytes`
+	let seplen = w.local(ValType::I32);
+	let total = w.local(ValType::I32);
+	let dst = w.local(types::bytes_ref());
+	let off = w.local(ValType::I32); // running write offset into `dst`
+	let part = w.local(types::bytes_ref()); // current part's backing `$bytes`
+	let plen = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+
+	// elems = list.elems; n = list.length (logical count, not capacity).
+	w.local_get(list)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(elems);
+	w.local_get(list)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 2)
+		.local_set(n);
+	// Fast paths that avoid allocating/copying a result: an empty list joins to an
+	// empty byte array; a singleton joins to its sole part's bytes verbatim (no
+	// separator applies). The latter is the `string.replace`-with-absent-pattern
+	// path (`split` yields one piece), which must not copy.
+	w.local_get(n).i32_eqz().if_(|w| {
+		w.i32(0).array_new_default(bv).ret();
+	});
+	w.local_get(n).i32(1).i32_eq().if_(|w| {
+		w.local_get(elems)
+			.i32(0)
+			.array_get(types::T_VALARRAY)
+			.ref_cast(types::T_STR)
+			.struct_get(types::T_STR, 1)
+			.ret();
+	});
+
+	// sepb = sep.bytes; seplen = array.len(sepb).
+	w.local_get(sep)
+		.ref_cast(types::T_STR)
+		.struct_get(types::T_STR, 1)
+		.local_set(sepb);
+	w.local_get(sepb).array_len().local_set(seplen);
+
+	// Pass 1: total = Σ len(parts[i]) + max(0, n - 1) * seplen.
+	w.i32(0).local_set(total);
+	w.i32(0).local_set(i);
+	w.block("sum_brk", |w| {
+		w.loop_("sum_lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("sum_brk");
+			w.local_get(total);
+			w.local_get(elems)
+				.local_get(i)
+				.array_get(types::T_VALARRAY)
+				.ref_cast(types::T_STR)
+				.struct_get(types::T_STR, 1)
+				.array_len();
+			w.i32_add().local_set(total);
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("sum_lp");
+		});
+	});
+	w.local_get(n).i32(1).i32_gt_s().if_(|w| {
+		w.local_get(total)
+			.local_get(n)
+			.i32(1)
+			.i32_sub()
+			.local_get(seplen)
+			.i32_mul()
+			.i32_add()
+			.local_set(total);
+	});
+
+	// dst = new bytes(total).
+	w.local_get(total).array_new_default(bv).local_set(dst);
+
+	// Pass 2: blit each part into `dst`, with `sep` before parts 1..n-1.
+	w.i32(0).local_set(off);
+	w.i32(0).local_set(i);
+	w.block("cp_brk", |w| {
+		w.loop_("cp_lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("cp_brk");
+			// Separator before every part but the first.
+			w.local_get(i).i32(0).i32_gt_s().if_(|w| {
+				w.copy_loop_bytes(bv, dst, Some(off), sepb, None, seplen);
+				w.local_get(off).local_get(seplen).i32_add().local_set(off);
+			});
+			// part = parts[i].bytes; blit it; advance the offset.
+			w.local_get(elems)
+				.local_get(i)
+				.array_get(types::T_VALARRAY)
+				.ref_cast(types::T_STR)
+				.struct_get(types::T_STR, 1)
+				.local_set(part);
+			w.local_get(part).array_len().local_set(plen);
+			w.copy_loop_bytes(bv, dst, Some(off), part, None, plen);
+			w.local_get(off).local_get(plen).i32_add().local_set(off);
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("cp_lp");
+		});
+	});
+
+	w.local_get(dst);
+	w.finish()
+}
+
 /// Build `__bytesconcat(a, b) -> bytes`: a fresh byte array holding `a` then `b`.
 pub(crate) fn build_bytesconcat_fn() -> Function {
 	let bv = types::T_BYTES;

@@ -285,6 +285,8 @@ enum FuncKind {
 	ArrConcat,
 	/// The bytes-concat helper: `(bytes, bytes) -> bytes`.
 	BytesConcat,
+	/// The single-pass join helper: `(value list, value sep) -> (ref $bytes)`.
+	Join,
 	/// The float-format host import: `(f64, i32 ptr, i32 cap) -> i32 len`. The host
 	/// formats the float and writes its UTF-8 bytes into scratch at `ptr` (≤ `cap`),
 	/// returning the length; the box/unbox to `$float` happens in wasm.
@@ -613,6 +615,11 @@ impl FuncTypes {
 	/// The type index for the bytes-concat helper: `(bytes, bytes) -> bytes`.
 	pub fn for_bytesconcat(&mut self) -> u32 {
 		self.intern(FuncKind::BytesConcat)
+	}
+
+	/// The type index for the join helper: `(value, value) -> (ref $bytes)`.
+	pub fn for_join(&mut self) -> u32 {
+		self.intern(FuncKind::Join)
 	}
 
 	/// The type index for the float-format host import: `(f64, i32, i32) -> i32`.
@@ -1205,6 +1212,7 @@ impl FuncTypes {
 				FuncKind::Helper(n) => (value_ref(), n, vec![value_ref()]),
 				FuncKind::ArrConcat => (valarray_ref(), 2, vec![valarray_ref()]),
 				FuncKind::BytesConcat => (bytes_ref(), 2, vec![bytes_ref()]),
+				FuncKind::Join => (value_ref(), 2, vec![bytes_ref()]),
 				// Heterogeneous params — built directly below rather than via `param_ty`.
 				FuncKind::FloatToStr => {
 					types
