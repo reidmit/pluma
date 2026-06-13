@@ -467,15 +467,107 @@ def adopt :: fun view dom.node -> nothing = fun v node {
 			adopt-attr node a
 		}
 		adopt-classes node attrs
-		list.each (list.enumerate kids) fun pair {
-			let (i, k) = pair
-			adopt k (dom.child-at node i)
-		}
+		adopt-children node kids
 	} is view.dyn-node f {
 		adopt-dyn node f
 	} is view.for-node thunk {
 		adopt-for node thunk
 	}
+}
+
+# Adopt an element's children against the DOM the server rendered.
+#
+# `view.to-string` serialises adjacent text views (static `view.text` and reactive
+# `view.text-of`) as one concatenated stretch of characters, and the browser's HTML
+# parser hands that back as a *single* text node -- so a run of N neighbouring text
+# views corresponds to one DOM node, not N. Walking children by raw index would slip
+# past that point and read off the end of the list. Instead we walk run by run: a
+# non-text child is one node; a run of text views is the one merged node. Where the
+# run is purely static we leave that node alone (its text is already the right
+# concatenation); where it carries a reactive piece we rebuild the run into one fresh
+# node apiece, so each effect owns the node it updates.
+def adopt-children :: fun dom.node (list view) -> nothing = fun parent kids {
+	adopt-walk parent kids 0
+}
+
+def adopt-walk :: fun dom.node (list view) int -> nothing = fun parent kids i {
+	when kids is [k, ...rest] {
+		if is-text k {
+			let n = text-run-len kids
+			if n == 1 {
+				adopt k (dom.child-at parent i)
+				adopt-walk parent rest (i + 1)
+			} else if run-has-dynamic kids n {
+				rebuild-text-run parent (dom.child-at parent i) (list.take kids n)
+				adopt-walk parent (list.drop kids n) (i + n)
+			} else {
+				adopt-walk parent (list.drop kids n) (i + 1)
+			}
+		} else {
+			adopt k (dom.child-at parent i)
+			adopt-walk parent rest (i + 1)
+		}
+	} is [] {
+		()
+	}
+}
+
+# Whether a view becomes a text node in the DOM (a static or reactive text run).
+def is-text :: fun view -> bool = fun v {
+	when v is view.txt _s {
+		true
+	} is view.dynamic-text _f {
+		true
+	} else {
+		false
+	}
+}
+
+def is-dynamic-text :: fun view -> bool = fun v {
+	when v is view.dynamic-text _f {
+		true
+	} else {
+		false
+	}
+}
+
+# How many text views lead the list (the length of the run starting at its head).
+def text-run-len :: fun (list view) -> int = fun vs {
+	when vs is [v, ...rest] {
+		if is-text v {
+			1 + text-run-len rest
+		} else {
+			0
+		}
+	} is [] {
+		0
+	}
+}
+
+# Whether any of the first `n` views is a reactive (rather than static) text node.
+def run-has-dynamic :: fun (list view) int -> bool = fun vs n {
+	if n <= 0 {
+		false
+	} else {
+		when vs is [v, ...rest] {
+			if is-dynamic-text v {
+				true
+			} else {
+				run-has-dynamic rest (n - 1)
+			}
+		} is [] {
+			false
+		}
+	}
+}
+
+# Replace the single merged text node with one fresh node per view in the run, in
+# order, then drop the merged node.
+def rebuild-text-run :: fun dom.node dom.node (list view) -> nothing = fun parent merged run {
+	list.each run fun v {
+		dom.insert-before parent (build v) merged
+	}
+	dom.remove-child parent merged
 }
 
 # Adopt one attribute onto an existing node. Static attributes and DOM properties

@@ -228,7 +228,7 @@ def sec-collections :: view = doc-section "collections" "Lists, tuples, and reco
 	h3 "Records",
 	pr [t "A record holds named fields. Write one with braces, and read a field with a dot."],
 	code "let person = {name: \"Ada\", age: 36}\nprint person.name        # Ada",
-	pr [t "Records are structural, which has a pleasant consequence: a function that reads a couple of fields works on ", view.em [] [t "any"], t " record that has them, whatever else it carries. This one accepts anything with a ", ic "name", t ":"],
+	pr [t "Records are structural, which has a pleasant consequence: a function that reads a couple of fields works on ", t "any", t " record that has them, whatever else it carries. This one accepts anything with a ", ic "name", t ":"],
 	code "def label = fun thing { thing.name }\n\nlabel {name: \"Ada\", age: 36}          # works\nlabel {name: \"Mars\", radius: 3389.5}  # also works",
 ]
 
