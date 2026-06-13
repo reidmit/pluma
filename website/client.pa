@@ -1,0 +1,21 @@
+# The client half — boots the browser app by *hydrating* the server-rendered DOM.
+# `pluma build website/` emits this to a web bundle (app.wasm + loader.js).
+#
+# Pages live in shared modules so the server can render the same views to HTML.
+# Navigation between pages is a plain link, so the browser fetches the next page's
+# server-rendered markup and we hydrate whichever one matches the current path:
+# `render.hydrate` walks that page's view alongside the existing DOM, attaching the
+# listeners and reactive bits to the server's nodes instead of rebuilding them.
+
+use std/web/dom
+use std/web/render
+use ui
+use reference
+
+def main = fun {
+	if dom.path () == "/reference" {
+		render.hydrate (dom.body ()) reference.page
+	} else {
+		render.hydrate (dom.body ()) ui.page
+	}
+}

@@ -1,0 +1,26 @@
+# The RPC contract for pluma.fun — compiled into BOTH artifacts. Each `remote def`
+# is one signature with two bodies: on the server the body below is the real
+# handler; on the client the compiler swaps it for a transport stub (encode args →
+# POST /rpc/<name> → decode reply). So `api.cheer ()` reads like a local async call
+# on both ends, and they agree by construction.
+#
+# The site needs no real backend yet, but it is still a fullstack app: this module
+# exercises the whole RPC path with a tiny piece of shared server state.
+
+use std/task
+
+# An in-memory "loved N times" counter, shared by every visitor for the lifetime
+# of the server process. A toy stand-in for real server state (a database read, a
+# downstream call) that a browser can't do directly.
+def hearts :: ref int = ref.new 0
+
+# Read the current count — called once when the page mounts in the browser.
+public remote def heart-count :: fun nothing -> task int = fun {
+	task.return (ref.get hearts)
+}
+
+# Bump the count and return the new total.
+public remote def cheer :: fun nothing -> task int = fun {
+	ref.set hearts (ref.get hearts + 1)
+	task.return (ref.get hearts)
+}

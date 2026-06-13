@@ -1,0 +1,337 @@
+# The landing page for pluma.fun. `page` is a pure `view` builder (no side effects
+# at construction) so it renders identically on the server (`view.to-string`, via
+# `theme.document-html`) and the client (`render.hydrate`). The only effects — the
+# `api.cheer` remote calls — live inside event/mount handlers, which run only in the
+# browser after hydration; `view.to-string` drops them. That is what makes the page
+# isomorphic: the server emits the styled shell for an instant first paint, then the
+# client adopts those exact nodes and they come alive.
+
+use std/css
+use std/list
+use std/signal
+use std/task
+use std/view
+use api
+use theme
+
+# --- hero -------------------------------------------------------------------
+
+def hero :: css.ruleset = css.rule [css.property "padding" "4rem 0 5rem"]
+
+def hero-grid :: css.ruleset = css.rule [
+	css.display "grid",
+	css.property "grid-template-columns" "1.05fr 1fr",
+	css.gap (css.rem 3.0),
+	css.align-items "center",
+	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr", css.gap (css.rem 2.5)],
+]
+
+def eyebrow :: css.ruleset = css.rule [
+	css.property "text-transform" "uppercase",
+	css.property "letter-spacing" "0.12em",
+	css.font-size (css.rem 0.78),
+	css.font-weight "600",
+	css.color (css.hex theme.accent),
+	css.property "margin-bottom" "1rem",
+]
+
+def headline :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.property "font-size" "clamp(2.4rem, 5vw, 3.5rem)",
+	css.line-height 1.06,
+	css.property "letter-spacing" "-0.025em",
+	css.font-weight "600",
+	css.property "margin-bottom" "1.2rem",
+]
+
+def lead :: css.ruleset = css.rule [
+	css.font-size (css.rem 1.18),
+	css.color (css.hex theme.muted),
+	css.property "max-width" "34rem",
+	css.property "margin-bottom" "2rem",
+]
+
+def cta-row :: css.ruleset = css.rule [css.display "flex", css.gap (css.rem 0.8), css.property "flex-wrap" "wrap"]
+
+# --- code card (interactive tabs) -------------------------------------------
+
+def code-card :: css.ruleset = css.rule [
+	css.background (css.hex theme.code-bg),
+	css.border-radius (css.px 14.0),
+	css.property "box-shadow" "0 24px 60px -20px rgba(28, 26, 38, 0.45)",
+	css.overflow "hidden",
+	# Grid items default to `min-width: auto`, so the wide <pre> would blow the
+	# column out past the viewport; this lets it shrink and the <pre> scroll.
+	css.property "min-width" "0",
+]
+
+def card-tabs :: css.ruleset = css.rule [
+	css.display "flex",
+	css.gap (css.rem 0.2),
+	css.property "padding" "0.6rem 0.6rem 0",
+	css.property "border-bottom" "1px solid rgba(255, 255, 255, 0.07)",
+]
+
+def tab :: css.ruleset = css.rule [
+	css.background (css.hex "#ffffff00"),
+	css.property "border" "none",
+	css.color (css.hex theme.code-dim),
+	css.property "padding" "0.5rem 0.85rem",
+	css.font-size (css.rem 0.85),
+	css.property "font-family" theme.mono,
+	css.cursor "pointer",
+	css.border-radius (css.px 8.0),
+	css.property "transition" "color 0.15s ease",
+	css.on "hover" [css.color (css.hex theme.code-fg)],
+]
+
+def tab-on :: css.ruleset = css.rule [
+	css.color (css.hex theme.code-fg),
+	css.background (css.hex "#ffffff12"),
+]
+
+def code-block :: css.ruleset = css.rule [
+	css.property "margin" "0",
+	css.property "padding" "1.4rem 1.5rem",
+	css.property "font-family" theme.mono,
+	css.font-size (css.rem 0.8),
+	css.line-height 1.7,
+	css.color (css.hex theme.code-fg),
+	css.property "white-space" "pre",
+	css.property "tab-size" "2",
+	css.property "overflow-x" "auto",
+]
+
+# --- features ---------------------------------------------------------------
+
+def section :: css.ruleset = css.rule [css.property "padding" "4rem 0"]
+
+def section-head :: css.ruleset = css.rule [css.property "max-width" "40rem", css.property "margin-bottom" "2.5rem"]
+
+def section-title :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 2.0),
+	css.line-height 1.15,
+	css.property "letter-spacing" "-0.02em",
+	css.font-weight "600",
+	css.property "margin-bottom" "0.7rem",
+]
+
+def section-sub :: css.ruleset = css.rule [css.font-size (css.rem 1.1), css.color (css.hex theme.muted)]
+
+def feature-grid :: css.ruleset = css.rule [
+	css.display "grid",
+	css.property "grid-template-columns" "repeat(3, 1fr)",
+	css.gap (css.rem 1.4),
+	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr"],
+]
+
+def feature-card :: css.ruleset = css.rule [
+	css.background (css.hex theme.card-bg),
+	css.property "border" "1px solid #e9e4dc",
+	css.border-radius (css.px 14.0),
+	css.property "padding" "1.6rem",
+	css.property "transition" "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
+	css.on "hover" [
+		css.property "transform" "translateY(-3px)",
+		css.property "box-shadow" "0 16px 32px -18px rgba(31, 29, 26, 0.28)",
+		css.border-color (css.hex theme.accent),
+	],
+]
+
+def feature-icon :: css.ruleset = css.rule [css.font-size (css.rem 1.7), css.property "margin-bottom" "0.8rem"]
+
+def feature-title :: css.ruleset = css.rule [
+	css.font-size (css.rem 1.08),
+	css.font-weight "600",
+	css.property "margin-bottom" "0.4rem",
+]
+
+def feature-text :: css.ruleset = css.rule [css.color (css.hex theme.muted), css.font-size (css.rem 0.96)]
+
+# --- meta strip (the live RPC demo) -----------------------------------------
+
+def strip :: css.ruleset = css.rule [
+	css.background (css.hex theme.code-bg),
+	css.color (css.hex theme.code-fg),
+	css.border-radius (css.px 18.0),
+	css.property "padding" "3.5rem 2rem",
+	css.text-align "center",
+	css.property "margin" "2rem 0 4rem",
+]
+
+def strip-eyebrow :: css.ruleset = css.compose [
+	eyebrow,
+	css.rule [css.color (css.hex "#c4a8ee")],
+]
+
+def strip-title :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 2.1),
+	css.font-weight "600",
+	css.property "margin-bottom" "0.8rem",
+]
+
+def strip-text :: css.ruleset = css.rule [
+	css.color (css.hex "#c9c4dd"),
+	css.font-size (css.rem 1.08),
+	css.property "max-width" "38rem",
+	css.property "margin" "0 auto 2rem",
+]
+
+def heart-btn :: css.ruleset = css.rule [
+	css.background (css.hex "#ffffff15"),
+	css.color (css.hex "#ffffff"),
+	css.property "border" "1px solid rgba(255, 255, 255, 0.22)",
+	css.property "padding" "0.7rem 1.4rem",
+	css.border-radius (css.px 999.0),
+	css.font-size (css.rem 1.0),
+	css.font-weight "600",
+	css.cursor "pointer",
+	css.property "font-family" theme.sans,
+	css.property "transition" "background 0.15s ease",
+	css.on "hover" [css.background (css.hex "#ffffff28")],
+]
+
+# --- showcase snippets ------------------------------------------------------
+#
+# Display-only Pluma source for the tabbed hero card. Each entry is (label, code).
+
+def snippets :: list (string, string) = [
+	(
+		"hello",
+		"def main = fun {\n\tlet xs = [1, 2, 3, 4]\n\tlet ys = list.map xs fun n { n * 2 }\n\tprint \"sum = " ++ theme.dol ++ "(to-string (list.sum ys))\"\n}",
+	),
+	(
+		"types",
+		"enum tree a {\n\tleaf\n\tnode (tree a) a (tree a)\n}\n\n# inferred: fun (tree int) -> int\ndef total = fun t {\n\twhen t is tree.leaf {\n\t\t0\n\t} is tree.node l v r {\n\t\ttotal l + v + total r\n\t}\n}",
+	),
+	(
+		"traits",
+		"trait to-text a {\n\tto-text :: a -> string\n}\n\nimplement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}\n\n# one name, dispatched on the type\ndef shout = fun x { to-text x ++ \"!\" }",
+	),
+	(
+		"fullstack",
+		"# api.pa — one signature, two sides\nremote def hi :: fun string -> task string =\n\tfun name { task.return (\"hi, \" ++ name) }\n\n# ui.pa — the browser just calls it\nlet msg = api.hi \"you\"",
+	),
+]
+
+def snippet-label :: fun int -> string = fun i {
+	let (label, _code) = list.get snippets i
+	label
+}
+
+def snippet-code :: fun int -> string = fun i {
+	let (_label, code) = list.get snippets i
+	code
+}
+
+def tab-btn :: fun (signal int) int -> view = fun active idx {
+	view.button [
+		view.styled tab,
+		view.styled-when tab-on fun { signal.get active == idx },
+		view.on-click fun { signal.set active idx },
+	] [view.text (snippet-label idx)]
+}
+
+def feature :: fun string string string -> view = fun icon title body {
+	view.div [view.styled feature-card] [
+		view.div [view.styled feature-icon] [view.text icon],
+		view.div [view.styled feature-title] [view.text title],
+		view.p [view.styled feature-text] [view.text body],
+	]
+}
+
+# --- sections ---------------------------------------------------------------
+
+def hero-section :: fun nothing -> view = fun {
+	let active = signal.new 0
+	view.section [view.styled hero] [
+		view.div [view.styled hero-grid] [
+			view.div [] [
+				view.div [view.styled eyebrow] [view.text "A functional language · server to browser"],
+				view.h1 [view.styled headline] [view.text "Write the whole app in one calm language."],
+				view.p [view.styled lead] [
+					view.text "Pluma is a small, statically-typed functional language with full type inference — and a fullstack framework that compiles to WebAssembly. Your API and your UI, the same syntax, the same backend.",
+				],
+				view.div [view.styled cta-row] [
+					view.a [view.styled theme.btn-primary, view.href "/reference"] [view.text "Read the reference"],
+					view.a [view.styled theme.btn-ghost, view.href theme.repo] [view.text "View source →"],
+				],
+			],
+			view.div [view.styled code-card] [
+				view.div [view.styled card-tabs] [
+					tab-btn active 0,
+					tab-btn active 1,
+					tab-btn active 2,
+					tab-btn active 3,
+				],
+				view.pre [view.styled code-block] [
+					view.code [] [view.text-of fun { snippet-code (signal.get active) }],
+				],
+			],
+		],
+	]
+}
+
+def features-section :: fun nothing -> view = fun {
+	view.section [view.styled section] [
+		view.div [view.styled section-head] [
+			view.div [view.styled section-title] [view.text "Small surface, serious reach."],
+			view.p [view.styled section-sub] [
+				view.text "A handful of ideas that compose — inference, immutability, traits, and a fullstack story that doesn't leave the language.",
+			],
+		],
+		view.div [view.styled feature-grid] [
+			feature "🪶" "Inference that gets out of the way" "Full Hindley–Milner inference. Write zero annotations and still get end-to-end static types — add `::` only where it sharpens intent.",
+			feature "🧊" "Immutable by default" "Values don't change out from under you. `ref` is the one mutation primitive; reach for it only when you genuinely need a cell.",
+			feature "🌐" "One language, server to browser" "`remote def` turns a function into a typed RPC. The compiler writes the client stub and the server route, so the two agree by construction.",
+			feature "⚡" "Fine-grained reactivity" "Signals track exactly what changed — no virtual DOM, no re-render guesswork. Server-render and hydrate from the very same view.",
+			feature "🧩" "Traits & row-polymorphic records" "Ad-hoc polymorphism through traits; structural records that accept extra fields. Composition without the ceremony.",
+			feature "📦" "Compiles to WasmGC" "One backend. `pluma run` and `pluma test` execute the exact artifact you deploy — under V8 today, the open web tomorrow.",
+		],
+	]
+}
+
+def meta-section :: fun (signal int) -> view = fun loved {
+	view.section [
+		view.styled strip,
+		view.on-mount fun {
+			task.spawn (task.map (api.heart-count ()) fun n {
+				signal.set loved n
+			})
+		},
+	] [
+		view.div [view.styled strip-eyebrow] [view.text "Yes, really"],
+		view.div [view.styled strip-title] [view.text "This page is a Pluma program."],
+		view.p [view.styled strip-text] [
+			view.text "The site you're reading is a fullstack Pluma app — server-rendered for an instant first paint, then hydrated in the browser. The button below makes a typed RPC round-trip to the server and back.",
+		],
+		view.button [
+			view.styled heart-btn,
+			view.on-click fun {
+				task.spawn (task.map (api.cheer ()) fun n {
+					signal.set loved n
+				})
+			},
+		] [
+			view.text-of fun { "♥ loved " ++ to-string (signal.get loved) ++ " times" },
+		],
+	]
+}
+
+# --- page -------------------------------------------------------------------
+
+public def page :: fun nothing -> view = fun {
+	let _ = theme.install-globals ()
+	let loved = signal.new 0
+	view.div [view.id "app"] [
+		view.div [view.styled theme.shell] [
+			theme.top-nav (),
+			hero-section (),
+			features-section (),
+			meta-section loved,
+			theme.site-footer (),
+		],
+	]
+}

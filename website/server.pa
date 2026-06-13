@@ -1,0 +1,31 @@
+# The server half of pluma.fun. One `std/sys/http` server, three responsibilities:
+#   - GET `/`          → the server-side-rendered landing page
+#   - GET `/reference` → the server-side-rendered language reference
+#   - everything else  → `rpc.dispatch`, the route table the compiler synthesizes
+#                        from `api.pa`'s `remote def`s (it handles the `/rpc/*` calls)
+#
+# Each page is rendered to HTML by `theme.document-html` for a real first paint; the
+# client then hydrates whichever page matches the path. `http.serve` binds to
+# `$PORT` when set (so `pluma dev` and a real host can hand it a port) and the
+# address below otherwise.
+
+use std/rpc
+use std/task
+use std/sys/http
+use theme
+use ui
+use reference
+
+def handler :: fun http.request -> task http.response = fun req {
+	if req.path == "/" {
+		task.return (http.html 200 (theme.document-html "Pluma — a fullstack functional language" (ui.page ())))
+	} else if req.path == "/reference" {
+		task.return (http.html 200 (theme.document-html "Language reference — Pluma" (reference.page ())))
+	} else {
+		rpc.dispatch req
+	}
+}
+
+def main = fun {
+	http.serve "127.0.0.1:8080" handler
+}

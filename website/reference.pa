@@ -1,0 +1,345 @@
+# The language reference page. Long-form prose that builds up the language one
+# idea at a time, each section leaning on the ones before it. Like the landing
+# page, `page` is a pure `view` builder so the server can render it to HTML and the
+# client can hydrate the same tree. There are no remote calls here — it's a static
+# document — but it shares the site chrome (nav, footer, palette) through `theme`.
+
+use std/css
+use std/list
+use std/view
+use theme
+
+# --- doc layout -------------------------------------------------------------
+
+def doc-grid :: css.ruleset = css.rule [
+	css.display "grid",
+	css.property "grid-template-columns" "190px 1fr",
+	css.gap (css.rem 3.5),
+	css.property "align-items" "start",
+	css.property "padding" "1rem 0 2rem",
+	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr"],
+]
+
+def sidebar :: css.ruleset = css.rule [
+	css.property "position" "sticky",
+	css.property "top" "1.5rem",
+	css.property "align-self" "start",
+	css.font-size (css.rem 0.92),
+	css.media "(max-width: 860px)" [css.display "none"],
+]
+
+def side-title :: css.ruleset = css.rule [
+	css.property "text-transform" "uppercase",
+	css.property "letter-spacing" "0.1em",
+	css.font-size (css.rem 0.72),
+	css.font-weight "600",
+	css.color (css.hex theme.faint),
+	css.property "margin-bottom" "0.9rem",
+]
+
+def side-list :: css.ruleset = css.rule [css.display "flex", css.flex-direction "column", css.gap (css.rem 0.1)]
+
+def side-item :: css.ruleset = css.rule [
+	css.property "padding" "0.28rem 0",
+	css.color (css.hex theme.muted),
+	css.property "border-left" "2px solid transparent",
+	css.property "padding-left" "0.8rem",
+	css.property "margin-left" "-0.8rem",
+	css.property "transition" "color 0.12s ease, border-color 0.12s ease",
+	css.on "hover" [css.color (css.hex theme.accent), css.property "border-color" "#6d4aa3"],
+]
+
+def doc-main :: css.ruleset = css.rule [css.property "min-width" "0", css.property "max-width" "44rem"]
+
+# --- prose ------------------------------------------------------------------
+
+def doc-title :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.property "font-size" "2.6rem",
+	css.line-height 1.1,
+	css.property "letter-spacing" "-0.025em",
+	css.font-weight "600",
+	css.property "margin-bottom" "0.6rem",
+]
+
+def doc-sub :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 1.25),
+	css.property "font-style" "italic",
+	css.color (css.hex theme.muted),
+	css.property "margin-bottom" "1rem",
+]
+
+def sect :: css.ruleset = css.rule [css.property "scroll-margin-top" "1.5rem", css.property "padding-top" "2.2rem"]
+
+def doc-h2 :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 1.7),
+	css.property "letter-spacing" "-0.02em",
+	css.font-weight "600",
+	css.property "margin-bottom" "0.4rem",
+]
+
+def doc-h3 :: css.ruleset = css.rule [
+	css.font-size (css.rem 1.12),
+	css.font-weight "600",
+	css.property "margin" "1.8rem 0 0.2rem",
+]
+
+def doc-p :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 1.08),
+	css.line-height 1.75,
+	css.property "color" "#2b2823",
+	css.property "margin" "1rem 0",
+]
+
+def inline-code :: css.ruleset = css.rule [
+	css.property "font-family" theme.mono,
+	css.property "font-size" "0.88em",
+	css.background (css.hex theme.code-soft),
+	css.color (css.hex theme.accent-deep),
+	css.property "padding" "0.1em 0.36em",
+	css.border-radius (css.px 5.0),
+]
+
+def doc-pre :: css.ruleset = css.rule [
+	css.property "font-family" theme.mono,
+	css.font-size (css.rem 0.88),
+	css.line-height 1.6,
+	css.background (css.hex theme.code-soft),
+	css.property "border" "1px solid #e9e4dc",
+	css.property "color" "#2b2823",
+	css.border-radius (css.px 10.0),
+	css.property "padding" "1rem 1.2rem",
+	css.property "margin" "1.2rem 0",
+	css.property "white-space" "pre",
+	css.property "tab-size" "2",
+	css.property "overflow-x" "auto",
+]
+
+def callout :: css.ruleset = css.rule [
+	css.background (css.hex "#f3eefb"),
+	css.property "border-left" "3px solid #6d4aa3",
+	css.border-radius (css.px 8.0),
+	css.property "padding" "0.4rem 1.2rem",
+	css.property "margin" "1.4rem 0",
+]
+
+def doc-cta :: css.ruleset = css.rule [css.display "flex", css.gap (css.rem 0.8), css.property "flex-wrap" "wrap", css.property "margin-top" "1.6rem"]
+
+# --- prose helpers ----------------------------------------------------------
+
+def t :: fun string -> view = view.text
+
+def p :: fun string -> view = fun s { view.p [view.styled doc-p] [view.text s] }
+
+def pr :: fun (list view) -> view = fun kids { view.p [view.styled doc-p] kids }
+
+def h3 :: fun string -> view = fun s { view.h3 [view.styled doc-h3] [view.text s] }
+
+def ic :: fun string -> view = fun s { view.code [view.styled inline-code] [view.text s] }
+
+def code :: fun string -> view = fun s {
+	view.pre [view.styled doc-pre] [view.code [] [view.text s]]
+}
+
+def note :: fun (list view) -> view = fun kids { view.div [view.styled callout] kids }
+
+def doc-section :: fun string string (list view) -> view = fun id title body {
+	view.section [view.id id, view.styled sect] [view.h2 [view.styled doc-h2] [view.text title], ...body]
+}
+
+# --- table of contents ------------------------------------------------------
+
+def toc :: list (string, string) = [
+	("intro", "A first look"),
+	("values", "Values & types"),
+	("bindings", "let and def"),
+	("functions", "Functions"),
+	("strings", "Strings"),
+	("collections", "Lists, tuples, records"),
+	("control-flow", "if, when, while"),
+	("patterns", "Patterns"),
+	("enums", "Enums"),
+	("options", "option & result"),
+	("mutation", "ref"),
+	("traits", "Traits"),
+	("modules", "Modules"),
+	("fullstack", "Going fullstack"),
+]
+
+def side-link :: fun (string, string) -> view = fun entry {
+	let (id, title) = entry
+	view.a [view.styled side-item, view.href ("#" ++ id)] [view.text title]
+}
+
+# --- sections ---------------------------------------------------------------
+
+def sec-intro :: view = doc-section "intro" "A first look" [
+	p "Pluma is a small functional language. This page walks through it from the ground up — each idea builds on the one before, so reading top to bottom is the intended path. You only need to know how to program; we'll define the rest as we go.",
+	p "A Pluma program is a list of definitions. One of them is named main, and running the program runs it.",
+	code "def main = fun {\n\tprint \"hello, world\"\n}",
+	pr [t "Here ", ic "def", t " gives a name to a value. ", ic "fun { ... }", t " is a function — in this case one that takes no arguments and prints a greeting. ", ic "print", t " writes a line to the screen. Run it, and you get ", ic "hello, world", t "."],
+	p "Everything that follows is about the values you can name, the types they carry, and the handful of forms for putting them together.",
+]
+
+def sec-values :: view = doc-section "values" "Values and types" [
+	p "Pluma has the building blocks you'd expect: whole numbers, decimals, text, and true-or-false.",
+	code "let count = 10        # int\nlet price = 1.99      # float\nlet name  = \"Ada\"     # string\nlet ready = true      # bool",
+	pr [t "Every value has a type, and Pluma checks those types before your program runs — so a whole class of mistakes is caught early. But you rarely write the types out: Pluma works them out from how a value is used. The ", ic "# int", t " comments above are just for us; the compiler already knew."],
+	pr [t "Whole numbers (", ic "int", t ") and decimals (", ic "float", t ") are kept separate on purpose. There's no silent conversion between them, so ", ic "2 + 3.5", t " is a type error rather than a surprise. If you want a float, say so: ", ic "2.0 + 3.5", t "."],
+]
+
+def sec-bindings :: view = doc-section "bindings" "Naming things: let and def" [
+	pr [t "There are two ways to give something a name. ", ic "def", t " works at the top level of a file; ", ic "let", t " works inside a function."],
+	code "def pi = 3.14159          # top level\n\ndef main = fun {\n\tlet radius = 2.0      # local to this function\n\tlet area = pi * radius * radius\n\tprint (to-string area)\n}",
+	pr [t "Both use ", ic "=", t " to join the name and the value. A ", ic "def", t " is visible to the whole file (and, if you mark it ", ic "public", t ", to other files — more on that later). A ", ic "let", t " is visible only from where it appears to the end of its function."],
+	pr [t "These names aren't variables in the change-it-later sense: once bound, a name keeps its value. When you genuinely need something that changes over time, you reach for a ", ic "ref", t ", which has its own section below."],
+]
+
+def sec-functions :: view = doc-section "functions" "Functions" [
+	pr [t "A function is written ", ic "fun", t ", then its argument names, then a block. The block's last expression is what the function gives back — there's no ", ic "return", t " keyword."],
+	code "let double = fun n { n * 2 }\nlet add = fun x y { x + y }\nlet greet = fun { print \"hi\" }   # no arguments",
+	p "You call a function by writing it next to its arguments, separated by spaces — no parentheses around the whole call. Parentheses are only for grouping sub-expressions.",
+	code "double 21          # => 42\nadd 2 3            # => 5\nprint (double 21)  # parens group the inner call",
+	note [
+		pr [t "One thing to know up front: a function takes all of its arguments at once. ", ic "add 2", t " isn't \"add with one argument filled in\" — it's an error, because ", ic "add", t " wants two. If you want a version of ", ic "add", t " with the first argument fixed, write a little function that says so:"],
+		code "let add-five = fun y { add 5 y }",
+	],
+]
+
+def sec-strings :: view = doc-section "strings" "Strings and text" [
+	pr [t "Strings are written with double quotes. To drop a value into the middle of one, use ", ic (theme.dol ++ "(...)"), t " — whatever's inside the parentheses is evaluated and spliced in."],
+	code ("let name = \"Ada\"\nprint \"hello, " ++ theme.dol ++ "(name)\"               # hello, Ada\n\nlet n = 42\nprint \"the answer is " ++ theme.dol ++ "(to-string n)\""),
+	pr [t "Text is always text — a number isn't automatically a string, so you call ", ic "to-string", t " when you want to show one. Join two strings with ", ic "++", t "."],
+	code "\"foo\" ++ \"bar\"     # => \"foobar\"",
+]
+
+def sec-collections :: view = doc-section "collections" "Lists, tuples, and records" [
+	p "Three ways to hold more than one value at a time.",
+	h3 "Lists",
+	pr [t "A list holds any number of values, all of the same type. Write one with square brackets."],
+	code "let primes = [2, 3, 5, 7, 11]\nlet names = [\"Ada\", \"Alan\", \"Grace\"]",
+	pr [t "The ", ic "std/list", t " module has the usual tools — ", ic "list.map", t " to transform every element, ", ic "list.filter", t " to keep some, and plenty more."],
+	h3 "Tuples",
+	p "A tuple holds a fixed number of values that may have different types. Write one with parentheses and commas.",
+	code "let point = (1, 2)\nlet row = (\"Ada\", 36, true)",
+	h3 "Records",
+	pr [t "A record holds named fields. Write one with braces, and read a field with a dot."],
+	code "let person = {name: \"Ada\", age: 36}\nprint person.name        # Ada",
+	pr [t "Records are structural, which has a pleasant consequence: a function that reads a couple of fields works on ", view.em [] [t "any"], t " record that has them, whatever else it carries. This one accepts anything with a ", ic "name", t ":"],
+	code "def label = fun thing { thing.name }\n\nlabel {name: \"Ada\", age: 36}          # works\nlabel {name: \"Mars\", radius: 3389.5}  # also works",
+]
+
+def sec-control :: view = doc-section "control-flow" "Making decisions: if, when, and while" [
+	h3 "if",
+	pr [t "An ", ic "if", t " runs a block when a condition holds, and an optional ", ic "else", t " block otherwise."],
+	code "if score > 100 {\n\tprint \"high score!\"\n} else {\n\tprint \"keep going\"\n}",
+	pr [t "An ", ic "if", t " is also an expression — it can produce a value you then name:"],
+	code "let label = if ready { \"go\" } else { \"wait\" }",
+	pr [t "And it chains with ", ic "else if", t ", just as you'd expect."],
+	h3 "when",
+	pr [t "When there are several cases, ", ic "when", t " is clearer. It checks the cases top to bottom and takes the first that matches. A ", ic "when", t " must cover every possibility, so you can't quietly forget a case — the compiler will point it out."],
+	code "when http-status is 200 {\n\t\"ok\"\n} is 404 {\n\t\"not found\"\n} else {\n\t\"something else\"\n}",
+	h3 "while",
+	pr [t "A ", ic "while", t " repeats its block for as long as the condition holds."],
+	code "let i = ref.new 0\nwhile ref.get i < 3 {\n\tprint (to-string (ref.get i))\n\tref.update i fun n { n + 1 }\n}",
+]
+
+def sec-patterns :: view = doc-section "patterns" "Patterns and destructuring" [
+	pr [t "Each ", ic "is ...", t " clause above is a pattern — a shape a value might match. Patterns also pull values apart. You can destructure a tuple or record right in a ", ic "let", t " to name its pieces:"],
+	code "let (x, y) = (10, 20)\nlet {name: n, age: a} = person",
+	p "Some patterns always match — naming a value, or splitting a tuple of known size. Others might not, like checking for a specific number. Patterns that can fail belong in if, when, or while, where there's a branch to take when they don't. The always-match kind can also be used in a let.",
+	p "Lists can be matched by shape, too — the empty list, or a first element and \"the rest\":",
+	code ("when items is [] {\n\t\"nothing here\"\n} is [first, ...rest] {\n\t\"starts with " ++ theme.dol ++ "(to-string first)\"\n}"),
+]
+
+def sec-enums :: view = doc-section "enums" "Your own types: enums" [
+	pr [t "An ", ic "enum", t " defines a type by listing the shapes its values can take. Each shape is a variant. The simplest enums are just a set of named choices:"],
+	code "enum color {\n\tred\n\tgreen\n\tblue\n}",
+	p "Variants can also carry data. A shape might be a circle with a radius, or a rectangle with a width and a height:",
+	code "enum shape {\n\tcircle float\n\trect float float\n}\n\nlet s = shape.circle 2.0",
+	pr [t "You reach a variant through its enum's name — ", ic "color.red", t ", ", ic "shape.circle", t " — the same way you reach a field through a record. To use an enum value, match on it. Because ", ic "when", t " is exhaustive, you're guaranteed to handle every variant:"],
+	code "def area = fun s {\n\twhen s is shape.circle r {\n\t\t3.14159 * r * r\n\t} is shape.rect w h {\n\t\tw * h\n\t}\n}",
+	p "Enums can take type parameters, so one definition works for any element type — here, a binary tree of anything:",
+	code "enum tree a {\n\tleaf\n\tnode (tree a) a (tree a)\n}",
+]
+
+def sec-options :: view = doc-section "options" "Missing values and errors: option and result" [
+	pr [t "Two enums are common enough that Pluma builds them in. The first is ", ic "option", t ", for a value that might be absent — it's either ", ic "some x", t " or ", ic "none", t ":"],
+	code "def first = fun xs {\n\twhen xs is [head, ...] {\n\t\tsome head\n\t} is [] {\n\t\tnone\n\t}\n}",
+	pr [t "The second is ", ic "result", t ", for something that can fail with an explanation — either ", ic "ok x", t " or ", ic "err message", t ":"],
+	code "def divide = fun a b {\n\tif b == 0 {\n\t\terr \"can't divide by zero\"\n\t} else {\n\t\tok (a / b)\n\t}\n}",
+	pr [t "These are ordinary enums, so you can handle them with ", ic "when", t ". But two shortcuts make them pleasant. The first, ", ic "??", t ", supplies a fallback when a value is ", ic "none", t " or ", ic "err", t ":"],
+	code "(first []) ?? 0          # => 0\n(first [9, 8]) ?? 0      # => 9",
+	pr [t "The second, ", ic "try", t ", unwraps a success — or stops the current function early and hands the failure outward. A chain of fallible steps then reads top to bottom, with the error path implied:"],
+	code "def run = fun a b {\n\ttry q = divide a b\n\tok (q + 1)\n}",
+]
+
+def sec-mutation :: view = doc-section "mutation" "When you need to change something: ref" [
+	pr [t "Names in Pluma don't change once bound, which keeps code easy to follow. But sometimes you really do need a value that updates over time — a counter, a running total. That's a ", ic "ref", t ": a small box you can read from and write to."],
+	code "let count = ref.new 0     # a box holding 0\nref.update count fun n { n + 1 }\nref.set count 100\nprint (to-string (ref.get count))   # 100",
+	pr [t "A ", ic "ref", t " is the one deliberate exception to immutability. Because changing one shows up in a function's type, you can always tell which functions can change state and which can't."],
+]
+
+def sec-traits :: view = doc-section "traits" "Shared behavior: traits" [
+	pr [t "Sometimes you want one name to work across many types. ", ic "to-string", t " turns an int into text — it'd be nice if it worked for your own types too. A ", ic "trait", t " describes a capability — a set of operations — that different types can provide."],
+	code "trait to-text a {\n\tto-text :: a -> string\n}",
+	pr [t "Then you give a type that capability with ", ic "implement", t ":"],
+	code "implement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}",
+	pr [t "Now ", ic "to-text true", t " finds the right implementation automatically, chosen from the type of the argument. Pluma leans on this for its built-in operators too: ", ic "+", t " works on ints and floats, and ", ic "<", t " works on anything that knows how to compare itself — all through traits."],
+]
+
+def sec-modules :: view = doc-section "modules" "Organizing code: modules" [
+	pr [t "Every file is a module. Bring another one into scope with ", ic "use", t ", then reach its contents through its name:"],
+	code "use std/list\n\ndef main = fun {\n\tlet xs = list.map [1, 2, 3] fun n { n * 2 }\n\tprint (to-string (list.sum xs))\n}",
+	pr [t "Within a file, definitions are private by default — visible only there. Mark one ", ic "public", t " to let other modules use it:"],
+	code "public def add = fun x y { x + y }   # other files can use this\ndef helper = fun n { n + n }         # private to this file",
+]
+
+def sec-fullstack :: view = doc-section "fullstack" "From here: the whole stack" [
+	pr [t "Everything above is just the language. Pluma also ships a fullstack framework — and this very website is built with it. A function marked ", ic "remote def", t " runs on the server, and the compiler generates the matching client call, so browser code can invoke it as if it were local:"],
+	code "remote def greet :: fun string -> task string =\n\tfun name { task.return (\"hi, \" ++ name) }",
+	p "Pair that with signals for reactive UI and server-side rendering, and one language carries you from the database to the DOM. The example apps in the repository are the best next step — they're complete, runnable programs.",
+	view.div [view.styled doc-cta] [
+		view.a [view.styled theme.btn-primary, view.href (theme.repo ++ "/tree/main/examples")] [view.text "Browse the examples"],
+		view.a [view.styled theme.btn-ghost, view.href "/"] [view.text "← Back to home"],
+	],
+]
+
+# --- page -------------------------------------------------------------------
+
+public def page :: fun nothing -> view = fun {
+	let _ = theme.install-globals ()
+	view.div [view.id "app"] [
+		view.div [view.styled theme.shell] [
+			theme.top-nav (),
+			view.div [view.styled doc-grid] [
+				view.aside [view.styled sidebar] [
+					view.div [view.styled side-title] [view.text "On this page"],
+					view.div [view.styled side-list] (list.map toc side-link),
+				],
+				view.main [view.styled doc-main] [
+					view.h1 [view.styled doc-title] [view.text "Language reference"],
+					view.p [view.styled doc-sub] [view.text "The whole language, one idea at a time."],
+					sec-intro,
+					sec-values,
+					sec-bindings,
+					sec-functions,
+					sec-strings,
+					sec-collections,
+					sec-control,
+					sec-patterns,
+					sec-enums,
+					sec-options,
+					sec-mutation,
+					sec-traits,
+					sec-modules,
+					sec-fullstack,
+				],
+			],
+			theme.site-footer (),
+		],
+	]
+}
