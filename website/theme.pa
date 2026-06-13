@@ -145,28 +145,32 @@ def footer-links :: css.ruleset = css.rule [css.display "flex", css.gap (css.rem
 
 # --- shared components ------------------------------------------------------
 
-public def top-nav :: fun nothing -> view = fun {
-	view.nav [view.styled nav] [
-		view.a [view.styled brand, view.href "/"] [
-			view.span [view.styled brand-mark] [view.text "🪶"],
-			view.span [] [view.text "pluma"],
-		],
-		view.div [view.styled nav-links] [
-			view.a [view.styled nav-link, view.href "/reference"] [view.text "Reference"],
-			view.a [view.styled nav-link, view.href "/playground"] [view.text "Playground"],
-			view.a [view.styled nav-link, view.href repo] [view.text "GitHub"],
-		],
-	]
+public def top-nav :: fun nothing -> view = using view {
+	fun {
+		.nav [.styled nav] [
+			.a [.styled brand, .href "/"] [
+				.span [.styled brand-mark] [.text "🪶"],
+				.span [] [.text "pluma"],
+			],
+			.div [.styled nav-links] [
+				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
+				.a [.styled nav-link, .href "/playground"] [.text "Playground"],
+				.a [.styled nav-link, .href repo] [.text "GitHub"],
+			],
+		]
+	}
 }
 
-public def site-footer :: fun nothing -> view = fun {
-	view.footer [view.styled footer] [
-		view.div [] [view.text "© 2026 Pluma · written in Pluma"],
-		view.div [view.styled footer-links] [
-			view.a [view.styled nav-link, view.href "/reference"] [view.text "Reference"],
-			view.a [view.styled nav-link, view.href repo] [view.text "GitHub"],
-		],
-	]
+public def site-footer :: fun nothing -> view = using view {
+	fun {
+		.footer [.styled footer] [
+			.div [] [.text "© 2026 Pluma · written in Pluma"],
+			.div [.styled footer-links] [
+				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
+				.a [.styled nav-link, .href repo] [.text "GitHub"],
+			],
+		]
+	}
 }
 
 # The full HTML document for a server-rendered first paint. The `body` view is

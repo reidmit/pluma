@@ -226,112 +226,124 @@ def snippet-code :: fun int -> string = fun i {
 	code
 }
 
-def tab-btn :: fun (signal int) int -> view = fun active idx {
-	view.button [
-		view.styled tab,
-		view.styled-when tab-on fun { signal.get active == idx },
-		view.on-click fun { signal.set active idx },
-	] [view.text (snippet-label idx)]
+def tab-btn :: fun (signal int) int -> view = using view {
+	fun active idx {
+		.button [
+			.styled tab,
+			.styled-when tab-on fun { signal.get active == idx },
+			.on-click fun { signal.set active idx },
+		] [.text (snippet-label idx)]
+	}
 }
 
-def feature :: fun string string string -> view = fun icon title body {
-	view.div [view.styled feature-card] [
-		view.div [view.styled feature-icon] [view.text icon],
-		view.div [view.styled feature-title] [view.text title],
-		view.p [view.styled feature-text] [view.text body],
-	]
+def feature :: fun string string string -> view = using view {
+	fun icon title body {
+		.div [.styled feature-card] [
+			.div [.styled feature-icon] [.text icon],
+			.div [.styled feature-title] [.text title],
+			.p [.styled feature-text] [.text body],
+		]
+	}
 }
 
 # --- sections ---------------------------------------------------------------
 
-def hero-section :: fun nothing -> view = fun {
-	let active = signal.new 0
-	view.section [view.styled hero] [
-		view.div [view.styled hero-grid] [
-			view.div [] [
-				view.div [view.styled eyebrow] [view.text "A functional language · server to browser"],
-				view.h1 [view.styled headline] [view.text "Write the whole app in one calm language."],
-				view.p [view.styled lead] [
-					view.text "Pluma is a small, statically-typed functional language with full type inference — and a fullstack framework that compiles to WebAssembly. Your API and your UI, the same syntax, the same backend.",
+def hero-section :: fun nothing -> view = using view {
+	fun {
+		let active = signal.new 0
+		.section [.styled hero] [
+			.div [.styled hero-grid] [
+				.div [] [
+					.div [.styled eyebrow] [.text "A functional language · server to browser"],
+					.h1 [.styled headline] [.text "Write the whole app in one calm language."],
+					.p [.styled lead] [
+						.text "Pluma is a small, statically-typed functional language with full type inference — and a fullstack framework that compiles to WebAssembly. Your API and your UI, the same syntax, the same backend.",
+					],
+					.div [.styled cta-row] [
+						.a [.styled theme.btn-primary, .href "/reference"] [.text "Read the reference"],
+						.a [.styled theme.btn-ghost, .href theme.repo] [.text "View source →"],
+					],
 				],
-				view.div [view.styled cta-row] [
-					view.a [view.styled theme.btn-primary, view.href "/reference"] [view.text "Read the reference"],
-					view.a [view.styled theme.btn-ghost, view.href theme.repo] [view.text "View source →"],
+				.div [.styled code-card] [
+					.div [.styled card-tabs] [
+						tab-btn active 0,
+						tab-btn active 1,
+						tab-btn active 2,
+						tab-btn active 3,
+					],
+					.pre [.styled code-block] [
+						.code [] [.text-of fun { snippet-code (signal.get active) }],
+					],
 				],
 			],
-			view.div [view.styled code-card] [
-				view.div [view.styled card-tabs] [
-					tab-btn active 0,
-					tab-btn active 1,
-					tab-btn active 2,
-					tab-btn active 3,
-				],
-				view.pre [view.styled code-block] [
-					view.code [] [view.text-of fun { snippet-code (signal.get active) }],
-				],
-			],
-		],
-	]
+		]
+	}
 }
 
-def features-section :: fun nothing -> view = fun {
-	view.section [view.styled section] [
-		view.div [view.styled section-head] [
-			view.div [view.styled section-title] [view.text "Small surface, serious reach."],
-			view.p [view.styled section-sub] [
-				view.text "A handful of ideas that compose — inference, immutability, traits, and a fullstack story that doesn't leave the language.",
+def features-section :: fun nothing -> view = using view {
+	fun {
+		.section [.styled section] [
+			.div [.styled section-head] [
+				.div [.styled section-title] [.text "Small surface, serious reach."],
+				.p [.styled section-sub] [
+					.text "A handful of ideas that compose — inference, immutability, traits, and a fullstack story that doesn't leave the language.",
+				],
 			],
-		],
-		view.div [view.styled feature-grid] [
-			feature "🪶" "Inference that gets out of the way" "Full Hindley–Milner inference. Write zero annotations and still get end-to-end static types — add `::` only where it sharpens intent.",
-			feature "🧊" "Immutable by default" "Values don't change out from under you. `ref` is the one mutation primitive; reach for it only when you genuinely need a cell.",
-			feature "🌐" "One language, server to browser" "`remote def` turns a function into a typed RPC. The compiler writes the client stub and the server route, so the two agree by construction.",
-			feature "⚡" "Fine-grained reactivity" "Signals track exactly what changed — no virtual DOM, no re-render guesswork. Server-render and hydrate from the very same view.",
-			feature "🧩" "Traits & row-polymorphic records" "Ad-hoc polymorphism through traits; structural records that accept extra fields. Composition without the ceremony.",
-			feature "📦" "Compiles to WasmGC" "One backend. `pluma run` and `pluma test` execute the exact artifact you deploy — under V8 today, the open web tomorrow.",
-		],
-	]
+			.div [.styled feature-grid] [
+				feature "🪶" "Inference that gets out of the way" "Full Hindley–Milner inference. Write zero annotations and still get end-to-end static types — add `::` only where it sharpens intent.",
+				feature "🧊" "Immutable by default" "Values don't change out from under you. `ref` is the one mutation primitive; reach for it only when you genuinely need a cell.",
+				feature "🌐" "One language, server to browser" "`remote def` turns a function into a typed RPC. The compiler writes the client stub and the server route, so the two agree by construction.",
+				feature "⚡" "Fine-grained reactivity" "Signals track exactly what changed — no virtual DOM, no re-render guesswork. Server-render and hydrate from the very same view.",
+				feature "🧩" "Traits & row-polymorphic records" "Ad-hoc polymorphism through traits; structural records that accept extra fields. Composition without the ceremony.",
+				feature "📦" "Compiles to WasmGC" "One backend. `pluma run` and `pluma test` execute the exact artifact you deploy — under V8 today, the open web tomorrow.",
+			],
+		]
+	}
 }
 
-def meta-section :: fun (signal int) -> view = fun loved {
-	view.section [
-		view.styled strip,
-		view.on-mount fun {
-			task.spawn (task.map (api.heart-count ()) fun n {
-				signal.set loved n
-			})
-		},
-	] [
-		view.div [view.styled strip-eyebrow] [view.text "Yes, really"],
-		view.div [view.styled strip-title] [view.text "This page is a Pluma program."],
-		view.p [view.styled strip-text] [
-			view.text "The site you're reading is a fullstack Pluma app — server-rendered for an instant first paint, then hydrated in the browser. The button below makes a typed RPC round-trip to the server and back.",
-		],
-		view.button [
-			view.styled heart-btn,
-			view.on-click fun {
-				task.spawn (task.map (api.cheer ()) fun n {
+def meta-section :: fun (signal int) -> view = using view {
+	fun loved {
+		.section [
+			.styled strip,
+			.on-mount fun {
+				task.spawn (task.map (api.heart-count ()) fun n {
 					signal.set loved n
 				})
 			},
 		] [
-			view.text-of fun { "♥ loved " ++ to-string (signal.get loved) ++ " times" },
-		],
-	]
+			.div [.styled strip-eyebrow] [.text "Yes, really"],
+			.div [.styled strip-title] [.text "This page is a Pluma program."],
+			.p [.styled strip-text] [
+				.text "The site you're reading is a fullstack Pluma app — server-rendered for an instant first paint, then hydrated in the browser. The button below makes a typed RPC round-trip to the server and back.",
+			],
+			.button [
+				.styled heart-btn,
+				.on-click fun {
+					task.spawn (task.map (api.cheer ()) fun n {
+						signal.set loved n
+					})
+				},
+			] [
+				.text-of fun { "♥ loved " ++ to-string (signal.get loved) ++ " times" },
+			],
+		]
+	}
 }
 
 # --- page -------------------------------------------------------------------
 
-public def page :: fun nothing -> view = fun {
-	let _ = theme.install-globals ()
-	let loved = signal.new 0
-	view.div [view.id "app"] [
-		view.div [view.styled theme.shell] [
-			theme.top-nav (),
-			hero-section (),
-			features-section (),
-			meta-section loved,
-			theme.site-footer (),
-		],
-	]
+public def page :: fun nothing -> view = using view {
+	fun {
+		let _ = theme.install-globals ()
+		let loved = signal.new 0
+		.div [.id "app"] [
+			.div [.styled theme.shell] [
+				theme.top-nav (),
+				hero-section (),
+				features-section (),
+				meta-section loved,
+				theme.site-footer (),
+			],
+		]
+	}
 }

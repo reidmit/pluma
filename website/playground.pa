@@ -206,63 +206,65 @@ def execute :: fun (fun string -> result string string) (signal string) (signal 
 # current source into a shareable URL + clipboard. All three are injected so this
 # module stays target-neutral — the server passes inert stubs, the client the real
 # browser-backed versions (see `client.pa`).
-public def page :: fun (fun string -> result string string) (fun nothing -> string) (fun string -> nothing) -> view = fun run initial share {
-	let _ = theme.install-globals ()
-	let start = initial ()
-	let src = signal.new (if start == "" { ex-list } else { start })
-	let out = signal.new placeholder
-	let shared = signal.new false
-	view.div [view.id "app"] [
-		view.div [view.styled theme.shell] [
-			theme.top-nav (),
-			view.section [view.styled wrap] [
-				view.div [view.styled head] [
-					view.h1 [view.styled title] [view.text "The playground"],
-					view.p [view.styled sub] [
-						view.text "Write a little Pluma and run it. The server compiles your program to WebAssembly; your browser runs the result. Standard output shows up on the right.",
-					],
-				],
-				view.div [view.styled grid] [
-					view.div [view.styled col] [
-						view.div [view.styled col-head] [
-							view.span [view.styled lbl] [view.text "Source"],
-							view.select [
-								view.id "examples",
-								view.styled picker,
-								view.on-change fun name { signal.set src (example-source name) },
-							] (list.map examples fun pair {
-								let (label, _src) = pair
-								view.option [view.attr "value" label] [view.text label]
-							}),
+public def page :: fun (fun string -> result string string) (fun nothing -> string) (fun string -> nothing) -> view = using view {
+	fun run initial share {
+		let _ = theme.install-globals ()
+		let start = initial ()
+		let src = signal.new (if start == "" { ex-list } else { start })
+		let out = signal.new placeholder
+		let shared = signal.new false
+		.div [.id "app"] [
+			.div [.styled theme.shell] [
+				theme.top-nav (),
+				.section [.styled wrap] [
+					.div [.styled head] [
+						.h1 [.styled title] [.text "The playground"],
+						.p [.styled sub] [
+							.text "Write a little Pluma and run it. The server compiles your program to WebAssembly; your browser runs the result. Standard output shows up on the right.",
 						],
-						view.textarea [view.id "source", view.styled editor, view.value src] [],
 					],
-					view.div [view.styled col] [
-						view.div [view.styled col-head] [
-							view.span [view.styled lbl] [view.text "Output"],
+					.div [.styled grid] [
+						.div [.styled col] [
+							.div [.styled col-head] [
+								.span [.styled lbl] [.text "Source"],
+								.select [
+									.id "examples",
+									.styled picker,
+									.on-change fun name { signal.set src (example-source name) },
+								] (list.map examples fun pair {
+									let (label, _src) = pair
+									.option [.attr "value" label] [.text label]
+								}),
+							],
+							.textarea [.id "source", .styled editor, .value src] [],
 						],
-						view.pre [view.styled pane] [view.text-of fun { signal.get out }],
+						.div [.styled col] [
+							.div [.styled col-head] [
+								.span [.styled lbl] [.text "Output"],
+							],
+							.pre [.styled pane] [.text-of fun { signal.get out }],
+						],
+					],
+					.div [.styled run-row] [
+						.button [.styled theme.btn-primary, .on-click fun { execute run src out }] [.text "Run ▸"],
+						.button [
+							.styled theme.btn-ghost,
+							.on-click fun {
+								share (signal.get src)
+								signal.set shared true
+							},
+						] [.text "Share"],
+						.span [.styled hint] [.text-of fun {
+							if signal.get shared {
+								"Link copied to your clipboard."
+							} else {
+								"Console programs only for now — file, network, and DOM access aren't wired up in the sandbox."
+							}
+						}],
 					],
 				],
-				view.div [view.styled run-row] [
-					view.button [view.styled theme.btn-primary, view.on-click fun { execute run src out }] [view.text "Run ▸"],
-					view.button [
-						view.styled theme.btn-ghost,
-						view.on-click fun {
-							share (signal.get src)
-							signal.set shared true
-						},
-					] [view.text "Share"],
-					view.span [view.styled hint] [view.text-of fun {
-						if signal.get shared {
-							"Link copied to your clipboard."
-						} else {
-							"Console programs only for now — file, network, and DOM access aren't wired up in the sandbox."
-						}
-					}],
-				],
+				theme.site-footer (),
 			],
-			theme.site-footer (),
-		],
-	]
+		]
+	}
 }

@@ -132,22 +132,24 @@ def doc-cta :: css.ruleset = css.rule [css.display "flex", css.gap (css.rem 0.8)
 
 def t :: fun string -> view = view.text
 
-def p :: fun string -> view = fun s { view.p [view.styled doc-p] [view.text s] }
+def p :: fun string -> view = using view { fun s { .p [.styled doc-p] [.text s] } }
 
-def pr :: fun (list view) -> view = fun kids { view.p [view.styled doc-p] kids }
+def pr :: fun (list view) -> view = using view { fun kids { .p [.styled doc-p] kids } }
 
-def h3 :: fun string -> view = fun s { view.h3 [view.styled doc-h3] [view.text s] }
+def h3 :: fun string -> view = using view { fun s { .h3 [.styled doc-h3] [.text s] } }
 
-def ic :: fun string -> view = fun s { view.code [view.styled inline-code] [view.text s] }
+def ic :: fun string -> view = using view { fun s { .code [.styled inline-code] [.text s] } }
 
-def code :: fun string -> view = fun s {
-	view.pre [view.styled doc-pre] [view.code [] [view.text s]]
+def code :: fun string -> view = using view {
+	fun s { .pre [.styled doc-pre] [.code [] [.text s]] }
 }
 
-def note :: fun (list view) -> view = fun kids { view.div [view.styled callout] kids }
+def note :: fun (list view) -> view = using view { fun kids { .div [.styled callout] kids } }
 
-def doc-section :: fun string string (list view) -> view = fun id title body {
-	view.section [view.id id, view.styled sect] [view.h2 [view.styled doc-h2] [view.text title], ...body]
+def doc-section :: fun string string (list view) -> view = using view {
+	fun id title body {
+		.section [.id id, .styled sect] [.h2 [.styled doc-h2] [.text title], ...body]
+	}
 }
 
 # --- table of contents ------------------------------------------------------
@@ -169,9 +171,11 @@ def toc :: list (string, string) = [
 	("fullstack", "Going fullstack"),
 ]
 
-def side-link :: fun (string, string) -> view = fun entry {
-	let (id, title) = entry
-	view.a [view.styled side-item, view.href ("#" ++ id)] [view.text title]
+def side-link :: fun (string, string) -> view = using view {
+	fun entry {
+		let (id, title) = entry
+		.a [.styled side-item, .href ("#" ++ id)] [.text title]
+	}
 }
 
 # --- sections ---------------------------------------------------------------
@@ -302,44 +306,48 @@ def sec-fullstack :: view = doc-section "fullstack" "From here: the whole stack"
 	pr [t "Everything above is just the language. Pluma also ships a fullstack framework — and this very website is built with it. A function marked ", ic "remote def", t " runs on the server, and the compiler generates the matching client call, so browser code can invoke it as if it were local:"],
 	code "remote def greet :: fun string -> task string =\n\tfun name { task.return (\"hi, \" ++ name) }",
 	p "Pair that with signals for reactive UI and server-side rendering, and one language carries you from the database to the DOM. The example apps in the repository are the best next step — they're complete, runnable programs.",
-	view.div [view.styled doc-cta] [
-		view.a [view.styled theme.btn-primary, view.href (theme.repo ++ "/tree/main/examples")] [view.text "Browse the examples"],
-		view.a [view.styled theme.btn-ghost, view.href "/"] [view.text "← Back to home"],
-	],
+	using view {
+		.div [.styled doc-cta] [
+			.a [.styled theme.btn-primary, .href (theme.repo ++ "/tree/main/examples")] [.text "Browse the examples"],
+			.a [.styled theme.btn-ghost, .href "/"] [.text "← Back to home"],
+		]
+	},
 ]
 
 # --- page -------------------------------------------------------------------
 
-public def page :: fun nothing -> view = fun {
-	let _ = theme.install-globals ()
-	view.div [view.id "app"] [
-		view.div [view.styled theme.shell] [
-			theme.top-nav (),
-			view.div [view.styled doc-grid] [
-				view.aside [view.styled sidebar] [
-					view.div [view.styled side-title] [view.text "On this page"],
-					view.div [view.styled side-list] (list.map toc side-link),
+public def page :: fun nothing -> view = using view {
+	fun {
+		let _ = theme.install-globals ()
+		.div [.id "app"] [
+			.div [.styled theme.shell] [
+				theme.top-nav (),
+				.div [.styled doc-grid] [
+					.aside [.styled sidebar] [
+						.div [.styled side-title] [.text "On this page"],
+						.div [.styled side-list] (list.map toc side-link),
+					],
+					.main [.styled doc-main] [
+						.h1 [.styled doc-title] [.text "Language reference"],
+						.p [.styled doc-sub] [.text "The whole language, one idea at a time."],
+						sec-intro,
+						sec-values,
+						sec-bindings,
+						sec-functions,
+						sec-strings,
+						sec-collections,
+						sec-control,
+						sec-patterns,
+						sec-enums,
+						sec-options,
+						sec-mutation,
+						sec-traits,
+						sec-modules,
+						sec-fullstack,
+					],
 				],
-				view.main [view.styled doc-main] [
-					view.h1 [view.styled doc-title] [view.text "Language reference"],
-					view.p [view.styled doc-sub] [view.text "The whole language, one idea at a time."],
-					sec-intro,
-					sec-values,
-					sec-bindings,
-					sec-functions,
-					sec-strings,
-					sec-collections,
-					sec-control,
-					sec-patterns,
-					sec-enums,
-					sec-options,
-					sec-mutation,
-					sec-traits,
-					sec-modules,
-					sec-fullstack,
-				],
+				theme.site-footer (),
 			],
-			theme.site-footer (),
-		],
-	]
+		]
+	}
 }
