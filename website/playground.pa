@@ -1,0 +1,178 @@
+# The playground — type Pluma, press Run, watch it execute in your own browser.
+#
+# How it works: the "Run" button sends the source to the server, which compiles it
+# to a WebAssembly module (`api.compile-snippet`, backed by `compile.to-wasm-hex`).
+# The browser then runs that module locally and shows whatever it printed. So the
+# heavy lifting (the compiler) stays on the server, but your program runs in your own
+# sandbox — nothing you write executes on ours.
+#
+# Like the other pages, this module is target-neutral: it only uses `std/view`, so it
+# builds into both the server (for the first paint) and the client (for the live
+# behavior). The one browser-only capability — actually running the compiled module —
+# is *injected* as the `run` argument to `page`, so the server build never has to pull
+# in `std/web/sandbox`. The client passes `sandbox.run-hex`; the server passes a stub
+# that never runs (server-side rendering drops event handlers).
+
+use std/css
+use std/signal
+use std/task
+use std/view
+use api
+use theme
+
+# --- the starter program ----------------------------------------------------
+#
+# What's in the editor on first load. Plain `\n`/`\t` source (no `$(...)`), so it
+# reads cleanly and edits to something interesting in one keystroke.
+
+def starter :: string =
+	"use std/list\n\n# Edit this, then press Run.\ndef main = fun {\n\tlet xs = [1, 2, 3, 4, 5]\n\tprint \"numbers:\"\n\tprint xs\n\tprint \"doubled:\"\n\tprint (list.map xs fun n { n * 2 })\n\tprint \"kept > 2:\"\n\tprint (list.filter xs fun n { n > 2 })\n}\n"
+
+def placeholder :: string = "Press Run to compile this program on the server and run it right here in your browser."
+
+# --- styles -----------------------------------------------------------------
+
+def wrap :: css.ruleset = css.rule [css.property "padding" "3rem 0 4rem"]
+
+def head :: css.ruleset = css.rule [css.property "max-width" "44rem", css.property "margin-bottom" "2rem"]
+
+def title :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 2.4),
+	css.line-height 1.1,
+	css.property "letter-spacing" "-0.025em",
+	css.font-weight "600",
+	css.property "margin-bottom" "0.8rem",
+]
+
+def sub :: css.ruleset = css.rule [css.font-size (css.rem 1.12), css.color (css.hex theme.muted)]
+
+def grid :: css.ruleset = css.rule [
+	css.display "grid",
+	css.property "grid-template-columns" "1fr 1fr",
+	css.gap (css.rem 1.2),
+	css.align-items "stretch",
+	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr"],
+]
+
+def col :: css.ruleset = css.rule [
+	css.display "flex",
+	css.property "flex-direction" "column",
+	# Grid items default to `min-width: auto`; without this the wide code blows the
+	# column out past the viewport instead of scrolling inside it.
+	css.property "min-width" "0",
+]
+
+def col-label :: css.ruleset = css.rule [
+	css.property "text-transform" "uppercase",
+	css.property "letter-spacing" "0.1em",
+	css.font-size (css.rem 0.72),
+	css.font-weight "600",
+	css.color (css.hex theme.faint),
+	css.property "margin-bottom" "0.6rem",
+]
+
+# The editor and the output pane share a dark terminal-ish skin so the page reads as
+# "this is where code lives".
+def panel :: css.ruleset = css.rule [
+	css.background (css.hex theme.code-bg),
+	css.color (css.hex theme.code-fg),
+	css.border-radius (css.px 12.0),
+	css.property "padding" "1.2rem 1.3rem",
+	css.property "font-family" theme.mono,
+	css.font-size (css.rem 0.85),
+	css.line-height 1.6,
+	css.property "tab-size" "2",
+	css.property "min-height" "22rem",
+	css.property "box-shadow" "0 18px 44px -22px rgba(28, 26, 38, 0.4)",
+]
+
+def editor :: css.ruleset = css.compose [
+	panel,
+	css.rule [
+		css.property "border" "none",
+		css.property "width" "100%",
+		css.property "resize" "vertical",
+		css.property "white-space" "pre",
+		css.property "outline" "none",
+	],
+]
+
+def pane :: css.ruleset = css.compose [
+	panel,
+	css.rule [
+		css.property "margin" "0",
+		css.property "white-space" "pre-wrap",
+		css.property "overflow-x" "auto",
+		css.color (css.hex theme.code-fg),
+	],
+]
+
+def run-row :: css.ruleset = css.rule [
+	css.display "flex",
+	css.align-items "center",
+	css.gap (css.rem 1.0),
+	css.property "margin" "1.4rem 0 0",
+	css.property "flex-wrap" "wrap",
+]
+
+def hint :: css.ruleset = css.rule [css.color (css.hex theme.faint), css.font-size (css.rem 0.9)]
+
+# --- behavior ---------------------------------------------------------------
+#
+# Compile on the server, then run in the browser, funneling both outcomes into the
+# `out` signal. `run` is the injected browser runner (`sandbox.run-hex` on the
+# client). All of this lives inside the click handler, so it only ever fires after
+# hydration — the server never invokes it.
+
+def execute :: fun (fun string -> result string string) (signal string) (signal string) -> nothing =
+	fun run src out {
+		signal.set out "Compiling…"
+		task.spawn (task.map (api.compile-snippet (signal.get src)) fun compiled {
+			when compiled is ok hex {
+				when (run hex) is ok printed {
+					signal.set out (if printed == "" { "(the program printed nothing)" } else { printed })
+				} is err message {
+					signal.set out message
+				}
+			} is err message {
+				signal.set out message
+			}
+		})
+	}
+
+# --- page -------------------------------------------------------------------
+
+public def page :: fun (fun string -> result string string) -> view = fun run {
+	let _ = theme.install-globals ()
+	let src = signal.new starter
+	let out = signal.new placeholder
+	view.div [view.id "app"] [
+		view.div [view.styled theme.shell] [
+			theme.top-nav (),
+			view.section [view.styled wrap] [
+				view.div [view.styled head] [
+					view.h1 [view.styled title] [view.text "The playground"],
+					view.p [view.styled sub] [
+						view.text "Write a little Pluma and run it. The server compiles your program to WebAssembly; your browser runs the result. Standard output shows up on the right.",
+					],
+				],
+				view.div [view.styled grid] [
+					view.div [view.styled col] [
+						view.div [view.styled col-label] [view.text "Source"],
+						view.textarea [view.id "source", view.styled editor, view.value src] [],
+					],
+					view.div [view.styled col] [
+						view.div [view.styled col-label] [view.text "Output"],
+						view.pre [view.styled pane] [view.text-of fun { signal.get out }],
+					],
+				],
+				view.div [view.styled run-row] [
+					view.button [view.styled theme.btn-primary, view.on-click fun { execute run src out }] [view.text "Run ▸"],
+					view.span [view.styled hint] [view.text "Console programs only for now — file, network, and DOM access aren't wired up in the sandbox."],
+				],
+			],
+			theme.site-footer (),
+		],
+	]
+}

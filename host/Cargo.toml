@@ -13,6 +13,11 @@ publish = false
 # is the deploy engine.
 
 [dependencies]
+# `std/sys/compile` (the playground compile primitive) runs the full frontend → IR →
+# WasmGC pipeline in-process. None of these depend on `host`, so there's no cycle.
+compiler = { path = "../compiler" }
+ir = { path = "../ir" }
+wasm = { path = "../wasm" }
 # The V8 backend (rusty_v8): instantiates the WasmGC artifact under V8, driving the
 # marshalled `pluma.*` imports as native callbacks over the exported memory's ArrayBuffer.
 v8 = "137"

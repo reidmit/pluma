@@ -1,0 +1,16 @@
+# Running a compiled Pluma program inside the browser.
+#
+# The companion to `compile.to-wasm-hex` (`std/sys/compile`): give this the
+# hex string that compile produced and it instantiates the module right here
+# in the page, runs it, and hands back whatever the program printed. Both
+# standard output and standard error are captured into the returned string.
+#
+# Only the console surface is wired up -- printing, math, and the like. File,
+# network, database, and DOM access are not available to a sandboxed program,
+# so one that reaches for them comes back with `err` describing what was
+# missing. This is the engine behind the playground's "Run" button.
+
+# Runs the wasm module described by `hex` (as produced by `compile.to-wasm-hex`)
+# and returns everything it printed. `err` if the module can't be instantiated
+# or the program stops with a failure partway through.
+public def run-hex :: fun string -> result string string = built-in "sandbox-run-hex"

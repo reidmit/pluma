@@ -1158,6 +1158,15 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: true,
 		}),
+		// The playground primitives: compile a Pluma source string to a wasm module
+		// (`compile.to-wasm-hex`, server) and run a compiled module in the browser
+		// (`sandbox.run-hex`, web). Both take one string and return `result string
+		// string`, so they ride the same marshalled read path as `io-read-file`
+		// (`IoKind::ReadFileStr`) — see `io_kind`/`is_io_result`.
+		"compile-wasm-hex" | "sandbox-run-hex" => Some(HostSig {
+			arity: 1,
+			returns_value: true,
+		}),
 		// `io.exit code` diverges: `(i32 code) -> ()`, the host exits the process. Not
 		// `is_io_host`/`io_kind` — emitted by `emit_exit`, typed `(i32)->()` in `module`.
 		"io-exit" => Some(HostSig {
@@ -1527,7 +1536,9 @@ pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 		"io-read-all-bytes" => IoKind::ReadBytes,
 		// `uuid-parse` isn't io, but it has the same shape — a string in, a `result
 		// string` out — so it reuses the `(path, plen, dst, cap)` read marshalling.
-		"io-read-file" | "uuid-parse" => IoKind::ReadFileStr,
+		// `compile-wasm-hex`/`sandbox-run-hex` aren't io either, but share the shape —
+		// a string in, a `result string` out (the playground compile + run primitives).
+		"io-read-file" | "uuid-parse" | "compile-wasm-hex" | "sandbox-run-hex" => IoKind::ReadFileStr,
 		"io-read-file-bytes" => IoKind::ReadFileBytes,
 		"io-read-dir" => IoKind::ReadDir,
 		"io-args" => IoKind::Args,
@@ -1580,6 +1591,9 @@ pub(crate) fn is_io_result(tag: &str) -> bool {
 			| "uuid-parse"
 			// the sync `std/sys/fs` op — its `result bytes` is shaped by `__io_result`.
 			| "fs-op-sync"
+			// the playground compile + run primitives — `result string` via `__io_result`.
+			| "compile-wasm-hex"
+			| "sandbox-run-hex"
 	)
 }
 

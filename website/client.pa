@@ -9,12 +9,18 @@
 
 use std/web/dom
 use std/web/render
+use std/web/sandbox
 use ui
 use reference
+use playground
 
 def main = fun {
 	if dom.path () == "/reference" {
 		render.hydrate (dom.body ()) reference.page
+	} else if dom.path () == "/playground" {
+		# Inject the real browser runner here — this is the one place `std/web/sandbox`
+		# is named, so it only ever lands in the client build.
+		render.hydrate (dom.body ()) (fun { playground.page sandbox.run-hex })
 	} else {
 		render.hydrate (dom.body ()) ui.page
 	}

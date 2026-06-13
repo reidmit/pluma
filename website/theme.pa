@@ -153,7 +153,7 @@ public def top-nav :: fun nothing -> view = fun {
 		],
 		view.div [view.styled nav-links] [
 			view.a [view.styled nav-link, view.href "/reference"] [view.text "Reference"],
-			view.a [view.styled nav-link, view.href (repo ++ "/tree/main/examples")] [view.text "Examples"],
+			view.a [view.styled nav-link, view.href "/playground"] [view.text "Playground"],
 			view.a [view.styled nav-link, view.href repo] [view.text "GitHub"],
 		],
 	]

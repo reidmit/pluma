@@ -44,6 +44,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std/test", include_str!("../../std/test.pa")),
 		("std/time", include_str!("../../std/time.pa")),
 		("std/uuid", include_str!("../../std/uuid.pa")),
+		("std/sys/compile", include_str!("../../std/sys/compile.pa")),
 		("std/sys/db", include_str!("../../std/sys/db.pa")),
 		("std/sys/fs", include_str!("../../std/sys/fs.pa")),
 		("std/sys/http", include_str!("../../std/sys/http.pa")),
@@ -57,6 +58,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std/web/dom", include_str!("../../std/web/dom.pa")),
 		("std/web/fetch", include_str!("../../std/web/fetch.pa")),
 		("std/web/render", include_str!("../../std/web/render.pa")),
+		("std/web/sandbox", include_str!("../../std/web/sandbox.pa")),
 	]
 }
 

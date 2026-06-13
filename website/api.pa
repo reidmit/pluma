@@ -8,6 +8,16 @@
 # exercises the whole RPC path with a tiny piece of shared server state.
 
 use std/task
+use std/sys/compile
+
+# Compile a Pluma snippet to a runnable wasm module, returned hex-encoded. The real
+# compiler runs here on the server; the browser runs the result locally (the
+# playground's "Run" button). `err` carries the compiler's diagnostics as readable
+# text. This body only ever runs server-side — on the client the compiler swaps it
+# for the transport stub, so `std/sys/compile` never reaches the browser build.
+public remote def compile-snippet :: fun string -> task (result string string) = fun source {
+	task.return (compile.to-wasm-hex source)
+}
 
 # An in-memory "loved N times" counter, shared by every visitor for the lifetime
 # of the server process. A toy stand-in for real server state (a database read, a

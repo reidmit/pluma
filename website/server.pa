@@ -15,12 +15,17 @@ use std/sys/http
 use theme
 use ui
 use reference
+use playground
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		task.return (http.html 200 (theme.document-html "Pluma — a fullstack functional language" (ui.page ())))
 	} else if req.path == "/reference" {
 		task.return (http.html 200 (theme.document-html "Language reference — Pluma" (reference.page ())))
+	} else if req.path == "/playground" {
+		# The runner is browser-only; the server just renders the shell, so it passes a
+		# stub that never fires (SSR drops event handlers).
+		task.return (http.html 200 (theme.document-html "Playground — Pluma" (playground.page (fun _hex { err "the playground runs in the browser" }))))
 	} else {
 		rpc.dispatch req
 	}
