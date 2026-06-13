@@ -486,6 +486,8 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(0),
 			test_suites: vec![],
+			param_shapes: std::collections::HashMap::new(),
+		extra_nominal: std::collections::HashMap::new(),
 		};
 		loopify(&mut p);
 		p.functions.pop().unwrap()

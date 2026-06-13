@@ -96,6 +96,7 @@ pub(crate) fn build_tostring_fn(
 	bump: u32,
 	variant_payload: u32,
 	tuple_elems: u32,
+	denom_idx: u32,
 	lits: ToStringLits,
 ) -> Function {
 	let bv = types::T_BYTES;
@@ -175,6 +176,12 @@ pub(crate) fn build_tostring_fn(
 	};
 
 	w.local_get(v).value_tag().local_set(ta);
+	// A nominal `$shapeN` prints as the uniform `$record` it lifts to.
+	w.local_get(ta).i32(types::TAG_SHAPE).i32_eq();
+	w.if_(|w| {
+		w.local_get(v).call(denom_idx).local_set(v);
+		w.i32(types::TAG_RECORD).local_set(ta);
+	});
 
 	// STR -> identity.
 	w.local_get(ta).i32(types::TAG_STR).i32_eq();

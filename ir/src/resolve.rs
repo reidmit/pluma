@@ -571,6 +571,8 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(2),
 			test_suites: vec![],
+			param_shapes: std::collections::HashMap::new(),
+		extra_nominal: std::collections::HashMap::new(),
 		};
 		resolve_direct_calls(&mut program);
 
@@ -602,6 +604,8 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(1),
 			test_suites: vec![],
+			param_shapes: std::collections::HashMap::new(),
+		extra_nominal: std::collections::HashMap::new(),
 		};
 		resolve_direct_calls(&mut program);
 		let body = &program.functions[0].body.0;
@@ -630,6 +634,8 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(2),
 			test_suites: vec![],
+			param_shapes: std::collections::HashMap::new(),
+		extra_nominal: std::collections::HashMap::new(),
 		};
 		resolve_direct_calls(&mut program);
 		let body = &program.functions[2].body.0;
@@ -669,6 +675,8 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(1),
 			test_suites: vec![],
+			param_shapes: std::collections::HashMap::new(),
+		extra_nominal: std::collections::HashMap::new(),
 		};
 		resolve_direct_calls(&mut program);
 		let body = &program.functions[1].body.0;
@@ -713,6 +721,8 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(2),
 			test_suites: vec![],
+			param_shapes: std::collections::HashMap::new(),
+		extra_nominal: std::collections::HashMap::new(),
 		};
 		resolve_direct_calls(&mut program);
 
@@ -760,6 +770,8 @@ mod tests {
 			enums: Default::default(),
 			entry: FuncId(0),
 			test_suites: vec![],
+			param_shapes: std::collections::HashMap::new(),
+		extra_nominal: std::collections::HashMap::new(),
 		};
 		fold_variant_ctor_calls(&mut program);
 

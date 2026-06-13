@@ -89,13 +89,14 @@ impl<'a> FnEmitter<'a> {
 		enums: &'a EnumTable,
 		ftypes: &'a mut FuncTypes,
 		param_shapes: &'a HashMap<u32, Vec<Option<ir::RecordShape>>>,
+		extra_nominal: &'a HashMap<u32, Vec<(u32, ir::RecordShape)>>,
 		callee_rets: &'a [Repr],
 		extra_params: u32,
 		diags: &'a mut Diagnostics,
 	) -> Self {
 		let var_tags = builtin_var_tags(&f.body, builtin_g);
 		let var_ctors = ctor_var_tags(&f.body);
-		let nominal = compute_nominal(f, fid, param_shapes);
+		let nominal = compute_nominal(f, fid, param_shapes, extra_nominal);
 		let n = f.var_reprs.len().max(f.params.len() + f.captures.len());
 		let mut locals = vec![u32::MAX; n];
 		// Wasm params: local 0 = env (closure ref/null), then the source params,
@@ -457,9 +458,17 @@ impl<'a> FnEmitter<'a> {
 					}
 					return;
 				}
-				// Uniform subject: name-scan via `__getfield`.
+				// Uniform subject: name-scan via `__getfield`. A nominal `$shapeN` reaching
+				// here (a record that flowed through generic code) is lifted first — both
+				// for this exact-arity check and so the `__getfield` reads below hit a
+				// `$record` (they self-lift too, but the arity check casts directly).
 				if let ir::RecordRest::Exact = rest {
+					let denom = self
+						.runtime
+						.idx(Helper::Denominalize)
+						.expect("denominalize");
 					self.ins(Instruction::LocalGet(subj));
+					self.ins(Instruction::Call(denom));
 					self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
 						types::T_RECORD,
 					)));
@@ -593,7 +602,13 @@ impl<'a> FnEmitter<'a> {
 		let Some(eq) = self.runtime.idx(Helper::Eq) else {
 			return;
 		};
+		let Some(denom) = self.runtime.idx(Helper::Denominalize) else {
+			return;
+		};
+		// `rec` may be a nominal `$shapeN` (this guard also shadows the uniform
+		// name-scan path, which now sees nominal records); lift it before casting.
 		self.ins(Instruction::LocalGet(rec));
+		self.ins(Instruction::Call(denom));
 		self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
 			types::T_RECORD,
 		)));
@@ -1150,9 +1165,10 @@ impl<'a> FnEmitter<'a> {
 						}
 					}
 				}
-				// Uniform path: name-scan via `__getfield`. The receiver is the uniform
-				// `$record` here (`atom` lifts a nominal arg, though a nominal receiver
-				// already took the fast path above).
+				// Uniform path: name-scan via `__getfield`, which self-lifts a nominal
+				// `$shapeN` receiver (one that flowed through generic code) to the uniform
+				// `$record` before scanning. A statically-nominal receiver already took the
+				// constant-index fast path above.
 				let Some(getfield) = self.runtime.idx(Helper::GetField) else {
 					self.diags.push("GetField used but __getfield not emitted");
 					return;
@@ -3427,12 +3443,12 @@ impl<'a> FnEmitter<'a> {
 	/// expects. Read sites (`GetField` receiver, `Match` subject) use `atom_raw`
 	/// instead, keeping the `$shapeN` for a constant-index `struct.get`.
 	fn atom(&mut self, a: &Atom) {
-		if let Atom::Var(v) = a {
-			if let Some(shape) = self.nominal.get(&v.0).cloned() {
-				self.emit_lift(self.local(v.0), &shape);
-				return;
-			}
-		}
+		// A nominal `$shapeN` is a `$value` subtype, so it flows raw everywhere a boxed
+		// value goes — stored into a list/`$valarray`, passed as an arg, returned. It is
+		// NOT lifted to the uniform `$record` here; the generic consumers that need a
+		// uniform record (`__getfield`/`__eq`/`__tostring`/wire/`__hash`) self-lift it via
+		// `__denominalize`. Keeping it nominal through containers is what lets a later
+		// field read on it stay a constant-index `struct.get` once the reader is nominal.
 		self.atom_raw(a);
 	}
 
@@ -3445,34 +3461,6 @@ impl<'a> FnEmitter<'a> {
 		}
 	}
 
-	/// `lift` a nominal record in local `rec` to the uniform `$record`: build the
-	/// name-sorted `names` array (constant field-name strings) and a parallel
-	/// `values` array read out of the struct's inline fields, then `struct.new
-	/// $record`. An unboxed (`F64`) field is boxed into a `$float` here, since the
-	/// uniform `$valarray` holds boxed `$value`s — this is where the boxing a hot
-	/// field read avoided gets paid, only at the generic boundary. Leaves one
-	/// `(ref $record)` on the stack; reads nothing else.
-	fn emit_lift(&mut self, rec: u32, shape: &ir::RecordShape) {
-		let st = self.ftypes.intern_shape(&shape).type_idx;
-		let k = shape.fields.len() as u32;
-		self.ins(Instruction::I32Const(types::TAG_RECORD));
-		for name in &shape.fields {
-			self.string_const(name);
-		}
-		self.ins(Instruction::ArrayNewFixed {
-			array_type_index: types::T_VALARRAY,
-			array_size: k,
-		});
-		for i in 0..k {
-			self.nominal_field_boxed(rec, st, i as usize, shape.field_reprs[i as usize]);
-		}
-		self.ins(Instruction::ArrayNewFixed {
-			array_type_index: types::T_VALARRAY,
-			array_size: k,
-		});
-		self.ins(Instruction::StructNew(types::T_RECORD));
-	}
-
 	/// Build a *nominal* record: a `$shapeN` struct `{ tag, shape_id, f0..fk }` with
 	/// the field values inline in the shape's name-sorted order. Field values are
 	/// pushed via `atom` (so a nested nominal record is stored as the uniform
@@ -3482,7 +3470,7 @@ impl<'a> FnEmitter<'a> {
 		let st = self.ftypes.intern_shape(&shape);
 		let mut sorted: Vec<(&String, &Atom)> = fields.iter().map(|(n, a)| (n, a)).collect();
 		sorted.sort_by(|a, b| a.0.cmp(b.0));
-		self.ins(Instruction::I32Const(types::TAG_RECORD));
+		self.ins(Instruction::I32Const(types::TAG_SHAPE));
 		self.ins(Instruction::I32Const(st.shape_id as i32));
 		for (_, a) in &sorted {
 			self.atom(a);
@@ -3510,7 +3498,7 @@ impl<'a> FnEmitter<'a> {
 				return;
 			}
 		};
-		self.ins(Instruction::I32Const(types::TAG_RECORD));
+		self.ins(Instruction::I32Const(types::TAG_SHAPE));
 		self.ins(Instruction::I32Const(st.shape_id as i32));
 		for (i, name) in shape.fields.iter().enumerate() {
 			match fields.iter().find(|(n, _)| n == name) {

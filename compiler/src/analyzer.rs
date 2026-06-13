@@ -119,6 +119,17 @@ pub struct Analyzer<'compiler> {
 	// the user module sees prelude types and instances without needing
 	// an explicit `use __prelude__`.
 	prelude_exports: Option<ModuleExports>,
+	// Record-shape monomorphization. The generalized signature type of each
+	// top-level Expr def in the module currently being annotated, keyed by
+	// def name. Built at the top of `annotate` (before def types are
+	// overwritten) by applying the solved substitution to each def's body
+	// type — quantified vars survive as `Var`/row-tail. A call to a
+	// same-module generic def diffs the concrete callee type against this
+	// scheme to recover the closed substitution selecting a specialization.
+	mono_def_schemes: HashMap<String, Type>,
+	// `PLUMA_MONO` is set: emit the per-call-site substitution the
+	// record-shape monomorphization collector recovers. Debug-only.
+	mono_debug: bool,
 }
 
 // Analyzer-side view of a trait declaration. Method types reference the
@@ -564,6 +575,8 @@ impl<'compiler> Analyzer<'compiler> {
 			def_value_constraints: HashMap::new(),
 			def_where_clauses: HashMap::new(),
 			prelude_exports: None,
+			mono_def_schemes: HashMap::new(),
+			mono_debug: std::env::var_os("PLUMA_MONO").is_some(),
 		}
 	}
 
@@ -2639,6 +2652,7 @@ impl<'compiler> Analyzer<'compiler> {
 			callee: Box::new(callee),
 			args: vec![name_arg, original],
 			dict_args: Vec::new(),
+			mono_callee: None,
 		});
 	}
 
@@ -2689,6 +2703,7 @@ impl<'compiler> Analyzer<'compiler> {
 					args,
 					dict_args,
 					range,
+					..
 				}) => (callee, args, dict_args, range),
 				_ => unreachable!(),
 			};
@@ -2757,6 +2772,7 @@ impl<'compiler> Analyzer<'compiler> {
 			callee: Box::new(new_callee),
 			args: new_args,
 			dict_args,
+			mono_callee: None,
 		});
 	}
 
@@ -5519,6 +5535,85 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 	}
 
+	// Record-shape monomorphization collector. If `callee` references a
+	// generic top-level def (a same-module Expr def, or an imported value),
+	// recover the closed type substitution this call site instantiates it at
+	// by diffing the def's generalized signature against the solved concrete
+	// callee type. Returns `(qualified def name, generalized scheme type)` so
+	// later passes can rebuild the specialization; `None` when the callee is
+	// monomorphic, locally bound, or unresolved.
+	fn mono_collect(&self, callee: &ExprNode, subst: &Substitution) -> Option<(String, Type)> {
+		let (name, generic) = match &callee.kind {
+			ExprKind::Identifier(ident) => (
+				ident.name.clone(),
+				self.mono_def_schemes.get(&ident.name)?.clone(),
+			),
+			ExprKind::NamespaceAccess(path) if path.len() == 2 => {
+				let module = &path[0].name;
+				let field = &path[1].name;
+				let ty = self.imports.get(module)?.values.get(field)?;
+				(format!("{}.{}", module, field), ty.clone())
+			}
+			_ => return None,
+		};
+
+		// Only polymorphic callees are candidates for specialization.
+		if generic.free_vars().is_empty() && generic.free_row_vars().is_empty() {
+			return None;
+		}
+
+		let concrete = subst.apply_to_type(&callee.ty);
+		let diff = Substitution::congruent_diff(&generic, &concrete);
+
+		if self.mono_debug {
+			// Closed = every substitution target is fully ground (no residual
+			// type/row vars). Only closed substitutions can drive nominal
+			// `$shapeN` selection; open ones stay on the generic body.
+			let closed = diff
+				.solutions
+				.values()
+				.all(|t| t.free_vars().is_empty() && t.free_row_vars().is_empty())
+				&& diff.row_solutions.values().all(|r| {
+					r.tail.is_none()
+						&& r
+							.fields
+							.iter()
+							.all(|(_, t)| t.free_vars().is_empty() && t.free_row_vars().is_empty())
+				});
+			let module = self.module_name.as_deref().unwrap_or("?");
+			let pos = callee.range.start;
+			eprintln!(
+				"[mono] {}:{}:{}  {}  (closed={})",
+				module,
+				pos.line + 1,
+				pos.col + 1,
+				name,
+				closed
+			);
+			let mut tv_keys: Vec<_> = diff.solutions.keys().copied().collect();
+			tv_keys.sort();
+			for v in tv_keys {
+				eprintln!("         t{} = {}", v, diff.solutions[&v]);
+			}
+			let mut rv_keys: Vec<_> = diff.row_solutions.keys().copied().collect();
+			rv_keys.sort();
+			for r in rv_keys {
+				let sol = &diff.row_solutions[&r];
+				let mut sorted: Vec<_> = sol.fields.iter().collect();
+				sorted.sort_by(|a, b| a.0.cmp(&b.0));
+				let body = sorted
+					.iter()
+					.map(|(n, t)| format!("{}: {}", n, t))
+					.collect::<Vec<_>>()
+					.join(", ");
+				let tail_str = if sol.tail.is_some() { ", ..." } else { "" };
+				eprintln!("         row{} = {{{}{}}}", r, body, tail_str);
+			}
+		}
+
+		Some((name, generic))
+	}
+
 	// Walk the class constraint set after unification. For each
 	// `Class name ty`:
 	//   - concrete `ty` + matching instance → write `Resolved::Global(slot)`
@@ -6278,6 +6373,7 @@ impl<'compiler> Analyzer<'compiler> {
 			callee: Box::new(callee),
 			args: vec![*value, fun_expr],
 			dict_args: Vec::new(),
+			mono_callee: None,
 		});
 
 		true
@@ -6405,12 +6501,27 @@ impl<'compiler> Analyzer<'compiler> {
 			callee: Box::new(callee),
 			args: vec![*left, thunk],
 			dict_args: Vec::new(),
+			mono_callee: None,
 		});
 
 		true
 	}
 
 	fn annotate(&mut self, module: &mut ModuleNode, subst: &Substitution) {
+		// Record-shape monomorphization: snapshot each top-level Expr def's
+		// generalized signature before the loop overwrites `definition.ty`.
+		// Applying the solved substitution leaves the def's quantified vars in
+		// place (they're free, so unsolved), giving the polymorphic scheme that
+		// a same-module call site is diffed against.
+		self.mono_def_schemes.clear();
+		for definition in &module.body {
+			if let DefinitionKind::Expr(expr) = &definition.kind {
+				self
+					.mono_def_schemes
+					.insert(definition.name.name.clone(), subst.apply_to_type(&expr.ty));
+			}
+		}
+
 		for definition in &mut module.body {
 			self.fill_in_placeholder(&mut definition.ty, subst);
 
@@ -6461,9 +6572,15 @@ impl<'compiler> Analyzer<'compiler> {
 				callee,
 				args,
 				dict_args,
+				mono_callee,
 				..
 			}) => {
 				self.annotate_expr(callee, subst);
+
+				// Record-shape monomorphization: now that the callee type is
+				// solved, recover the closed substitution this call instantiates
+				// its generic callee at (if any) and stamp it on the node.
+				*mono_callee = self.mono_collect(callee, subst);
 
 				// Drain any cells the callee's dispatch sink collected during
 				// Gen/Inst processing — these are the dicts this call needs

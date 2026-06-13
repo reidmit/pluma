@@ -1,14 +1,100 @@
 // Record field access + update (`__getfield`, `__record_update`).
 
 use crate::helpers::wat::Wat;
+use crate::scan::StrPool;
 use crate::types;
+use ir::Repr;
 use wasm_encoder::{Function, ValType};
+
+/// Build `__denominalize(value) -> value`: if `value` is a *nominal* `$shapeN`
+/// record (tag `TAG_SHAPE`), lift it to the uniform `$record` so the name-scanning
+/// consumers (`__eq`/`__getfield`/`__tostring`/wire/`__hash`) can treat every record
+/// uniformly; any other value (including an already-uniform `$record`) is returned
+/// unchanged. The lift builds the uniform `$record` the same way a record literal
+/// does: a name-sorted `names` array of `$str` constants plus a parallel `values`
+/// array read out of the struct's inline fields, boxing each `F64` slot into a
+/// `$float`. Dispatches on the runtime `shape_id` (read via the `$shape_hdr`
+/// supertype) — *not* `ref.test`, since WasmGC canonicalizes two structurally-
+/// identical shape structs (e.g. `{x,y}` and `{name,age}`, both
+/// `{tag,shape_id,boxed,boxed}`) into one runtime type that `ref.test` can't tell
+/// apart. Every shape is interned by the time this body is built (only IR-function
+/// emission interns shapes), so the chain is complete. An empty program (no nominal
+/// records) makes this the identity.
+pub(crate) fn build_denominalize_fn(
+	shapes: &[(u32, u32, ir::RecordShape)],
+	strpool: &StrPool,
+) -> Function {
+	let va = types::T_VALARRAY;
+	let mut w = Wat::new(1);
+	let v = w.param(0);
+	let sid = w.local(ValType::I32);
+
+	// Fast path: a non-nominal value flows straight through. Reading field 0 (the
+	// tag) requires narrowing the `eqref` param to `$value` first.
+	w.local_get(v)
+		.ref_cast(types::T_VALUE)
+		.struct_get(types::T_VALUE, 0)
+		.i32(types::TAG_SHAPE)
+		.i32_ne()
+		.if_(|w| {
+			w.local_get(v).ret();
+		});
+
+	// Nominal: read the `shape_id` via the `$shape_hdr` supertype, then rebuild the
+	// uniform `$record` for the matching shape.
+	w.local_get(v)
+		.ref_cast(types::T_SHAPE_HDR)
+		.struct_get(types::T_SHAPE_HDR, 1)
+		.local_set(sid);
+	for (type_idx, shape_id, shape) in shapes {
+		let k = shape.fields.len() as u32;
+		w.local_get(sid).i32(*shape_id as i32).i32_eq();
+		w.if_(|w| {
+			w.i32(types::TAG_RECORD);
+			// names: one `$str` constant per field, in the shape's name-sorted order.
+			for name in &shape.fields {
+				let (off, len) = strpool
+					.at
+					.get(name)
+					.copied()
+					.expect("record field name in string pool");
+				w.i32(types::TAG_STR)
+					.i32(off as i32)
+					.i32(len as i32)
+					.array_new_data(types::T_BYTES, 0)
+					.struct_new(types::T_STR);
+			}
+			w.array_new_fixed(va, k);
+			// values: read each inline field, boxing an unboxed `F64` into a `$float`.
+			for (i, repr) in shape.field_reprs.iter().enumerate() {
+				let slot = (2 + i) as u32;
+				if *repr == Repr::F64 {
+					w.i32(types::TAG_FLOAT)
+						.local_get(v)
+						.ref_cast(*type_idx)
+						.struct_get(*type_idx, slot)
+						.struct_new(types::T_FLOAT);
+				} else {
+					w.local_get(v)
+						.ref_cast(*type_idx)
+						.struct_get(*type_idx, slot);
+				}
+			}
+			w.array_new_fixed(va, k);
+			w.struct_new(types::T_RECORD);
+			w.ret();
+		});
+	}
+	// The tag said `TAG_SHAPE`, so one shape_id must have matched.
+	w.unreachable();
+	w.finish()
+}
 
 /// Build `__getfield(record, name) -> value`: linear-scan the record's
 /// name-sorted `names` array, comparing each to `name` via `__eq`; return the
 /// parallel `values` element on match. Traps if absent (the type checker
 /// guarantees the field exists).
-pub(crate) fn build_getfield_fn(eq_idx: u32) -> Function {
+pub(crate) fn build_getfield_fn(eq_idx: u32, denom_idx: u32) -> Function {
 	let mut w = Wat::new(2);
 	let (rec, name) = (w.param(0), w.param(1));
 	let names = w.local(types::valarray_ref());
@@ -16,6 +102,9 @@ pub(crate) fn build_getfield_fn(eq_idx: u32) -> Function {
 	let n = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
 
+	// A nominal `$shapeN` reaching open field access (a field read on a record that
+	// flowed through generic code) is lifted to the uniform `$record` first.
+	w.local_get(rec).call(denom_idx).local_set(rec);
 	w.local_get(rec)
 		.ref_cast(types::T_RECORD)
 		.struct_get(types::T_RECORD, 1)
@@ -48,7 +137,7 @@ pub(crate) fn build_getfield_fn(eq_idx: u32) -> Function {
 /// Build `__record_update(rec, name, value) -> rec`: a copy of `rec` with the
 /// field named `name` overridden. Shares `rec`'s name array; copies its values
 /// and replaces the matching slot (found via `__eq` on names).
-pub(crate) fn build_record_update_fn(eq_idx: u32) -> Function {
+pub(crate) fn build_record_update_fn(eq_idx: u32, denom_idx: u32) -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(3);
 	let (rec, name, value) = (w.param(0), w.param(1), w.param(2));
@@ -58,6 +147,8 @@ pub(crate) fn build_record_update_fn(eq_idx: u32) -> Function {
 	let n = w.local(ValType::I32);
 	let i = w.local(ValType::I32);
 
+	// Lift a nominal base to the uniform `$record` before the name-scanning copy.
+	w.local_get(rec).call(denom_idx).local_set(rec);
 	w.local_get(rec)
 		.ref_cast(types::T_RECORD)
 		.struct_get(types::T_RECORD, 1)
@@ -98,10 +189,12 @@ pub(crate) fn build_record_update_fn(eq_idx: u32) -> Function {
 /// from a field read. The rest length is `rec.len - excluded.len` (an open pattern
 /// matches fields that are present, so every excluded name is in `rec`); for each
 /// non-excluded slot it copies the (name, value) pair.
-pub(crate) fn build_record_rest_fn(eq_idx: u32) -> Function {
+pub(crate) fn build_record_rest_fn(eq_idx: u32, denom_idx: u32) -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(2);
 	let (rec, excluded) = (w.param(0), w.param(1));
+	// Lift a nominal subject to the uniform `$record` before filtering its fields.
+	w.local_get(rec).call(denom_idx).local_set(rec);
 	let names = w.local(types::valarray_ref());
 	let values = w.local(types::valarray_ref());
 	let exnames = w.local(types::valarray_ref());

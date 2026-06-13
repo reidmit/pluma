@@ -40,6 +40,7 @@ impl Module {
 		p: &IrProgram,
 		reach: &Reach,
 		param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
+		extra_nominal: &HashMap<u32, Vec<(u32, ir::RecordShape)>>,
 		browser: bool,
 		diags: &mut Diagnostics,
 	) -> Vec<u8> {
@@ -429,6 +430,7 @@ impl Module {
 				&p.enums,
 				&mut ftypes,
 				param_shapes,
+				extra_nominal,
 				&callee_rets,
 				extra_params,
 				diags,
@@ -447,6 +449,7 @@ impl Module {
 					self_idx,
 					rt: &runtime,
 					ftypes: &mut ftypes,
+					strpool: &strpool,
 				};
 				code.function(&(def.build)(&mut ctx));
 			}

@@ -299,6 +299,7 @@ pub(crate) fn compute_nominal(
 	f: &ir::Function,
 	fid: u32,
 	param_shapes: &HashMap<u32, Vec<Option<ir::RecordShape>>>,
+	extra_nominal: &HashMap<u32, Vec<(u32, ir::RecordShape)>>,
 ) -> HashMap<u32, ir::RecordShape> {
 	let mut nominal = HashMap::new();
 	// (a) This function's own nominal params (from record-shape monomorphization):
@@ -311,10 +312,20 @@ pub(crate) fn compute_nominal(
 			}
 		}
 	}
-	// (b) A `MakeRecord` is nominal if read as a record locally, or if it's passed
-	// as an arg into a nominal callee param (so it's passed raw, not lifted).
+	// (a') Extra nominal vars the substitution-driven engine recorded — a specialized
+	// lambda's captures of a nominal var (e.g. a `list.fold` lambda capturing the
+	// enclosing record param). Their runtime value is the captured `$shapeN`.
+	if let Some(extras) = extra_nominal.get(&fid) {
+		for (v, sh) in extras {
+			nominal.insert(*v, sh.clone());
+		}
+	}
+	// (b) A `MakeRecord` with a typed shape is always built nominal (it flows
+	// uniformly as a `$value` and self-lifts at generic consumers). A `None`-shape
+	// `MakeRecord` stays uniform, except one passed as an arg into a nominal callee
+	// param (record-shape monomorphization) — `read` collects those so they're built
+	// with the boxed shape the param expects.
 	let mut read = HashSet::new();
-	collect_record_reads(&f.body, &mut read);
 	collect_nominal_param_args(&f.body, param_shapes, &mut read);
 	collect_nominal_records(&f.body, &read, &mut nominal);
 	nominal
@@ -364,46 +375,6 @@ fn collect_nominal_param_args(
 	}
 }
 
-/// Vars used as a record read: a `GetField` receiver, or a `Match` subject with at
-/// least one record-pattern arm. (Both are the positions `compute_nominal` treats
-/// as nominal reads; everything else flows uniform.)
-fn collect_record_reads(b: &Block, read: &mut HashSet<u32>) {
-	for s in &b.0 {
-		match &s.kind {
-			StmtKind::Let(_, rv) | StmtKind::Discard(rv) => {
-				if let Rvalue::GetField(Atom::Var(v), _, _) = rv {
-					read.insert(v.0);
-				}
-			}
-			StmtKind::If(_, t, e) => {
-				collect_record_reads(t, read);
-				collect_record_reads(e, read);
-			}
-			StmtKind::Switch { arms, default, .. } => {
-				for (_, b) in arms {
-					collect_record_reads(b, read);
-				}
-				collect_record_reads(default, read);
-			}
-			StmtKind::Match { subject, arms } => {
-				if let Atom::Var(v) = subject {
-					if arms
-						.iter()
-						.any(|a| matches!(a.pattern, ir::Pattern::Record { .. }))
-					{
-						read.insert(v.0);
-					}
-				}
-				for a in arms {
-					collect_record_reads(&a.body, read);
-				}
-			}
-			StmtKind::Loop(b) => collect_record_reads(b, read),
-			_ => {}
-		}
-	}
-}
-
 /// Mark the nominal record producers whose result var is in `read`: a
 /// `MakeRecord` (shape = its name-sorted fields), and a `RecordUpdate` on an
 /// already-nominal base (shape-preserving, so it inherits the base's shape — built
@@ -416,21 +387,42 @@ fn collect_nominal_records(
 ) {
 	for s in &b.0 {
 		match &s.kind {
-			StmtKind::Let(v, Rvalue::MakeRecord(fields, shape)) if read.contains(&v.0) => {
-				// Prefer the typed shape threaded by lowering (it carries per-field
-				// reprs); fall back to an all-boxed shape for a synthetic record built
-				// without a type in hand.
-				let shape = shape.clone().unwrap_or_else(|| {
-					ir::RecordShape::boxed_from_names(fields.iter().map(|(n, _)| n.clone()).collect())
-				});
-				out.insert(v.0, shape);
+			StmtKind::Let(v, Rvalue::MakeRecord(fields, shape)) => {
+				match shape {
+					// A `MakeRecord` carrying a *typed* shape is built nominal
+					// unconditionally — not just when read as a record in this function. A
+					// nominal record is a `$value` subtype, so it flows uniformly everywhere
+					// a boxed value goes (`emit::atom` no longer lifts it); the generic
+					// consumers self-lift it via `__denominalize`. Keeping a record nominal
+					// as it's stored into a list and read back is what lets field access
+					// after `list.get` stay a constant-index `struct.get` once the reader is
+					// monomorphic.
+					Some(shape) => {
+						out.insert(v.0, shape.clone());
+					}
+					// A `None`-shape `MakeRecord` (a synthetic record built without a type —
+					// e.g. the CPS poll-state) has no closed shape, so it stays uniform and
+					// the async-runtime helpers that read it by name keep seeing a `$record`
+					// — *unless* it flows into a record-shape-monomorphized callee's nominal
+					// param (in `read`), where the boxed shape the param expects must match.
+					None if read.contains(&v.0) => {
+						out.insert(
+							v.0,
+							ir::RecordShape::boxed_from_names(fields.iter().map(|(n, _)| n.clone()).collect()),
+						);
+					}
+					None => {}
+				}
 			}
+			// `{ ...base, f: v }` is shape-preserving, so it inherits `base`'s shape and
+			// is built nominal exactly when `base` is (a `struct.new` copy). The forward
+			// walk means `base` (bound earlier in ANF) is already recorded.
 			StmtKind::Let(
 				v,
 				Rvalue::RecordUpdate {
 					base: Atom::Var(b), ..
 				},
-			) if read.contains(&v.0) => {
+			) => {
 				if let Some(shape) = out.get(&b.0).cloned() {
 					out.insert(v.0, shape);
 				}

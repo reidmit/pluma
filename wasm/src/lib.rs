@@ -112,7 +112,14 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 	// shape so the clone reads its param by `struct.get` (and the caller passes it
 	// nominal). Returns the per-clone param shapes the emitter consumes. Runs before
 	// the repr pass so clones get their `var_reprs`/coercions too.
-	let param_shapes = mono::specialize_record_shapes(&mut p);
+	let mut param_shapes = mono::specialize_record_shapes(&mut p);
+	// Merge the substitution-driven engine's specialized-function param shapes
+	// (produced during lowering — a generic def re-lowered under a closed type
+	// substitution, whose record params hold a `$shapeN`). Distinct `FuncId`s from
+	// `mono`'s call-site-shape clones, so the maps don't collide.
+	for (fid, shapes) in &p.param_shapes {
+		param_shapes.entry(*fid).or_insert_with(|| shapes.clone());
+	}
 	// Numeric monomorphization: an eligible direct-only function keeps its recorded
 	// param/return reprs (so a concrete `fib : int -> int` takes an i64 param and
 	// returns an i64, with no box/unbox at the call boundary); every function that
@@ -121,11 +128,12 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 	// signatures, and the coercion pass makes each direct call site match.
 	monomorphize_signatures(&mut p);
 	let sigs = ir::repr::Sigs::from_program(&p);
+	let extra_nominal = p.extra_nominal.clone();
 	for (fid, f) in p.functions.iter_mut().enumerate() {
 		// The per-function nominal-record map (same one the emitter recomputes), so
 		// the coercion pass reads/stores each unboxed (`F64`) record field at its slot
 		// repr instead of boxing — keeping repr inference in step with emission.
-		let nominal = scan::compute_nominal(f, fid as u32, &param_shapes);
+		let nominal = scan::compute_nominal(f, fid as u32, &param_shapes, &extra_nominal);
 		f.var_reprs = ir::repr::infer_reprs(f, &sigs, &nominal);
 		ir::repr::insert_coercions(f, &sigs, &nominal);
 	}
@@ -135,7 +143,14 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 
 	// 3. Build and encode the module.
 	let mut diags = Diagnostics::default();
-	let bytes = module::Module::build(&p, &reach, &param_shapes, opts.browser, &mut diags);
+	let bytes = module::Module::build(
+		&p,
+		&reach,
+		&param_shapes,
+		&extra_nominal,
+		opts.browser,
+		&mut diags,
+	);
 	if diags.is_empty() {
 		Ok(bytes)
 	} else {

@@ -277,7 +277,12 @@ fn splice_remove(w: &mut Wat, src: Local, len: Local, idx: Local) -> Local {
 /// recursion). `ref`/`dict` keys (and any unhandled tag) collapse to the
 /// tag-only hash — correct (`__eq` still separates them), just not finely
 /// distributed; such keys are exotic.
-pub(crate) fn build_hash_fn(self_idx: u32, variant_payload: u32, tuple_elems: u32) -> Function {
+pub(crate) fn build_hash_fn(
+	self_idx: u32,
+	variant_payload: u32,
+	tuple_elems: u32,
+	denom_idx: u32,
+) -> Function {
 	let mut w = Wat::new(1);
 	let v = w.param(0);
 	let ta = w.local(ValType::I32);
@@ -300,6 +305,14 @@ pub(crate) fn build_hash_fn(self_idx: u32, variant_payload: u32, tuple_elems: u3
 	// h = OFFSET; ta = tag(v); mix the tag so distinct types diverge.
 	w.i64(FNV_OFFSET).local_set(h);
 	w.local_get(v).value_tag().local_set(ta);
+	// A nominal `$shapeN` hashes as the uniform `$record` it lifts to — normalize
+	// before the tag is mixed in, so the two forms (which `__eq` treats as equal)
+	// produce the same hash.
+	w.local_get(ta).i32(types::TAG_SHAPE).i32_eq();
+	w.if_(|w| {
+		w.local_get(v).call(denom_idx).local_set(v);
+		w.i32(types::TAG_RECORD).local_set(ta);
+	});
 	w.local_get(ta).i64_extend_i32_u();
 	mix(&mut w, h);
 

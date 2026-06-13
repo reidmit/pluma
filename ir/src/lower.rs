@@ -31,7 +31,7 @@ use compiler::ast::{
 	PatternKind, PatternNode, RegexAnchor, RegexKind, RegexNode, ScopeNode, TryNode, WhenNode,
 	WhileNode,
 };
-use compiler::types::Type;
+use compiler::types::{Substitution, Type};
 use compiler::{Compiler, Range};
 use std::collections::HashMap;
 
@@ -100,7 +100,45 @@ struct Lowerer<'a> {
 	// reachability prune carve out each artifact (the server-only `remote def` bodies
 	// are simply never reached from the client's `main`).
 	entry_override: Option<String>,
+	// --- record-shape monomorphization (substitution-driven specialization) ---
+	// The active type substitution while lowering a specialized body: it binds the
+	// def's quantified vars to the concrete types this specialization is for, so
+	// `shape_of`/`repr_of` see concrete records (nominal `$shapeN`) and inner calls
+	// recompute their own closed substitutions under it. Empty while lowering a
+	// generic body (the normal pass).
+	mono_subst: Substitution,
+	// Each top-level value def's body + metadata, keyed by `(module, name)`, so a
+	// closed call site can re-lower the callee under a substitution. Built once up
+	// front from the analyzed program.
+	def_index: HashMap<(String, String), DefEntry<'a>>,
+	// Per-module local-namespace → qualified-module import maps, so a re-lowered def
+	// from another module resolves its own `module.value` references. Built up front.
+	module_imports: HashMap<String, HashMap<String, String>>,
+	// Canonical specialization key (`module.name|<subst>`) → the specialized inner
+	// `FuncId`. Registered *before* the body is lowered so a recursive call in the
+	// body reuses the same specialization (and terminates).
+	spec_map: HashMap<String, FuncId>,
+	// Per-source-def specialization count, to cap code-size blowup.
+	spec_per_def: HashMap<(String, String), usize>,
+	// Output: specialized `FuncId.0` → its params' nominal shapes, carried to the
+	// emitter via `IrProgram::param_shapes`.
+	spec_param_shapes: HashMap<u32, Vec<Option<RecordShape>>>,
+	// Output: extra nominal vars (captures of a nominal var) per `FuncId.0`, beyond
+	// the params in `spec_param_shapes` — `(VarId.0, shape)` pairs, carried via
+	// `IrProgram::extra_nominal` so the emitter reads those vars by `struct.get`.
+	spec_extra_nominal: HashMap<u32, Vec<(u32, RecordShape)>>,
 }
+
+/// A top-level value def captured for on-demand re-lowering under a substitution.
+struct DefEntry<'a> {
+	module: String,
+	body: &'a ExprNode,
+	dict_param_count: u16,
+}
+
+/// Cap on specializations per source def — a code-size bound (mirrors
+/// `wasm::mono::MAX_CLONES_PER_FN`). Calls past the cap keep the generic body.
+const MAX_SPECIALIZATIONS_PER_DEF: usize = 8;
 
 /// Per-function lowering state.
 struct FnScope {
@@ -120,6 +158,13 @@ struct FnScope {
 	// function's signature. Carried into `Function` by `finish_scope`.
 	param_reprs: Vec<Repr>,
 	ret_repr: Repr,
+	// Record-shape monomorphization: vars in this function whose runtime value is a
+	// nominal `$shapeN` of a known shape — closed-shape params of a specialized body,
+	// and captures whose source var is itself nominal. Reads on them lower to a
+	// constant-index `struct.get`. Drives capture propagation (a nested lambda
+	// capturing a nominal var marks its capture nominal too) and the emitter's nominal
+	// map (via `spec_extra_nominal` for captures). Empty in a generic body.
+	nominal_vars: HashMap<u32, RecordShape>,
 }
 
 /// A free variable captured by a `fun`: the `VarId` it gets inside this
@@ -182,6 +227,13 @@ impl<'a> Lowerer<'a> {
 			poison: None,
 			test_color: None,
 			entry_override: None,
+			mono_subst: Substitution::empty(),
+			def_index: build_def_index(compiler),
+			module_imports: build_module_imports(compiler),
+			spec_map: HashMap::new(),
+			spec_per_def: HashMap::new(),
+			spec_param_shapes: HashMap::new(),
+			spec_extra_nominal: HashMap::new(),
 		}
 	}
 
@@ -222,12 +274,16 @@ impl<'a> Lowerer<'a> {
 		}
 		let enums = self.enums;
 		let globals = self.globals.finish();
+		let param_shapes = self.spec_param_shapes;
+		let extra_nominal = self.spec_extra_nominal;
 		Ok(IrProgram {
 			functions,
 			globals,
 			enums,
 			entry,
 			test_suites,
+			param_shapes,
+			extra_nominal,
 		})
 	}
 
@@ -1218,7 +1274,7 @@ impl<'a> Lowerer<'a> {
 					let atom = self.lower_expr(value)?;
 					ir_fields.push((name.name.clone(), atom));
 				}
-				let shape = record_shape_of(&expr.ty);
+				let shape = self.shape_of(&expr.ty);
 				Ok(self.emit_let(Rvalue::MakeRecord(ir_fields, shape), range))
 			}
 			ExprKind::RecordUpdate { base, fields } => {
@@ -1228,7 +1284,7 @@ impl<'a> Lowerer<'a> {
 					let atom = self.lower_expr(value)?;
 					ir_fields.push((name.name.clone(), atom));
 				}
-				let shape = record_shape_of(&expr.ty);
+				let shape = self.shape_of(&expr.ty);
 				Ok(self.emit_let(
 					Rvalue::RecordUpdate {
 						base: base_atom,
@@ -1250,7 +1306,7 @@ impl<'a> Lowerer<'a> {
 				// `NamespaceAccess` by this point). If `receiver` is actually a
 				// namespace it won't lower as a value, poisoning the def.
 				let recv = self.lower_expr(receiver)?;
-				let shape = record_shape_of(&receiver.ty);
+				let shape = self.shape_of(&receiver.ty);
 				Ok(self.emit_let(Rvalue::GetField(recv, field.name.clone(), shape), range))
 			}
 			ExprKind::ElementAccess { receiver, index } => {
@@ -1614,9 +1670,207 @@ impl<'a> Lowerer<'a> {
 			.ok_or_else(|| format!("bare variant `{variant}` is not a prelude variant"))
 	}
 
+	/// Record shape for `ty` under the active monomorphization substitution. With an
+	/// empty subst (the normal pass) this is exactly `record_shape_of`, so generic
+	/// lowering is unchanged; in a specialized body the subst binds the def's
+	/// quantified vars, turning an open record into a closed (nominal) one.
+	fn shape_of(&self, ty: &Type) -> Option<RecordShape> {
+		if self.mono_subst.solutions.is_empty()
+			&& self.mono_subst.row_solutions.is_empty()
+			&& self.mono_subst.tuple_row_solutions.is_empty()
+		{
+			record_shape_of(ty)
+		} else {
+			record_shape_of(&self.mono_subst.apply_to_type(ty))
+		}
+	}
+
+	/// The `(module, name)` of the top-level def a call's callee refers to, if it's a
+	/// plain global reference (a same-module bare identifier or an imported
+	/// `module.value`). `None` for locals, builtins, variant constructors, etc.
+	fn callee_def_key(&self, callee: &ExprNode) -> Option<(String, String)> {
+		match &callee.kind {
+			ExprKind::Grouping(inner) => self.callee_def_key(inner),
+			ExprKind::Identifier(ident) => Some((self.current_module.clone(), ident.name.clone())),
+			ExprKind::NamespaceAccess(path) if path.len() == 2 => {
+				let module = self.imports.get(&path[0].name)?.clone();
+				Some((module, path[1].name.clone()))
+			}
+			_ => None,
+		}
+	}
+
+	/// If this call instantiates a generic def at a closed, record-touching
+	/// substitution (under the active subst), return the specialized callee `FuncId`
+	/// and the lowered user args. The caller emits the direct (tail) call. Returns
+	/// `None` to fall back to the generic indirect call.
+	fn try_specialize_call(
+		&mut self,
+		call: &compiler::ast::CallNode,
+		_range: Range,
+	) -> Result<Option<(FuncId, Vec<Atom>)>, String> {
+		// Constrained (dict-passing) calls keep the generic path — their dicts ride as
+		// leading args, which the direct-call redirect doesn't reconstruct.
+		if !call.dict_args.is_empty() {
+			return Ok(None);
+		}
+		let Some((_name, generic)) = &call.mono_callee else {
+			return Ok(None);
+		};
+		let Some(key) = self.callee_def_key(&call.callee) else {
+			return Ok(None);
+		};
+		// The substitution the callee is instantiated at here, composed under the
+		// active subst (which binds the enclosing specialized def's vars).
+		let concrete = self.mono_subst.apply_to_type(&call.callee.ty);
+		let subst = Substitution::congruent_diff(generic, &concrete);
+		if !subst_is_closed(&subst) || !subst_touches_record(&subst) {
+			return Ok(None);
+		}
+		let Some(fid) = self.get_or_specialize(&key, subst)? else {
+			return Ok(None);
+		};
+		// The specialization is a capture-free top-level function — pass the user args
+		// directly (the emitter supplies the null closure env).
+		let mut args = Vec::with_capacity(call.args.len());
+		for a in &call.args {
+			args.push(self.lower_expr(a)?);
+		}
+		Ok(Some((fid, args)))
+	}
+
+	/// Get (or create) the specialization of `key`'s def under `subst`. Reuses a
+	/// prior specialization for the same `(def, subst)`; caps the count per def; and
+	/// registers the new `FuncId` *before* lowering the body, so a recursive call in
+	/// the body resolves to it (and the worklist terminates). `None` when the callee
+	/// isn't a specializable function-valued def or the cap is hit.
+	fn get_or_specialize(
+		&mut self,
+		key: &(String, String),
+		subst: Substitution,
+	) -> Result<Option<FuncId>, String> {
+		let canon = format!("{}.{}|{}", key.0, key.1, canonical_subst(&subst));
+		if let Some(&fid) = self.spec_map.get(&canon) {
+			return Ok(Some(fid));
+		}
+		// Only a function-valued, dict-free def we hold the AST for is specializable.
+		let (module, body, dict_param_count) = {
+			let Some(entry) = self.def_index.get(key) else {
+				return Ok(None);
+			};
+			(entry.module.clone(), entry.body, entry.dict_param_count)
+		};
+		if dict_param_count != 0 || !matches!(body.kind, ExprKind::Fun(_)) {
+			return Ok(None);
+		}
+		{
+			let count = self.spec_per_def.entry(key.clone()).or_insert(0);
+			if *count >= MAX_SPECIALIZATIONS_PER_DEF {
+				return Ok(None);
+			}
+			*count += 1;
+		}
+		let fid = self.reserve_function();
+		if std::env::var_os("PLUMA_MONO_SPEC").is_some() {
+			eprintln!("[spec] #{} {}.{}  ({})", fid.0, key.0, key.1, canon);
+		}
+		self.spec_map.insert(canon, fid);
+		self.specialize_fun_body(fid, &key.1, &module, body, subst)?;
+		Ok(Some(fid))
+	}
+
+	/// Re-lower a def's `fun` body into the reserved `fid` under `subst`, in the def's
+	/// own module and on a fresh scope stack (a top-level def captures nothing and
+	/// must not see the caller's locals). Records the specialization's per-param
+	/// nominal shapes. The lowering context (module/imports/subst/scopes) is saved and
+	/// restored around the re-entrant lower.
+	fn specialize_fun_body(
+		&mut self,
+		fid: FuncId,
+		name: &str,
+		module: &str,
+		body: &ExprNode,
+		subst: Substitution,
+	) -> Result<(), String> {
+		let ExprKind::Fun(fun) = &body.kind else {
+			self.functions[fid.0 as usize] = placeholder_function(name);
+			return Ok(());
+		};
+		let saved_scopes = std::mem::take(&mut self.scopes);
+		let saved_module = std::mem::replace(&mut self.current_module, module.to_string());
+		let saved_imports = std::mem::replace(
+			&mut self.imports,
+			self.module_imports.get(module).cloned().unwrap_or_default(),
+		);
+		let saved_subst = std::mem::replace(&mut self.mono_subst, subst);
+
+		let param_names: Vec<&str> = fun.params.iter().map(|p| p.ident.name.as_str()).collect();
+		let param_reprs: Vec<Repr> = fun
+			.params
+			.iter()
+			.map(|p| crate::repr::repr_of_type(&p.ty))
+			.collect();
+		let fn_name = format!("{}.{}$spec{}", module, name, fid.0);
+		// Param nominal shapes under the active subst — these tell the emitter to read
+		// the specialization's record params by constant-index `struct.get`. Computed
+		// before lowering so the params' nominal status propagates to captures.
+		let shapes: Vec<Option<RecordShape>> =
+			fun.params.iter().map(|p| self.shape_of(&p.ty)).collect();
+		self.push_scope(fn_name, &param_names);
+		if let Some(scope) = self.scopes.last_mut() {
+			scope.param_reprs = param_reprs;
+			scope.ret_repr = fun
+				.body
+				.last()
+				.map(|e| crate::repr::repr_of_type(&e.ty))
+				.unwrap_or(Repr::Boxed);
+			for (p, sh) in scope.params.clone().iter().zip(&shapes) {
+				if let Some(sh) = sh {
+					scope.nominal_vars.insert(p.0, sh.clone());
+				}
+			}
+		}
+		let body_range = fun.body.last().map(|e| e.range).unwrap_or(body.range);
+		let result = self.lower_body_tail(&fun.body, body_range);
+		let scope = self.scopes.pop().unwrap();
+
+		self.scopes = saved_scopes;
+		self.current_module = saved_module;
+		self.imports = saved_imports;
+		self.mono_subst = saved_subst;
+
+		match result {
+			Ok(()) => {
+				self.spec_param_shapes.insert(fid.0, shapes);
+				self.functions[fid.0 as usize] = finish_scope(scope);
+				Ok(())
+			}
+			Err(e) => {
+				self.functions[fid.0 as usize] = placeholder_function(name);
+				Err(e)
+			}
+		}
+	}
+
+	/// Append a placeholder function and return its `FuncId`. The placeholder is
+	/// overwritten by `specialize_fun_body` (on success or error) before lowering
+	/// finishes; reserving the id first lets a recursive call bind to it.
+	fn reserve_function(&mut self) -> FuncId {
+		let fid = FuncId(self.functions.len() as u32);
+		self.functions.push(placeholder_function("<reserved>"));
+		fid
+	}
+
 	fn lower_call(&mut self, call: &compiler::ast::CallNode, range: Range) -> Result<Atom, String> {
 		if let Some(result) = self.try_lower_wire_call(call, range) {
 			return result;
+		}
+		// Record-shape monomorphization: a call whose generic callee is instantiated
+		// at a closed substitution (under the active subst) is redirected to a
+		// specialized clone of the callee — its record params hold a `$shapeN`, so the
+		// reads inside become constant-index `struct.get`.
+		if let Some((fid, args)) = self.try_specialize_call(call, range)? {
+			return Ok(self.emit_let(Rvalue::Call(Callee::Function(fid), args), range));
 		}
 		let callee = self.lower_callee(&call.callee)?;
 		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
@@ -2231,7 +2485,7 @@ impl<'a> Lowerer<'a> {
 				// record sub-patterns are lowered with `Type::Unknown` (below), so they
 				// get `None` and flow uniform — matching the receiver-type threading in
 				// `FieldAccess`.
-				let shape = record_shape_of(subject_ty);
+				let shape = self.shape_of(subject_ty);
 				let mut ir_fields = Vec::with_capacity(fields.len());
 				for (name, p) in fields {
 					// Sub-patterns carry no known subject type (matching `emit.rs`).
@@ -2295,7 +2549,29 @@ impl<'a> Lowerer<'a> {
 			"{}.fun@{}:{}",
 			self.current_module, fun.range.start.line, fun.range.start.col
 		);
-		self.lower_closure(fn_name, &param_names, &param_reprs, &fun.body, range)
+		// Inside a specialized body, a nested lambda's record params are concrete too
+		// (under the active subst) — record their nominal shapes so this closure (e.g.
+		// the `list.fold`/`list.map` lambda — the hot inner loop) reads them by
+		// `struct.get`, not a name-scan. A generic lambda's params are open → all-`None`.
+		let nominal_params = self
+			.in_specialized_body()
+			.then(|| fun.params.iter().map(|p| self.shape_of(&p.ty)).collect());
+		self.lower_closure(
+			fn_name,
+			&param_names,
+			&param_reprs,
+			&fun.body,
+			range,
+			nominal_params,
+		)
+	}
+
+	/// Whether a non-empty monomorphization substitution is active — i.e. we are
+	/// re-lowering a specialized body, where open record types resolve to closed ones.
+	fn in_specialized_body(&self) -> bool {
+		!self.mono_subst.solutions.is_empty()
+			|| !self.mono_subst.row_solutions.is_empty()
+			|| !self.mono_subst.tuple_row_solutions.is_empty()
 	}
 
 	/// Lower a closure body into its own `Function` and return a `MakeClosure`
@@ -2310,6 +2586,7 @@ impl<'a> Lowerer<'a> {
 		param_reprs: &[Repr],
 		body: &[ExprNode],
 		outer_range: Range,
+		nominal_params: Option<Vec<Option<RecordShape>>>,
 	) -> Result<Atom, String> {
 		self.push_scope(fn_name, param_names);
 		// Record the function's signature reprs (the projection of the AST param
@@ -2321,6 +2598,16 @@ impl<'a> Lowerer<'a> {
 				.last()
 				.map(|e| crate::repr::repr_of_type(&e.ty))
 				.unwrap_or(Repr::Boxed);
+			// Seed nominal params so the body's reads (and any captures of them by a
+			// nested lambda) are nominal.
+			if let Some(shapes) = &nominal_params {
+				let ps = scope.params.clone();
+				for (p, sh) in ps.iter().zip(shapes) {
+					if let Some(sh) = sh {
+						scope.nominal_vars.insert(p.0, sh.clone());
+					}
+				}
+			}
 		}
 		let body_range = body.last().map(|e| e.range).unwrap_or(outer_range);
 		if let Err(e) = self.lower_body_tail(body, body_range) {
@@ -2336,7 +2623,31 @@ impl<'a> Lowerer<'a> {
 			.iter()
 			.map(|c| self.capture_src_atom(&c.src))
 			.collect();
+		// Captures whose source was a nominal var (`add_capture` propagated the shape)
+		// — carried to the emitter so the lambda reads them by `struct.get` too (e.g.
+		// the `list.fold` lambda capturing the enclosing specialized record param).
+		let extra_nominal: Vec<(u32, RecordShape)> = scope
+			.captures
+			.iter()
+			.filter_map(|c| {
+				scope
+					.nominal_vars
+					.get(&c.var.0)
+					.map(|s| (c.var.0, s.clone()))
+			})
+			.collect();
 		let fid = self.add_function(finish_scope(scope));
+		// Record nominal param shapes for a lambda lowered in a specialized body, so
+		// the emitter reads its record params by `struct.get` (only when at least one
+		// param actually has a closed shape).
+		if let Some(shapes) = nominal_params {
+			if shapes.iter().any(Option::is_some) {
+				self.spec_param_shapes.insert(fid.0, shapes);
+			}
+		}
+		if !extra_nominal.is_empty() {
+			self.spec_extra_nominal.insert(fid.0, extra_nominal);
+		}
 		Ok(self.emit_let(Rvalue::MakeClosure(fid, capture_atoms), outer_range))
 	}
 
@@ -2349,7 +2660,8 @@ impl<'a> Lowerer<'a> {
 			"{}.defer@{}:{}",
 			self.current_module, inner.range.start.line, inner.range.start.col
 		);
-		let closure = self.lower_closure(fn_name, &[], &[], std::slice::from_ref(inner), range)?;
+		let closure =
+			self.lower_closure(fn_name, &[], &[], std::slice::from_ref(inner), range, None)?;
 		self.push_stmt(StmtKind::PushDefer(closure), range);
 		Ok(Atom::Const(Const::Unit))
 	}
@@ -2403,7 +2715,14 @@ impl<'a> Lowerer<'a> {
 			"{}.scope@{}:{}",
 			self.current_module, range.start.line, range.start.col
 		);
-		let body = self.lower_closure(fn_name, &[handle_name], &[Repr::Boxed], &node.body, range)?;
+		let body = self.lower_closure(
+			fn_name,
+			&[handle_name],
+			&[Repr::Boxed],
+			&node.body,
+			range,
+			None,
+		)?;
 		Ok(self.emit_let(Rvalue::CallClosure(scope_new, vec![manual, body]), range))
 	}
 
@@ -2562,6 +2881,15 @@ impl<'a> Lowerer<'a> {
 			self.push_stmt(StmtKind::Return(atom), range);
 			return Ok(());
 		}
+		// Record-shape monomorphization: a tail call to a closed-instantiated generic
+		// callee becomes a direct tail call to its specialization (preserving TCO —
+		// e.g. nbody's `run` recursion, which must not grow the stack).
+		if let Some((fid, args)) = self.try_specialize_call(call, range)? {
+			let v = self.alloc_var();
+			self.push_stmt(StmtKind::Let(v, Rvalue::TailCallDirect(fid, args)), range);
+			self.push_stmt(StmtKind::Return(Atom::Var(v)), range);
+			return Ok(());
+		}
 		let callee = self.lower_callee(&call.callee)?;
 		let mut args = Vec::with_capacity(call.dict_args.len() + call.args.len());
 		for cell in &call.dict_args {
@@ -2637,6 +2965,7 @@ impl<'a> Lowerer<'a> {
 			is_async: false,
 			param_reprs: vec![Repr::Boxed; param_names.len()],
 			ret_repr: Repr::Boxed,
+			nominal_vars: HashMap::new(),
 		};
 		for pn in param_names {
 			let v = VarId(scope.next_var);
@@ -2756,12 +3085,25 @@ impl<'a> Lowerer<'a> {
 
 	fn add_capture(&mut self, scope_idx: usize, name: &str, src: CaptureSrc) -> ScopeSlot {
 		let var = self.fresh_var(scope_idx);
+		// Propagate nominal-ness: a capture of a nominal var (a `$shapeN`) is itself
+		// nominal in this scope, so its field reads stay `struct.get` and a deeper
+		// lambda capturing it propagates further.
+		let shape = scope_idx.checked_sub(1).and_then(|pi| match &src {
+			CaptureSrc::ParentLocal(pv) => self.scopes[pi].nominal_vars.get(&pv.0).cloned(),
+			CaptureSrc::ParentCapture(idx) => {
+				let pv = self.scopes[pi].captures.get(*idx)?.var.0;
+				self.scopes[pi].nominal_vars.get(&pv).cloned()
+			}
+		});
 		let i = self.scopes[scope_idx].captures.len();
 		self.scopes[scope_idx].captures.push(CaptureInfo {
 			name: name.to_string(),
 			var,
 			src,
 		});
+		if let Some(sh) = shape {
+			self.scopes[scope_idx].nominal_vars.insert(var.0, sh);
+		}
 		ScopeSlot::Capture(i)
 	}
 
@@ -2999,6 +3341,42 @@ fn build_imports(ast: &ModuleNode) -> HashMap<String, String> {
 	imports
 }
 
+/// Index every top-level value def's body by `(module, name)` so the
+/// specialization engine can re-lower a callee on demand under a substitution.
+/// Only `DefinitionKind::Expr` defs (the call targets) are indexed.
+fn build_def_index(compiler: &Compiler) -> HashMap<(String, String), DefEntry<'_>> {
+	let mut index = HashMap::new();
+	for (module, data) in &compiler.modules {
+		let Some(ast) = data.ast.as_ref() else {
+			continue;
+		};
+		for def in &ast.body {
+			if let DefinitionKind::Expr(expr) = &def.kind {
+				index.insert(
+					(module.clone(), def.name.name.clone()),
+					DefEntry {
+						module: module.clone(),
+						body: expr,
+						dict_param_count: def.dict_param_count,
+					},
+				);
+			}
+		}
+	}
+	index
+}
+
+/// Each module's import map (`build_imports`), so a specialized def re-lowered from
+/// another module resolves its own `module.value` references under that module's
+/// `use`s rather than the caller's.
+fn build_module_imports(compiler: &Compiler) -> HashMap<String, HashMap<String, String>> {
+	compiler
+		.modules
+		.iter()
+		.filter_map(|(m, data)| data.ast.as_ref().map(|ast| (m.clone(), build_imports(ast))))
+		.collect()
+}
+
 /// If `expr` carries a non-empty, undrained dispatch sink, return its cells. A
 /// surviving sink means a trait-constrained value referenced in value position
 /// (passed, returned, or bound — not directly called), which needs its dicts
@@ -3146,6 +3524,98 @@ fn binop_for(op: &Operator, is_float: bool) -> Option<BinOp> {
 		(Operator::GreaterThanEquals, true) => BinOp::GeF64,
 		_ => return None,
 	})
+}
+
+/// A minimal valid function, used to fill a reserved specialization slot before
+/// (and, on a lowering error, instead of) the real body.
+fn placeholder_function(name: &str) -> Function {
+	Function {
+		name: name.to_string(),
+		module: String::new(),
+		params: vec![],
+		captures: vec![],
+		is_async: false,
+		poll_fn: None,
+		body: Block(vec![Stmt::new(
+			StmtKind::Return(Atom::Const(Const::Unit)),
+			SYNTHETIC,
+		)]),
+		var_reprs: vec![],
+		param_reprs: vec![],
+		ret_repr: Repr::Boxed,
+	}
+}
+
+/// A deterministic key for a specialization substitution: sorted `var=Type` and
+/// `row=fields` entries. Ground types render stably, so the same `(def, instance)`
+/// always produces the same key (dedup) and different defs/instances differ.
+fn canonical_subst(s: &Substitution) -> String {
+	let mut parts: Vec<String> = Vec::new();
+	let mut keys: Vec<usize> = s.solutions.keys().copied().collect();
+	keys.sort();
+	for k in keys {
+		parts.push(format!("{}={}", k, s.solutions[&k]));
+	}
+	let mut rkeys: Vec<usize> = s.row_solutions.keys().copied().collect();
+	rkeys.sort();
+	for k in rkeys {
+		let sol = &s.row_solutions[&k];
+		let mut fs: Vec<&(String, Type)> = sol.fields.iter().collect();
+		fs.sort_by(|a, b| a.0.cmp(&b.0));
+		let body: Vec<String> = fs.iter().map(|(n, t)| format!("{}:{}", n, t)).collect();
+		parts.push(format!("r{}={{{}}}", k, body.join(",")));
+	}
+	let mut tkeys: Vec<usize> = s.tuple_row_solutions.keys().copied().collect();
+	tkeys.sort();
+	for k in tkeys {
+		let sol = &s.tuple_row_solutions[&k];
+		let mut fs: Vec<&(usize, Type)> = sol.fields.iter().collect();
+		fs.sort_by_key(|(i, _)| *i);
+		let body: Vec<String> = fs.iter().map(|(i, t)| format!("{}:{}", i, t)).collect();
+		parts.push(format!("t{}=({})", k, body.join(",")));
+	}
+	parts.join(";")
+}
+
+/// Whether every target of `subst` is fully ground (no residual type/row vars) and
+/// the subst is non-empty. Only a closed substitution can drive nominal `$shapeN`
+/// selection; an open one stays on the generic body.
+fn subst_is_closed(s: &Substitution) -> bool {
+	if s.solutions.is_empty() && s.row_solutions.is_empty() && s.tuple_row_solutions.is_empty() {
+		return false;
+	}
+	let ground = |t: &Type| t.free_vars().is_empty() && t.free_row_vars().is_empty();
+	s.solutions.values().all(ground)
+		&& s
+			.row_solutions
+			.values()
+			.all(|r| r.tail.is_none() && r.fields.iter().all(|(_, t)| ground(t)))
+		&& s
+			.tuple_row_solutions
+			.values()
+			.all(|r| r.tail.is_none() && r.fields.iter().all(|(_, t)| ground(t)))
+}
+
+/// Whether `subst` involves any record — the only case record-shape specialization
+/// helps. A bound record row variable counts even with no extra fields: closing an
+/// open record's tail (open → closed) is what turns its field reads from a name-scan
+/// into a nominal `struct.get`. Skips pure-scalar polymorphism (`identity` at `int`),
+/// which keeps the generic body.
+fn subst_touches_record(s: &Substitution) -> bool {
+	!s.row_solutions.is_empty() || s.solutions.values().any(type_has_record)
+}
+
+fn type_has_record(t: &Type) -> bool {
+	match t {
+		Type::Record(..) => true,
+		Type::List(e) | Type::Ref(e) => type_has_record(e),
+		Type::Tuple(es) => es.iter().any(type_has_record),
+		Type::PartialTuple(fs, _) => fs.iter().any(|(_, t)| type_has_record(t)),
+		Type::Enum(_, args) => args.iter().any(type_has_record),
+		Type::Dict(k, v) => type_has_record(k) || type_has_record(v),
+		Type::Fun(ps, r) => ps.iter().any(type_has_record) || type_has_record(r),
+		_ => false,
+	}
 }
 
 /// The closed-record shape of `ty`, if it is one: a `Type::Record` with a `None`

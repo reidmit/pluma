@@ -15,6 +15,7 @@ pub(crate) fn build_eq_fn(
 	dict_eq_idx: u32,
 	variant_payload: u32,
 	tuple_elems: u32,
+	denom_idx: u32,
 ) -> Function {
 	let mut w = Wat::new(2);
 	let (a, b) = (w.param(0), w.param(1));
@@ -30,6 +31,19 @@ pub(crate) fn build_eq_fn(
 	// ta = tag(a); tb = tag(b); if ta != tb -> 0.
 	w.local_get(a).value_tag().local_set(ta);
 	w.local_get(b).value_tag().local_set(tb);
+	// A nominal `$shapeN` compares as the uniform `$record` it lifts to — normalize
+	// each operand (and its tag) before the tag-mismatch check, so a nominal record
+	// and the equal uniform record aren't rejected as different kinds.
+	w.local_get(ta).i32(types::TAG_SHAPE).i32_eq();
+	w.if_(|w| {
+		w.local_get(a).call(denom_idx).local_set(a);
+		w.i32(types::TAG_RECORD).local_set(ta);
+	});
+	w.local_get(tb).i32(types::TAG_SHAPE).i32_eq();
+	w.if_(|w| {
+		w.local_get(b).call(denom_idx).local_set(b);
+		w.i32(types::TAG_RECORD).local_set(tb);
+	});
 	w.local_get(ta).local_get(tb).i32_ne();
 	w.if_(|w| {
 		w.i32(0).ret();

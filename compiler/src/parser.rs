@@ -1126,6 +1126,7 @@ impl<'a> Parser<'a> {
 							callee: Box::new(lhs_expr),
 							args,
 							dict_args: Vec::new(),
+							mono_callee: None,
 						}),
 						ty: Type::Unknown,
 						trait_dispatch: None,

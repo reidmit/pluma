@@ -51,27 +51,28 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::Eq,
 		fn_type: Ty::Eq,
-		deps: &[H::DictEq, H::VariantPayload, H::TupleElems],
+		deps: &[H::DictEq, H::VariantPayload, H::TupleElems, H::Denominalize],
 		build: |c| {
 			eq::build_eq_fn(
 				c.self_idx,
 				c.dep(H::DictEq),
 				c.dep(H::VariantPayload),
 				c.dep(H::TupleElems),
+				c.dep(H::Denominalize),
 			)
 		},
 	},
 	HelperDef {
 		id: H::GetField,
 		fn_type: Ty::Helper(2),
-		deps: &[H::Eq],
-		build: |c| record::build_getfield_fn(c.dep(H::Eq)),
+		deps: &[H::Eq, H::Denominalize],
+		build: |c| record::build_getfield_fn(c.dep(H::Eq), c.dep(H::Denominalize)),
 	},
 	HelperDef {
 		id: H::RecordUpdate,
 		fn_type: Ty::Helper(3),
-		deps: &[H::Eq],
-		build: |c| record::build_record_update_fn(c.dep(H::Eq)),
+		deps: &[H::Eq, H::Denominalize],
+		build: |c| record::build_record_update_fn(c.dep(H::Eq), c.dep(H::Denominalize)),
 	},
 	HelperDef {
 		id: H::ListTail,
@@ -102,6 +103,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::MarshalLoad,
 			H::VariantPayload,
 			H::TupleElems,
+			H::Denominalize,
 		],
 		build: |c| {
 			to_string::build_tostring_fn(
@@ -115,6 +117,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.rt.bump,
 				c.dep(H::VariantPayload),
 				c.dep(H::TupleElems),
+				c.dep(H::Denominalize),
 				c.rt.lits,
 			)
 		},
@@ -202,8 +205,15 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::Hash,
 		fn_type: Ty::Helper(1),
-		deps: &[H::VariantPayload, H::TupleElems],
-		build: |c| dict::build_hash_fn(c.self_idx, c.dep(H::VariantPayload), c.dep(H::TupleElems)),
+		deps: &[H::VariantPayload, H::TupleElems, H::Denominalize],
+		build: |c| {
+			dict::build_hash_fn(
+				c.self_idx,
+				c.dep(H::VariantPayload),
+				c.dep(H::TupleElems),
+				c.dep(H::Denominalize),
+			)
+		},
 	},
 	HelperDef {
 		id: H::DictEmpty,
@@ -392,6 +402,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::WireEncDict,
 			H::VariantPayload,
 			H::TupleElems,
+			H::Denominalize,
 		],
 		build: |c| {
 			wire::build_wire_enc_fn(
@@ -404,6 +415,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::WireEncDict),
 				c.dep(H::VariantPayload),
 				c.dep(H::TupleElems),
+				c.dep(H::Denominalize),
 				c.rt.wire,
 			)
 		},
@@ -535,8 +547,8 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::RecordRest,
 		fn_type: Ty::Helper(2),
-		deps: &[H::Eq],
-		build: |c| record::build_record_rest_fn(c.dep(H::Eq)),
+		deps: &[H::Eq, H::Denominalize],
+		build: |c| record::build_record_rest_fn(c.dep(H::Eq), c.dep(H::Denominalize)),
 	},
 	HelperDef {
 		id: H::RunDefers,
@@ -1027,6 +1039,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::TupleFromArray,
 		deps: &[],
 		build: |_| tuple::build_tuple_from_array_fn(),
+	},
+	HelperDef {
+		id: H::Denominalize,
+		fn_type: Ty::Helper(1),
+		deps: &[],
+		build: |c| record::build_denominalize_fn(&c.ftypes.shapes_for_lift(), c.strpool),
 	},
 ];
 

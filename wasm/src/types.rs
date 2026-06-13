@@ -44,7 +44,8 @@ pub const T_DENTRY: u32 = 17; // struct { i32 tag, (ref null $value) key, (mut r
 pub const T_EXTERN: u32 = 18; // struct { i32 tag, (ref null extern) handle }  — a host-owned resource handle
 pub const T_CNODE: u32 = 19; // struct { i32 tag, i32 dataMap, i32 nodeMap, (mut ref $valarray) entries, (mut ref $valarray) children, (mut ref null $value) edit }  — a persistent dict trie node
 pub const T_LOCAL: u32 = 20; // struct { i32 tag, (ref null $value) default }  — a task-local cell (identity by ref.eq)
-const T_FIRST_FUNC: u32 = 21;
+pub const T_SHAPE_HDR: u32 = 21; // struct { i32 tag, i32 shape_id }  — the open supertype of every $shapeN
+const T_FIRST_FUNC: u32 = 22;
 
 // --------------------------------------------------------------------------
 // Runtime tags carried in the `$value` discriminant field — one per runtime
@@ -104,6 +105,13 @@ pub const TAG_CNODE: i32 = 20;
 /// cell's default value. Identity is the struct reference itself (`ref.eq`, like
 /// `$ref`) — the binding environment matches frames by cell identity. Never printed.
 pub const TAG_LOCAL: i32 = 21;
+/// A *nominal* record: a `$shapeN` struct `{ tag, shape_id, f0..fk }` (see
+/// `ShapeInfo`). The distinct tag (vs `TAG_RECORD` for the uniform `$record`) lets a
+/// generic consumer holding an arbitrary `$value` tell a nominal record apart from a
+/// uniform one by reading field 0, and `__denominalize` it to the uniform form before
+/// the name-scanning paths (`__eq`/`__getfield`/`__tostring`/wire/`__hash`). Never
+/// reaches the host formatter — it's lifted to `$record` at every uniform boundary.
+pub const TAG_SHAPE: i32 = 22;
 
 /// `(ref null $valarray)` — a reference to a value array (closure captures or
 /// variant payload).
@@ -530,6 +538,19 @@ impl FuncTypes {
 		self.shape_count += 1;
 		self.pending.push(Pending::Shape(shape.field_reprs.clone()));
 		info
+	}
+
+	/// Every interned record shape with its struct type index and dense `shape_id`,
+	/// for the `__denominalize` lift dispatch. `__denominalize` dispatches on the
+	/// `shape_id` (not `ref.test`, which can't tell two structurally-identical shapes
+	/// apart after WasmGC canonicalization). Empty before any nominal record is built —
+	/// `__denominalize` then degenerates to identity.
+	pub fn shapes_for_lift(&self) -> Vec<(u32, u32, ir::RecordShape)> {
+		self
+			.shape_keys
+			.iter()
+			.map(|(shape, info)| (info.type_idx, info.shape_id, shape.clone()))
+			.collect()
 	}
 
 	/// The type index for a Pluma function of the given arity (boxed in/out).
@@ -1080,6 +1101,20 @@ impl FuncTypes {
 			],
 			true,
 		));
+		// 21 $shape_hdr — { tag, i32 shape_id }. The open (non-final) supertype every
+		// `$shapeN` nominal record extends, so a generic consumer holding an arbitrary
+		// `$value` can read the `shape_id` (field 1) without knowing the concrete shape.
+		// WasmGC canonicalizes two structurally-identical shape structs into one runtime
+		// type, so `ref.test` can't tell `{x,y}` from `{name,age}` — the `shape_id` is
+		// the discriminator `__denominalize` dispatches on.
+		types.ty().subtype(&struct_subtype(
+			Some(T_VALUE),
+			vec![
+				val_field(ValType::I32, false),
+				val_field(ValType::I32, false),
+			],
+			false,
+		));
 		// Interned function types + record-shape structs, in index order. A Pluma
 		// function takes an implicit closure-environment param first (`env`, the
 		// `$closure` ref or null for a capture-free direct call), then its `arity`
@@ -1105,9 +1140,11 @@ impl FuncTypes {
 					// One slot per field at its storage repr: `F64` is an unboxed `f64`
 					// (read without chasing a `$float` box), everything else a `$value` ref.
 					fields.extend(reprs.iter().map(|r| val_field(repr_valtype(*r), false)));
+					// Subtype `$shape_hdr` (not `$value` directly) so a generic consumer can
+					// recover the `shape_id` from any nominal record via the supertype.
 					types
 						.ty()
-						.subtype(&struct_subtype(Some(T_VALUE), fields, true));
+						.subtype(&struct_subtype(Some(T_SHAPE_HDR), fields, true));
 					continue;
 				}
 			};

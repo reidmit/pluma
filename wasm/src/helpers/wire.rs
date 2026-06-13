@@ -486,6 +486,7 @@ pub(crate) fn build_wire_enc_fn(
 	enc_dict: u32,
 	variant_payload: u32,
 	tuple_elems: u32,
+	denom_idx: u32,
 	wt: WireTags,
 ) -> Function {
 	let va = types::T_VALARRAY;
@@ -642,6 +643,9 @@ pub(crate) fn build_wire_enc_fn(
 	// order, so encode positionally (no per-name lookup needed).
 	w.local_get(vtag).i32(wt.s_record as i32).i32_eq();
 	w.if_(|w| {
+		// A nominal `$shapeN` is lifted to the uniform `$record` (same name-sorted
+		// field order the schema expects) before its values array is read.
+		w.local_get(val).call(denom_idx).local_set(val);
 		payload_elem(w, 0);
 		w.ref_cast(types::T_LIST)
 			.struct_get(types::T_LIST, 1)

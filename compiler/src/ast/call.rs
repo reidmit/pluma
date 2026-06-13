@@ -14,6 +14,14 @@ pub struct CallNode {
 	// `double` whose scheme is `forall a. Numeric a => a -> a`). Each cell
 	// is shared with a Class constraint, mutated by the discharge pass.
 	pub dict_args: Vec<DispatchCell>,
+	// Record-shape monomorphization. When the callee resolves to a generic
+	// top-level def, this holds `(qualified def name, the def's generic
+	// scheme type)` captured during constrain — the scheme type still carries
+	// the def's own quantified vars. After annotate the concrete `callee.ty`
+	// is diffed against this scheme to recover the closed type substitution
+	// that selects a specialization. `None` for monomorphic / unresolved
+	// callees.
+	pub mono_callee: Option<(String, crate::types::Type)>,
 }
 
 #[derive(Clone)]

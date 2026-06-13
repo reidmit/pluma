@@ -47,6 +47,21 @@ pub struct IrProgram {
 	/// `lower_tests` synthesizes the entry over these; `pluma test` also reads it to
 	/// detect "no tests found".
 	pub test_suites: Vec<(String, GlobalId)>,
+	/// Record-shape monomorphization output: `FuncId.0 -> per-param nominal shapes`
+	/// for the specialized functions the lowerer's substitution-driven engine
+	/// produced (a clone of a generic def/lambda re-lowered under a closed type
+	/// substitution, whose record params hold a `$shapeN`). The WASM emitter merges
+	/// this with `wasm::mono`'s call-site-shape clones; `scan::compute_nominal` reads
+	/// it to mark a specialized function's record params nominal. Empty when nothing
+	/// specialized.
+	pub param_shapes: HashMap<u32, Vec<Option<RecordShape>>>,
+	/// Record-shape monomorphization: extra nominal vars per `FuncId.0` beyond the
+	/// params in `param_shapes` — `(VarId.0, shape)` pairs for a specialized function's
+	/// captures of a nominal var (e.g. a `list.fold` lambda that captures the
+	/// enclosing record param). `scan::compute_nominal` marks these vars nominal so
+	/// their field reads are a constant-index `struct.get`. Empty when nothing
+	/// specialized.
+	pub extra_nominal: HashMap<u32, Vec<(u32, RecordShape)>>,
 }
 
 /// How a global slot is initialized.

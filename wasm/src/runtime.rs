@@ -511,13 +511,17 @@ pub(crate) enum Helper {
 	/// `__tuple_from_array(valarray) -> value` — build a `$tuple` from an elements
 	/// array, splitting it into the inline slots. The cold/dynamic construction sites.
 	TupleFromArray,
+	/// `__denominalize(value) -> value` — lift a *nominal* `$shapeN` record (tag
+	/// `TAG_SHAPE`) to the uniform `$record`, so the name-scanning generic consumers
+	/// can handle every record uniformly; passes any other value through unchanged.
+	Denominalize,
 }
 
 impl Helper {
 	/// Variant count; the discriminants are `0..COUNT`, used to index
 	/// `HelperIndices`. A test in `helpers` checks `REGISTRY` stays this length
 	/// and in-order.
-	pub(crate) const COUNT: usize = 102;
+	pub(crate) const COUNT: usize = 103;
 }
 
 /// The wasm index assigned to each emitted helper (`None` = not in the reachable
@@ -802,6 +806,10 @@ pub(crate) struct HelperCtx<'a> {
 	pub(crate) self_idx: u32,
 	pub(crate) rt: &'a Runtime,
 	pub(crate) ftypes: &'a mut FuncTypes,
+	/// The interned string pool — the `__denominalize` lift builds field-name
+	/// `$str` constants from it. Every record field name is interned during the
+	/// string scan, so each shape's names are present.
+	pub(crate) strpool: &'a crate::scan::StrPool,
 }
 
 impl HelperCtx<'_> {

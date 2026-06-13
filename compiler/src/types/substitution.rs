@@ -62,6 +62,98 @@ impl Substitution {
 		}
 	}
 
+	/// Recover the substitution mapping `generic`'s quantified type/row variables to
+	/// the concrete subtypes in `concrete`, by a congruent-shape diff walk. The two
+	/// types are assumed congruent — they came from the same scheme, one
+	/// freshened-and-solved — so this is NOT unification: a structural mismatch on a
+	/// branch simply records nothing for it. Wherever `generic` has a `Var(v)`, bind
+	/// `v` to the concrete subtype; wherever it has an open record/tuple row tail,
+	/// bind that row variable to the concrete's extra fields. First binding wins.
+	/// Used by record-shape monomorphization to turn a call site's instantiation into
+	/// a substitution it can re-lower the callee body under.
+	pub fn congruent_diff(generic: &Type, concrete: &Type) -> Substitution {
+		let mut s = Substitution::empty();
+		s.diff_into(generic, concrete);
+		s
+	}
+
+	fn diff_into(&mut self, generic: &Type, concrete: &Type) {
+		match (generic, concrete) {
+			(Type::Var(v), c) => {
+				self.solutions.entry(*v).or_insert_with(|| c.clone());
+			}
+			(Type::Fun(gp, gr), Type::Fun(cp, cr)) => {
+				for (g, c) in gp.iter().zip(cp) {
+					self.diff_into(g, c);
+				}
+				self.diff_into(gr, cr);
+			}
+			(Type::List(g), Type::List(c)) => self.diff_into(g, c),
+			(Type::Dict(gk, gv), Type::Dict(ck, cv)) => {
+				self.diff_into(gk, ck);
+				self.diff_into(gv, cv);
+			}
+			(Type::Ref(g), Type::Ref(c)) => self.diff_into(g, c),
+			(Type::Tuple(gs), Type::Tuple(cs)) => {
+				for (g, c) in gs.iter().zip(cs) {
+					self.diff_into(g, c);
+				}
+			}
+			(Type::Enum(_, gs), Type::Enum(_, cs)) => {
+				for (g, c) in gs.iter().zip(cs) {
+					self.diff_into(g, c);
+				}
+			}
+			(Type::Record(gf, gtail), Type::Record(cf, ctail)) => {
+				for (gname, gty) in gf {
+					if let Some((_, cty)) = cf.iter().find(|(n, _)| n == gname) {
+						self.diff_into(gty, cty);
+					}
+				}
+				// The generic's open row tail stands for whatever fields the concrete
+				// carries beyond the ones named in the generic.
+				if let Some(rid) = gtail {
+					let fields: Vec<(String, Type)> = cf
+						.iter()
+						.filter(|(n, _)| !gf.iter().any(|(gn, _)| gn == n))
+						.cloned()
+						.collect();
+					self.row_solutions.entry(*rid).or_insert(RowSolution {
+						fields,
+						tail: *ctail,
+					});
+				}
+			}
+			(Type::PartialTuple(gf, gtail), Type::Tuple(cs)) => {
+				for (idx, gty) in gf {
+					if let Some(cty) = cs.get(*idx) {
+						self.diff_into(gty, cty);
+					}
+				}
+				if let Some(rid) = gtail {
+					let fields: Vec<(usize, Type)> = cs
+						.iter()
+						.enumerate()
+						.filter(|(i, _)| !gf.iter().any(|(gi, _)| gi == i))
+						.map(|(i, t)| (i, t.clone()))
+						.collect();
+					self
+						.tuple_row_solutions
+						.entry(*rid)
+						.or_insert(TupleRowSolution { fields, tail: None });
+				}
+			}
+			(Type::PartialTuple(gf, _), Type::PartialTuple(cf, _)) => {
+				for (idx, gty) in gf {
+					if let Some((_, cty)) = cf.iter().find(|(i, _)| i == idx) {
+						self.diff_into(gty, cty);
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+
 	pub fn apply_to_type(&self, ty: &Type) -> Type {
 		match ty {
 			Type::Unknown
