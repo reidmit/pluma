@@ -7,6 +7,9 @@
 # `render.hydrate` walks that page's view alongside the existing DOM, attaching the
 # listeners and reactive bits to the server's nodes instead of rebuilding them.
 
+use std/base64
+use std/bytes
+use std/string
 use std/web/dom
 use std/web/render
 use std/web/sandbox
@@ -14,13 +17,46 @@ use ui
 use reference
 use playground
 
+# A shared snippet rides in the URL fragment as URL-safe base64 of its UTF-8 bytes.
+def encode-source :: fun string -> string = fun src {
+	base64.url-encode (string.to-bytes src)
+}
+
+def decode-source :: fun string -> string = fun token {
+	when (base64.url-decode token) is ok b {
+		when (bytes.to-string b) is ok s {
+			s
+		} is err _ {
+			""
+		}
+	} is err _ {
+		""
+	}
+}
+
+# The playground's starting source: decode the `#…` fragment if a link carried one,
+# otherwise "" (the page falls back to its default example).
+def load-shared :: fun nothing -> string = fun {
+	let h = dom.hash ()
+	if string.is-empty h {
+		""
+	} else {
+		decode-source (string.drop h 1)
+	}
+}
+
+# Encode the current source into the URL fragment + clipboard (the "Share" button).
+def share-source :: fun string -> nothing = fun src {
+	sandbox.share-link (encode-source src)
+}
+
 def main = fun {
 	if dom.path () == "/reference" {
 		render.hydrate (dom.body ()) reference.page
 	} else if dom.path () == "/playground" {
-		# Inject the real browser runner here — this is the one place `std/web/sandbox`
-		# is named, so it only ever lands in the client build.
-		render.hydrate (dom.body ()) (fun { playground.page sandbox.run-hex })
+		# Inject the real browser capabilities here — this is the one place
+		# `std/web/sandbox` + the URL helpers are named, so they only land in the client.
+		render.hydrate (dom.body ()) (fun { playground.page sandbox.run-hex load-shared share-source })
 	} else {
 		render.hydrate (dom.body ()) ui.page
 	}

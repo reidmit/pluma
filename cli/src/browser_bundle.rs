@@ -282,6 +282,15 @@ const pluma = {
     const ctrl = rpcStreams.get(token);
     if (ctrl) { rpcStreams.delete(token); ctrl.abort(); }
   },
+  // std/web/sandbox share-link — stash the encoded snippet in the URL fragment (a
+  // history replace, so back/forward stay clean) and copy the resulting absolute URL
+  // to the clipboard. Clipboard needs a secure context (https or localhost); we guard
+  // and best-effort it, since the URL is updated regardless.
+  "share-link": (p, l) => {
+    const token = readStr(p, l);
+    history.replaceState(null, "", '#' + token);
+    if (navigator.clipboard) navigator.clipboard.writeText(location.href).catch(() => {});
+  },
   // std/web/sandbox — the playground's "Run" engine. `hex` is a wasm module the
   // server compiled (`compile.to-wasm-hex`); decode it, instantiate it *here* in the
   // page as its own isolated module, run its `main`, and return everything it printed.

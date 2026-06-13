@@ -1113,6 +1113,9 @@ pub(crate) fn is_byte_writer(tag: &str) -> bool {
 			| "io-write-bytes"
 			| "io-write-err-bytes"
 			| "io-fail"
+			// `std/web/sandbox` share-link: takes one string (the encoded snippet), writes
+			// it into the URL fragment + clipboard, returns nothing — the byte-writer shape.
+			| "share-link"
 	)
 }
 
@@ -1137,7 +1140,9 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		// stdout/stderr writers + the program-controlled abort. All take one
 		// boxed arg and return nothing (`io.fail` diverges — the host traps).
 		"print" | "io-print" | "io-print-err" | "io-write" | "io-write-err" | "io-write-bytes"
-		| "io-write-err-bytes" | "io-fail" => Some(HostSig {
+		| "io-write-err-bytes" | "io-fail"
+		// `share-link` (std/web/sandbox) rides the same one-string-in, nothing-out shape.
+		| "share-link" => Some(HostSig {
 			arity: 1,
 			returns_value: false,
 		}),

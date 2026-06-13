@@ -23,9 +23,10 @@ def handler :: fun http.request -> task http.response = fun req {
 	} else if req.path == "/reference" {
 		task.return (http.html 200 (theme.document-html "Language reference — Pluma" (reference.page ())))
 	} else if req.path == "/playground" {
-		# The runner is browser-only; the server just renders the shell, so it passes a
-		# stub that never fires (SSR drops event handlers).
-		task.return (http.html 200 (theme.document-html "Playground — Pluma" (playground.page (fun _hex { err "the playground runs in the browser" }))))
+		# The browser capabilities are inert here; the server just renders the shell, so
+		# it passes stubs that never fire (SSR drops event handlers, and the editor starts
+		# from its default example — `""` means "no shared snippet").
+		task.return (http.html 200 (theme.document-html "Playground — Pluma" (playground.page (fun _hex { err "the playground runs in the browser" }) (fun { "" }) (fun _src { () }))))
 	} else {
 		rpc.dispatch req
 	}

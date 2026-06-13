@@ -201,10 +201,17 @@ def execute :: fun (fun string -> result string string) (signal string) (signal 
 
 # --- page -------------------------------------------------------------------
 
-public def page :: fun (fun string -> result string string) -> view = fun run {
+# `run` executes a compiled module in the browser; `initial` supplies the starting
+# source (a shared link decodes to non-empty, otherwise ""); `share` encodes the
+# current source into a shareable URL + clipboard. All three are injected so this
+# module stays target-neutral — the server passes inert stubs, the client the real
+# browser-backed versions (see `client.pa`).
+public def page :: fun (fun string -> result string string) (fun nothing -> string) (fun string -> nothing) -> view = fun run initial share {
 	let _ = theme.install-globals ()
-	let src = signal.new ex-list
+	let start = initial ()
+	let src = signal.new (if start == "" { ex-list } else { start })
 	let out = signal.new placeholder
+	let shared = signal.new false
 	view.div [view.id "app"] [
 		view.div [view.styled theme.shell] [
 			theme.top-nav (),
@@ -239,7 +246,20 @@ public def page :: fun (fun string -> result string string) -> view = fun run {
 				],
 				view.div [view.styled run-row] [
 					view.button [view.styled theme.btn-primary, view.on-click fun { execute run src out }] [view.text "Run ▸"],
-					view.span [view.styled hint] [view.text "Console programs only for now — file, network, and DOM access aren't wired up in the sandbox."],
+					view.button [
+						view.styled theme.btn-ghost,
+						view.on-click fun {
+							share (signal.get src)
+							signal.set shared true
+						},
+					] [view.text "Share"],
+					view.span [view.styled hint] [view.text-of fun {
+						if signal.get shared {
+							"Link copied to your clipboard."
+						} else {
+							"Console programs only for now — file, network, and DOM access aren't wired up in the sandbox."
+						}
+					}],
 				],
 			],
 			theme.site-footer (),

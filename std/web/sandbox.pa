@@ -14,3 +14,8 @@
 # and returns everything it printed. `err` if the module can't be instantiated
 # or the program stops with a failure partway through.
 public def run-hex :: fun string -> result string string = built-in "sandbox-run-hex"
+
+# Writes `token` into the page's URL fragment (so the link reproduces whatever the
+# token encodes) and copies the resulting absolute URL to the clipboard. Backs the
+# playground's "Share" button.
+public def share-link :: fun string -> nothing = built-in "share-link"
