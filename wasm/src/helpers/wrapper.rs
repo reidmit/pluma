@@ -43,16 +43,12 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 			w.local_get(arg).ref_cast(ty).struct_get(ty, 1);
 		}
 	};
-	// Emit `return <ordering variant>` for the given within-enum tag + display name
-	// (a 4-field `$variant` with an empty payload).
-	let mk_ord = |w: &mut Wat, vtag: u32, (off, len): (u32, u32)| {
+	// Emit `return <ordering variant>` for the given within-enum tag + global ctor id
+	// (a `$variant` with an empty payload).
+	let mk_ord = |w: &mut Wat, vtag: u32, gid: u32| {
 		w.i32(types::TAG_VARIANT);
 		w.i32(vtag as i32);
-		w.i32(types::TAG_STR);
-		w.i32(off as i32);
-		w.i32(len as i32);
-		w.array_new_data(types::T_BYTES, 0);
-		w.struct_new(types::T_STR);
+		w.i32(gid as i32); // ctor_id (field 2)
 		// arity 0, all payload slots null.
 		w.i32(0);
 		w.ref_null(types::T_VALUE);
@@ -225,14 +221,14 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 			unbox(&mut w, 1, ty);
 			unbox(&mut w, 2, ty);
 			lt(&mut w);
-			w.if_(|w| mk_ord(w, ord.lt_tag, ord.lt_name));
+			w.if_(|w| mk_ord(w, ord.lt_tag, ord.lt_gid));
 			// a == b -> eq.
 			unbox(&mut w, 1, ty);
 			unbox(&mut w, 2, ty);
 			eq(&mut w);
-			w.if_(|w| mk_ord(w, ord.eq_tag, ord.eq_name));
+			w.if_(|w| mk_ord(w, ord.eq_tag, ord.eq_gid));
 			// else gt.
-			mk_ord(&mut w, ord.gt_tag, ord.gt_name);
+			mk_ord(&mut w, ord.gt_tag, ord.gt_gid);
 		}
 		// String / bytes ordering: lexicographic byte compare (Rust `str`/`[u8]`
 		// `Ord` is byte-lexicographic). Both reuse the `$str` `{tag, $bytes}` shape,
@@ -277,21 +273,21 @@ pub(crate) fn build_builtin_wrapper(tag: &str, ord: &OrderingLits) -> Option<Fun
 					w.local_get(abytes).local_get(i).array_get_u(types::T_BYTES);
 					w.local_get(bbytes).local_get(i).array_get_u(types::T_BYTES);
 					w.i32_lt_u();
-					w.if_(|w| mk_ord(w, ord.lt_tag, ord.lt_name));
+					w.if_(|w| mk_ord(w, ord.lt_tag, ord.lt_gid));
 					w.local_get(abytes).local_get(i).array_get_u(types::T_BYTES);
 					w.local_get(bbytes).local_get(i).array_get_u(types::T_BYTES);
 					w.i32_gt_u();
-					w.if_(|w| mk_ord(w, ord.gt_tag, ord.gt_name));
+					w.if_(|w| mk_ord(w, ord.gt_tag, ord.gt_gid));
 					w.local_get(i).i32(1).i32_add().local_set(i);
 					w.br("cmp");
 				});
 			});
 			// Prefix equal: shorter sorts first.
 			w.local_get(alen).local_get(blen).i32_lt_u();
-			w.if_(|w| mk_ord(w, ord.lt_tag, ord.lt_name));
+			w.if_(|w| mk_ord(w, ord.lt_tag, ord.lt_gid));
 			w.local_get(alen).local_get(blen).i32_gt_u();
-			w.if_(|w| mk_ord(w, ord.gt_tag, ord.gt_name));
-			mk_ord(&mut w, ord.eq_tag, ord.eq_name);
+			w.if_(|w| mk_ord(w, ord.gt_tag, ord.gt_gid));
+			mk_ord(&mut w, ord.eq_tag, ord.eq_gid);
 		}
 		// `hash` instances. The wasm `dict` scans keys with `__eq` and never calls
 		// these, but a program can call `hash.hash x` directly (and parametric

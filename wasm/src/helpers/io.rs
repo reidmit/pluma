@@ -13,15 +13,6 @@ use wasm_encoder::{Function, ValType};
 /// truncates to this and returns the written length, so no overflow path is needed.
 const ERR_CAP: i32 = 256;
 
-/// Push a `$str` value for an interned data-segment string `(off, len)`.
-fn str_lit(w: &mut Wat, (off, len): (u32, u32)) {
-	w.i32(types::TAG_STR);
-	w.i32(off as i32);
-	w.i32(len as i32);
-	w.array_new_data(types::T_BYTES, 0);
-	w.struct_new(types::T_STR);
-}
-
 /// `__io_result(payload) -> result`. The argument is a marshalled `std/sys/io` op's
 /// shaped return: a primitive `$value` on success, or `null` on failure (the host
 /// having stashed the message for `io-last-error`). Build `ok payload` (non-null) or
@@ -47,7 +38,7 @@ pub(crate) fn build_io_result_fn(
 		// null host return -> `err (io-last-error())`.
 		|w| {
 			w.i32(types::TAG_VARIANT).i32(lits.err_tag as i32);
-			str_lit(w, lits.err_name);
+			w.i32(lits.err_gid as i32); // ctor_id (field 2)
 			w.i32(1); // arity
 			// p0 = message = $str(__load_bytes(dst, io_last_error(dst, ERR_CAP))).
 			w.i32(0).global_set(bump);
@@ -67,7 +58,7 @@ pub(crate) fn build_io_result_fn(
 		// non-null host return -> `ok payload`.
 		|w| {
 			w.i32(types::TAG_VARIANT).i32(lits.ok_tag as i32);
-			str_lit(w, lits.ok_name);
+			w.i32(lits.ok_gid as i32); // ctor_id (field 2)
 			w.i32(1); // arity
 			w.local_get(payload) // p0
 				.ref_null(types::T_VALUE)

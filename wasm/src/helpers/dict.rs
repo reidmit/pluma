@@ -36,20 +36,10 @@ const FNV_PRIME: i64 = 0x0000_0100_0000_01b3;
 
 const VA: u32 = types::T_VALARRAY;
 
-/// Push a display-name `$str` from its interned `(offset, len)` data-segment slice.
-fn name_str(w: &mut Wat, name: (u32, u32)) {
-	let (off, len) = name;
-	w.i32(types::TAG_STR)
-		.i32(off as i32)
-		.i32(len as i32)
-		.array_new_data(types::T_BYTES, 0)
-		.struct_new(types::T_STR);
-}
-
 /// Build a `none` `$variant` inline (arity 0, all payload slots null).
 fn build_none(w: &mut Wat, opt: OptionLits) {
 	w.i32(types::TAG_VARIANT).i32(opt.none_tag as i32);
-	name_str(w, opt.none_name);
+	w.i32(opt.none_gid as i32); // ctor_id (field 2)
 	w.i32(0)
 		.ref_null(types::T_VALUE)
 		.ref_null(types::T_VALUE)
@@ -57,11 +47,11 @@ fn build_none(w: &mut Wat, opt: OptionLits) {
 		.struct_new(types::T_VARIANT);
 }
 
-/// Push a `some` `$variant`'s header (tag, vtag, name, arity 1); the caller then
+/// Push a `some` `$variant`'s header (tag, vtag, ctor_id, arity 1); the caller then
 /// pushes the single payload value (`p0`) and calls `finish_some`.
 fn start_some(w: &mut Wat, opt: OptionLits) {
 	w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
-	name_str(w, opt.some_name);
+	w.i32(opt.some_gid as i32); // ctor_id (field 2)
 	w.i32(1);
 }
 

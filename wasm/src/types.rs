@@ -268,9 +268,11 @@ enum FuncKind {
 	/// `__variant_payload(value) -> valarray` — materialize a `$variant`'s inline
 	/// payload as a uniform array for generic consumers.
 	VariantPayload,
-	/// `__variant_from_array(i32 vtag, value name, valarray arr) -> value` — build a
+	/// `__variant_from_array(i32 vtag, i32 ctor_id, valarray arr) -> value` — build a
 	/// `$variant` from a payload array (splitting it into the inline slots).
 	VariantFromArray,
+	/// `__variant_name(i32 ctor_id) -> value` — the variant's display-name `$str`.
+	VariantName,
 	/// `__tuple_elems(value) -> valarray` — materialize a `$tuple`'s inline elements
 	/// as a uniform array for generic consumers.
 	TupleElems,
@@ -578,9 +580,14 @@ impl FuncTypes {
 		self.intern(FuncKind::VariantPayload)
 	}
 
-	/// `__variant_from_array(i32, value, valarray) -> value`.
+	/// `__variant_from_array(i32, i32, valarray) -> value`.
 	pub fn for_variant_from_array(&mut self) -> u32 {
 		self.intern(FuncKind::VariantFromArray)
+	}
+
+	/// `__variant_name(i32) -> value`.
+	pub fn for_variant_name(&mut self) -> u32 {
+		self.intern(FuncKind::VariantName)
 	}
 
 	/// `__tuple_elems(value) -> valarray`.
@@ -927,22 +934,26 @@ impl FuncTypes {
 			],
 			true,
 		));
-		// 8 $variant — { tag, i32 variant_tag, (ref $str) display-name, i32 arity,
-		// p0, p1, (ref null $valarray) rest }. The payload is stored *inline*: arity
-		// ≤ 2 keeps its elements in `p0`/`p1` (with `rest` null), so `tree.node l r`,
-		// `option`, and `result` allocate just this one struct — no separate payload
-		// array. Arity ≥ 3 (rare) stores the whole payload in `rest` (and leaves
-		// `p0`/`p1` null), so no element ever needs copying. Generic consumers that
-		// want the payload as a uniform `$valarray` (print/eq/wire) call
-		// `__variant_payload`, which returns `rest` directly when present or
-		// materializes a small array from `p0`/`p1`; the hot construct/match/payload
-		// paths, where the arity is statically known, read the inline slots.
+		// 8 $variant — { tag, i32 variant_tag, i32 ctor_id, i32 arity, p0, p1,
+		// (ref null $valarray) rest }. `ctor_id` is a globally-unique constructor id
+		// (see `ir::global_ctor_id`): the cold print/wire paths recover the display
+		// name by indexing a side table (`__variant_name`) with it, so a node carries
+		// no GC-traced name pointer — only the payload refs the collector must trace
+		// anyway. The payload is stored *inline*: arity ≤ 2 keeps its elements in
+		// `p0`/`p1` (with `rest` null), so `tree.node l r`, `option`, and `result`
+		// allocate just this one struct — no separate payload array. Arity ≥ 3 (rare)
+		// stores the whole payload in `rest` (and leaves `p0`/`p1` null), so no element
+		// ever needs copying. Generic consumers that want the payload as a uniform
+		// `$valarray` (print/eq/wire) call `__variant_payload`, which returns `rest`
+		// directly when present or materializes a small array from `p0`/`p1`; the hot
+		// construct/match/payload paths, where the arity is statically known, read the
+		// inline slots.
 		types.ty().subtype(&struct_subtype(
 			Some(T_VALUE),
 			vec![
 				val_field(ValType::I32, false),
 				val_field(ValType::I32, false),
-				val_field(value_ref(), false),
+				val_field(ValType::I32, false),
 				val_field(ValType::I32, false),
 				val_field(value_ref(), false),
 				val_field(value_ref(), false),
@@ -1176,7 +1187,11 @@ impl FuncTypes {
 				FuncKind::VariantFromArray => {
 					types
 						.ty()
-						.function([ValType::I32, value_ref(), valarray_ref()], [value_ref()]);
+						.function([ValType::I32, ValType::I32, valarray_ref()], [value_ref()]);
+					continue;
+				}
+				FuncKind::VariantName => {
+					types.ty().function([ValType::I32], [value_ref()]);
 					continue;
 				}
 				FuncKind::TupleElems => {

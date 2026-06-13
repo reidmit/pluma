@@ -46,14 +46,14 @@ pub(crate) fn build_variant_payload_fn() -> Function {
 	w.finish()
 }
 
-/// `__variant_from_array(i32 vtag, value name, valarray arr) -> value` — build a
+/// `__variant_from_array(i32 vtag, i32 ctor_id, valarray arr) -> value` — build a
 /// `$variant` whose payload is `arr`, splitting it into the inline slots: the
 /// first two elements into `p0`/`p1` for arity ≤ 2, else the whole array into
-/// `rest` (so nothing is copied). The `name`/`vtag` come straight from the caller.
+/// `rest` (so nothing is copied). The `vtag`/`ctor_id` come straight from the caller.
 pub(crate) fn build_variant_from_array_fn() -> Function {
 	let mut w = Wat::new(3);
 	let vtag = w.param(0);
-	let name = w.param(1);
+	let ctor_id = w.param(1);
 	let arr = w.param(2);
 	let n = w.local(ValType::I32);
 	// `p0`/`p1`/`rest` default to null; fill them per the arity.
@@ -79,11 +79,35 @@ pub(crate) fn build_variant_from_array_fn() -> Function {
 	});
 	w.i32(types::TAG_VARIANT)
 		.local_get(vtag)
-		.local_get(name)
+		.local_get(ctor_id)
 		.local_get(n)
 		.local_get(p0)
 		.local_get(p1)
 		.local_get(rest)
 		.struct_new(types::T_VARIANT);
+	w.finish()
+}
+
+/// `__variant_name(i32 ctor_id) -> value` — recover a variant's `bare-enum.variant`
+/// display name as a `$str` from its global ctor id, for the cold print/wire paths.
+/// `names[gid] = (offset, len)` into the interned-string data segment, so each arm
+/// rebuilds the constant `$str` from segment 0 (like `str_lit`). An id past the table
+/// (shouldn't happen) yields the empty string rather than trapping.
+pub(crate) fn build_variant_name_fn(names: &[(u32, u32)]) -> Function {
+	let mut w = Wat::new(1);
+	let gid = w.param(0);
+	for (g, (off, len)) in names.iter().enumerate() {
+		w.local_get(gid).i32(g as i32).i32_eq().if_(|w| {
+			w.i32(types::TAG_STR)
+				.i32(*off as i32)
+				.i32(*len as i32)
+				.array_new_data(types::T_BYTES, 0)
+				.struct_new(types::T_STR);
+			w.ret();
+		});
+	}
+	w.i32(types::TAG_STR)
+		.array_new_fixed(types::T_BYTES, 0)
+		.struct_new(types::T_STR);
 	w.finish()
 }

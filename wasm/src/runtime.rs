@@ -213,8 +213,8 @@ pub(crate) enum GlobalKind {
 ///   the encode byte/varint sinks, `WireEnc` the recursive encoder, `WireRByte`/
 ///   `WireRUvarint` the decode byte/varint sources, `WireDec`/`WireDecVariant`
 ///   the recursive decoder, `WireCtxPut`/`WireCtxGet` the recursive-enum
-///   registry, `WireDisp` rebuilds a decoded variant's display name, and
-///   `WireResult` wraps a decoded value in `ok`/`err` (the trailing-bytes check).
+///   registry, and `WireResult` wraps a decoded value in `ok`/`err` (the
+///   trailing-bytes check).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum Helper {
 	Eq,
@@ -316,7 +316,6 @@ pub(crate) enum Helper {
 	WireEncVariant,
 	WireRByte,
 	WireRUvarint,
-	WireDisp,
 	WireDecVariant,
 	WireDec,
 	WireResult,
@@ -499,11 +498,16 @@ pub(crate) enum Helper {
 	/// generic consumers (eq/wire/to-string/…) that iterate a payload of
 	/// runtime-unknown arity.
 	VariantPayload,
-	/// `__variant_from_array(i32 vtag, value name, valarray arr) -> value` — build a
+	/// `__variant_from_array(i32 vtag, i32 ctor_id, valarray arr) -> value` — build a
 	/// `$variant` from a payload array, splitting it into the inline slots. Used by
 	/// the cold/dynamic construction sites (wire decode, host-result wrappers) that
 	/// already have the payload as an array.
 	VariantFromArray,
+	/// `__variant_name(i32 ctor_id) -> value` — the variant's `bare-enum.variant`
+	/// display name as a `$str`, recovered from the global ctor id by indexing the
+	/// interned name table. The cold print (`__tostring`) and program-failure
+	/// (`__entry_error`) paths use it, so a `$variant` need not store a name pointer.
+	VariantName,
 	/// `__tuple_elems(value) -> valarray` — materialize a `$tuple`'s inline elements
 	/// (`e0`/`e1`/`e2`, plus `rest` for arity ≥ 4) as a uniform array, for the generic
 	/// consumers (eq/wire/to-string) that iterate an arity-unknown tuple.
@@ -733,8 +737,10 @@ pub(crate) enum Ty {
 	Eq,
 	/// `__variant_payload(value) -> valarray`.
 	VariantPayload,
-	/// `__variant_from_array(i32, value, valarray) -> value`.
+	/// `__variant_from_array(i32, i32, valarray) -> value`.
 	VariantFromArray,
+	/// `__variant_name(i32) -> value`.
+	VariantName,
 	/// `__tuple_elems(value) -> valarray`.
 	TupleElems,
 	/// `__tuple_from_array(valarray) -> value`.
@@ -773,6 +779,7 @@ impl Ty {
 			Ty::Eq => ft.for_eq(),
 			Ty::VariantPayload => ft.for_variant_payload(),
 			Ty::VariantFromArray => ft.for_variant_from_array(),
+			Ty::VariantName => ft.for_variant_name(),
 			Ty::TupleElems => ft.for_tuple_elems(),
 			Ty::TupleFromArray => ft.for_tuple_from_array(),
 			Ty::Helper(n) => ft.for_helper(n),
@@ -810,6 +817,11 @@ pub(crate) struct HelperCtx<'a> {
 	/// `$str` constants from it. Every record field name is interned during the
 	/// string scan, so each shape's names are present.
 	pub(crate) strpool: &'a crate::scan::StrPool,
+	/// Interned `(offset, len)` display-name slices for every enum constructor,
+	/// indexed by global ctor id (`ir::global_ctor_id`). `__variant_name` indexes
+	/// this to recover a variant's name for the cold print/wire paths, so the hot
+	/// `$variant` carries only the id (an `i32`), not a GC-traced name reference.
+	pub(crate) ctor_names: &'a [(u32, u32)],
 }
 
 impl HelperCtx<'_> {
@@ -891,12 +903,12 @@ pub(crate) struct WireGlobals {
 pub(crate) struct WireResultLits {
 	pub(crate) ok_tag: u32,
 	pub(crate) err_tag: u32,
-	pub(crate) ok_name: (u32, u32),
-	pub(crate) err_name: (u32, u32),
-	/// `(tag, display-name)` for each `wire-error` variant, indexed by error code
-	/// minus one: `[unexpected-end, invalid-tag, invalid-utf8, trailing-bytes,
-	/// malformed]`.
-	pub(crate) errors: [(u32, (u32, u32)); 5],
+	pub(crate) ok_gid: u32,
+	pub(crate) err_gid: u32,
+	/// `(within-enum tag, global ctor id)` for each `wire-error` variant, indexed by
+	/// error code minus one: `[unexpected-end, invalid-tag, invalid-utf8,
+	/// trailing-bytes, malformed]`.
+	pub(crate) errors: [(u32, u32); 5],
 }
 
 /// The `result` `ok`/`err` variant tags + interned display-name `(off, len)`
@@ -906,8 +918,8 @@ pub(crate) struct WireResultLits {
 pub(crate) struct IoResultLits {
 	pub(crate) ok_tag: u32,
 	pub(crate) err_tag: u32,
-	pub(crate) ok_name: (u32, u32),
-	pub(crate) err_name: (u32, u32),
+	pub(crate) ok_gid: u32,
+	pub(crate) err_gid: u32,
 }
 
 /// What an `*-compare` wrapper needs to construct an `ordering` `$variant`: each
@@ -917,9 +929,9 @@ pub(crate) struct OrderingLits {
 	pub(crate) lt_tag: u32,
 	pub(crate) eq_tag: u32,
 	pub(crate) gt_tag: u32,
-	pub(crate) lt_name: (u32, u32),
-	pub(crate) eq_name: (u32, u32),
-	pub(crate) gt_name: (u32, u32),
+	pub(crate) lt_gid: u32,
+	pub(crate) eq_gid: u32,
+	pub(crate) gt_gid: u32,
 }
 
 /// The async scheduler's module-level mutable globals. The currently-pumping
@@ -958,12 +970,12 @@ pub(crate) struct TaskGlobals {
 pub(crate) struct TaskLits {
 	pub(crate) ok_tag: u32,
 	pub(crate) err_tag: u32,
-	pub(crate) ok_name: (u32, u32),
-	pub(crate) err_name: (u32, u32),
+	pub(crate) ok_gid: u32,
+	pub(crate) err_gid: u32,
 	pub(crate) some_tag: u32,
 	pub(crate) none_tag: u32,
-	pub(crate) some_name: (u32, u32),
-	pub(crate) none_name: (u32, u32),
+	pub(crate) some_gid: u32,
+	pub(crate) none_gid: u32,
 	pub(crate) defers_name: (u32, u32),
 	pub(crate) cancelled_msg: (u32, u32),
 	/// The failure message a browser RPC stream's `fault` event surfaces as (the
@@ -983,8 +995,8 @@ pub(crate) struct TaskLits {
 pub(crate) struct OptionLits {
 	pub(crate) some_tag: u32,
 	pub(crate) none_tag: u32,
-	pub(crate) some_name: (u32, u32),
-	pub(crate) none_name: (u32, u32),
+	pub(crate) some_gid: u32,
+	pub(crate) none_gid: u32,
 }
 
 /// `(offset, len)` of each fixed literal `__tostring` emits, in the shared data

@@ -383,6 +383,23 @@ impl Module {
 			diags,
 		);
 
+		// Display-name table for every enum constructor, indexed by global ctor id
+		// (`ir::global_ctor_id`'s sorted-enum order). `__variant_name` indexes it to
+		// render a variant's name on the cold print/wire paths, so a `$variant` stores
+		// only the id (an `i32`) — not a name pointer the GC must trace per node.
+		let ctor_names: Vec<(u32, u32)> = {
+			let mut keys: Vec<&String> = p.enums.keys().collect();
+			keys.sort();
+			let mut names = Vec::new();
+			for k in keys {
+				let count = p.enums.get(k).map_or(0, Vec::len);
+				for tag in 0..count {
+					names.push(strpool.intern(&crate::util::variant_display(k, tag as u32, &p.enums)));
+				}
+			}
+			names
+		};
+
 		// Function-type interning + section building.
 		let mut ftypes = FuncTypes::new();
 
@@ -450,6 +467,7 @@ impl Module {
 					rt: &runtime,
 					ftypes: &mut ftypes,
 					strpool: &strpool,
+					ctor_names: &ctor_names,
 				};
 				code.function(&(def.build)(&mut ctx));
 			}

@@ -6,6 +6,33 @@
 use compiler::Range;
 use std::collections::HashMap;
 
+/// A globally-unique, dense constructor id for an enum variant, derived purely from
+/// the enum table so the same constructor maps to the same id at every compilation
+/// stage (wire-schema lowering and wasm variant construction). Enums are visited in
+/// sorted-name order; the id is the running count of all constructors declared in
+/// earlier enums plus the variant's within-enum tag. This is what each `$variant`
+/// stores in place of a per-instance display-name pointer — the cold name/print paths
+/// recover the name by indexing a side table with this id, so the GC never traces a
+/// name reference on the hot construct/match path. Returns `None` for an unknown
+/// enum/tag.
+pub fn global_ctor_id(
+	enums: &HashMap<String, Vec<(String, usize)>>,
+	enum_name: &str,
+	tag: u32,
+) -> Option<u32> {
+	let mut keys: Vec<&String> = enums.keys().collect();
+	keys.sort();
+	let mut base = 0u32;
+	for k in keys {
+		let count = enums.get(k).map_or(0, Vec::len) as u32;
+		if k == enum_name {
+			return if tag < count { Some(base + tag) } else { None };
+		}
+		base += count;
+	}
+	None
+}
+
 // --------------------------------------------------------------------------
 // Identifiers. Abstract handles assigned by lowering; the WASM emitter maps
 // them to locals.

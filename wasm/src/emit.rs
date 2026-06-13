@@ -15,7 +15,7 @@ use crate::runtime::{
 };
 use crate::scan::{StrPool, block_has_pushdefer, builtin_var_tags, compute_nominal, ctor_var_tags};
 use crate::types::{self, FuncTypes};
-use crate::util::{EnumTable, binop_instr, repr_valtype, variant_display};
+use crate::util::{EnumTable, binop_instr, repr_valtype};
 use ir::{Atom, Block, Callee, Const, Repr, Rvalue, StmtKind};
 use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
@@ -844,9 +844,10 @@ impl<'a> FnEmitter<'a> {
 	/// struct, no payload array; arity ≥ 3 (rare) stores the whole payload in `rest`.
 	fn emit_make_variant(&mut self, enum_name: &str, tag: u32, payload: &[Atom]) {
 		let n = payload.len();
+		let gid = ir::global_ctor_id(self.enums, enum_name, tag).unwrap_or(0);
 		self.ins(Instruction::I32Const(types::TAG_VARIANT));
 		self.ins(Instruction::I32Const(tag as i32));
-		self.string_const(&variant_display(enum_name, tag, self.enums));
+		self.ins(Instruction::I32Const(gid as i32));
 		self.ins(Instruction::I32Const(n as i32));
 		if n <= 2 {
 			for slot in 0..2 {
@@ -2821,20 +2822,20 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::I32Const(0));
 		self.ins(Instruction::I32LtS);
 		self.ins(Instruction::If(BlockType::Result(types::value_ref())));
-		// none: `$variant { TAG_VARIANT, none_tag, none_name, arity 0, …null }`.
+		// none: `$variant { TAG_VARIANT, none_tag, none_gid, arity 0, …null }`.
 		self.ins(Instruction::I32Const(types::TAG_VARIANT));
 		self.ins(Instruction::I32Const(opt.none_tag as i32));
-		self.str_seg(opt.none_name);
+		self.ins(Instruction::I32Const(opt.none_gid as i32));
 		self.ins(Instruction::I32Const(0));
 		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
 		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALUE)));
 		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALARRAY)));
 		self.ins(Instruction::StructNew(types::T_VARIANT));
 		self.ins(Instruction::Else);
-		// some value: `$variant { …, some_name, arity 1, p0 = $str(value), …null }`.
+		// some value: `$variant { …, some_gid, arity 1, p0 = $str(value), …null }`.
 		self.ins(Instruction::I32Const(types::TAG_VARIANT));
 		self.ins(Instruction::I32Const(opt.some_tag as i32));
-		self.str_seg(opt.some_name);
+		self.ins(Instruction::I32Const(opt.some_gid as i32));
 		self.ins(Instruction::I32Const(1));
 		self.ins(Instruction::I32Const(types::TAG_STR));
 		self.ins(Instruction::LocalGet(dst));
@@ -2845,20 +2846,6 @@ impl<'a> FnEmitter<'a> {
 		self.ins(Instruction::RefNull(HeapType::Concrete(types::T_VALARRAY)));
 		self.ins(Instruction::StructNew(types::T_VARIANT));
 		self.ins(Instruction::End);
-	}
-
-	/// Push a `$str` for an interned data-segment string `(off, len)` — like
-	/// `string_const`, but from a pre-interned segment ref (e.g. an `option` variant
-	/// name carried in `runtime.opt`).
-	fn str_seg(&mut self, (off, len): (u32, u32)) {
-		self.ins(Instruction::I32Const(types::TAG_STR));
-		self.ins(Instruction::I32Const(off as i32));
-		self.ins(Instruction::I32Const(len as i32));
-		self.ins(Instruction::ArrayNewData {
-			array_type_index: types::T_BYTES,
-			array_data_index: 0,
-		});
-		self.ins(Instruction::StructNew(types::T_STR));
 	}
 
 	/// `std/time` clock host imports. now/monotonic box the host's i64 under

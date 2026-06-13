@@ -95,7 +95,7 @@ pub(crate) fn build_send_bytes_fn(bump: u32, alloc: u32, store: u32) -> Function
 /// whose display name's last `.`-segment is `err` with exactly one payload — then
 /// renders `e` via `__tostring` into scratch and returns its length, or `-1` if the
 /// return is not such an error (an `ok`, a plain value, `nothing`).
-pub(crate) fn build_entry_error_fn(tostring: u32, send: u32) -> Function {
+pub(crate) fn build_entry_error_fn(tostring: u32, send: u32, variant_name: u32) -> Function {
 	let bv = types::T_BYTES;
 	let mut w = Wat::new(1);
 	let v = w.param(0);
@@ -107,10 +107,12 @@ pub(crate) fn build_entry_error_fn(tostring: u32, send: u32) -> Function {
 	w.if_(|w| {
 		w.i32(-1).ret();
 	});
-	// name = the variant's display-name `$str` bytes (field 2).
+	// name = the variant's display-name `$str` bytes, recovered from its global ctor
+	// id (field 2) via `__variant_name`.
 	w.local_get(v)
 		.ref_cast(types::T_VARIANT)
 		.struct_get(types::T_VARIANT, 2)
+		.call(variant_name)
 		.ref_cast(types::T_STR)
 		.struct_get(types::T_STR, 1)
 		.local_set(nb);

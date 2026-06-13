@@ -313,15 +313,6 @@ pub(crate) fn build_wire_fp_fn(
 // recursive `s-enum-ref` resolves to its enclosing `s-enum`.
 // ===========================================================================
 
-/// Push a fresh `$str` for an interned data-segment literal `(off, len)`.
-fn str_lit(w: &mut Wat, (off, len): (u32, u32)) {
-	w.i32(types::TAG_STR);
-	w.i32(off as i32);
-	w.i32(len as i32);
-	w.array_new_data(types::T_BYTES, 0);
-	w.struct_new(types::T_STR);
-}
-
 /// Push the unit `nothing` value.
 fn push_nothing(w: &mut Wat) {
 	w.ref_null(types::T_VALUE);
@@ -835,68 +826,6 @@ pub(crate) fn build_wire_ruvarint_fn(rbyte: u32, g: WireGlobals) -> Function {
 	w.finish()
 }
 
-/// Build `__wire_disp(value qualified, value varname) -> value`: rebuild a
-/// decoded variant's display name `"<bare-enum>.<variant>"` (bare = the qualified
-/// name after its last `.`), so `to-string`/the host formatter render it like a
-/// literally-constructed variant. Equality/pattern-match use the `vtag`, not this.
-pub(crate) fn build_wire_disp_fn(bytesconcat: u32) -> Function {
-	let bytes = types::T_BYTES;
-	let mut w = Wat::new(2);
-	let (qual, varname) = (w.param(0), w.param(1));
-	let qb = w.local(types::bytes_ref());
-	let n = w.local(ValType::I32);
-	let last = w.local(ValType::I32);
-	let i = w.local(ValType::I32);
-	let start = w.local(ValType::I32);
-	let barelen = w.local(ValType::I32);
-	let bare = w.local(types::bytes_ref());
-
-	// qb = qualified bytes; n = len.
-	w.local_get(qual)
-		.ref_cast(types::T_STR)
-		.struct_get(types::T_STR, 1)
-		.local_set(qb);
-	w.local_get(qb).array_len().local_set(n);
-	// last = index of the last '.' (46), or -1.
-	w.i32(-1).local_set(last);
-	w.i32(0).local_set(i);
-	w.block("brk", |w| {
-		w.loop_("lp", |w| {
-			w.local_get(i).local_get(n).i32_ge_u().br_if("brk");
-			w.local_get(qb)
-				.local_get(i)
-				.array_get_u(bytes)
-				.i32(46)
-				.i32_eq();
-			w.if_(|w| {
-				w.local_get(i).local_set(last);
-			});
-			w.local_get(i).i32(1).i32_add().local_set(i);
-			w.br("lp");
-		});
-	});
-	// start = last + 1; barelen = n - start.
-	w.local_get(last).i32(1).i32_add().local_set(start);
-	w.local_get(n).local_get(start).i32_sub().local_set(barelen);
-	// bare = qb[start..n] (loop, not array.copy — see copy_loop_bytes).
-	w.local_get(barelen)
-		.array_new_default(bytes)
-		.local_set(bare);
-	w.copy_loop_bytes(bytes, bare, None, qb, Some(start), barelen);
-	// result = $str( (bare ++ ".") ++ varname-bytes ).
-	w.i32(types::TAG_STR);
-	w.local_get(bare)
-		.i32(46)
-		.array_new_fixed(bytes, 1)
-		.call(bytesconcat);
-	w.local_get(varname)
-		.ref_cast(types::T_STR)
-		.struct_get(types::T_STR, 1)
-		.call(bytesconcat);
-	w.struct_new(types::T_STR);
-	w.finish()
-}
-
 /// Build `__wire_dec_variant(value qualified, value variants) -> value`: read the
 /// variant tag (a uvarint), bounds-check it against `variants`, decode each
 /// payload field, and build the `$variant` (the `wire` format's variant decode).
@@ -904,25 +833,23 @@ pub(crate) fn build_wire_disp_fn(bytesconcat: u32) -> Function {
 pub(crate) fn build_wire_dec_variant_fn(
 	ruvarint: u32,
 	dec: u32,
-	disp: u32,
 	variant_from_array: u32,
 	tuple_elems: u32,
 	g: WireGlobals,
 ) -> Function {
 	let va = types::T_VALARRAY;
 	let mut w = Wat::new(2);
-	let (qual, variants) = (w.param(0), w.param(1));
+	let (_qual, variants) = (w.param(0), w.param(1));
 	let tag = w.local(ValType::I64);
 	let varelems = w.local(types::valarray_ref());
 	let m = w.local(ValType::I32);
 	let idx = w.local(ValType::I32);
 	let tup = w.local(types::valarray_ref());
-	let name = w.local(types::value_ref());
+	let gid = w.local(ValType::I32);
 	let fsl = w.local(types::valarray_ref());
 	let k = w.local(ValType::I32);
 	let j = w.local(ValType::I32);
 	let payload = w.local(types::valarray_ref());
-	let disp_l = w.local(types::value_ref());
 
 	// tag = ruvarint(); bail on read failure.
 	w.call(ruvarint).local_set(tag);
@@ -948,11 +875,16 @@ pub(crate) fn build_wire_dec_variant_fn(
 		w.ret();
 	});
 	w.local_get(tag).i32_wrap_i64().local_set(idx);
-	// tup = (cast $tuple varelems[idx]).elems; name = tup[0]; fsl = (cast $list
-	// tup[1]).elems; k = len.
+	// tup = (cast $tuple varelems[idx]).elems; gid = unbox(tup[2]) (the global ctor
+	// id for name rendering); fsl = (cast $list tup[1]).elems; k = len.
 	w.local_get(varelems).local_get(idx).array_get(va);
 	w.call(tuple_elems).local_set(tup);
-	w.local_get(tup).i32(0).array_get(va).local_set(name);
+	w.local_get(tup)
+		.i32(2)
+		.array_get(va)
+		.unbox_int()
+		.i32_wrap_i64()
+		.local_set(gid);
 	w.local_get(tup).i32(1).array_get(va);
 	w.ref_cast(types::T_LIST)
 		.struct_get(types::T_LIST, 1)
@@ -971,14 +903,10 @@ pub(crate) fn build_wire_dec_variant_fn(
 			w.br("lp");
 		});
 	});
-	// disp_l = disp(qualified, name); build $variant{tag, idx, disp_l, payload}.
-	w.local_get(qual)
-		.local_get(name)
-		.call(disp)
-		.local_set(disp_l);
-	// Build the variant from the decoded payload array (arbitrary arity).
+	// Build the variant from the decoded payload array (arbitrary arity), stamping
+	// the within-enum tag (idx) and the global ctor id (gid) from the schema.
 	w.local_get(idx)
-		.local_get(disp_l)
+		.local_get(gid)
 		.local_get(payload)
 		.call(variant_from_array);
 	w.finish()
@@ -1306,7 +1234,7 @@ pub(crate) fn build_wire_result_fn(
 	w.global_get(g.err).i32_eqz();
 	w.if_(|w| {
 		w.i32(lits.ok_tag as i32);
-		str_lit(w, lits.ok_name);
+		w.i32(lits.ok_gid as i32); // ctor_id
 		w.local_get(v)
 			.array_new_fixed(va, 1)
 			.call(variant_from_array)
@@ -1316,12 +1244,13 @@ pub(crate) fn build_wire_result_fn(
 	// an `int` payload for invalid-tag / trailing-bytes.
 	w.ref_null(types::T_VALUE).local_set(e);
 	for code in 1..=5i32 {
-		let (etag, ename) = lits.errors[(code - 1) as usize];
+		let (etag, egid) = lits.errors[(code - 1) as usize];
 		let has_payload = code == 2 || code == 4;
 		w.global_get(g.err).i32(code).i32_eq();
 		w.if_(|w| {
 			w.i32(etag as i32);
-			str_lit(w, ename);
+			w.i32(egid as i32); // ctor_id
+
 			if has_payload {
 				w.i32(types::TAG_INT)
 					.global_get(g.errval)
@@ -1335,7 +1264,7 @@ pub(crate) fn build_wire_result_fn(
 	}
 	// err(e).
 	w.i32(lits.err_tag as i32);
-	str_lit(&mut w, lits.err_name);
+	w.i32(lits.err_gid as i32); // ctor_id
 	w.local_get(e)
 		.array_new_fixed(va, 1)
 		.call(variant_from_array);

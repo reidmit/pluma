@@ -12,7 +12,6 @@ use crate::runtime::{
 	WireResultLits, WireTags,
 };
 use crate::scan::StrPool;
-use crate::util::variant_display;
 use ir::IrProgram;
 
 /// The within-enum tag of variant `name` in the qualified enum `qual` (declaration
@@ -75,8 +74,8 @@ pub(super) fn resolve_literals(
 				runtime.opt = OptionLits {
 					some_tag,
 					none_tag,
-					some_name: strpool.intern(&variant_display(en, some_tag, &p.enums)),
-					none_name: strpool.intern(&variant_display(en, none_tag, &p.enums)),
+					some_gid: ir::global_ctor_id(&p.enums, en, some_tag).unwrap_or(0),
+					none_gid: ir::global_ctor_id(&p.enums, en, none_tag).unwrap_or(0),
 				};
 			}
 			_ => diags.push("dict.lookup needs the `option` enum".to_string()),
@@ -102,9 +101,9 @@ pub(super) fn resolve_literals(
 					lt_tag,
 					eq_tag,
 					gt_tag,
-					lt_name: strpool.intern(&variant_display(en, lt_tag, &p.enums)),
-					eq_name: strpool.intern(&variant_display(en, eq_tag, &p.enums)),
-					gt_name: strpool.intern(&variant_display(en, gt_tag, &p.enums)),
+					lt_gid: ir::global_ctor_id(&p.enums, en, lt_tag).unwrap_or(0),
+					eq_gid: ir::global_ctor_id(&p.enums, en, eq_tag).unwrap_or(0),
+					gt_gid: ir::global_ctor_id(&p.enums, en, gt_tag).unwrap_or(0),
 				};
 			}
 			_ => diags.push("`compare` needs the `ordering` enum".to_string()),
@@ -183,11 +182,11 @@ pub(super) fn resolve_literals(
 					"trailing-bytes",
 					"malformed",
 				];
-				let mut errors = [(0u32, (0u32, 0u32)); 5];
+				let mut errors = [(0u32, 0u32); 5];
 				let mut ok = true;
 				for (i, name) in err_names.iter().enumerate() {
 					match tag_in(p, werr, name) {
-						Some(t) => errors[i] = (t, strpool.intern(&variant_display(werr, t, &p.enums))),
+						Some(t) => errors[i] = (t, ir::global_ctor_id(&p.enums, werr, t).unwrap_or(0)),
 						None => ok = false,
 					}
 				}
@@ -195,8 +194,8 @@ pub(super) fn resolve_literals(
 					runtime.wirelits = WireResultLits {
 						ok_tag,
 						err_tag,
-						ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
-						err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
+						ok_gid: ir::global_ctor_id(&p.enums, res, ok_tag).unwrap_or(0),
+						err_gid: ir::global_ctor_id(&p.enums, res, err_tag).unwrap_or(0),
 						errors,
 					};
 				} else {
@@ -222,12 +221,12 @@ pub(super) fn resolve_literals(
 				runtime.tasklits = TaskLits {
 					ok_tag,
 					err_tag,
-					ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
-					err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
+					ok_gid: ir::global_ctor_id(&p.enums, res, ok_tag).unwrap_or(0),
+					err_gid: ir::global_ctor_id(&p.enums, res, err_tag).unwrap_or(0),
 					some_tag,
 					none_tag,
-					some_name: strpool.intern(&variant_display(opt, some_tag, &p.enums)),
-					none_name: strpool.intern(&variant_display(opt, none_tag, &p.enums)),
+					some_gid: ir::global_ctor_id(&p.enums, opt, some_tag).unwrap_or(0),
+					none_gid: ir::global_ctor_id(&p.enums, opt, none_tag).unwrap_or(0),
 					defers_name: strpool.intern("__defers"),
 					cancelled_msg: strpool.intern("scope cancelled"),
 					stream_fault_msg: strpool.intern("rpc.stream: stream faulted"),
@@ -246,8 +245,8 @@ pub(super) fn resolve_literals(
 				runtime.ioreslits = IoResultLits {
 					ok_tag,
 					err_tag,
-					ok_name: strpool.intern(&variant_display(res, ok_tag, &p.enums)),
-					err_name: strpool.intern(&variant_display(res, err_tag, &p.enums)),
+					ok_gid: ir::global_ctor_id(&p.enums, res, ok_tag).unwrap_or(0),
+					err_gid: ir::global_ctor_id(&p.enums, res, err_tag).unwrap_or(0),
 				};
 			}
 			_ => diags.push("`std/sys/io` needs the `result` enum".to_string()),

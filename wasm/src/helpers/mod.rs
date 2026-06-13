@@ -102,6 +102,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			H::MarshalAlloc,
 			H::MarshalLoad,
 			H::VariantPayload,
+			H::VariantName,
 			H::TupleElems,
 			H::Denominalize,
 		],
@@ -116,6 +117,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 				c.dep(H::MarshalLoad),
 				c.rt.bump,
 				c.dep(H::VariantPayload),
+				c.dep(H::VariantName),
 				c.dep(H::TupleElems),
 				c.dep(H::Denominalize),
 				c.rt.lits,
@@ -446,18 +448,11 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		build: |c| wire::build_wire_ruvarint_fn(c.dep(H::WireRByte), c.rt.wireg),
 	},
 	HelperDef {
-		id: H::WireDisp,
-		fn_type: Ty::Helper(2),
-		deps: &[H::BytesConcat],
-		build: |c| wire::build_wire_disp_fn(c.dep(H::BytesConcat)),
-	},
-	HelperDef {
 		id: H::WireDecVariant,
 		fn_type: Ty::Helper(2),
 		deps: &[
 			H::WireRUvarint,
 			H::WireDec,
-			H::WireDisp,
 			H::VariantFromArray,
 			H::TupleElems,
 		],
@@ -465,7 +460,6 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 			wire::build_wire_dec_variant_fn(
 				c.dep(H::WireRUvarint),
 				c.dep(H::WireDec),
-				c.dep(H::WireDisp),
 				c.dep(H::VariantFromArray),
 				c.dep(H::TupleElems),
 				c.rt.wireg,
@@ -833,8 +827,14 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 	HelperDef {
 		id: H::EntryError,
 		fn_type: Ty::EntryError,
-		deps: &[H::ToString, H::MarshalSend],
-		build: |c| marshal::build_entry_error_fn(c.dep(H::ToString), c.dep(H::MarshalSend)),
+		deps: &[H::ToString, H::MarshalSend, H::VariantName],
+		build: |c| {
+			marshal::build_entry_error_fn(
+				c.dep(H::ToString),
+				c.dep(H::MarshalSend),
+				c.dep(H::VariantName),
+			)
+		},
 	},
 	HelperDef {
 		id: H::DomRegister,
@@ -1027,6 +1027,12 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 		fn_type: Ty::VariantFromArray,
 		deps: &[],
 		build: |_| variant::build_variant_from_array_fn(),
+	},
+	HelperDef {
+		id: H::VariantName,
+		fn_type: Ty::VariantName,
+		deps: &[],
+		build: |c| variant::build_variant_name_fn(c.ctor_names),
 	},
 	HelperDef {
 		id: H::TupleElems,

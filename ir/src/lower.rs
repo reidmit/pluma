@@ -2131,13 +2131,26 @@ impl<'a> Lowerer<'a> {
 				variants,
 			} => {
 				let mut items = Vec::with_capacity(variants.len());
-				for (vname, field_shapes) in variants {
+				for (i, (vname, field_shapes)) in variants.iter().enumerate() {
 					let mut field_items = Vec::with_capacity(field_shapes.len());
 					for fs in field_shapes {
 						field_items.push(ListItem::Elem(self.lower_wire_shape(fs, range)?));
 					}
 					let fields_list = self.emit_let(Rvalue::MakeList(field_items), range);
-					let pair = self.emit_let(Rvalue::MakeTuple(vec![str_atom(vname), fields_list]), range);
+					// The variant's global ctor id (declaration index = within-enum tag),
+					// carried so `__wire_dec_variant` can stamp it into the decoded
+					// `$variant` for name rendering. It never crosses the wire (the
+					// per-enum tag does), and the schema fingerprint ignores it, so peers
+					// built from different enum sets stay interoperable.
+					let gid = crate::global_ctor_id(&self.enums, qualified, i as u32).unwrap_or(0);
+					let pair = self.emit_let(
+						Rvalue::MakeTuple(vec![
+							str_atom(vname),
+							fields_list,
+							Atom::Const(Const::Int(gid as i64)),
+						]),
+						range,
+					);
 					items.push(ListItem::Elem(pair));
 				}
 				let vlist = self.emit_let(Rvalue::MakeList(items), range);

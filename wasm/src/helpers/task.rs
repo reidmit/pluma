@@ -260,7 +260,7 @@ pub(crate) fn build_run_task_fn(
 	w.if_result(
 		v,
 		|w| {
-			push_result(w, lits.err_tag, lits.err_name, |w| {
+			push_result(w, lits.err_tag, lits.err_gid, |w| {
 				w.global_get(g.root_val);
 			});
 		},
@@ -1553,7 +1553,7 @@ pub(crate) fn build_pump_fn(
 							|w| {
 								// The element is a `bytes`-tagged `$str`; retag its payload to
 								// `TAG_STR` so it flows as the `string` the stub reads.
-								push_result(w, lits.ok_tag, lits.ok_name, |w| {
+								push_result(w, lits.ok_tag, lits.ok_gid, |w| {
 									w.i32(types::TAG_STR);
 									w.local_get(queue)
 										.ref_cast(types::T_LIST)
@@ -1579,7 +1579,7 @@ pub(crate) fn build_pump_fn(
 								w.i32_or();
 								w.if_else(
 									|w| {
-										push_result(w, lits.err_tag, lits.err_name, |w| {
+										push_result(w, lits.err_tag, lits.err_gid, |w| {
 											str_lit(w, lits.web_fetch_fail_msg);
 										});
 										w.local_set(fval);
@@ -1654,7 +1654,7 @@ pub(crate) fn build_pump_fn(
 					});
 					w.local_get(akind).i32(act_kind::ATTEMPT).i32_eq();
 					w.if_(|w| {
-						push_result(w, lits.ok_tag, lits.ok_name, |w| {
+						push_result(w, lits.ok_tag, lits.ok_gid, |w| {
 							w.local_get(fval);
 						});
 						w.local_set(fval);
@@ -1719,7 +1719,7 @@ pub(crate) fn build_pump_fn(
 					});
 					w.local_get(akind).i32(act_kind::ATTEMPT).i32_eq();
 					w.if_(|w| {
-						push_result(w, lits.err_tag, lits.err_name, |w| {
+						push_result(w, lits.err_tag, lits.err_gid, |w| {
 							w.local_get(fval);
 						});
 						w.local_set(fval);
@@ -3811,7 +3811,7 @@ fn pop_activation(w: &mut Wat, g: TaskGlobals, a: Local, akind: Local, apl: Loca
 fn push_activation(w: &mut Wat, kind: i32, x: impl FnOnce(&mut Wat), y: impl FnOnce(&mut Wat)) {
 	w.i32(types::TAG_VARIANT);
 	w.i32(kind);
-	w.ref_null(types::T_VALUE); // name (unused)
+	w.i32(0); // ctor_id (unused — internal activation, never named)
 	w.i32(2); // arity
 	x(w); // p0
 	y(w); // p1
@@ -3834,10 +3834,10 @@ fn push_tuple3(w: &mut Wat, kind: i64, x: impl FnOnce(&mut Wat), y: impl FnOnce(
 }
 
 /// Push a `result`/`option` `$variant` `{vtag: tag, name, payload: [<value>]}`.
-fn push_result(w: &mut Wat, tag: u32, name: (u32, u32), val: impl FnOnce(&mut Wat)) {
+fn push_result(w: &mut Wat, tag: u32, gid: u32, val: impl FnOnce(&mut Wat)) {
 	w.i32(types::TAG_VARIANT);
 	w.i32(tag as i32);
-	str_lit(w, name);
+	w.i32(gid as i32); // ctor_id (field 2)
 	w.i32(1); // arity
 	val(w); // p0
 	w.ref_null(types::T_VALUE); // p1
@@ -3879,14 +3879,14 @@ fn action_tuple(w: &mut Wat, action: i64, val: impl FnOnce(&mut Wat)) {
 
 /// Push `option.some(<val>)`.
 fn push_some(w: &mut Wat, lits: TaskLits, val: impl FnOnce(&mut Wat)) {
-	push_result(w, lits.some_tag, lits.some_name, val);
+	push_result(w, lits.some_tag, lits.some_gid, val);
 }
 
 /// Push `option.none`.
 fn push_none(w: &mut Wat, lits: TaskLits) {
 	w.i32(types::TAG_VARIANT);
 	w.i32(lits.none_tag as i32);
-	str_lit(w, lits.none_name);
+	w.i32(lits.none_gid as i32); // ctor_id (field 2)
 	w.i32(0); // arity
 	w.ref_null(types::T_VALUE); // p0
 	w.ref_null(types::T_VALUE); // p1
@@ -3910,7 +3910,7 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 	w.if_result(
 		types::value_ref(),
 		|w| {
-			push_result(w, lits.ok_tag, lits.ok_name, |w| {
+			push_result(w, lits.ok_tag, lits.ok_gid, |w| {
 				w.local_get(oc)
 					.ref_cast(types::T_TUPLE)
 					.struct_get(types::T_TUPLE, 5)
@@ -3924,7 +3924,7 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 			w.if_result(
 				types::value_ref(),
 				|w| {
-					push_result(w, lits.err_tag, lits.err_name, |w| {
+					push_result(w, lits.err_tag, lits.err_gid, |w| {
 						w.local_get(oc)
 							.ref_cast(types::T_TUPLE)
 							.struct_get(types::T_TUPLE, 5)
@@ -3935,7 +3935,7 @@ fn push_settled(w: &mut Wat, lits: TaskLits, oc: Local) {
 				},
 				|w| {
 					// cancelled -> ok ().
-					push_result(w, lits.ok_tag, lits.ok_name, push_nothing);
+					push_result(w, lits.ok_tag, lits.ok_gid, push_nothing);
 				},
 			);
 		},

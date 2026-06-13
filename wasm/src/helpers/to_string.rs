@@ -95,6 +95,7 @@ pub(crate) fn build_tostring_fn(
 	load_bytes: u32,
 	bump: u32,
 	variant_payload: u32,
+	variant_name: u32,
 	tuple_elems: u32,
 	denom_idx: u32,
 	lits: ToStringLits,
@@ -378,10 +379,12 @@ pub(crate) fn build_tostring_fn(
 	// VARIANT -> "enum.variant" then ` arg` per payload element.
 	w.local_get(ta).i32(types::TAG_VARIANT).i32_eq();
 	w.if_(|w| {
-		// acc = bytes-of(name).
+		// acc = bytes-of(name), where the name is recovered from the variant's global
+		// ctor id (field 2) via `__variant_name`.
 		w.local_get(v)
 			.ref_cast(types::T_VARIANT)
-			.struct_get(types::T_VARIANT, 2);
+			.struct_get(types::T_VARIANT, 2)
+			.call(variant_name);
 		w.ref_cast(types::T_STR)
 			.struct_get(types::T_STR, 1)
 			.local_set(acc);
