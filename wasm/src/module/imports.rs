@@ -240,6 +240,15 @@ pub(super) fn classify_host_call(
 		imports.register("io-last-error");
 		imports.register("io-copyout");
 	}
+	// `std/regex` (`emit_regex`): marshals the pattern source + subject into scratch
+	// (`__alloc`/`__store_bytes`), reads the packed span buffer back (`__load_bytes`),
+	// and drains the host stash via `io-copyout` when the buffer overflows the first cap.
+	if tag == "regex-find-all" {
+		requested.insert(Helper::MarshalAlloc);
+		requested.insert(Helper::MarshalStore);
+		requested.insert(Helper::MarshalLoad);
+		imports.register("io-copyout");
+	}
 	if !imports.contains(tag) {
 		if host_sig(tag).is_none() {
 			diags.push(format!("unsupported host builtin `{tag}`"));
@@ -268,6 +277,9 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 		// `(op, pp, pl, dp, dl, dst, cap) -> len` — the sync fs op (7 args; neither io2 nor
 		// io4, so handled before the generic io branch).
 		ftypes.for_fs_op_sync()
+	} else if tag == "regex-find-all" {
+		// `(pat_ptr, pat_len, inp_ptr, inp_len, dst, cap) -> len`.
+		ftypes.for_regex_find_all()
 	} else if tag == "web-fetch" {
 		// `(req_ptr, req_len, dst, cap) -> len` — the sys host's blocking exchange, the
 		// same shape as a path io read.

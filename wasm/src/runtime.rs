@@ -1197,6 +1197,13 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: true,
 		}),
+		// `std/regex`: `(pattern-source, subject) -> bytes` (a packed i32 span buffer).
+		// Has a dedicated 6-arg import type + emit path (`emit_regex`); this entry only
+		// keeps `classify_host_call` from rejecting it as an unsupported builtin.
+		"regex-find-all" => Some(HostSig {
+			arity: 2,
+			returns_value: true,
+		}),
 		// `std/time` clock reads (`Clock`). `time-now`/`-monotonic` cross as i64
 		// BigInts (boxed `instant`/`duration` in wasm — `is_clock_host` → `emit_clock`);
 		// `time-parse` rides a marshalled `(fp,fl,ip,il,dst) -> status` shape into a

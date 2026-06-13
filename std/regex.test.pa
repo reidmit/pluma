@@ -65,6 +65,22 @@ def tests :: test.suite = [
 		let ms = re.find-all `digit+` "no numbers"
 		assert.equals (list.length ms) 0
 	},
+	test.case "offsets are byte offsets past a multibyte char" fun {
+		# "café" is 5 bytes (é is two), so the digits start at byte 6, not 5;
+		# and the ASCII `letter` class stops at the multibyte byte, matching "caf".
+		when re.find `digit+` "café 123" is some m {
+			assert.all [assert.equals m.text "123", assert.equals m.start 6, assert.equals m.end 9]
+		} is none {
+			assert.is-true false
+		}
+	},
+	test.case "ascii letter class does not match multibyte bytes" fun {
+		when re.find `letter+` "café" is some m {
+			assert.all [assert.equals m.text "caf", assert.equals m.start 0, assert.equals m.end 3]
+		} is none {
+			assert.is-true false
+		}
+	},
 	test.case "named-capture returns some on a hit" fun {
 		# --- named-capture ---
 

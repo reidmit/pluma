@@ -27,6 +27,7 @@ mod marshal;
 mod math;
 mod net;
 mod offload;
+mod regex;
 mod time;
 mod writers;
 
@@ -39,6 +40,7 @@ use fs::*;
 use math::*;
 use net::*;
 use offload::*;
+use regex::*;
 use time::*;
 use writers::*;
 
@@ -220,6 +222,8 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "uuid-v4", cb_uuid_v4);
 	register(scope, pluma, data, "uuid-v7", cb_uuid_v7);
 	register(scope, pluma, data, "uuid-parse", cb_uuid_parse);
+	// std/regex (V8's RegExp).
+	register(scope, pluma, data, "regex-find-all", cb_regex_find_all);
 	// std/time clock surface (Clock capability) — wall/monotonic clock, sleep, parse.
 	register(scope, pluma, data, "time-now", cb_time_now);
 	register(scope, pluma, data, "time-monotonic", cb_time_monotonic);

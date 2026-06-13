@@ -324,6 +324,10 @@ enum FuncKind {
 	/// -> i32`. Covers the path reads (`(path, plen, dst, cap) -> len`) and the file
 	/// writers (`(path, plen, data, dlen) -> status`).
 	Io4,
+	/// `regex-find-all`: `(pat_ptr, pat_len, inp_ptr, inp_len, dst, cap) -> i32 len` —
+	/// two scratch strings (the translated pattern source + the subject) in, a packed
+	/// little-endian i32 span buffer written to `dst` (overflow stashed, like the io reads).
+	RegexFindAll,
 	/// `time-sleep(i64 nanos) -> ()` — the host blocks for the duration.
 	TimeSleep,
 	/// `time-parse(fp, fl, ip, il, dst) -> i32 status` — strtime-parse two scratch
@@ -667,6 +671,11 @@ impl FuncTypes {
 	/// A four-arg `std/sys/io` host import: `(i32, i32, i32, i32) -> i32`.
 	pub fn for_io4(&mut self) -> u32 {
 		self.intern(FuncKind::Io4)
+	}
+
+	/// `regex-find-all`: `(pat_ptr, pat_len, inp_ptr, inp_len, dst, cap) -> i32 len`.
+	pub fn for_regex_find_all(&mut self) -> u32 {
+		self.intern(FuncKind::RegexFindAll)
 	}
 
 	/// `time-sleep(i64) -> ()`.
@@ -1244,6 +1253,20 @@ impl FuncTypes {
 				FuncKind::Io4 => {
 					types.ty().function(
 						[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+						[ValType::I32],
+					);
+					continue;
+				}
+				FuncKind::RegexFindAll => {
+					types.ty().function(
+						[
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+							ValType::I32,
+						],
 						[ValType::I32],
 					);
 					continue;

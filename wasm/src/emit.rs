@@ -1921,6 +1921,12 @@ impl<'a> FnEmitter<'a> {
 			self.emit_web_fetch(idx, args);
 			return;
 		}
+		// `std/regex`: marshal the pattern source + subject into scratch, call the
+		// `(…6 i32…) -> len` import, drain any overflow, and build the `$bytes` span buffer.
+		if tag == "regex-find-all" {
+			self.emit_regex(idx, args);
+			return;
+		}
 		// Byte-payload writers (`print`/`io.write*`/`io.fail`): render the arg into the
 		// scratch memory and pass `(ptr=0, len)` to the `(i32,i32) -> ()` host import.
 		if is_byte_writer(tag) {
@@ -2138,6 +2144,62 @@ impl<'a> FnEmitter<'a> {
 		}
 		// `$str`/`$bytes` share the `{tag, $bytes}` struct; only the tag differs.
 		self.ins(Instruction::I32Const(tag_const));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::LocalGet(len));
+		self.ins(Instruction::Call(load));
+		self.ins(Instruction::StructNew(types::T_STR));
+	}
+
+	/// `std/regex` (`regex-find-all`): marshal the translated pattern source + the subject
+	/// into scratch, call `(pat_ptr, pat_len, inp_ptr, inp_len, dst, cap) -> len`, drain the
+	/// host stash on overflow, and build the `$bytes` span buffer (a packed little-endian i32
+	/// array `[match_start, match_end, g1s, g1e, …]` the Pluma decoder unpacks). The host
+	/// runs V8's `RegExp`, so this never fails (an invalid translation would be a compiler
+	/// bug, not a user error) — no `__io_result` wrap.
+	fn emit_regex(&mut self, idx: u32, args: &[Atom]) {
+		let (Some(alloc), Some(store), Some(load)) = (
+			self.runtime.idx(Helper::MarshalAlloc),
+			self.runtime.idx(Helper::MarshalStore),
+			self.runtime.idx(Helper::MarshalLoad),
+		) else {
+			self
+				.diags
+				.push("`regex-find-all` needs the marshalling helpers");
+			self.push_nothing();
+			return;
+		};
+		const CAP: i32 = 4096;
+		self.reset_bump();
+		let (pat_ptr, pat_len) = self.marshal_strlike_arg(&args[0], alloc, store);
+		let (inp_ptr, inp_len) = self.marshal_strlike_arg(&args[1], alloc, store);
+		let dst = self.fresh_local(ValType::I32);
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::Call(alloc));
+		self.ins(Instruction::LocalSet(dst));
+		self.ins(Instruction::LocalGet(pat_ptr));
+		self.ins(Instruction::LocalGet(pat_len));
+		self.ins(Instruction::LocalGet(inp_ptr));
+		self.ins(Instruction::LocalGet(inp_len));
+		self.ins(Instruction::LocalGet(dst));
+		self.ins(Instruction::I32Const(CAP));
+		self.ins(Instruction::Call(idx)); // -> i32 len
+		let len = self.fresh_local(ValType::I32);
+		self.ins(Instruction::LocalSet(len));
+		// Overflow: re-`__alloc` the true size and drain the host stash (the span buffer for
+		// a match-heavy scan easily exceeds the initial `CAP`).
+		if let Some(copyout) = self.host_index.get("io-copyout").copied() {
+			self.ins(Instruction::LocalGet(len));
+			self.ins(Instruction::I32Const(CAP));
+			self.ins(Instruction::I32GtS);
+			self.ins(Instruction::If(BlockType::Empty));
+			self.ins(Instruction::LocalGet(len));
+			self.ins(Instruction::Call(alloc));
+			self.ins(Instruction::LocalSet(dst));
+			self.ins(Instruction::LocalGet(dst));
+			self.ins(Instruction::Call(copyout));
+			self.ins(Instruction::End);
+		}
+		self.ins(Instruction::I32Const(types::TAG_BYTES));
 		self.ins(Instruction::LocalGet(dst));
 		self.ins(Instruction::LocalGet(len));
 		self.ins(Instruction::Call(load));

@@ -17,10 +17,13 @@
 # The `start` / `end` positions reported below are byte offsets into the
 # string you searched.
 #
-# The engine is pure Pluma: a backtick literal reifies to the prelude
-# `regex-pattern` tree (the `regex` type), and the matcher below is a
-# recursive backtracker with leftmost-first, greedy semantics. It runs
-# identically on every backend -- no native regex engine, no host call.
+# A backtick literal reifies to the prelude `regex-pattern` tree (the
+# `regex` type). The matcher translates that tree to an equivalent regex
+# source and runs it on the host's `RegExp` engine, returning each match's
+# byte offsets. The two strings cross to the host as latin1 (one byte = one
+# code unit), so the engine's code-unit offsets coincide with byte offsets
+# even for non-ASCII input; the character classes translate to ASCII byte
+# ranges, so matching stays byte-level (Pluma indexes bytes, not codepoints).
 
 use std/bytes
 use std/dict
@@ -34,225 +37,217 @@ use std/string
 # left out of the dict rather than mapped to "".
 public alias match {text :: string, start :: int, end :: int, groups :: dict string string}
 
+# The host matcher: `(pattern-source, subject) -> spans`. Both arguments are
+# raw bytes (latin1 on the host), and the result is a packed little-endian
+# i32 buffer -- per match `[start, end, g1-start, g1-end, ..., gN-start,
+# gN-end]`, with `-1, -1` for a capture group that didn't participate. The
+# group *names* never cross: this module owns the pattern, so it maps each
+# positional group back to its name itself.
+def find-all-raw :: fun bytes bytes -> bytes = built-in "regex-find-all"
+
 # ============================================================================
-# The matcher (private). Continuation-passing recursive backtracker over the
-# `regex-pattern` tree, indexing the input as bytes.
+# Pattern translation: `regex-pattern` tree -> regex source (as bytes).
 #
-# `re-match pat input pos caps k` tries to match `pat` at `pos`; on success it
-# calls `k new-pos new-caps`, and `k` returning `none` triggers backtracking.
-# Captures are a `list (string, int, int)` (name, start, end) threaded
-# immutably, so a failed branch's captures are discarded for free.
+# Capture groups translate to *positional* `(...)` groups (not named ones, to
+# sidestep host identifier rules); intermediate grouping uses non-capturing
+# `(?:...)`, so the source's group numbering matches a pre-order walk of the
+# tree -- which `capture-names` reproduces to recover each group's name.
 # ============================================================================
 
-# ---- character classes (ASCII, byte-level) ----
-
-def byte-in = fun b lo hi {
-	b >= lo && b <= hi
+# Regex metacharacters that must be backslash-escaped inside a literal:
+# `. * + ? ( ) [ ] { } ^ $ | \ /`.
+def meta-byte = fun b {
+	b == 46 || b == 42 || b == 43 || b == 63 || b == 40 || b == 41 || b == 91 || b == 93 || b == 123 || b == 125 || b == 94 || b == 36 || b == 124 || b == 92 || b == 47
 }
 
-def is-word-byte = fun b {
-	byte-in b 48 57 || byte-in b 65 90 || byte-in b 97 122 || b == 95
+# Escape a literal byte-run into regex source, prefixing each metacharacter
+# with a backslash. Slicing one byte at a time keeps raw (non-ASCII) bytes
+# intact -- they cross to the host as latin1 and match byte-for-byte.
+def esc-literal = fun lit i acc {
+	if i >= bytes.length lit {
+		acc
+	} else {
+		let b = bytes.get lit i
+		let ch = bytes.slice lit i (i + 1)
+		let acc2 = if meta-byte b {
+			bytes.concat (bytes.concat acc (string.to-bytes "\\")) ch
+		} else {
+			bytes.concat acc ch
+		}
+		esc-literal lit (i + 1) acc2
+	}
 }
 
-def class-matches = fun name b {
+# A character class as an ASCII byte range (so matching stays byte-level and
+# never picks up the host engine's Unicode interpretation). `whitespace` is
+# exactly space/tab/newline/carriage-return; `any` is "any byte".
+def class-source = fun name {
 	when name is "digit" {
-		byte-in b 48 57
+		string.to-bytes "[0-9]"
 	} is "letter" {
-		byte-in b 65 90 || byte-in b 97 122
+		string.to-bytes "[A-Za-z]"
 	} is "word" {
-		is-word-byte b
+		string.to-bytes "[0-9A-Za-z_]"
 	} is "whitespace" {
-		b == 32 || b == 9 || b == 10 || b == 13
+		string.to-bytes "[ \t\n\r]"
 	} is "any" {
-		true
+		string.to-bytes "[\\s\\S]"
 	} else {
-		false
+		# An unknown class matches nothing (the old matcher returned `false`).
+		string.to-bytes "[^\\s\\S]"
 	}
 }
 
-# ---- zero-width anchors ----
-
-def word-before = fun input pos {
-	if pos > 0 {
-		is-word-byte (bytes.get input (pos - 1))
-	} else {
-		false
-	}
-}
-
-def word-after = fun input pos {
-	if pos < bytes.length input {
-		is-word-byte (bytes.get input pos)
-	} else {
-		false
-	}
-}
-
-def anchor-ok = fun name input pos {
+def anchor-source = fun name {
 	when name is "start" {
-		pos == 0
+		string.to-bytes "^"
 	} is "end" {
-		pos == bytes.length input
+		string.to-bytes "$"
 	} is "boundary" {
-		word-before input pos != word-after input pos
+		string.to-bytes "\\b"
 	} else {
-		false
+		string.to-bytes ""
 	}
 }
 
-# ---- literal byte-run matching ----
-
-def lit-eq-at = fun input pos lit i n {
-	if i >= n {
-		true
-	} else if bytes.get input (pos + i) == bytes.get lit i {
-		lit-eq-at input pos lit (i + 1) n
+# `inner` repeated `lo`..`hi` times (`hi = -1` is unbounded), greedy -- the
+# `RegExp` default, matching the pattern tree's semantics.
+def quantifier = fun lo hi {
+	string.to-bytes if lo == 0 && hi == 0 - 1 {
+		"*"
+	} else if lo == 1 && hi == 0 - 1 {
+		"+"
+	} else if lo == 0 && hi == 1 {
+		"?"
+	} else if hi == 0 - 1 {
+		"{$(to-string lo),}"
+	} else if lo == hi {
+		"{$(to-string lo)}"
 	} else {
-		false
+		"{$(to-string lo),$(to-string hi)}"
 	}
 }
 
-def match-literal = fun input pos lit {
-	let n = bytes.length lit
-	if pos + n <= bytes.length input {
-		lit-eq-at input pos lit 0 n
-	} else {
-		false
+def wrap-noncap = fun b {
+	bytes.concat (bytes.concat (string.to-bytes "(?:") b) (string.to-bytes ")")
+}
+
+def wrap-paren = fun b {
+	bytes.concat (bytes.concat (string.to-bytes "(") b) (string.to-bytes ")")
+}
+
+def seq-source = fun parts {
+	list.fold parts (string.to-bytes "") fun acc p {
+		bytes.concat acc (to-source p)
 	}
 }
 
-# `-1` budget means unbounded; this decrements a finite budget but keeps -1.
-def dec-budget = fun hi {
-	if hi == 0 - 1 {
-		0 - 1
+# Join the alternatives with `|` and wrap them non-capturing so the bar binds
+# only within this alternation.
+def alt-source = fun parts {
+	if parts is [first, ...rest] {
+		wrap-noncap (list.fold rest (to-source first) fun acc p {
+			bytes.concat (bytes.concat acc (string.to-bytes "|")) (to-source p)
+		})
 	} else {
-		hi - 1
+		string.to-bytes ""
 	}
 }
 
-# ---- the core matcher ----
-
-def re-match = fun pat input pos caps k {
+def to-source = fun pat {
 	when pat is regex-pattern.p-literal lit {
-		if match-literal input pos lit {
-			k (pos + bytes.length lit) caps
-		} else {
-			none
-		}
+		esc-literal lit 0 (string.to-bytes "")
 	} is regex-pattern.p-class name {
-		if pos < bytes.length input {
-			if class-matches name (bytes.get input pos) {
-				k (pos + 1) caps
-			} else {
-				none
-			}
-		} else {
-			none
-		}
+		class-source name
 	} is regex-pattern.p-anchor name {
-		if anchor-ok name input pos {
-			k pos caps
-		} else {
-			none
-		}
+		anchor-source name
 	} is regex-pattern.p-sequence parts {
-		re-seq parts input pos caps k
+		seq-source parts
 	} is regex-pattern.p-alternation parts {
-		re-alt parts input pos caps k
+		alt-source parts
 	} is regex-pattern.p-repeat inner lo hi {
-		re-repeat inner lo hi input pos caps k
-	} is regex-pattern.p-capture name inner {
-		re-match inner input pos caps fun endp c2 {
-			k endp [(name, pos, endp), ...c2]
-		}
+		bytes.concat (wrap-noncap (to-source inner)) (quantifier lo hi)
+	} is regex-pattern.p-capture _name inner {
+		wrap-paren (to-source inner)
 	}
 }
 
-def re-seq = fun parts input pos caps k {
-	if parts is [first, ...rest] {
-		re-match first input pos caps fun p2 c2 {
-			re-seq rest input p2 c2 k
+# The capture names in the order the host numbers their groups (pre-order,
+# left-to-right -- the order `to-source` opens its `(` parens).
+def capture-names = fun pat {
+	when pat is regex-pattern.p-capture name inner {
+		[name, ...capture-names inner]
+	} is regex-pattern.p-sequence parts {
+		list.fold parts [] fun acc p {
+			list.concat acc (capture-names p)
 		}
+	} is regex-pattern.p-alternation parts {
+		list.fold parts [] fun acc p {
+			list.concat acc (capture-names p)
+		}
+	} is regex-pattern.p-repeat inner _lo _hi {
+		capture-names inner
 	} else {
-		k pos caps
+		[]
 	}
 }
 
-def re-alt = fun parts input pos caps k {
-	if parts is [first, ...rest] {
-		when re-match first input pos caps k is some r {
-			some r
-		} is none {
-			re-alt rest input pos caps k
-		}
+# ============================================================================
+# Decoding the host's packed span buffer into `(start, end, caps)` triples,
+# where `caps` is a `list (string, int, int)` of `(name, start, end)` -- the
+# same shape the match-record + replacement builders below consume.
+# ============================================================================
+
+# A signed little-endian i32 at byte offset `off`.
+def read-i32 = fun buf off {
+	let u = bytes.get buf off + bytes.get buf (off + 1) * 256 + bytes.get buf (off + 2) * 65536 + bytes.get buf (off + 3) * 16777216
+	if u >= 2147483648 {
+		u - 4294967296
 	} else {
-		none
+		u
 	}
 }
 
-# `inner` repeated between `lo` and `hi` times (hi = -1 unbounded), greedy.
-def re-repeat = fun inner lo hi input pos caps k {
-	if lo > 0 {
-		re-match inner input pos caps fun p2 c2 {
-			re-repeat inner (lo - 1) (dec-budget hi) input p2 c2 k
-		}
-	} else if hi == 0 {
-		k pos caps
+# The participating groups of one match, as `(name, start, end)` in group
+# order. A group whose start is `-1` didn't fire and is dropped.
+def decode-groups = fun buf names off g ngroups {
+	if g >= ngroups {
+		[]
 	} else {
-		# Greedy: try one more (requiring forward progress to avoid an
-		# infinite empty-match loop), otherwise stop and run `k` here.
-		when re-match inner input pos caps fun p2 c2 {
-			if p2 > pos {
-				re-repeat inner 0 (dec-budget hi) input p2 c2 k
-			} else {
-				none
-			}
-		} is some r {
-			some r
-		} is none {
-			k pos caps
+		let gs = read-i32 buf (off + g * 8)
+		let ge = read-i32 buf (off + g * 8 + 4)
+		let rest = decode-groups buf names off (g + 1) ngroups
+		if gs >= 0 {
+			[(list.get names g, gs, ge), ...rest]
+		} else {
+			rest
 		}
 	}
 }
 
-# Try to match `pat` anchored at `start`; `some (end, caps)` or `none`.
-def match-at = fun pat input start {
-	re-match pat input start [] fun endp caps {
-		some (endp, caps)
-	}
-}
-
-# Leftmost search at or after `start`: `some (match-start, match-end, caps)`.
-def search-from = fun pat input start {
-	if start <= bytes.length input {
-		when match-at pat input start is some pair {
-			let (endp, caps) = pair
-			some (start, endp, caps)
-		} is none {
-			search-from pat input (start + 1)
-		}
+# Walk the `nmatches` fixed-stride records, appending each `(start, end, caps)`
+# in place (`acc` is threaded linearly, as in the rest of the scan).
+def decode-matches = fun buf names ngroups stride idx nmatches acc {
+	if idx >= nmatches {
+		acc
 	} else {
-		none
+		let base = idx * stride * 4
+		let ms = read-i32 buf base
+		let me = read-i32 buf (base + 4)
+		let caps = decode-groups buf names (base + 8) 0 ngroups
+		list.push acc (ms, me, caps)
+		decode-matches buf names ngroups stride (idx + 1) nmatches acc
 	}
 }
 
 # Every non-overlapping match left-to-right, as a list of `(start, end, caps)`.
-# Advances by one on an empty match so the scan terminates.
-def collect-spans = fun pat input start acc {
-	when search-from pat input start is some triple {
-		let (ms, me, caps) = triple
-		let nexti = if me > ms {
-			me
-		} else {
-			me + 1
-		}
-		# Append in place (`acc` is threaded linearly). Prepending with a spread
-		# instead would rebuild the whole list each match -- O(n^2) over the scan.
-		list.push acc (ms, me, caps)
-		collect-spans pat input nexti acc
-	} is none {
-		acc
-	}
+def match-spans = fun pat input {
+	let buf = find-all-raw (to-source pat) input
+	let names = capture-names pat
+	let ngroups = list.length names
+	let stride = 2 + 2 * ngroups
+	let nmatches = bytes.length buf / 4 / stride
+	decode-matches buf names ngroups stride 0 nmatches []
 }
 
 # ---- match-record construction ----
@@ -261,8 +256,9 @@ def slice-str = fun input start end {
 	bytes.to-string (bytes.slice input start end) ?? ""
 }
 
-# `caps` is most-recent-first, so keep the first occurrence of each name
-# (the last one matched) and drop earlier rebinds.
+# `caps` lists each group once, in group order; keep the first occurrence of a
+# name. A named group that never fired is absent from `caps`, so it's simply
+# never inserted (rather than mapped to "").
 def caps-to-dict = fun input caps {
 	list.fold caps (dict.empty ()) fun acc entry {
 		let (name, s, e) = entry
@@ -370,9 +366,9 @@ def expand-repl = fun repl caps input ms me {
 #     regex.matches `digit+` "abc123"   # => true
 #     regex.matches `digit+` "abc"      # => false
 public def matches :: fun regex string -> bool = fun pat s {
-	when search-from pat (string.to-bytes s) 0 is some _t {
+	if match-spans pat (string.to-bytes s) is [_first, ..._rest] {
 		true
-	} is none {
+	} else {
 		false
 	}
 }
@@ -385,10 +381,10 @@ public def matches :: fun regex string -> bool = fun pat s {
 #     regex.find `digit+` "no digits"   # => none
 public def find :: fun regex string -> option match = fun pat s {
 	let input = string.to-bytes s
-	when search-from pat input 0 is some triple {
+	if match-spans pat input is [triple, ..._rest] {
 		let (ms, me, caps) = triple
 		some (build-match input ms me caps)
-	} is none {
+	} else {
 		none
 	}
 }
@@ -401,7 +397,7 @@ public def find :: fun regex string -> option match = fun pat s {
 #     list.map nums (fun m { m.text })   # => ["1", "22", "333"]
 public def find-all :: fun regex string -> list match = fun pat s {
 	let input = string.to-bytes s
-	list.map (collect-spans pat input 0 []) fun span {
+	list.map (match-spans pat input) fun span {
 		let (ms, me, caps) = span
 		build-match input ms me caps
 	}
@@ -430,7 +426,7 @@ public def named-capture :: fun regex string string -> option string = fun pat s
 #     regex.replace `<n: digit+>` "x42y" "[${n}]"   # => "x[42]y"
 public def replace :: fun regex string string -> string = fun pat s repl {
 	let input = string.to-bytes s
-	replace-pieces input (collect-spans pat input 0 []) repl 0 ""
+	replace-pieces input (match-spans pat input) repl 0 ""
 }
 
 def replace-pieces = fun input spans repl prev acc {
@@ -448,10 +444,10 @@ def replace-pieces = fun input spans repl prev acc {
 #     regex.replace-first `digit+` "1 2 3" "N"   # => "N 2 3"
 public def replace-first :: fun regex string string -> string = fun pat s repl {
 	let input = string.to-bytes s
-	when search-from pat input 0 is some triple {
+	if match-spans pat input is [triple, ..._rest] {
 		let (ms, me, caps) = triple
 		slice-str input 0 ms ++ expand-repl repl caps input ms me ++ slice-str input me (bytes.length input)
-	} is none {
+	} else {
 		s
 	}
 }
@@ -464,7 +460,7 @@ public def replace-first :: fun regex string string -> string = fun pat s repl {
 #     regex.split `whitespace+` "a  b c"    # => ["a", "b", "c"]
 public def split :: fun regex string -> list string = fun pat s {
 	let input = string.to-bytes s
-	split-pieces input (collect-spans pat input 0 []) 0 []
+	split-pieces input (match-spans pat input) 0 []
 }
 
 def split-pieces = fun input spans prev acc {
