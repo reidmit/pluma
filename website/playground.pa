@@ -14,19 +14,56 @@
 # that never runs (server-side rendering drops event handlers).
 
 use std/css
+use std/list
 use std/signal
 use std/task
 use std/view
 use api
 use theme
 
-# --- the starter program ----------------------------------------------------
+# --- curated examples -------------------------------------------------------
 #
-# What's in the editor on first load. Plain `\n`/`\t` source (no `$(...)`), so it
-# reads cleanly and edits to something interesting in one keystroke.
+# Short, self-contained programs that show off one idea each. They're plain
+# `\n`/`\t` strings (a literal `$(` would interpolate when *this* file compiles,
+# so the one example that shows interpolation splices it in via `theme.dol`).
 
-def starter :: string =
+def ex-list :: string =
 	"use std/list\n\n# Edit this, then press Run.\ndef main = fun {\n\tlet xs = [1, 2, 3, 4, 5]\n\tprint \"numbers:\"\n\tprint xs\n\tprint \"doubled:\"\n\tprint (list.map xs fun n { n * 2 })\n\tprint \"kept > 2:\"\n\tprint (list.filter xs fun n { n > 2 })\n}\n"
+
+def ex-fact :: string =
+	"# Plain recursion — the type is inferred, no annotations needed.\ndef fact = fun n {\n\tif n <= 1 { 1 } else { n * fact (n - 1) }\n}\n\ndef main = fun {\n\tprint (fact 5)\n\tprint (fact 10)\n}\n"
+
+def ex-enum :: string =
+	"# An enum, matched with `when` (checked for exhaustiveness).\nenum shape {\n\tcircle float\n\trect float float\n}\n\ndef area = fun s {\n\twhen s is shape.circle r {\n\t\t3.14159 * r * r\n\t} is shape.rect w h {\n\t\tw * h\n\t}\n}\n\ndef main = fun {\n\tprint (area (shape.circle 2.0))\n\tprint (area (shape.rect 3.0 4.0))\n}\n"
+
+def ex-trait :: string =
+	"# One name, many types — a trait with an instance.\ntrait to-text a {\n\tto-text :: a -> string\n}\n\nimplement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}\n\ndef main = fun {\n\tprint (to-text true)\n\tprint (to-text false)\n}\n"
+
+def ex-record :: string =
+	"# Records are structural; " ++ theme.dol ++ "(...) interpolates into a string.\ndef main = fun {\n\tlet user = { name: \"Ada\", age: 36 }\n\tprint \"" ++ theme.dol ++ "(user.name) is " ++ theme.dol ++ "(to-string user.age)\"\n}\n"
+
+# (label, source). The first is what loads on first paint.
+def examples :: list (string, string) = [
+	("List · map & filter", ex-list),
+	("Recursion · factorial", ex-fact),
+	("Enums · when", ex-enum),
+	("Traits · one name, many types", ex-trait),
+	("Records · interpolation", ex-record),
+]
+
+# The source for a picked label, falling back to the first example.
+def example-source :: fun string -> string = fun name {
+	let match = list.find examples fun pair {
+		let (label, _src) = pair
+		label == name
+	}
+	when match is some pair {
+		let (_label, src) = pair
+		src
+	} is none {
+		ex-list
+	}
+}
 
 def placeholder :: string = "Press Run to compile this program on the server and run it right here in your browser."
 
@@ -63,13 +100,34 @@ def col :: css.ruleset = css.rule [
 	css.property "min-width" "0",
 ]
 
-def col-label :: css.ruleset = css.rule [
+# Each column opens with a header row (the uppercase label, plus the example
+# picker on the source side) so the two columns line up.
+def col-head :: css.ruleset = css.rule [
+	css.display "flex",
+	css.align-items "center",
+	css.justify-content "space-between",
+	css.property "margin-bottom" "0.6rem",
+	css.property "min-height" "1.7rem",
+]
+
+def lbl :: css.ruleset = css.rule [
 	css.property "text-transform" "uppercase",
 	css.property "letter-spacing" "0.1em",
 	css.font-size (css.rem 0.72),
 	css.font-weight "600",
 	css.color (css.hex theme.faint),
-	css.property "margin-bottom" "0.6rem",
+]
+
+def picker :: css.ruleset = css.rule [
+	css.property "font-family" theme.sans,
+	css.font-size (css.rem 0.82),
+	css.color (css.hex theme.muted),
+	css.background (css.hex theme.card-bg),
+	css.property "border" "1px solid #e9e4dc",
+	css.border-radius (css.px 8.0),
+	css.property "padding" "0.3rem 0.5rem",
+	css.cursor "pointer",
+	css.on "hover" [css.border-color (css.hex theme.accent)],
 ]
 
 # The editor and the output pane share a dark terminal-ish skin so the page reads as
@@ -145,7 +203,7 @@ def execute :: fun (fun string -> result string string) (signal string) (signal 
 
 public def page :: fun (fun string -> result string string) -> view = fun run {
 	let _ = theme.install-globals ()
-	let src = signal.new starter
+	let src = signal.new ex-list
 	let out = signal.new placeholder
 	view.div [view.id "app"] [
 		view.div [view.styled theme.shell] [
@@ -159,11 +217,23 @@ public def page :: fun (fun string -> result string string) -> view = fun run {
 				],
 				view.div [view.styled grid] [
 					view.div [view.styled col] [
-						view.div [view.styled col-label] [view.text "Source"],
+						view.div [view.styled col-head] [
+							view.span [view.styled lbl] [view.text "Source"],
+							view.select [
+								view.id "examples",
+								view.styled picker,
+								view.on-change fun name { signal.set src (example-source name) },
+							] (list.map examples fun pair {
+								let (label, _src) = pair
+								view.option [view.attr "value" label] [view.text label]
+							}),
+						],
 						view.textarea [view.id "source", view.styled editor, view.value src] [],
 					],
 					view.div [view.styled col] [
-						view.div [view.styled col-label] [view.text "Output"],
+						view.div [view.styled col-head] [
+							view.span [view.styled lbl] [view.text "Output"],
+						],
 						view.pre [view.styled pane] [view.text-of fun { signal.get out }],
 					],
 				],
