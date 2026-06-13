@@ -150,6 +150,115 @@ impl<'a> Formatter<'a> {
 		}
 	}
 
+	// Own-line comments inside a value collection, on lines in the half-open
+	// range `[lower, upper)`, joined by hardlines (which also force the
+	// enclosing group to break). Source blank-line gaps between consecutive
+	// comments are preserved. Returns `Nil` when the range holds no unconsumed
+	// comment. No leading or trailing hardline is emitted — the caller adds the
+	// break on whichever side abuts the item or bracket.
+	//
+	// Unlike `drain_leading`, this is bounded below so a nested collection only
+	// claims comments within its own brackets — an unbounded drain would let an
+	// inner `[...]` swallow a comment that belongs to an outer item above it.
+	fn drain_interior(&self, lower: usize, upper: usize) -> Doc {
+		let mut lines: Vec<usize> = self
+			.comments
+			.keys()
+			.filter(|&&l| l >= lower && l < upper && !self.consumed.borrow().contains(&l))
+			.copied()
+			.collect();
+		lines.sort();
+		if lines.is_empty() {
+			return nil();
+		}
+
+		let mut parts: Vec<Doc> = Vec::new();
+		let mut prev: Option<usize> = None;
+		for line in lines {
+			if let Some(p) = prev {
+				parts.push(hardline());
+				if line > p + 1 {
+					parts.push(hardline());
+				}
+			}
+			let body = self.comments.get(&line).unwrap();
+			parts.push(text(format!("#{}", body)));
+			self.consumed.borrow_mut().insert(line);
+			prev = Some(line);
+		}
+		concat(parts)
+	}
+
+	// Lay out a list/record/tuple value literal, interleaving any comments
+	// that sit between its items. `entries` gives each item's source line span
+	// and its pre-rendered Doc, in source order; `open_line`/`end_line` are the
+	// lines of the brackets, which bound the comment search so comments stay
+	// inside the brackets rather than being hoisted away or stolen by a sibling
+	// collection. Any interior comment forces the collection to break across
+	// lines (a comment can't ride a flat one-liner). With no interior comments
+	// this lays out identically to `bracketed_collection`.
+	fn comment_aware_collection(
+		&self,
+		open: &str,
+		close: &str,
+		open_line: usize,
+		end_line: usize,
+		entries: Vec<(usize, usize, Doc)>,
+	) -> Doc {
+		let n = entries.len();
+		let mut inner: Vec<Doc> = Vec::new();
+		// Comments above each item are searched from just after the previous
+		// item (or from the opening bracket, for the first item) up to the
+		// item's start line.
+		let mut lower = open_line;
+		for (i, (start_line, item_end, doc)) in entries.into_iter().enumerate() {
+			// Separator before this item: a space when flat, a newline when
+			// broken. The previous item's comma was emitted with that item.
+			if i > 0 {
+				inner.push(if_flat(text(" "), line()));
+			}
+			// Own-line comments above this item, separated from it by a
+			// hardline.
+			let leading = self.drain_interior(lower, start_line);
+			if !matches!(leading, Doc::Nil) {
+				inner.push(leading);
+				inner.push(hardline());
+			}
+			inner.push(doc);
+			// Comma after the item: always for non-last items; the last item
+			// gets a trailing comma only once the collection has broken.
+			if i + 1 < n {
+				inner.push(text(","));
+			} else {
+				inner.push(if_flat(text(""), text(",")));
+			}
+			// A comment sharing the item's last line trails after the comma —
+			// but only when that line is strictly inside the brackets. A comment
+			// on the closing-bracket line (e.g. `[1, 2, 3] # note`, where every
+			// item shares that line) belongs to the whole collection's enclosing
+			// context, not to an item, so it's left for the caller to claim.
+			if item_end < end_line {
+				inner.push(self.trailing_comment(item_end));
+			}
+			lower = item_end + 1;
+		}
+		// Comments between the last item and the closing bracket. A leading
+		// hardline drops them onto a fresh line after the last item; the
+		// closing `softbreak` below then lands the bracket on its own line.
+		let trailing = self.drain_interior(lower, end_line);
+		if !matches!(trailing, Doc::Nil) {
+			inner.push(hardline());
+			inner.push(trailing);
+		}
+
+		group(concat(vec![
+			text(open.to_string()),
+			nest(concat(vec![softbreak(), concat(inner)])),
+			softbreak(),
+			text(close.to_string()),
+		]))
+	}
+
 	// --- use ----------------------------------------------------------
 
 	fn format_use(&self, u: &UseNode) -> Doc {
@@ -522,10 +631,12 @@ impl<'a> Formatter<'a> {
 			Let(l) => self.format_let(l, tail),
 			Defer(inner) => concat(vec![text("defer "), self.fmt_prec(inner, 0, tail)]),
 			Try(t) => self.format_try(t, tail),
-			Tuple(items) => self.format_tuple(items),
-			List(items) => self.format_list(items),
-			Record(fields) => self.format_record(fields),
-			RecordUpdate { base, fields } => self.format_record_update(base, fields),
+			Tuple(items) => self.format_tuple(items, e.range.start.line, e.range.end.line),
+			List(items) => self.format_list(items, e.range.start.line, e.range.end.line),
+			Record(fields) => self.format_record(fields, e.range.start.line, e.range.end.line),
+			RecordUpdate { base, fields } => {
+				self.format_record_update(base, fields, e.range.start.line, e.range.end.line)
+			}
 			Interpolation(parts) => self.format_interpolation(parts),
 			Regex(r) => self.format_regex_literal(r),
 			If(i) => self.format_if(i),
@@ -725,73 +836,102 @@ impl<'a> Formatter<'a> {
 		concat(parts)
 	}
 
-	fn format_tuple(&self, items: &[ExprNode]) -> Doc {
+	fn format_tuple(&self, items: &[ExprNode], open_line: usize, end_line: usize) -> Doc {
 		if items.is_empty() {
 			return text("()");
 		}
-		let docs: Vec<Doc> = items.iter().map(|e| self.format_expr(e)).collect();
 		// Tuples stay inline when they fit, but wrap (one per line, trailing
 		// comma) when too wide — same as lists and records.
-		bracketed_collection("(", ")", docs)
+		let entries: Vec<(usize, usize, Doc)> = items
+			.iter()
+			.map(|e| (e.range.start.line, e.range.end.line, self.format_expr(e)))
+			.collect();
+		self.comment_aware_collection("(", ")", open_line, end_line, entries)
 	}
 
-	fn format_list(&self, items: &[ListItem]) -> Doc {
+	fn format_list(&self, items: &[ListItem], open_line: usize, end_line: usize) -> Doc {
 		if items.is_empty() {
 			return text("[]");
 		}
-		let docs: Vec<Doc> = items
+		let entries: Vec<(usize, usize, Doc)> = items
 			.iter()
-			.map(|item| match item {
-				ListItem::Item(e) => self.format_expr(e),
-				ListItem::Spread(e) => concat(vec![text("..."), self.format_expr(e)]),
+			.map(|item| {
+				let e = item.expr();
+				let doc = match item {
+					ListItem::Item(e) => self.format_expr(e),
+					ListItem::Spread(e) => concat(vec![text("..."), self.format_expr(e)]),
+				};
+				(e.range.start.line, e.range.end.line, doc)
 			})
 			.collect();
-		bracketed_collection("[", "]", docs)
+		self.comment_aware_collection("[", "]", open_line, end_line, entries)
 	}
 
-	fn format_record(&self, fields: &[(IdentifierNode, ExprNode)]) -> Doc {
+	fn format_record(
+		&self,
+		fields: &[(IdentifierNode, ExprNode)],
+		open_line: usize,
+		end_line: usize,
+	) -> Doc {
 		if fields.is_empty() {
 			return text("{}");
 		}
-		let docs: Vec<Doc> = fields
+		let entries: Vec<(usize, usize, Doc)> = fields
 			.iter()
 			.map(|(name, value)| {
 				// Field shorthand: render `{a: a}` as `{a}` when the value
 				// is just an identifier with the same name.
-				if let ExprKind::Identifier(ident) = &value.kind {
+				let doc = if let ExprKind::Identifier(ident) = &value.kind {
 					if ident.name == name.name {
-						return text(name.name.clone());
+						text(name.name.clone())
+					} else {
+						self.format_field(name, value)
 					}
-				}
-				concat(vec![
-					text(name.name.clone()),
-					text(": "),
-					self.format_expr(value),
-				])
+				} else {
+					self.format_field(name, value)
+				};
+				(name.range.start.line, value.range.end.line, doc)
 			})
 			.collect();
-		bracketed_collection("{", "}", docs)
+		self.comment_aware_collection("{", "}", open_line, end_line, entries)
 	}
 
-	fn format_record_update(&self, base: &ExprNode, fields: &[(IdentifierNode, ExprNode)]) -> Doc {
-		let mut docs: Vec<Doc> = Vec::with_capacity(fields.len() + 1);
-		docs.push(concat(vec![text("..."), self.format_expr(base)]));
+	fn format_field(&self, name: &IdentifierNode, value: &ExprNode) -> Doc {
+		concat(vec![
+			text(name.name.clone()),
+			text(": "),
+			self.format_expr(value),
+		])
+	}
+
+	fn format_record_update(
+		&self,
+		base: &ExprNode,
+		fields: &[(IdentifierNode, ExprNode)],
+		open_line: usize,
+		end_line: usize,
+	) -> Doc {
+		let mut entries: Vec<(usize, usize, Doc)> = Vec::with_capacity(fields.len() + 1);
+		entries.push((
+			base.range.start.line,
+			base.range.end.line,
+			concat(vec![text("..."), self.format_expr(base)]),
+		));
 		for (name, value) in fields {
 			// Field shorthand: render `{...r, a: a}` as `{...r, a}` when the
 			// value is just an identifier with the same name.
-			if let ExprKind::Identifier(ident) = &value.kind {
+			let doc = if let ExprKind::Identifier(ident) = &value.kind {
 				if ident.name == name.name {
-					docs.push(text(name.name.clone()));
-					continue;
+					text(name.name.clone())
+				} else {
+					self.format_field(name, value)
 				}
-			}
-			docs.push(concat(vec![
-				text(name.name.clone()),
-				text(": "),
-				self.format_expr(value),
-			]));
+			} else {
+				self.format_field(name, value)
+			};
+			entries.push((name.range.start.line, value.range.end.line, doc));
 		}
-		bracketed_collection("{", "}", docs)
+		self.comment_aware_collection("{", "}", open_line, end_line, entries)
 	}
 
 	fn format_interpolation(&self, parts: &[ExprNode]) -> Doc {

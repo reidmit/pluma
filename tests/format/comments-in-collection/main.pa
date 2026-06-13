@@ -1,0 +1,37 @@
+# Comments interleaved among the items of a list/record/tuple literal must
+# stay between the items they annotate, not get hoisted out of the brackets.
+
+def palette = [
+	"#fff",
+	# the brand accent
+	"#2563eb",
+	"#111", # near-black, used for ink
+	# a dangling note before the closing bracket
+]
+
+def nested = [
+	[
+		1,
+		# inner comment stays in the inner list
+		2,
+	],
+	# outer comment between the two sub-lists
+	[3, 4],
+]
+
+def config = {
+	name: "site",
+	# how many columns the grid uses
+	columns: 3,
+	rows: 2, # trailing note on a field
+}
+
+def pair = (
+	1,
+	# comment between tuple elements
+	2,
+)
+
+# A single-line collection with a trailing comment keeps the comment on the
+# def, not pulled inside the brackets.
+def small = [1, 2, 3] # three items
