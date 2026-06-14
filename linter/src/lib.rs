@@ -14,6 +14,7 @@ mod walk;
 
 use compiler::ast::ExprNode;
 use compiler::{Diagnostic, Module, Point, Range};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// An autofix: replace the source spanning `range` with `replacement`. A rule
@@ -71,11 +72,33 @@ impl Finding {
 /// `FieldAccess` shape in the parsed AST.
 pub struct Context {
 	frames: Vec<Vec<String>>,
+	/// Local import name → fully-qualified module name, e.g. `css` → `std/css`
+	/// (or the alias for `use std/css as c`). Module-wide, set once before the
+	/// walk; lets a rule recognize that a `css.rule` projection lands on an
+	/// imported module rather than an unrelated local of the same name.
+	imports: HashMap<String, String>,
 }
 
 impl Context {
 	fn new() -> Self {
-		Context { frames: Vec::new() }
+		Context {
+			frames: Vec::new(),
+			imports: HashMap::new(),
+		}
+	}
+
+	/// Record the module's `use` bindings. Called once by the walker before
+	/// descending, so every rule sees the same import set regardless of position.
+	pub(crate) fn set_imports(&mut self, imports: HashMap<String, String>) {
+		self.imports = imports;
+	}
+
+	/// The fully-qualified module a local name was imported as (`std/css`), or
+	/// `None` if the name isn't an import. A name that is also shadowed by a local
+	/// value is still reported here — callers that care pair this with
+	/// [`is_local`](Self::is_local).
+	pub fn imported_module(&self, name: &str) -> Option<&str> {
+		self.imports.get(name).map(String::as_str)
 	}
 
 	fn push(&mut self, names: Vec<String>) {
@@ -125,6 +148,7 @@ fn rules() -> Vec<Box<dyn Rule>> {
 		Box::new(rules::RedundantBoolComparison),
 		Box::new(rules::RedundantBoolOperand),
 		Box::new(rules::IfReturnsBool),
+		Box::new(rules::PreferUsingBlock),
 		Box::new(rules::RedundantLambda),
 		Box::new(rules::IdenticalBranches),
 		Box::new(rules::BindThenReturn),

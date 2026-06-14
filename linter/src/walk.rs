@@ -17,6 +17,13 @@ pub fn walk_module(
 	ctx: &mut Context,
 	out: &mut Vec<Finding>,
 ) {
+	ctx.set_imports(
+		ast
+			.uses
+			.iter()
+			.map(|u| (u.local_name().name.clone(), u.module_name()))
+			.collect(),
+	);
 	for def in &ast.body {
 		walk_definition(def, rules, ctx, out);
 	}

@@ -4,6 +4,7 @@
 mod bind_then_return;
 mod identical_branches;
 mod if_returns_bool;
+mod prefer_using_block;
 mod redundant_bool_comparison;
 mod redundant_bool_operand;
 mod redundant_lambda;
@@ -13,6 +14,7 @@ mod redundant_try_underscore;
 pub use bind_then_return::BindThenReturn;
 pub use identical_branches::IdenticalBranches;
 pub use if_returns_bool::IfReturnsBool;
+pub use prefer_using_block::PreferUsingBlock;
 pub use redundant_bool_comparison::RedundantBoolComparison;
 pub use redundant_bool_operand::RedundantBoolOperand;
 pub use redundant_lambda::RedundantLambda;

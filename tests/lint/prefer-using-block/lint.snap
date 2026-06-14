@@ -1,0 +1,19 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0009]: This function projects off `css` 8 times.
+   │
+   ├─𜱶 help: wrap the body in `using css { … }` and write members as `.member`.
+   │
+ 5 │ def card-style = fun {
+   │                  ^^^^^
+   ╰─𜱶 tests/lint/prefer-using-block/main.pa:5:18
+
+warning[L0009]: This function projects off `view` 3 times.
+   │
+   ├─𜱶 help: wrap the body in `using view { … }` and write members as `.member`.
+   │
+16 │ def panel = fun title {
+   │             ^^^^^^^^^^^
+   ╰─𜱶 tests/lint/prefer-using-block/main.pa:16:13

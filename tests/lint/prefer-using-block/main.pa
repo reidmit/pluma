@@ -1,0 +1,38 @@
+use std/css
+use std/view
+
+# Fires: four `css.` projections — wrap in `using css`.
+def card-style = fun {
+	css.global [
+		css.at ".card" [
+			css.background (css.hex "fff"),
+			css.padding (css.px 8.0),
+			css.color (css.hex "111"),
+		],
+	]
+}
+
+# Fires: three `view.` projections — wrap in `using view`.
+def panel = fun title {
+	view.element "div" [
+		view.attr "class" "panel",
+		view.text title,
+	]
+}
+
+# Does not fire: only two `css.` projections, below the threshold.
+def thin = fun {
+	css.at ".x" [css.padding "1px"]
+}
+
+# Does not fire: the projections are already inside a matching `using css`.
+def wrapped = fun {
+	using css {
+		css.at ".y" [css.background (css.hex "000"), css.padding (css.px 2.0)]
+	}
+}
+
+# Does not fire: `view` here is a local value, not the imported namespace.
+def shadowed = fun view {
+	view.element [view.attr, view.text]
+}
