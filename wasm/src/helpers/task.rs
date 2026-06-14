@@ -731,6 +731,11 @@ pub(crate) fn build_spawn_command_fn(list_append: u32, g: TaskGlobals) -> Functi
 		});
 		w.call(list_append);
 	});
+	// Live-child count += 1 (paired with the settle/reap decrement).
+	set_fld_i(&mut w, g.scopes, root_sid, scope::LIVE, |w| {
+		fld_i(w, g, g.scopes, root_sid, scope::LIVE);
+		w.i32(1).i32_add();
+	});
 	// ready.append((fid, Start, task)).
 	ready_push(&mut w, g, list_append, fid, focus::START, |w| {
 		w.local_get(task);
@@ -1902,6 +1907,11 @@ pub(crate) fn build_sched_spawn_fn(list_append: u32, g: TaskGlobals) -> Function
 		});
 		w.call(list_append);
 	});
+	// Live-child count += 1 (paired with the settle/reap decrement).
+	set_fld_i(&mut w, g.scopes, sid, scope::LIVE, |w| {
+		fld_i(w, g, g.scopes, sid, scope::LIVE);
+		w.i32(1).i32_add();
+	});
 	// ready.append((fid, Start, task)).
 	ready_push(&mut w, g, list_append, fid, focus::START, |w| {
 		w.local_get(task);
@@ -1952,6 +1962,15 @@ pub(crate) fn build_fiber_completed_fn(
 	set_fld(&mut w, g.fibers, fid, fiber::RES_VAL, |w| {
 		w.local_get(val);
 	});
+	// Settled — release the heavy state this fiber held (its activation/await
+	// chain, task-local env, and any parked retry task). A settled fiber never
+	// runs again, but its slot lingers in the `fibers` table and its owning
+	// scope's CHILDREN, so without this the continuation graph of every request
+	// a long-lived scope ever served stays pinned, and GC cost grows with it.
+	// RES_KIND/RES_VAL are kept — an awaiter still reads the outcome.
+	set_fld(&mut w, g.fibers, fid, fiber::ACT, empty_list);
+	set_fld(&mut w, g.fibers, fid, fiber::RETRY, push_nothing);
+	set_fld(&mut w, g.fibers, fid, fiber::ENV, push_nothing);
 
 	// root?
 	w.local_get(fid).i32_eqz();
@@ -2112,6 +2131,14 @@ pub(crate) fn build_on_child_done_fn(
 		.struct_get(types::T_INT, 1)
 		.i32_wrap_i64()
 		.local_set(kind);
+
+	// This child settled — drop it from its scope's live count. That counter is
+	// the O(1) "all children done?" signal (`try_finalize`/`all_children_done`);
+	// the CHILDREN list itself keeps the fid (it's only read on cancellation).
+	set_fld_i(&mut w, g.scopes, sid, scope::LIVE, |w| {
+		fld_i(w, g, g.scopes, sid, scope::LIVE);
+		w.i32(1).i32_sub();
+	});
 
 	// Deliver to waiters; clear them.
 	fld(&mut w, g, g.fibers, fid, fiber::WAITERS);
@@ -2300,6 +2327,7 @@ pub(crate) fn build_reap_fiber_fn(
 	let act = w.local(types::valarray_ref());
 	let i = w.local(ValType::I32);
 	let act_el = w.local(v);
+	let csid = w.local(ValType::I32);
 
 	w.local_get(fid_b)
 		.ref_cast(types::T_INT)
@@ -2314,6 +2342,19 @@ pub(crate) fn build_reap_fiber_fn(
 		});
 		set_fld_i(w, g.fibers, fid, fiber::RES_KIND, |w| {
 			w.i32(outcome::CANCELLED);
+		});
+		// A reaped *child* (a spawned task, not a scope body) leaves its owning
+		// scope's live set — mirror the settle-path decrement so a cancelled scope
+		// still reaches "all done". Bodies (runs_scope != none) aren't counted.
+		fld_i(w, g, g.fibers, fid, fiber::RUNS_SCOPE);
+		w.i32(NO_SCOPE as i32).i32_eq();
+		w.if_(|w| {
+			fld_i(w, g, g.fibers, fid, fiber::SCOPE);
+			w.local_set(csid);
+			set_fld_i(w, g.scopes, csid, scope::LIVE, |w| {
+				fld_i(w, g, g.scopes, csid, scope::LIVE);
+				w.i32(1).i32_sub();
+			});
 		});
 		// If it was awaiting a sub-scope, cancel that too.
 		fld_i(w, g, g.fibers, fid, fiber::WAIT_KIND);
@@ -2391,9 +2432,6 @@ pub(crate) fn build_try_finalize_scope_fn(
 	let mut w = Wat::new(1);
 	let sid_b = w.param(0);
 	let sid = w.local(ValType::I32);
-	let children = w.local(types::valarray_ref());
-	let n = w.local(ValType::I32);
-	let i = w.local(ValType::I32);
 	let aw = w.local(ValType::I32);
 	let rkind = w.local(ValType::I32);
 	let rval = w.local(v);
@@ -2409,29 +2447,11 @@ pub(crate) fn build_try_finalize_scope_fn(
 		// Body done?
 		fld_i(w, g, g.scopes, sid, scope::BD_KIND);
 		w.i32_eqz().br_if("done");
-		// All children done?
-		fld(w, g, g.scopes, sid, scope::CHILDREN);
-		w.ref_cast(types::T_LIST)
-			.struct_get(types::T_LIST, 1)
-			.local_set(children);
-		fld_len(w, g, g.scopes, sid, scope::CHILDREN);
-		w.local_set(n);
-		w.i32(0).local_set(i);
-		w.block("allok", |w| {
-			w.loop_("lp", |w| {
-				w.local_get(i).local_get(n).i32_ge_s().br_if("allok");
-				w.local_get(children)
-					.local_get(i)
-					.array_get(types::T_VALARRAY);
-				unbox_i(w);
-				let c = w.local(ValType::I32);
-				w.local_set(c);
-				fld_i(w, g, g.fibers, c, fiber::ALIVE);
-				w.br_if("done"); // a child still alive -> not yet
-				w.local_get(i).i32(1).i32_add().local_set(i);
-				w.br("lp");
-			});
-		});
+		// All children done? O(1) via the scope's live-child counter — CHILDREN
+		// holds every fid ever spawned (settled ones are never pruned), so a scan
+		// here was O(cumulative spawns), which decayed server throughput linearly.
+		fld_i(w, g, g.scopes, sid, scope::LIVE);
+		w.br_if("done"); // a live child remains -> not yet
 		set_fld_i(w, g.scopes, sid, scope::FINALIZED, |w| {
 			w.i32(1);
 		});
@@ -3250,6 +3270,9 @@ fn scope_fields(
 	push_nothing(w); // FAIL_VAL
 	empty_list(w); // COMPLETED
 	empty_list(w); // NEXT_WAITERS
+	box_i(w, |w| {
+		w.i32(0);
+	}); // LIVE
 	w.array_new_fixed(types::T_VALARRAY, scope::COUNT);
 }
 
@@ -3306,6 +3329,9 @@ fn push_scope(w: &mut Wat, manual: i64, awaiter: i64, body: u32) {
 	push_nothing(w); // FAIL_VAL
 	empty_list(w); // COMPLETED
 	empty_list(w); // NEXT_WAITERS
+	box_i(w, |w| {
+		w.i32(0);
+	}); // LIVE
 	w.array_new_fixed(types::T_VALARRAY, scope::COUNT);
 	w.struct_new(types::T_TUPLE);
 }
@@ -3959,36 +3985,9 @@ fn drop_first_list(w: &mut Wat, arr: Local, n: Local) {
 }
 
 /// Push i32 1 if every child of scope `sid` has settled (none alive), else 0.
+/// O(1): reads the scope's live-child counter rather than scanning CHILDREN (which
+/// retains every fid ever spawned), so `s.next` stays flat as a scope serves more.
 fn all_children_done(w: &mut Wat, g: TaskGlobals, sid: Local) {
-	let children = w.local(types::valarray_ref());
-	let n = w.local(ValType::I32);
-	let i = w.local(ValType::I32);
-	let res = w.local(ValType::I32);
-	fld(w, g, g.scopes, sid, scope::CHILDREN);
-	w.ref_cast(types::T_LIST)
-		.struct_get(types::T_LIST, 1)
-		.local_set(children);
-	fld_len(w, g, g.scopes, sid, scope::CHILDREN);
-	w.local_set(n);
-	w.i32(0).local_set(i);
-	w.i32(1).local_set(res);
-	w.block("brk", |w| {
-		w.loop_("lp", |w| {
-			w.local_get(i).local_get(n).i32_ge_s().br_if("brk");
-			w.local_get(children)
-				.local_get(i)
-				.array_get(types::T_VALARRAY);
-			let c = w.local(ValType::I32);
-			unbox_i(w);
-			w.local_set(c);
-			fld_i(w, g, g.fibers, c, fiber::ALIVE);
-			w.if_(|w| {
-				w.i32(0).local_set(res);
-				w.br("brk");
-			});
-			w.local_get(i).i32(1).i32_add().local_set(i);
-			w.br("lp");
-		});
-	});
-	w.local_get(res);
+	fld_i(w, g, g.scopes, sid, scope::LIVE);
+	w.i32_eqz();
 }

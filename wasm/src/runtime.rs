@@ -144,7 +144,8 @@ pub(crate) mod sched {
 		pub(crate) const FAIL_VAL: u32 = 9; // value — the failure
 		pub(crate) const COMPLETED: u32 = 10; // $list of settled child outcomes (for s.next), FIFO
 		pub(crate) const NEXT_WAITERS: u32 = 11; // $list of fids parked in s.next
-		pub(crate) const COUNT: u32 = 12;
+		pub(crate) const LIVE: u32 = 12; // boxed int — count of children still alive. CHILDREN holds every fid ever spawned (settled ones are never removed), so this counter is the O(1) "are all children done?" check instead of an O(n) scan over CHILDREN.
+		pub(crate) const COUNT: u32 = 13;
 	}
 	/// What a fiber is parked on (`Wait`).
 	pub(crate) mod wait {
