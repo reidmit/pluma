@@ -194,16 +194,40 @@ def fill-chars :: fun bytes int (list string) int int -> nothing = fun b n out a
 #     string.to-upper "Hello, World"   # => "HELLO, WORLD"
 public def to-upper :: fun string -> string = fun s {
 	let b = to-bytes s
+	let n = bytes.length b
 	# ASCII letters are single bytes below 128; a multi-byte character
 	# holds no byte in that range, so a per-byte map can't touch one.
-	as-string (bytes.build (bytes.length b) fun i {
+	# A read-only scan first lets an already-uppercase string (no a-z byte)
+	# skip the allocation and return unchanged -- trading one pass of reads
+	# for a traced heap object the collector would otherwise have to sweep.
+	if has-byte-in-range b n 0 97 122 {
+		as-string (bytes.build n fun i {
+			let c = bytes.get b i
+			if c >= 97 && c <= 122 {
+				c - 32
+			} else {
+				c
+			}
+		})
+	} else {
+		s
+	}
+}
+
+# True when some byte of `b[i..n)` falls in the inclusive range `[lo, hi]`.
+# The case-fold fast path uses this to detect "nothing to change" without
+# allocating.
+def has-byte-in-range :: fun bytes int int int int -> bool = fun b n i lo hi {
+	if i >= n {
+		false
+	} else {
 		let c = bytes.get b i
-		if c >= 97 && c <= 122 {
-			c - 32
+		if c >= lo && c <= hi {
+			true
 		} else {
-			c
+			has-byte-in-range b n (i + 1) lo hi
 		}
-	})
+	}
 }
 
 # Lowercases the ASCII letters A-Z. Everything else (including non-ASCII
@@ -212,14 +236,21 @@ public def to-upper :: fun string -> string = fun s {
 #     string.to-lower "Hello, World"   # => "hello, world"
 public def to-lower :: fun string -> string = fun s {
 	let b = to-bytes s
-	as-string (bytes.build (bytes.length b) fun i {
-		let c = bytes.get b i
-		if c >= 65 && c <= 90 {
-			c + 32
-		} else {
-			c
-		}
-	})
+	let n = bytes.length b
+	# Already-lowercase strings (no A-Z byte) return unchanged without
+	# allocating; see `to-upper` for the read-scan-versus-alloc trade.
+	if has-byte-in-range b n 0 65 90 {
+		as-string (bytes.build n fun i {
+			let c = bytes.get b i
+			if c >= 65 && c <= 90 {
+				c + 32
+			} else {
+				c
+			}
+		})
+	} else {
+		s
+	}
 }
 
 # Removes ASCII whitespace (spaces, tabs, newlines, and the carriage
@@ -234,7 +265,14 @@ public def trim :: fun string -> string = fun s {
 	# character boundaries and the slice stays well-formed UTF-8.
 	let lo = trim-start b n 0
 	let hi = trim-end b n
-	as-string (bytes.slice b lo hi)
+	# Nothing to trim: hand back the original rather than allocating a slice
+	# that would copy the whole string. The offsets are already computed, so
+	# this check is free.
+	if lo == 0 && hi == n {
+		s
+	} else {
+		as-string (bytes.slice b lo hi)
+	}
 }
 
 # Is `c` an ASCII whitespace byte? space / tab / newline / vertical tab /
@@ -321,7 +359,49 @@ public def split :: fun string string -> list string = fun s sep {
 		# boundaries, so `as-string` (the unchecked reinterpret) is sound here --
 		# no need to re-validate every piece through `bytes.to-string` and unwrap
 		# the `result` it returns (pure churn at this scale).
-		list.map (bytes.split (to-bytes s) (to-bytes sep)) as-string
+		#
+		# The scan builds the `string` list directly. Routing through
+		# `bytes.split` first would allocate a `list bytes` spine and a bytes
+		# box per piece, then `list.map as-string` would allocate a second spine
+		# and re-tag every box -- twice the garbage for the same result.
+		let b = to-bytes s
+		let sep-b = to-bytes sep
+		let out :: list string = []
+		split-into b sep-b (bytes.length sep-b) (bytes.length b) 0 0 out
+		out
+	}
+}
+
+# Forward scan for `split`: `i` is the cursor, `start` the open piece's first
+# byte. At each separator, push the string piece `b[start, i)` and resume past
+# it; when no further match can begin, push the final piece `b[start, n)`. The
+# match-then-jump stride is what makes empty pieces (adjacent or edge
+# separators) and the `sep`-free whole-input case fall out.
+def split-into :: fun bytes bytes int int int int (list string) -> nothing = fun b sep seplen n i start out {
+	if i + seplen > n {
+		list.push out (as-string (bytes.slice b start n))
+		()
+	} else if sep-matches-at b sep seplen i {
+		list.push out (as-string (bytes.slice b start i))
+		split-into b sep seplen n (i + seplen) (i + seplen) out
+	} else {
+		split-into b sep seplen n (i + 1) start out
+	}
+}
+
+# True when `sep` (length `seplen`) occurs at byte offset `i` in `b`, compared
+# byte-wise without slicing.
+def sep-matches-at :: fun bytes bytes int int -> bool = fun b sep seplen i {
+	sep-eq-range b sep i 0 seplen
+}
+
+def sep-eq-range :: fun bytes bytes int int int -> bool = fun b sep bi si slen {
+	if si >= slen {
+		true
+	} else if bytes.get b (bi + si) == bytes.get sep si {
+		sep-eq-range b sep bi (si + 1) slen
+	} else {
+		false
 	}
 }
 

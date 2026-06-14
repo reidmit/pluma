@@ -389,14 +389,18 @@ def parse-method :: fun string -> method = fun s {
 	}
 }
 
-# Add one `Name: value` header line to the accumulating dict, lower-casing
+# Collect one `Name: value` header line as a `(name, value)` pair, lower-casing
 # the name. Splits on the first colon, so values containing `:` survive.
-def parse-header :: fun (dict string string) string -> dict string string = fun acc line {
+# Pairs accumulate in a plain list and are handed to `dict.from-entries` once,
+# rather than rebuilding the persistent dict on every header -- a single
+# transient build instead of N path-copies up the trie.
+def parse-header :: fun (list (string, string)) string -> list (string, string) = fun acc line {
 	let kv = string.split line ":"
 	if list.length kv >= 2 {
 		let key = string.to-lower (string.trim (list.head kv ?? ""))
 		let value = string.trim (string.join (list.drop kv 1) ":")
-		dict.insert acc key value
+		list.push acc (key, value)
+		acc
 	} else {
 		acc
 	}
@@ -425,7 +429,7 @@ def parse-head :: fun bytes -> {
 	let tq = string.split target "?"
 	let path = list.head tq ?? "/"
 	let query = nth tq 1 ""
-	let headers = list.fold (list.drop lines 1) (dict.empty ()) parse-header
+	let headers = dict.from-entries (list.fold (list.drop lines 1) [] parse-header)
 	let clen = when dict.lookup headers "content-length" is some v {
 		string.to-int v ?? 0
 	} is none {
@@ -639,7 +643,7 @@ def parse-response-head :: fun bytes -> {
 	let status-line = list.head lines ?? ""
 	let sl = string.split status-line " "
 	let status = string.to-int (nth sl 1 "0") ?? 0
-	let headers = list.fold (list.drop lines 1) (dict.empty ()) parse-header
+	let headers = dict.from-entries (list.fold (list.drop lines 1) [] parse-header)
 	let clen = when dict.lookup headers "content-length" is some v {
 		string.to-int v ?? 0
 	} is none {
