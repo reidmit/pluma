@@ -151,6 +151,20 @@ pub(crate) enum Command {
 		dir: Option<String>,
 	},
 
+	/// Generate documentation for a module from its source.
+	///
+	/// Analyzes the module and emits a self-contained Pluma data module
+	/// describing each public item — its type signature and doc comment, with
+	/// example blocks split out — for a docs site to render from source.
+	Doc {
+		/// Module to document, e.g. `std/list`.
+		module: String,
+
+		/// Write the generated module to this file instead of stdout.
+		#[arg(short = 'o', long = "out", value_name = "FILE")]
+		out: Option<String>,
+	},
+
 	/// Run the language server over stdio (spawned by editor extensions).
 	LanguageServer,
 

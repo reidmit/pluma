@@ -3,6 +3,7 @@ pub mod ast;
 mod binding;
 mod compiler;
 mod diagnostic;
+pub mod docs;
 mod errors;
 mod location;
 mod module;
