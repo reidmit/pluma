@@ -5,6 +5,7 @@ mod compiler;
 mod diagnostic;
 pub mod docs;
 mod errors;
+pub mod highlight;
 mod location;
 mod module;
 mod parser;
