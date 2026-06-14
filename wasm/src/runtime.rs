@@ -957,17 +957,18 @@ pub(crate) struct TaskGlobals {
 	pub(crate) act: u32, // mut ref null $valarray — current fiber's activation stack
 	pub(crate) actlen: u32, // mut i32 — activation count
 	pub(crate) fibers: u32, // mut ref null $value — $list of fiber field-arrays (by fid)
-	pub(crate) scopes: u32, // mut ref null $value — $list of scope field-arrays (by sid)
-	pub(crate) ready: u32, // mut ref null $value — $list of ready entries (fid, focus_kind, val)
-	pub(crate) rhead: u32, // mut i32 — ready deque head cursor (pop_front)
-	pub(crate) timers: u32, // mut ref null $value — $list of timer entries (at, kind, arg)
-	pub(crate) pending: u32, // mut ref null $value — $list of scope ids to cancel between steps
-	pub(crate) now: u32, // mut i64 — virtual clock (nanoseconds)
-	pub(crate) root_kind: u32, // mut i32 — root outcome kind (0 = not done yet)
-	pub(crate) root_val: u32, // mut ref null $value — root outcome value
-	pub(crate) out_kind: u32, // mut i32 — pump output: 1 done / 2 park
-	pub(crate) out_okerr: u32, // mut i32 — on done: outcome kind (ok/err); on park: wait kind
-	pub(crate) out_val: u32, // mut ref null $value — on done: outcome value
+	pub(crate) free_fibers: u32, // mut ref null $value — $list (stack) of recyclable fids: a fid lands here once its fiber settled AND its outcome was consumed via s.next, so the slot can back a future spawn instead of growing the fibers table forever
+	pub(crate) scopes: u32,      // mut ref null $value — $list of scope field-arrays (by sid)
+	pub(crate) ready: u32,       // mut ref null $value — $list of ready entries (fid, focus_kind, val)
+	pub(crate) rhead: u32,       // mut i32 — ready deque head cursor (pop_front)
+	pub(crate) timers: u32,      // mut ref null $value — $list of timer entries (at, kind, arg)
+	pub(crate) pending: u32,     // mut ref null $value — $list of scope ids to cancel between steps
+	pub(crate) now: u32,         // mut i64 — virtual clock (nanoseconds)
+	pub(crate) root_kind: u32,   // mut i32 — root outcome kind (0 = not done yet)
+	pub(crate) root_val: u32,    // mut ref null $value — root outcome value
+	pub(crate) out_kind: u32,    // mut i32 — pump output: 1 done / 2 park
+	pub(crate) out_okerr: u32,   // mut i32 — on done: outcome kind (ok/err); on park: wait kind
+	pub(crate) out_val: u32,     // mut ref null $value — on done: outcome value
 	pub(crate) out_arg: u32, // mut i32 — on park: wait arg (fid/sid), or sleep nanos low bits unused
 	pub(crate) out_arg64: u32, // mut i64 — on park sleep: nanos
 	pub(crate) current_fiber: u32, // mut i32 — fid of the fiber the pump is currently running (or reaping). The task-local builtins (`local-get`/`-enter`/`-exit`) index `fibers[current_fiber].ENV` through it.

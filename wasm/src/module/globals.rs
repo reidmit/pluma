@@ -201,6 +201,7 @@ pub(super) fn build_globals(
 		act: task_global(arr, &null_arr),
 		actlen: task_global(ValType::I32, &zero_i32),
 		fibers: task_global(val, &null_val),
+		free_fibers: task_global(val, &null_val),
 		scopes: task_global(val, &null_val),
 		ready: task_global(val, &null_val),
 		rhead: task_global(ValType::I32, &zero_i32),

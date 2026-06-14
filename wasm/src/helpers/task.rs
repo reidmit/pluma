@@ -118,6 +118,9 @@ pub(crate) fn build_run_task_fn(
 	empty_list(&mut w);
 	push_fiber(&mut w, ROOT_SCOPE, NO_SCOPE); // root fiber: not a scope body
 	w.call(list_append).global_set(g.fibers);
+	// The recycle free-list indexes `fibers`, so reset it alongside.
+	empty_list(&mut w);
+	w.global_set(g.free_fibers);
 	// Seed the root fiber's binding env with the captured chain (empty at top level).
 	w.i32(0).local_set(root_fid);
 	set_fld(&mut w, g.fibers, root_fid, fiber::ENV, |w| {
@@ -311,6 +314,9 @@ fn emit_init_sched_state(
 	empty_list(w);
 	push_fiber(w, ROOT_SCOPE, NO_SCOPE);
 	w.call(list_append).global_set(g.fibers);
+	// The recycle free-list indexes `fibers`, so reset it alongside.
+	empty_list(w);
+	w.global_set(g.free_fibers);
 	// Initialise the ready queue BEFORE running the root body. The body
 	// (`seed_root` = the program's `main`) runs synchronously here, and a browser
 	// app's `main` can `spawn` during it (the initial mount kicking off a remote
@@ -1868,11 +1874,33 @@ pub(crate) fn build_sched_spawn_fn(list_append: u32, g: TaskGlobals) -> Function
 		.struct_get(types::T_INT, 1)
 		.i32_wrap_i64()
 		.local_set(sid);
-	list_len(&mut w, g.fibers);
-	w.local_set(fid);
+	// Pick the fid: reuse a recycled slot if the free-list has one (a settled,
+	// drained child's), else take a fresh index at the end of the fibers table.
+	let reused = w.local(ValType::I32);
+	list_len(&mut w, g.free_fibers);
+	w.i32(0).i32_gt_s();
+	w.if_else(
+		|w| {
+			// fid = free_fibers[len-1]; free_fibers = drop-last.
+			w.global_get(g.free_fibers)
+				.ref_cast(types::T_LIST)
+				.struct_get(types::T_LIST, 1);
+			list_len(w, g.free_fibers);
+			w.i32(1).i32_sub().array_get(types::T_VALARRAY);
+			unbox_i(w);
+			w.local_set(fid);
+			drop_last(w, g.free_fibers);
+			w.i32(1).local_set(reused);
+		},
+		|w| {
+			list_len(w, g.fibers);
+			w.local_set(fid);
+			w.i32(0).local_set(reused);
+		},
+	);
 
-	// fibers.append(new child fiber { scope=sid, runs_scope=none }).
-	w.global_get(g.fibers);
+	// Build the child fiber tuple { scope=sid, runs_scope=none }.
+	let ftuple = w.local(types::value_ref());
 	w.i32(types::TAG_TUPLE);
 	w.i32(0); // arity unused for internal records (read via rest)
 	w.ref_null(types::T_VALUE);
@@ -1888,7 +1916,26 @@ pub(crate) fn build_sched_spawn_fn(list_append: u32, g: TaskGlobals) -> Function
 		},
 	);
 	w.struct_new(types::T_TUPLE);
-	w.call(list_append).global_set(g.fibers);
+	w.local_set(ftuple);
+
+	// Store it: overwrite the recycled slot in place, else append a fresh slot.
+	w.local_get(reused);
+	w.if_else(
+		|w| {
+			w.global_get(g.fibers)
+				.ref_cast(types::T_LIST)
+				.struct_get(types::T_LIST, 1);
+			w.local_get(fid);
+			w.local_get(ftuple);
+			w.array_set(types::T_VALARRAY);
+		},
+		|w| {
+			w.global_get(g.fibers)
+				.local_get(ftuple)
+				.call(list_append)
+				.global_set(g.fibers);
+		},
+	);
 
 	// Capture-at-spawn: the child inherits the spawning fiber's binding env (an
 	// immutable cons-chain, so sharing the pointer is safe — a later parent `with`
@@ -2080,7 +2127,14 @@ pub(crate) fn build_on_body_done_fn(
 				.array_get(types::T_VALARRAY);
 			unbox_i(w);
 			w.local_set(c);
+			// Reap a live child still owned by THIS scope. The `SCOPE == sid` guard
+			// skips stale CHILDREN entries from fiber-slot recycling: a settled
+			// child's fid may now back a different scope's live fiber, which this
+			// scope must not cancel.
 			fld_i(w, g, g.fibers, c, fiber::ALIVE);
+			fld_i(w, g, g.fibers, c, fiber::SCOPE);
+			w.local_get(sid).i32_eq();
+			w.i32_and();
 			w.if_(|w| {
 				box_i(w, |w| {
 					w.local_get(c);
@@ -2192,12 +2246,27 @@ pub(crate) fn build_on_child_done_fn(
 			ready_push(w, g, list_append, nwfid, focus::OK, |w| {
 				push_some(w, lits, |w| push_settled(w, lits, octmp));
 			});
+			// The s.next waiter now owns a copy of this outcome, and only a manual
+			// scope ever parks a next-waiter — whose children are drained, never
+			// handle-awaited. So the settled fiber is unobservable: recycle its slot
+			// (a future spawn reuses the fid) instead of growing the fibers table
+			// for the lifetime of a long-running drain loop.
+			recycle_fiber(w, g, list_append, fid);
 		},
 		|w| {
 			set_fld(w, g.scopes, sid, scope::COMPLETED, |w| {
 				fld(w, g, g.scopes, sid, scope::COMPLETED);
 				mk_outcome(w, kind, val);
 				w.call(list_append);
+			});
+			// COMPLETED owns a copy of the outcome. On a manual scope (drained via
+			// s.next, never handle-awaited) the settled fiber is unobservable once
+			// drained, and `drain_next` reads the COMPLETED copy rather than the
+			// slot — so the fid is safe to recycle now. Non-manual scopes keep the
+			// slot: their children are read back through `try h` (RES_VAL).
+			fld_i(w, g, g.scopes, sid, scope::MANUAL);
+			w.if_(|w| {
+				recycle_fiber(w, g, list_append, fid);
 			});
 		},
 	);
@@ -2295,7 +2364,13 @@ pub(crate) fn build_cancel_scope_fn(
 					.array_get(types::T_VALARRAY);
 				unbox_i(w);
 				w.local_set(c);
+				// Only reap a live child still owned by THIS scope — `SCOPE == sid`
+				// skips stale CHILDREN entries whose fid was recycled into another
+				// scope (see `recycle_fiber`).
 				fld_i(w, g, g.fibers, c, fiber::ALIVE);
+				fld_i(w, g, g.fibers, c, fiber::SCOPE);
+				w.local_get(sid).i32_eq();
+				w.i32_and();
 				w.if_(|w| {
 					box_i(w, |w| {
 						w.local_get(c);
@@ -3432,6 +3507,18 @@ fn mk_outcome(w: &mut Wat, kind: Local, val: Local) {
 }
 
 /// Drop the last element of the `$list` in global `gl` (rebuild via slice).
+/// Return a settled, fully-observed fiber's slot to the recycle free-list (a
+/// stack of fids). A future `sched_spawn` pops it and overwrites the slot in
+/// place, so a long-running scope that drains children via `s.next` reuses slots
+/// rather than growing the `fibers` table without bound.
+fn recycle_fiber(w: &mut Wat, g: TaskGlobals, list_append: u32, fid: Local) {
+	w.global_get(g.free_fibers);
+	box_i(w, |w| {
+		w.local_get(fid);
+	});
+	w.call(list_append).global_set(g.free_fibers);
+}
+
 fn drop_last(w: &mut Wat, gl: u32) {
 	let arr = w.local(types::valarray_ref());
 	let n = w.local(ValType::I32);
