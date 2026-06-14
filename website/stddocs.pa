@@ -1,0 +1,213 @@
+# The standard-library reference. Unlike the hand-written `reference`, every word
+# here comes from the source: `pluma doc std` walks each analyzed module and emits
+# `stdlibdocs.pa` (signatures from the compiler's own inferred types, prose from the
+# `#` doc comments), and this page renders that data with the shared `prose`
+# toolkit. Regenerate the data and the docs update — they can't drift.
+#
+# One module per page, at the module's own path (`/std/list`, `/std/sys/http`): a
+# left sidebar picks the module, a right sidebar jumps to a name within it. `page`
+# takes the module name; the server passes it from the path and the client reads it
+# back at hydration, so both render the same tree.
+
+use std/css
+use std/list
+use std/view
+use prose
+use stdlibdocs
+use theme
+
+# --- layout -----------------------------------------------------------------
+
+def layout :: css.ruleset = css.rule [
+	css.display "grid",
+	css.property "grid-template-columns" "190px minmax(0, 1fr) 170px",
+	css.gap (css.rem 2.5),
+	css.property "align-items" "start",
+	css.property "padding" "1rem 0 2rem",
+	css.media "(max-width: 980px)" [css.property "grid-template-columns" "180px minmax(0, 1fr)"],
+	css.media "(max-width: 720px)" [css.property "grid-template-columns" "1fr"],
+]
+
+def rail :: css.ruleset = css.rule [
+	css.property "position" "sticky",
+	css.property "top" "1.5rem",
+	css.property "align-self" "start",
+	css.property "max-height" "calc(100vh - 3rem)",
+	css.property "overflow-y" "auto",
+	css.font-size (css.rem 0.88),
+]
+
+# The right rail (within-page jumps) folds away before the left on narrow screens.
+def rail-right :: css.ruleset = css.compose [
+	rail,
+	css.rule [css.media "(max-width: 980px)" [css.display "none"]],
+]
+
+def rail-left :: css.ruleset = css.compose [
+	rail,
+	css.rule [css.media "(max-width: 720px)" [css.display "none"]],
+]
+
+def side-title :: css.ruleset = css.rule [
+	css.property "text-transform" "uppercase",
+	css.property "letter-spacing" "0.1em",
+	css.font-size (css.rem 0.7),
+	css.font-weight "600",
+	css.color (css.hex theme.faint),
+	css.property "margin-bottom" "0.7rem",
+]
+
+def side-list :: css.ruleset = css.rule [
+	css.display "flex",
+	css.flex-direction "column",
+	css.gap (css.rem 0.05),
+]
+
+def side-item :: css.ruleset = css.rule [
+	css.property "padding" "0.22rem 0 0.22rem 0.7rem",
+	css.property "margin-left" "-0.7rem",
+	css.color (css.hex theme.muted),
+	css.property "border-left" "2px solid transparent",
+	css.property "transition" "color 0.12s ease, border-color 0.12s ease",
+	css.on "hover" [css.color (css.hex theme.accent), css.property "border-color" "#6d4aa3"],
+]
+
+# The currently-selected module in the left rail.
+def side-item-active :: css.ruleset = css.compose [
+	side-item,
+	css.rule [
+		css.color (css.hex theme.accent-deep),
+		css.property "border-left" "2px solid #6d4aa3",
+	],
+]
+
+def toc-item :: css.ruleset = css.compose [
+	side-item,
+	css.rule [css.property "font-family" theme.mono, css.font-size (css.rem 0.82)],
+]
+
+# --- content styles ---------------------------------------------------------
+
+def main-col :: css.ruleset = css.rule [
+	css.property "min-width" "0",
+	css.property "max-width" "44rem",
+]
+
+def mod-head :: css.ruleset = css.rule [
+	css.property "font-family" theme.mono,
+	css.font-size (css.rem 0.84),
+	css.color (css.hex theme.faint),
+	css.property "margin-bottom" "1rem",
+]
+
+def item :: css.ruleset = css.rule [
+	css.property "border-top" "1px solid #e9e4dc",
+	css.property "padding-top" "1.6rem",
+	css.property "margin-top" "1.8rem",
+	css.property "scroll-margin-top" "1.5rem",
+]
+
+def sig :: css.ruleset = css.rule [
+	css.property "font-family" theme.mono,
+	css.font-size (css.rem 1.0),
+	css.font-weight "600",
+	css.color (css.hex theme.accent-deep),
+	css.property "white-space" "pre-wrap",
+	css.property "margin-bottom" "0.2rem",
+]
+
+# --- module lookup ----------------------------------------------------------
+
+def empty-module :: stdlibdocs.doc-module = {name: "", namespace: "", blocks: [], items: []}
+
+# The module a path selects (by its full name, e.g. `std/list`), falling back to
+# the first when the name is empty (`/std`) or unknown.
+def current-module :: fun string -> stdlibdocs.doc-module = fun name {
+	when list.find stdlibdocs.modules fun m { m.name == name } is some m {
+		m
+	} else {
+		when list.head stdlibdocs.modules is some m {
+			m
+		} else {
+			empty-module
+		}
+	}
+}
+
+# --- rendering --------------------------------------------------------------
+
+# One doc paragraph: prose, or a fenced example block.
+def render-block :: fun stdlibdocs.doc-block -> view = fun b {
+	if b.kind == "code" {
+		prose.code b.text
+	} else {
+		prose.p b.text
+	}
+}
+
+# One documented item — `list.map :: <signature>`, anchored at `<ns>-<name>`,
+# followed by its prose and examples.
+def render-item :: fun string stdlibdocs.doc-item -> view = using view {
+	fun ns it {
+		.div [.id (ns ++ "-" ++ it.name), .styled item] [
+			.div [.styled sig] [.text (ns ++ "." ++ it.name ++ "  ::  " ++ it.signature)],
+			...list.map it.blocks render-block,
+		]
+	}
+}
+
+# Left rail: every module, linking to its page; the current one highlighted.
+def module-link :: fun string stdlibdocs.doc-module -> view = using view {
+	fun current m {
+		.a [
+			.styled if m.name == current {
+				side-item-active
+			} else {
+				side-item
+			},
+			.href ("/" ++ m.name),
+		] [.text m.name]
+	}
+}
+
+# Right rail: every item name on this page, linking to its anchor.
+def toc-link :: fun string stdlibdocs.doc-item -> view = using view {
+	fun ns it {
+		.a [.styled toc-item, .href ("#" ++ ns ++ "-" ++ it.name)] [.text it.name]
+	}
+}
+
+# --- page -------------------------------------------------------------------
+
+public def page :: fun string -> view = using view {
+	fun name {
+		let _ = theme.install-globals ()
+		let cur = current-module name
+		.div [.id "app"] [
+			.div [.styled theme.shell] [
+				theme.top-nav (),
+				.div [.styled layout] [
+					.aside [.styled rail-left] [
+						.div [.styled side-title] [.text "Modules"],
+						.div [.styled side-list] (list.map stdlibdocs.modules fun m {
+							module-link cur.name m
+						}),
+					],
+					.main [.styled main-col] [
+						.h1 [.styled prose.doc-title] [.text cur.name],
+						.div [.styled mod-head] [.text ("use " ++ cur.name)],
+						...list.map cur.blocks render-block,
+						...list.map cur.items fun it { render-item cur.namespace it },
+					],
+					.aside [.styled rail-right] [
+						.div [.styled side-title] [.text "On this page"],
+						.div [.styled side-list] (list.map cur.items fun it {
+							toc-link cur.namespace it
+						}),
+					],
+				],
+				theme.site-footer (),
+			],
+		]
+	}
+}
