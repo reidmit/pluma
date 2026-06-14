@@ -136,13 +136,48 @@ def current-module :: fun string -> stdlibdocs.doc-module = fun name {
 
 # --- rendering --------------------------------------------------------------
 
-# One doc paragraph: a fenced example block, or prose with inline markdown.
+# One highlighted token of a code block — a class-tagged span, or bare text for
+# the unclassified runs (whitespace, punctuation). The `tok-*` classes are
+# themed by `install-highlight`.
+def render-span :: fun stdlibdocs.doc-span -> view = using view {
+	fun s {
+		if s.class == "" {
+			.text s.text
+		} else {
+			.span [.class ("tok-" ++ s.class)] [.text s.text]
+		}
+	}
+}
+
+# One doc paragraph: a syntax-highlighted example block, or prose with inline
+# markdown.
 def render-block :: fun stdlibdocs.doc-block -> view = fun b {
 	if b.kind == "code" {
-		prose.code b.text
+		prose.code-of (list.map b.spans render-span)
 	} else {
 		prose.markdown b.text
 	}
+}
+
+# The syntax-highlight palette — warm, tuned for the light code background. The
+# token classes come from the compiler's own classifier (`compiler::highlight`),
+# the same one the editor uses. Registered as global `.tok-*` rules so the spans
+# stay lightweight.
+def install-highlight :: fun nothing -> nothing = fun {
+	css.global [
+		css.at ".tok-keyword" [css.color (css.hex "#553a82"), css.font-weight "600"],
+		css.at ".tok-string" [css.color (css.hex "#3d7d54")],
+		css.at ".tok-number" [css.color (css.hex "#9c5a2e")],
+		css.at ".tok-comment" [css.color (css.hex "#a39a8c"), css.property "font-style" "italic"],
+		css.at ".tok-operator" [css.color (css.hex "#86806f")],
+		css.at ".tok-function" [css.color (css.hex "#2b5a9c")],
+		css.at ".tok-type" [css.color (css.hex "#1f7a6d")],
+		css.at ".tok-interface" [css.color (css.hex "#1f7a6d")],
+		css.at ".tok-enum" [css.color (css.hex "#1f7a6d")],
+		css.at ".tok-enum-member" [css.color (css.hex "#9c5a2e")],
+		css.at ".tok-namespace" [css.color (css.hex "#6d4aa3")],
+		css.at ".tok-regexp" [css.color (css.hex "#b05a3c")],
+	]
 }
 
 # One documented item — `list.map :: <signature>`, anchored at `<ns>-<name>`,
@@ -182,6 +217,7 @@ def toc-link :: fun string stdlibdocs.doc-item -> view = using view {
 public def page :: fun string -> view = using view {
 	fun name {
 		let _ = theme.install-globals ()
+		let _ = install-highlight ()
 		let cur = current-module name
 		.div [.id "app"] [
 			.div [.styled theme.shell] [

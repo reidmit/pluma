@@ -165,6 +165,14 @@ public def code :: fun string -> view = using view {
 	}
 }
 
+# A fenced code block built from arbitrary children — e.g. syntax-highlighted
+# spans — sharing the same frame as `code`.
+public def code-of :: fun (list view) -> view = using view {
+	fun kids {
+		.pre [.styled doc-pre] [.code [] kids]
+	}
+}
+
 # A highlighted aside.
 public def note :: fun (list view) -> view = using view {
 	fun kids {
