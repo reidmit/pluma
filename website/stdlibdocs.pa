@@ -1050,8 +1050,8 @@ public def modules :: list doc-module = [
 				],
 			},
 			{
-				name: "decl",
-				signature: "enum decl",
+				name: "declaration",
+				signature: "enum declaration",
 				blocks: [
 					{
 						kind: "code",
@@ -1059,7 +1059,7 @@ public def modules :: list doc-module = [
 						spans: [
 							{class: "keyword", text: "enum"},
 							{class: "", text: " "},
-							{class: "enum", text: "decl"},
+							{class: "enum", text: "declaration"},
 							{class: "", text: " {\n\t"},
 							{class: "enum-member", text: "decl"},
 							{class: "", text: " "},
@@ -1073,7 +1073,7 @@ public def modules :: list doc-module = [
 							{class: "", text: " ("},
 							{class: "type", text: "list"},
 							{class: "", text: " "},
-							{class: "type", text: "decl"},
+							{class: "type", text: "declaration"},
 							{class: "", text: ")\n\t"},
 							{class: "enum-member", text: "media"},
 							{class: "", text: " "},
@@ -1081,7 +1081,7 @@ public def modules :: list doc-module = [
 							{class: "", text: " ("},
 							{class: "type", text: "list"},
 							{class: "", text: " "},
-							{class: "type", text: "decl"},
+							{class: "type", text: "declaration"},
 							{class: "", text: ")\n}"},
 						],
 					},
@@ -1193,25 +1193,25 @@ public def modules :: list doc-module = [
 					{kind: "p", text: "Viewport width units: `vw 50.0` => `50vw`.", spans: []},
 				],
 			},
-			{name: "color", signature: "color-value -> decl", blocks: []},
-			{name: "background", signature: "color-value -> decl", blocks: []},
-			{name: "border-color", signature: "color-value -> decl", blocks: []},
-			{name: "padding", signature: "length -> decl", blocks: []},
-			{name: "margin", signature: "length -> decl", blocks: []},
-			{name: "width", signature: "length -> decl", blocks: []},
-			{name: "height", signature: "length -> decl", blocks: []},
-			{name: "min-width", signature: "length -> decl", blocks: []},
-			{name: "max-width", signature: "length -> decl", blocks: []},
-			{name: "gap", signature: "length -> decl", blocks: []},
-			{name: "font-size", signature: "length -> decl", blocks: []},
-			{name: "border-radius", signature: "length -> decl", blocks: []},
-			{name: "top", signature: "length -> decl", blocks: []},
-			{name: "right", signature: "length -> decl", blocks: []},
-			{name: "bottom", signature: "length -> decl", blocks: []},
-			{name: "left", signature: "length -> decl", blocks: []},
+			{name: "color", signature: "color-value -> declaration", blocks: []},
+			{name: "background", signature: "color-value -> declaration", blocks: []},
+			{name: "border-color", signature: "color-value -> declaration", blocks: []},
+			{name: "padding", signature: "length -> declaration", blocks: []},
+			{name: "margin", signature: "length -> declaration", blocks: []},
+			{name: "width", signature: "length -> declaration", blocks: []},
+			{name: "height", signature: "length -> declaration", blocks: []},
+			{name: "min-width", signature: "length -> declaration", blocks: []},
+			{name: "max-width", signature: "length -> declaration", blocks: []},
+			{name: "gap", signature: "length -> declaration", blocks: []},
+			{name: "font-size", signature: "length -> declaration", blocks: []},
+			{name: "border-radius", signature: "length -> declaration", blocks: []},
+			{name: "top", signature: "length -> declaration", blocks: []},
+			{name: "right", signature: "length -> declaration", blocks: []},
+			{name: "bottom", signature: "length -> declaration", blocks: []},
+			{name: "left", signature: "length -> declaration", blocks: []},
 			{
 				name: "opacity",
-				signature: "float -> decl",
+				signature: "float -> declaration",
 				blocks: [
 					{
 						kind: "p",
@@ -1222,14 +1222,14 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "z-index",
-				signature: "int -> decl",
+				signature: "int -> declaration",
 				blocks: [
 					{kind: "p", text: "Stacking order: `z-index 10` => `z-index: 10`.", spans: []},
 				],
 			},
 			{
 				name: "line-height",
-				signature: "float -> decl",
+				signature: "float -> declaration",
 				blocks: [
 					{
 						kind: "p",
@@ -1238,20 +1238,20 @@ public def modules :: list doc-module = [
 					},
 				],
 			},
-			{name: "display", signature: "string -> decl", blocks: []},
-			{name: "position", signature: "string -> decl", blocks: []},
-			{name: "text-align", signature: "string -> decl", blocks: []},
-			{name: "flex-direction", signature: "string -> decl", blocks: []},
-			{name: "justify-content", signature: "string -> decl", blocks: []},
-			{name: "align-items", signature: "string -> decl", blocks: []},
-			{name: "font-weight", signature: "string -> decl", blocks: []},
-			{name: "font-family", signature: "string -> decl", blocks: []},
-			{name: "text-decoration", signature: "string -> decl", blocks: []},
-			{name: "cursor", signature: "string -> decl", blocks: []},
-			{name: "overflow", signature: "string -> decl", blocks: []},
+			{name: "display", signature: "string -> declaration", blocks: []},
+			{name: "position", signature: "string -> declaration", blocks: []},
+			{name: "text-align", signature: "string -> declaration", blocks: []},
+			{name: "flex-direction", signature: "string -> declaration", blocks: []},
+			{name: "justify-content", signature: "string -> declaration", blocks: []},
+			{name: "align-items", signature: "string -> declaration", blocks: []},
+			{name: "font-weight", signature: "string -> declaration", blocks: []},
+			{name: "font-family", signature: "string -> declaration", blocks: []},
+			{name: "text-decoration", signature: "string -> declaration", blocks: []},
+			{name: "cursor", signature: "string -> declaration", blocks: []},
+			{name: "overflow", signature: "string -> declaration", blocks: []},
 			{
 				name: "property",
-				signature: "string string -> decl",
+				signature: "string string -> declaration",
 				blocks: [
 					{
 						kind: "p",
@@ -1262,7 +1262,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "inline",
-				signature: "(list decl) -> string",
+				signature: "(list declaration) -> string",
 				blocks: [
 					{
 						kind: "p",
@@ -1289,7 +1289,7 @@ public def modules :: list doc-module = [
 							{class: "", text: " ("},
 							{class: "type", text: "list"},
 							{class: "", text: " "},
-							{class: "type", text: "decl"},
+							{class: "type", text: "declaration"},
 							{class: "", text: ")\n}"},
 						],
 					},
@@ -1302,7 +1302,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "rule",
-				signature: "(list decl) -> ruleset",
+				signature: "(list declaration) -> ruleset",
 				blocks: [
 					{
 						kind: "p",
@@ -1324,7 +1324,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "on",
-				signature: "string (list decl) -> decl",
+				signature: "string (list declaration) -> declaration",
 				blocks: [
 					{
 						kind: "p",
@@ -1335,7 +1335,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "media",
-				signature: "string (list decl) -> decl",
+				signature: "string (list declaration) -> declaration",
 				blocks: [
 					{
 						kind: "p",
@@ -1417,7 +1417,7 @@ public def modules :: list doc-module = [
 							{class: "", text: " ("},
 							{class: "type", text: "list"},
 							{class: "", text: " "},
-							{class: "type", text: "decl"},
+							{class: "type", text: "declaration"},
 							{class: "", text: ")\n}"},
 						],
 					},
@@ -1457,7 +1457,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "frame",
-				signature: "string (list decl) -> keyframe",
+				signature: "string (list declaration) -> keyframe",
 				blocks: [
 					{
 						kind: "p",
@@ -1473,7 +1473,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "animation",
-				signature: "keyframe-set string -> decl",
+				signature: "keyframe-set string -> declaration",
 				blocks: [
 					{
 						kind: "p",
@@ -1500,7 +1500,7 @@ public def modules :: list doc-module = [
 							{class: "", text: " ("},
 							{class: "type", text: "list"},
 							{class: "", text: " "},
-							{class: "type", text: "decl"},
+							{class: "type", text: "declaration"},
 							{class: "", text: ")\n}"},
 						],
 					},
@@ -1513,7 +1513,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "at",
-				signature: "string (list decl) -> global-rule",
+				signature: "string (list declaration) -> global-rule",
 				blocks: [
 					{
 						kind: "p",
@@ -13746,7 +13746,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				name: "style-of",
-				signature: "(list decl) -> attribute",
+				signature: "(list declaration) -> attribute",
 				blocks: [
 					{
 						kind: "p",
