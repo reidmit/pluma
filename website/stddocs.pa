@@ -150,7 +150,7 @@ def render-block :: fun stdlibdocs.doc-block -> view = fun b {
 def render-item :: fun string stdlibdocs.doc-item -> view = using view {
 	fun ns it {
 		.div [.id (ns ++ "-" ++ it.name), .styled item] [
-			.div [.styled sig] [.text (ns ++ "." ++ it.name ++ "  ::  " ++ it.signature)],
+			.div [.styled sig] [.text (it.name ++ " :: " ++ it.signature)],
 			...list.map it.blocks render-block,
 		]
 	}
