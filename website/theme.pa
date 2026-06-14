@@ -1,0 +1,203 @@
+# Shared chrome for pluma.fun — the palette, fonts, global styles, nav, footer,
+# and the HTML-document wrapper that every page reuses. Page modules (`ui`,
+# `reference`) import this so the look stays consistent and each page only has to
+# describe its own content.
+
+use std/css
+use std/view
+
+# --- palette ----------------------------------------------------------------
+#
+# Pluma's brand is warm paper + a quill-ink purple (pluma == feather/quill).
+
+public def paper :: string = "#fdfcfa"
+
+public def ink :: string = "#1f1d1a"
+
+public def muted :: string = "#6b655d"
+
+public def faint :: string = "#a8a39b"
+
+public def accent :: string = "#6d4aa3"
+
+public def accent-deep :: string = "#553a82"
+
+public def border :: string = "#e9e4dc"
+
+public def card-bg :: string = "#ffffff"
+
+public def code-bg :: string = "#1c1a26"
+
+public def code-fg :: string = "#e8e4f3"
+
+public def code-dim :: string = "#928bb4"
+
+public def code-soft :: string = "#f4f1ea"
+
+public def sans :: string = "'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif"
+
+public def serif :: string = "'Source Serif 4', Georgia, 'Times New Roman', serif"
+
+public def mono :: string = "'Source Code Pro', ui-monospace, 'SF Mono', Menlo, monospace"
+
+public def repo :: string = "https://github.com/reidmit/pluma"
+
+# Pluma interpolates `$(expr)` inside string literals, so a literal dollar that
+# should survive into displayed code is spliced in from this single-character def.
+public def dol :: string = "$"
+
+# --- global (unscoped) styles -----------------------------------------------
+#
+# Registered into the CSS collector when a page builds, on both server and client.
+
+public def install-globals :: fun nothing -> nothing = fun {
+	css.global [
+		css.at "*" [css.property "box-sizing" "border-box"],
+		css.at "html, body" [css.margin (css.px 0.0), css.padding (css.px 0.0)],
+		css.at "body" [
+			css.background (css.hex paper),
+			css.color (css.hex ink),
+			css.property "font-family" sans,
+			css.line-height 1.6,
+			css.property "-webkit-font-smoothing" "antialiased",
+		],
+		css.at "a" [css.property "color" "inherit", css.text-decoration "none"],
+		# Browsers give `code`/`pre` their own default monospace font, which
+		# overrides the family inherited from a styled `<pre>`. Pin both to our
+		# mono so every monospace surface — inline code, code blocks, the
+		# highlighted token spans inside them — uses the same typeface.
+		css.at "code, pre" [css.property "font-family" mono],
+		css.at "h1, h2, h3, p" [css.margin (css.px 0.0)],
+		css.at "::selection" [css.property "background" "rgba(109, 74, 163, 0.18)"],
+	]
+}
+
+# --- layout + chrome --------------------------------------------------------
+
+public def shell :: css.ruleset = css.rule [
+	css.property "max-width" "1080px",
+	css.property "margin" "0 auto",
+	css.property "padding" "0 1.5rem",
+]
+
+def nav :: css.ruleset = css.rule [
+	css.display "flex",
+	css.align-items "center",
+	css.justify-content "space-between",
+	css.property "padding" "1.4rem 0",
+]
+
+def brand :: css.ruleset = css.rule [
+	css.display "flex",
+	css.align-items "center",
+	css.gap (css.rem 0.5),
+	css.font-size (css.rem 1.3),
+	css.font-weight "600",
+	css.property "letter-spacing" "-0.01em",
+]
+
+def brand-mark :: css.ruleset = css.rule [css.font-size (css.rem 1.5)]
+
+def nav-links :: css.ruleset = css.rule [
+	css.display "flex",
+	css.align-items "center",
+	css.gap (css.rem 1.7),
+	css.font-size (css.rem 0.97),
+	css.color (css.hex muted),
+]
+
+public def nav-link :: css.ruleset = css.rule [
+	css.property "transition" "color 0.15s ease",
+	css.on "hover" [css.color (css.hex accent)],
+]
+
+# --- buttons ----------------------------------------------------------------
+
+def btn :: css.ruleset = css.rule [
+	css.display "inline-block",
+	css.property "border" "1px solid transparent",
+	css.property "padding" "0.7rem 1.3rem",
+	css.border-radius (css.px 10.0),
+	css.font-size (css.rem 1.0),
+	css.font-weight "600",
+	css.cursor "pointer",
+	css.property "font-family" sans,
+	css.property "transition" "all 0.15s ease",
+]
+
+public def btn-primary :: css.ruleset = css.compose [
+	btn,
+	css.rule [
+		css.background (css.hex accent),
+		css.color (css.hex "#ffffff"),
+		css.property "box-shadow" "0 6px 18px rgba(109, 74, 163, 0.22)",
+		css.on "hover" [css.background (css.hex accent-deep)],
+	],
+]
+
+public def btn-ghost :: css.ruleset = css.compose [
+	btn,
+	css.rule [
+		css.background (css.hex "#ffffff00"),
+		css.color (css.hex ink),
+		css.border-color (css.hex border),
+		css.on "hover" [css.border-color (css.hex accent), css.color (css.hex accent)],
+	],
+]
+
+# --- footer -----------------------------------------------------------------
+
+def footer :: css.ruleset = css.rule [
+	css.display "flex",
+	css.align-items "center",
+	css.justify-content "space-between",
+	css.property "flex-wrap" "wrap",
+	css.gap (css.rem 1.0),
+	css.property "border-top" "1px solid #e9e4dc",
+	css.property "padding" "2.5rem 0",
+	css.color (css.hex faint),
+	css.font-size (css.rem 0.92),
+]
+
+def footer-links :: css.ruleset = css.rule [css.display "flex", css.gap (css.rem 1.4)]
+
+# --- shared components ------------------------------------------------------
+
+public def top-nav :: fun nothing -> view = using view {
+	fun {
+		.nav [.styled nav] [
+			.a [.styled brand, .href "/"] [
+				.span [.styled brand-mark] [.text "🪶"],
+				.span [] [.text "pluma"],
+			],
+			.div [.styled nav-links] [
+				.a [.styled nav-link, .href "/start"] [.text "Get started"],
+				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
+				.a [.styled nav-link, .href "/std/list"] [.text "Stdlib"],
+				.a [.styled nav-link, .href "/playground"] [.text "Playground"],
+				.a [.styled nav-link, .href repo] [.text "GitHub"],
+			],
+		]
+	}
+}
+
+public def site-footer :: fun nothing -> view = using view {
+	fun {
+		.footer [.styled footer] [
+			.div [] [.text "© 2026 Pluma · written in Pluma"],
+			.div [.styled footer-links] [
+				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
+				.a [.styled nav-link, .href repo] [.text "GitHub"],
+			],
+		]
+	}
+}
+
+# The full HTML document for a server-rendered first paint. The `body` view is
+# already built by the time we get here (so every `view.styled` has registered its
+# rule in the CSS collector); `css.style-tag ()` then emits exactly those rules
+# into `<head>`, so the page arrives fully styled with no extra asset request.
+public def document-html :: fun string view -> string = fun title body {
+	let rendered = view.to-string body
+	"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>$(title)</title><meta name=\"description\" content=\"Pluma is a small, statically-typed functional language with full type inference and a fullstack framework that compiles to WebAssembly.\"><link rel=\"icon\" href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>🪶</text></svg>\"><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&family=Source+Sans+3:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap\" rel=\"stylesheet\">$(css.style-tag ())</head><body>$(rendered)<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+}

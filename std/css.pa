@@ -50,10 +50,10 @@ public enum length {
 # (`css.media "(...)" [...]`) block, which sit as siblings of the plain declarations --
 # there is no separate base wrapper. `css.inline`/`view.style-of` serialize the plain
 # declarations and ignore any nested blocks (an inline style can't carry them).
-public enum decl {
+public enum declaration {
 	decl string string
-	on string (list decl)
-	media string (list decl)
+	on string (list declaration)
+	media string (list declaration)
 }
 
 # --- colors -----------------------------------------------------------------
@@ -115,87 +115,87 @@ public def vw :: fun float -> length = fun n {
 
 # --- declarations: color-valued properties ----------------------------------
 
-public def color :: fun color-value -> decl = fun c {
-	decl.decl "color" (color-to-string c)
+public def color :: fun color-value -> declaration = fun c {
+	declaration.decl "color" (color-to-string c)
 }
 
-public def background :: fun color-value -> decl = fun c {
-	decl.decl "background" (color-to-string c)
+public def background :: fun color-value -> declaration = fun c {
+	declaration.decl "background" (color-to-string c)
 }
 
-public def border-color :: fun color-value -> decl = fun c {
-	decl.decl "border-color" (color-to-string c)
+public def border-color :: fun color-value -> declaration = fun c {
+	declaration.decl "border-color" (color-to-string c)
 }
 
 # --- declarations: length-valued properties ---------------------------------
 
-public def padding :: fun length -> decl = fun l {
-	decl.decl "padding" (length-to-string l)
+public def padding :: fun length -> declaration = fun l {
+	declaration.decl "padding" (length-to-string l)
 }
 
-public def margin :: fun length -> decl = fun l {
-	decl.decl "margin" (length-to-string l)
+public def margin :: fun length -> declaration = fun l {
+	declaration.decl "margin" (length-to-string l)
 }
 
-public def width :: fun length -> decl = fun l {
-	decl.decl "width" (length-to-string l)
+public def width :: fun length -> declaration = fun l {
+	declaration.decl "width" (length-to-string l)
 }
 
-public def height :: fun length -> decl = fun l {
-	decl.decl "height" (length-to-string l)
+public def height :: fun length -> declaration = fun l {
+	declaration.decl "height" (length-to-string l)
 }
 
-public def min-width :: fun length -> decl = fun l {
-	decl.decl "min-width" (length-to-string l)
+public def min-width :: fun length -> declaration = fun l {
+	declaration.decl "min-width" (length-to-string l)
 }
 
-public def max-width :: fun length -> decl = fun l {
-	decl.decl "max-width" (length-to-string l)
+public def max-width :: fun length -> declaration = fun l {
+	declaration.decl "max-width" (length-to-string l)
 }
 
-public def gap :: fun length -> decl = fun l {
-	decl.decl "gap" (length-to-string l)
+public def gap :: fun length -> declaration = fun l {
+	declaration.decl "gap" (length-to-string l)
 }
 
-public def font-size :: fun length -> decl = fun l {
-	decl.decl "font-size" (length-to-string l)
+public def font-size :: fun length -> declaration = fun l {
+	declaration.decl "font-size" (length-to-string l)
 }
 
-public def border-radius :: fun length -> decl = fun l {
-	decl.decl "border-radius" (length-to-string l)
+public def border-radius :: fun length -> declaration = fun l {
+	declaration.decl "border-radius" (length-to-string l)
 }
 
-public def top :: fun length -> decl = fun l {
-	decl.decl "top" (length-to-string l)
+public def top :: fun length -> declaration = fun l {
+	declaration.decl "top" (length-to-string l)
 }
 
-public def right :: fun length -> decl = fun l {
-	decl.decl "right" (length-to-string l)
+public def right :: fun length -> declaration = fun l {
+	declaration.decl "right" (length-to-string l)
 }
 
-public def bottom :: fun length -> decl = fun l {
-	decl.decl "bottom" (length-to-string l)
+public def bottom :: fun length -> declaration = fun l {
+	declaration.decl "bottom" (length-to-string l)
 }
 
-public def left :: fun length -> decl = fun l {
-	decl.decl "left" (length-to-string l)
+public def left :: fun length -> declaration = fun l {
+	declaration.decl "left" (length-to-string l)
 }
 
 # --- declarations: number-valued properties ---------------------------------
 
 # Opacity (0.0-1.0): `opacity 0.5` => `opacity: 0.5`.
-public def opacity :: fun float -> decl = fun n {
-	decl.decl "opacity" (fmt-num n)
+public def opacity :: fun float -> declaration = fun n {
+	declaration.decl "opacity" (fmt-num n)
 }
 
 # Stacking order: `z-index 10` => `z-index: 10`.
-public def z-index :: fun int -> decl = fun n {
-	decl.decl "z-index" (to-string n)
+public def z-index :: fun int -> declaration = fun n {
+	declaration.decl "z-index" (to-string n)
 }
 
 # Line height as a unitless multiple: `line-height 1.5` => `line-height: 1.5`.
-public def line-height :: fun float -> decl = fun n {
-	decl.decl "line-height" (fmt-num n)
+public def line-height :: fun float -> declaration = fun n {
+	declaration.decl "line-height" (fmt-num n)
 }
 
 # --- declarations: keyword-valued properties --------------------------------
@@ -204,54 +204,54 @@ public def line-height :: fun float -> decl = fun n {
 # name is still checked, so it's a step up from a fully hand-rolled style string. A
 # typed keyword layer can come later.
 
-public def display :: fun string -> decl = fun v {
-	decl.decl "display" v
+public def display :: fun string -> declaration = fun v {
+	declaration.decl "display" v
 }
 
-public def position :: fun string -> decl = fun v {
-	decl.decl "position" v
+public def position :: fun string -> declaration = fun v {
+	declaration.decl "position" v
 }
 
-public def text-align :: fun string -> decl = fun v {
-	decl.decl "text-align" v
+public def text-align :: fun string -> declaration = fun v {
+	declaration.decl "text-align" v
 }
 
-public def flex-direction :: fun string -> decl = fun v {
-	decl.decl "flex-direction" v
+public def flex-direction :: fun string -> declaration = fun v {
+	declaration.decl "flex-direction" v
 }
 
-public def justify-content :: fun string -> decl = fun v {
-	decl.decl "justify-content" v
+public def justify-content :: fun string -> declaration = fun v {
+	declaration.decl "justify-content" v
 }
 
-public def align-items :: fun string -> decl = fun v {
-	decl.decl "align-items" v
+public def align-items :: fun string -> declaration = fun v {
+	declaration.decl "align-items" v
 }
 
-public def font-weight :: fun string -> decl = fun v {
-	decl.decl "font-weight" v
+public def font-weight :: fun string -> declaration = fun v {
+	declaration.decl "font-weight" v
 }
 
-public def font-family :: fun string -> decl = fun v {
-	decl.decl "font-family" v
+public def font-family :: fun string -> declaration = fun v {
+	declaration.decl "font-family" v
 }
 
-public def text-decoration :: fun string -> decl = fun v {
-	decl.decl "text-decoration" v
+public def text-decoration :: fun string -> declaration = fun v {
+	declaration.decl "text-decoration" v
 }
 
-public def cursor :: fun string -> decl = fun v {
-	decl.decl "cursor" v
+public def cursor :: fun string -> declaration = fun v {
+	declaration.decl "cursor" v
 }
 
-public def overflow :: fun string -> decl = fun v {
-	decl.decl "overflow" v
+public def overflow :: fun string -> declaration = fun v {
+	declaration.decl "overflow" v
 }
 
 # A raw property/value pair -- the escape hatch for any property without its own
 # builder: `css.property "grid-template-columns" "1fr 1fr"`. Still us producing the
 # bytes (one declaration), not the untrusted-CSS seam (`css.raw`, deferred).
-public def property :: fun string string -> decl = decl.decl
+public def property :: fun string string -> declaration = declaration.decl
 
 # --- serialization ----------------------------------------------------------
 
@@ -261,13 +261,13 @@ public def property :: fun string string -> decl = decl.decl
 # call it directly inside `view.bind-attr "style" (fun { ... })` for a reactive style.
 # Only plain declarations are serialized -- any nested `on`/`media` block (which can
 # appear in a `css.rule` list but not in an inline style) is skipped.
-public def inline :: fun (list decl) -> string = fun decls {
+public def inline :: fun (list declaration) -> string = fun decls {
 	string.join (list.flat-map decls fun d {
-		when d is decl.decl k v {
+		when d is declaration.decl k v {
 			["$(k): $(v)"]
-		} is decl.on _ _ {
+		} is declaration.on _ _ {
 			[]
-		} is decl.media _ _ {
+		} is declaration.media _ _ {
 			[]
 		}
 	}) "; "
@@ -345,12 +345,12 @@ def color-to-string :: fun color-value -> string = fun c {
 # reads `card-<hash>` in devtools instead of a bare `c<hash>`. It never enters the
 # content hash, so dedup and the rendered CSS are unaffected.
 public enum ruleset {
-	blocks string (list decl)
+	blocks string (list declaration)
 }
 
 # Assemble a ruleset from its entries -- plain declarations and any `on`/`media`
 # blocks, mixed freely in one list.
-public def rule :: fun (list decl) -> ruleset = fun ds {
+public def rule :: fun (list declaration) -> ruleset = fun ds {
 	ruleset.blocks "" ds
 }
 
@@ -369,11 +369,11 @@ public def label :: fun string ruleset -> ruleset = fun name r {
 # A pseudo-class (or pseudo-element) variant: `on "hover" [...]` =>
 # `.<class>:hover { ... }`. Pass the suffix after the colon (`"hover"`, `"focus"`,
 # `"disabled"`); a pseudo-element needs the leading colon yourself (`":before"`).
-public def on :: fun string (list decl) -> decl = decl.on
+public def on :: fun string (list declaration) -> declaration = declaration.on
 
 # A media-query variant: `media "(max-width: 600px)" [...]` =>
 # `@media (max-width: 600px) { .<class> { ... } }`.
-public def media :: fun string (list decl) -> decl = decl.media
+public def media :: fun string (list declaration) -> declaration = declaration.media
 
 # Merge several rulesets into one: all their blocks are concatenated, so a later
 # rule's declarations win over an earlier one's (single source order, one hash, one
@@ -457,7 +457,7 @@ public def reset :: fun nothing -> nothing = fun {
 
 # One stop in an animation: an offset (`"from"`/`"to"`/`"50%"`) and its declarations.
 public enum keyframe {
-	frame string (list decl)
+	frame string (list declaration)
 }
 
 # An animation's stops, a pure value. (Type `keyframe-set`, not `keyframes`, since
@@ -467,7 +467,7 @@ public enum keyframe-set {
 }
 
 # One animation stop: `css.frame "from" [...]`, `css.frame "50%" [...]`.
-public def frame :: fun string (list decl) -> keyframe = keyframe.frame
+public def frame :: fun string (list declaration) -> keyframe = keyframe.frame
 
 # Bundle stops into an animation value.
 public def keyframes :: fun (list keyframe) -> keyframe-set = keyframe-set.stops
@@ -475,10 +475,10 @@ public def keyframes :: fun (list keyframe) -> keyframe-set = keyframe-set.stops
 # An `animation` declaration that plays `kf` with the given timing
 # (`"1s linear infinite"`), AND registers `kf` as an `@keyframes` block in the
 # collector. `css.animation spin "1s linear infinite"` => `animation: <name> 1s linear infinite`.
-public def animation :: fun keyframe-set string -> decl = fun kf timing {
+public def animation :: fun keyframe-set string -> declaration = fun kf timing {
 	let name = "k$(to-hex (hash-css (canonical-frames kf)))"
 	register name (render-keyframes name kf)
-	decl.decl "animation" "$(name) $(timing)"
+	declaration.decl "animation" "$(name) $(timing)"
 }
 
 # --- global rules -----------------------------------------------------------
@@ -500,11 +500,11 @@ public def animation :: fun keyframe-set string -> decl = fun kf timing {
 # declarations. The selector is emitted verbatim, so any at-rule with a declaration
 # body works.
 public enum global-rule {
-	at string (list decl)
+	at string (list declaration)
 }
 
 # A global rule: `css.at ":root" [...]`, `css.at "@font-face" [...]`.
-public def at :: fun string (list decl) -> global-rule = global-rule.at
+public def at :: fun string (list declaration) -> global-rule = global-rule.at
 
 # Register global rules into the collector (`selector { decls }`, unscoped). Returns
 # nothing -- it's a setup call; run it before `collect`/`style-tag`.
@@ -537,12 +537,12 @@ def canonical :: fun ruleset -> string = fun r {
 	}
 }
 
-def canon-decl :: fun decl -> string = fun d {
-	when d is decl.decl k v {
+def canon-decl :: fun declaration -> string = fun d {
+	when d is declaration.decl k v {
 		"$(k):$(v)"
-	} is decl.on sel inner {
+	} is declaration.on sel inner {
 		"on:$(sel){$(inline inner)}"
-	} is decl.media q inner {
+	} is declaration.media q inner {
 		"media:$(q){$(inline inner)}"
 	}
 }
@@ -558,11 +558,11 @@ def render-rule :: fun string ruleset -> string = fun cls r {
 			".$(cls){$(own)}"
 		}
 		let nested = string.join (list.flat-map ds fun d {
-			when d is decl.decl _ _ {
+			when d is declaration.decl _ _ {
 				[]
-			} is decl.on sel inner {
+			} is declaration.on sel inner {
 				[".$(cls):$(sel){$(inline inner)}"]
-			} is decl.media q inner {
+			} is declaration.media q inner {
 				["@media $(q){.$(cls){$(inline inner)}}"]
 			}
 		}) ""

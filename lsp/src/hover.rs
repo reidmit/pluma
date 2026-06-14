@@ -1,4 +1,5 @@
 use compiler::ast::*;
+use compiler::docs::{doc_comment_for, module_doc_comment};
 use compiler::types::Type;
 use compiler::{Module, Range};
 
@@ -50,95 +51,6 @@ pub fn build_index(module: &Module) -> Vec<HoverHit> {
 		}
 	}
 	hits
-}
-
-// The module-level doc comment: a comment block at the very top of the file,
-// separated from the first definition by a blank line so it isn't the first
-// def's own doc. Returns None if the file opens with code, or if the leading
-// comment block butts directly against the first item (then it belongs to
-// that item, and `doc_comment_for` already shows it there).
-fn module_doc_comment(module: &Module) -> Option<String> {
-	let ast = module.ast.as_ref()?;
-	module.comments.get(&0)?;
-
-	// The contiguous comment run starting at line 0.
-	let mut lines: Vec<String> = Vec::new();
-	let mut line = 0usize;
-	while let Some(text) = module.comments.get(&line) {
-		lines.push(
-			text
-				.strip_prefix(' ')
-				.unwrap_or(text)
-				.trim_end()
-				.to_string(),
-		);
-		line += 1;
-	}
-
-	// `line` is the first non-comment line. The block is a module doc only
-	// when a blank line separates it from the first item — i.e. the earliest
-	// top-level item starts strictly after `line`. If an item sits on `line`
-	// (directly attached) or there's a trailing comment on an item's line,
-	// the block belongs to that item, not the module.
-	if let Some(item_line) = first_item_line(ast) {
-		if item_line <= line {
-			return None;
-		}
-	}
-	Some(lines.join("\n"))
-}
-
-// The start line of the earliest top-level item (`use` or `def`) in the file.
-fn first_item_line(ast: &ModuleNode) -> Option<usize> {
-	let uses = ast.uses.iter().map(|u| u.range.start.line);
-	let defs = ast.body.iter().map(|d| d.range.start.line);
-	uses.chain(defs).min()
-}
-
-// The doc comment for a top-level def: the contiguous run of full-line
-// comments directly above it. We bound the search at the previous
-// top-level item's end line so a trailing comment on the line above
-// (e.g. `def prev = 1 # note`) is never mistaken for this def's doc.
-fn doc_comment_for(module: &Module, def_start_line: usize) -> Option<String> {
-	let ast = module.ast.as_ref()?;
-
-	let mut floor: isize = -1;
-	for u in &ast.uses {
-		if u.range.end.line < def_start_line {
-			floor = floor.max(u.range.end.line as isize);
-		}
-	}
-	for d in &ast.body {
-		if d.range.end.line < def_start_line {
-			floor = floor.max(d.range.end.line as isize);
-		}
-	}
-
-	// Walk upward from the line just above the def, collecting comments
-	// until a non-comment line (or the previous item) stops the run.
-	let mut lines: Vec<String> = Vec::new();
-	let mut line = def_start_line as isize - 1;
-	while line > floor {
-		let Some(text) = module.comments.get(&(line as usize)) else {
-			break;
-		};
-		// Comment text is everything after `#`; drop the conventional
-		// single leading space so `# foo` renders as `foo`.
-		lines.push(
-			text
-				.strip_prefix(' ')
-				.unwrap_or(text)
-				.trim_end()
-				.to_string(),
-		);
-		line -= 1;
-	}
-
-	if lines.is_empty() {
-		return None;
-	}
-	lines.reverse();
-	Some(lines.join("\n"))
 }
 
 pub fn lookup(hits: &[HoverHit], line: u32, character: u32) -> Option<&HoverHit> {

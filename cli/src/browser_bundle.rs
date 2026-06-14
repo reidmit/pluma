@@ -282,6 +282,72 @@ const pluma = {
     const ctrl = rpcStreams.get(token);
     if (ctrl) { rpcStreams.delete(token); ctrl.abort(); }
   },
+  // std/web/sandbox share-link — stash the encoded snippet in the URL fragment (a
+  // history replace, so back/forward stay clean) and copy the resulting absolute URL
+  // to the clipboard. Clipboard needs a secure context (https or localhost); we guard
+  // and best-effort it, since the URL is updated regardless.
+  "share-link": (p, l) => {
+    const token = readStr(p, l);
+    history.replaceState(null, "", '#' + token);
+    if (navigator.clipboard) navigator.clipboard.writeText(location.href).catch(() => {});
+  },
+  // std/web/sandbox — the playground's "Run" engine. `hex` is a wasm module the
+  // server compiled (`compile.to-wasm-hex`); decode it, instantiate it *here* in the
+  // page as its own isolated module, run its `main`, and return everything it printed.
+  // The snippet is a Sys-target module (`_entry` runs `main` to completion), so we give
+  // it a console-only `pluma` shim bound to the snippet's *own* memory — never this
+  // app's. Any host import the program reaches for that we don't implement (fs, net,
+  // db, dom) throws a clear message when called, so an unused one never blocks startup.
+  "sandbox-run-hex": (hp, hl, dst, cap) => {
+    let out = "";
+    try {
+      const bytes = hexDecode(readStr(hp, hl));
+      let smem;                                   // the snippet's exported memory
+      const su8 = () => new Uint8Array(smem.buffer);
+      const sread = (p, l) => dec.decode(su8().subarray(p, p + l));
+      const swrite = (p, lim, s) => {
+        const b = enc.encode(s);
+        const n = Math.min(b.length, lim < 0 ? 0 : lim);
+        su8().set(b.subarray(0, n), p);
+        return b.length;
+      };
+      let sErr = "";
+      const real = {
+        float_to_str: (n, p, c) =>
+          swrite(p, c, Number.isFinite(n) && Number.isInteger(n) ? n.toFixed(1) : String(n)),
+        print: (p, l) => { out += sread(p, l) + "\n"; },
+        "io-print": (p, l) => { out += sread(p, l) + "\n"; },
+        "io-print-err": (p, l) => { out += sread(p, l) + "\n"; },
+        "io-write": (p, l) => { out += sread(p, l); },
+        "io-write-err": (p, l) => { out += sread(p, l); },
+        "io-write-bytes": (p, l) => { out += sread(p, l); },
+        "io-write-err-bytes": (p, l) => { out += sread(p, l); },
+        "io-fail": (p, l) => { sErr = sread(p, l); throw new Error("io.fail: " + sErr); },
+        "io-last-error": (p, c) => swrite(p, c, sErr),
+        "io-copyout": () => {},   // unused: this shim never overflows a snippet read
+      };
+      // A Proxy so *any* import name resolves at instantiation; unimplemented ones
+      // throw only if the program actually calls them.
+      const shim = new Proxy(real, {
+        has: () => true,
+        get: (t, name) =>
+          name in t ? t[name]
+                    : () => { throw new Error(String(name) + " is not available in the playground"); },
+      });
+      const inst = new WebAssembly.Instance(new WebAssembly.Module(bytes), { pluma: shim });
+      smem = inst.exports.memory;
+      inst.exports._entry(null);
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      out += (out && !out.endsWith("\n") ? "\n" : "") + msg;
+    }
+    // Deliver the captured output the same way a host read does: write it into the
+    // caller's scratch if it fits, else stash the full bytes for `io-copyout`.
+    const ob = enc.encode(out);
+    if (ob.length <= (cap < 0 ? 0 : cap)) u8().set(ob, dst);
+    else readStash = ob.slice();
+    return ob.length;
+  },
 };
 
 async function main() {

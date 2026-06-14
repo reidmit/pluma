@@ -1,0 +1,50 @@
+# The server half of pluma.fun. One `std/sys/http` server, three responsibilities:
+#   - GET `/`          → the server-side-rendered landing page
+#   - GET `/reference` → the server-side-rendered language reference
+#   - everything else  → `rpc.dispatch`, the route table the compiler synthesizes
+#                        from `api.pa`'s `remote def`s (it handles the `/rpc/*` calls)
+#
+# Each page is rendered to HTML by `theme.document-html` for a real first paint; the
+# client then hydrates whichever page matches the path. `http.serve` binds to
+# `$PORT` when set (so `pluma dev` and a real host can hand it a port) and the
+# address below otherwise.
+
+use std/rpc
+use std/string
+use std/task
+use std/sys/http
+use playground
+use reference
+use start
+use stddocs
+use theme
+use ui
+
+def handler :: fun http.request -> task http.response = fun req {
+	if req.path == "/" {
+		task.return (http.html 200 (theme.document-html "Pluma — a fullstack functional language" (ui.page ())))
+	} else if req.path == "/reference" {
+		task.return (http.html 200 (theme.document-html "Language reference — Pluma" (reference.page ())))
+	} else if req.path == "/start" {
+		task.return (http.html 200 (theme.document-html "Get started — Pluma" (start.page ())))
+	} else if string.starts-with req.path "/std" {
+		# The path is the module name: `/std/list` → `std/list`. Bare `/std` (and
+		# any unknown name) falls back to the first module.
+		task.return (http.html 200 (theme.document-html "Standard library — Pluma" (stddocs.page (string.drop req.path 1))))
+	} else if req.path == "/playground" {
+		# The browser capabilities are inert here; the server just renders the shell, so
+		# it passes stubs that never fire (SSR drops event handlers, and the editor starts
+		# from its default example — `""` means "no shared snippet").
+		task.return (http.html 200 (theme.document-html "Playground — Pluma" (playground.page fun _hex {
+			err "the playground runs in the browser"
+		} fun { "" } fun _src {
+			()
+		})))
+	} else {
+		rpc.dispatch req
+	}
+}
+
+def main = fun {
+	http.serve "127.0.0.1:8080" handler
+}

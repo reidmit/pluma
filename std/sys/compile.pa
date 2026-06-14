@@ -1,0 +1,16 @@
+# Compiling Pluma source into a runnable program, from inside a program.
+#
+# This is what powers the browser playground. The server takes a snippet of
+# Pluma source, compiles it to a WebAssembly module, and hands that module
+# back as a plain hex string -- which the browser then runs in its own
+# sandbox (see `std/web/sandbox`). The module is built for the server/CLI
+# run profile, so its entry point runs `main` to completion and produces
+# console output, rather than starting a long-lived user interface.
+
+# Compiles `source` -- a complete single-file Pluma program -- and returns
+# the finished wasm module encoded as a lowercase hex string. On a compile
+# error you get `err` carrying the compiler's diagnostics (type errors,
+# syntax errors, and so on) as readable text.
+#
+#     try wasm = compile.to-wasm-hex "def main = fun { print 1 }"
+public def to-wasm-hex :: fun string -> result string string = built-in "compile-wasm-hex"

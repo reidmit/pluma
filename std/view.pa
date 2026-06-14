@@ -939,7 +939,7 @@ public def class-list :: fun (list (string, bool)) -> string = fun pairs {
 # A typed inline `style` attribute from a `std/css` declaration list:
 # `view.style-of [css.color (css.hex "#e11"), css.padding (css.rem 1.0)]`. For a
 # reactive style, wrap `css.inline` in `bind`: `view.bind-attr "style" (fun { css.inline [...] })`.
-public def style-of :: fun (list css.decl) -> attribute = fun decls {
+public def style-of :: fun (list css.declaration) -> attribute = fun decls {
 	attribute.static "style" (css.inline decls)
 }
 

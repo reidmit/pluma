@@ -1,0 +1,277 @@
+# The playground — type Pluma, press Run, watch it execute in your own browser.
+#
+# How it works: the "Run" button sends the source to the server, which compiles it
+# to a WebAssembly module (`api.compile-snippet`, backed by `compile.to-wasm-hex`).
+# The browser then runs that module locally and shows whatever it printed. So the
+# heavy lifting (the compiler) stays on the server, but your program runs in your own
+# sandbox — nothing you write executes on ours.
+#
+# Like the other pages, this module is target-neutral: it only uses `std/view`, so it
+# builds into both the server (for the first paint) and the client (for the live
+# behavior). The one browser-only capability — actually running the compiled module —
+# is *injected* as the `run` argument to `page`, so the server build never has to pull
+# in `std/web/sandbox`. The client passes `sandbox.run-hex`; the server passes a stub
+# that never runs (server-side rendering drops event handlers).
+
+use std/css
+use std/list
+use std/signal
+use std/task
+use std/view
+use api
+use theme
+
+# --- curated examples -------------------------------------------------------
+#
+# Short, self-contained programs that show off one idea each. They're plain
+# `\n`/`\t` strings (a literal `$(` would interpolate when *this* file compiles,
+# so the one example that shows interpolation splices it in via `theme.dol`).
+
+def ex-list :: string = "use std/list\n\n# Edit this, then press Run.\ndef main = fun {\n\tlet xs = [1, 2, 3, 4, 5]\n\tprint \"numbers:\"\n\tprint xs\n\tprint \"doubled:\"\n\tprint (list.map xs fun n { n * 2 })\n\tprint \"kept > 2:\"\n\tprint (list.filter xs fun n { n > 2 })\n}\n"
+
+def ex-fact :: string = "# Plain recursion — the type is inferred, no annotations needed.\ndef fact = fun n {\n\tif n <= 1 { 1 } else { n * fact (n - 1) }\n}\n\ndef main = fun {\n\tprint (fact 5)\n\tprint (fact 10)\n}\n"
+
+def ex-enum :: string = "# An enum, matched with `when` (checked for exhaustiveness).\nenum shape {\n\tcircle float\n\trect float float\n}\n\ndef area = fun s {\n\twhen s is shape.circle r {\n\t\t3.14159 * r * r\n\t} is shape.rect w h {\n\t\tw * h\n\t}\n}\n\ndef main = fun {\n\tprint (area (shape.circle 2.0))\n\tprint (area (shape.rect 3.0 4.0))\n}\n"
+
+def ex-trait :: string = "# One name, many types — a trait with an instance.\ntrait to-text a {\n\tto-text :: a -> string\n}\n\nimplement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}\n\ndef main = fun {\n\tprint (to-text true)\n\tprint (to-text false)\n}\n"
+
+def ex-record :: string = "# Records are structural; " ++ theme.dol ++ "(...) interpolates into a string.\ndef main = fun {\n\tlet user = { name: \"Ada\", age: 36 }\n\tprint \"" ++ theme.dol ++ "(user.name) is " ++ theme.dol ++ "(to-string user.age)\"\n}\n"
+
+# (label, source). The first is what loads on first paint.
+def examples :: list (string, string) = [
+	("List · map & filter", ex-list),
+	("Recursion · factorial", ex-fact),
+	("Enums · when", ex-enum),
+	("Traits · one name, many types", ex-trait),
+	("Records · interpolation", ex-record),
+]
+
+# The source for a picked label, falling back to the first example.
+def example-source :: fun string -> string = fun name {
+	let match = list.find examples fun pair {
+		let (label, _src) = pair
+		label == name
+	}
+	when match is some pair {
+		let (_label, src) = pair
+		src
+	} is none {
+		ex-list
+	}
+}
+
+def placeholder :: string = "Press Run to compile this program on the server and run it right here in your browser."
+
+# --- styles -----------------------------------------------------------------
+
+def wrap :: css.ruleset = css.rule [css.property "padding" "3rem 0 4rem"]
+
+def head :: css.ruleset = css.rule [
+	css.property "max-width" "44rem",
+	css.property "margin-bottom" "2rem",
+]
+
+def title :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 2.4),
+	css.line-height 1.1,
+	css.property "letter-spacing" "-0.025em",
+	css.font-weight "600",
+	css.property "margin-bottom" "0.8rem",
+]
+
+def sub :: css.ruleset = css.rule [css.font-size (css.rem 1.12), css.color (css.hex theme.muted)]
+
+def grid :: css.ruleset = css.rule [
+	css.display "grid",
+	css.property "grid-template-columns" "1fr 1fr",
+	css.gap (css.rem 1.2),
+	css.align-items "stretch",
+	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr"],
+]
+
+# `min-width: 0` here because grid items default to `min-width: auto`; without it
+# the wide code blows the column out past the viewport instead of scrolling inside.
+def col :: css.ruleset = css.rule [
+	css.display "flex",
+	css.property "flex-direction" "column",
+	css.property "min-width" "0",
+]
+
+# Each column opens with a header row (the uppercase label, plus the example
+# picker on the source side) so the two columns line up.
+def col-head :: css.ruleset = css.rule [
+	css.display "flex",
+	css.align-items "center",
+	css.justify-content "space-between",
+	css.property "margin-bottom" "0.6rem",
+	css.property "min-height" "1.7rem",
+]
+
+def lbl :: css.ruleset = css.rule [
+	css.property "text-transform" "uppercase",
+	css.property "letter-spacing" "0.1em",
+	css.font-size (css.rem 0.72),
+	css.font-weight "600",
+	css.color (css.hex theme.faint),
+]
+
+def picker :: css.ruleset = css.rule [
+	css.property "font-family" theme.sans,
+	css.font-size (css.rem 0.82),
+	css.color (css.hex theme.muted),
+	css.background (css.hex theme.card-bg),
+	css.property "border" "1px solid #e9e4dc",
+	css.border-radius (css.px 8.0),
+	css.property "padding" "0.3rem 0.5rem",
+	css.cursor "pointer",
+	css.on "hover" [css.border-color (css.hex theme.accent)],
+]
+
+# The editor and the output pane share a dark terminal-ish skin so the page reads as
+# "this is where code lives".
+def panel :: css.ruleset = css.rule [
+	css.background (css.hex theme.code-bg),
+	css.color (css.hex theme.code-fg),
+	css.border-radius (css.px 12.0),
+	css.property "padding" "1.2rem 1.3rem",
+	css.property "font-family" theme.mono,
+	css.font-size (css.rem 0.85),
+	css.line-height 1.6,
+	css.property "tab-size" "2",
+	css.property "min-height" "22rem",
+	css.property "box-shadow" "0 18px 44px -22px rgba(28, 26, 38, 0.4)",
+]
+
+def editor :: css.ruleset = css.compose [
+	panel,
+	css.rule [
+		css.property "border" "none",
+		css.property "width" "100%",
+		css.property "resize" "vertical",
+		css.property "white-space" "pre",
+		css.property "outline" "none",
+	],
+]
+
+def pane :: css.ruleset = css.compose [
+	panel,
+	css.rule [
+		css.property "margin" "0",
+		css.property "white-space" "pre-wrap",
+		css.property "overflow-x" "auto",
+		css.color (css.hex theme.code-fg),
+	],
+]
+
+def run-row :: css.ruleset = css.rule [
+	css.display "flex",
+	css.align-items "center",
+	css.gap (css.rem 1.0),
+	css.property "margin" "1.4rem 0 0",
+	css.property "flex-wrap" "wrap",
+]
+
+def hint :: css.ruleset = css.rule [css.color (css.hex theme.faint), css.font-size (css.rem 0.9)]
+
+# --- behavior ---------------------------------------------------------------
+#
+# Compile on the server, then run in the browser, funneling both outcomes into the
+# `out` signal. `run` is the injected browser runner (`sandbox.run-hex` on the
+# client). All of this lives inside the click handler, so it only ever fires after
+# hydration — the server never invokes it.
+
+def execute :: fun (fun string -> result string string) (signal string) (signal string) -> nothing = fun run src out {
+	signal.set out "Compiling…"
+	task.spawn (task.map (api.compile-snippet (signal.get src)) fun compiled {
+		when compiled is ok hex {
+			when run hex is ok printed {
+				signal.set out if printed == "" {
+					"(the program printed nothing)"
+				} else {
+					printed
+				}
+			} is err message {
+				signal.set out message
+			}
+		} is err message {
+			signal.set out message
+		}
+	})
+}
+
+# --- page -------------------------------------------------------------------
+
+# `run` executes a compiled module in the browser; `initial` supplies the starting
+# source (a shared link decodes to non-empty, otherwise ""); `share` encodes the
+# current source into a shareable URL + clipboard. All three are injected so this
+# module stays target-neutral — the server passes inert stubs, the client the real
+# browser-backed versions (see `client.pa`).
+public def page :: fun (fun string -> result string string) (fun nothing -> string) (fun string -> nothing) -> view = using view {
+	fun run initial share {
+		let _ = theme.install-globals ()
+		let start = initial ()
+		let src = signal.new if start == "" {
+			ex-list
+		} else {
+			start
+		}
+		let out = signal.new placeholder
+		let shared = signal.new false
+		.div [.id "app"] [
+			.div [.styled theme.shell] [
+				theme.top-nav (),
+				.section [.styled wrap] [
+					.div [.styled head] [
+						.h1 [.styled title] [.text "The playground"],
+						.p [.styled sub] [
+							.text "Write a little Pluma and run it. The server compiles your program to WebAssembly; your browser runs the result. Standard output shows up on the right.",
+						],
+					],
+					.div [.styled grid] [
+						.div [.styled col] [
+							.div [.styled col-head] [
+								.span [.styled lbl] [.text "Source"],
+								.select [
+									.id "examples",
+									.styled picker,
+									.on-change fun name { signal.set src (example-source name) },
+								] (list.map examples fun pair {
+									let (label, _src) = pair
+									.option [.attr "value" label] [.text label]
+								}),
+							],
+							.textarea [.id "source", .styled editor, .value src] [],
+						],
+						.div [.styled col] [
+							.div [.styled col-head] [.span [.styled lbl] [.text "Output"]],
+							.pre [.styled pane] [.text-of fun { signal.get out }],
+						],
+					],
+					.div [.styled run-row] [
+						.button [.styled theme.btn-primary, .on-click fun { execute run src out }] [
+							.text "Run ▸",
+						],
+						.button [
+							.styled theme.btn-ghost,
+							.on-click fun {
+								share (signal.get src)
+								signal.set shared true
+							},
+						] [.text "Share"],
+						.span [.styled hint] [
+							.text-of fun {
+								if signal.get shared {
+									"Link copied to your clipboard."
+								} else {
+									"Console programs only for now — file, network, and DOM access aren't wired up in the sandbox."
+								}
+							},
+						],
+					],
+				],
+				theme.site-footer (),
+			],
+		]
+	}
+}

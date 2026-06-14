@@ -20,6 +20,7 @@ use crate::net::HostNet;
 use crate::offload::Reactor;
 use crate::{BufferedIo, CapturingIo, HostIo, HostState, RunCapture, RunResult, StdioIo};
 
+mod compile;
 mod db;
 mod entropy;
 mod fs;
@@ -34,6 +35,7 @@ mod writers;
 use marshal::{get_prop, read_mem, register};
 // The native import callbacks, grouped by capability. Glob-imported so the registration
 // table below can name each `cb_*` bare (the table is the canonical `pluma.*` surface).
+use compile::cb_compile_wasm_hex;
 use db::*;
 use entropy::*;
 use fs::*;
@@ -207,6 +209,9 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-is-dir", cb_is_dir);
 	register(scope, pluma, data, "io-last-error", cb_last_error);
 	register(scope, pluma, data, "io-copyout", cb_io_copyout);
+	// std/sys/compile — the playground compile primitive (source string -> wasm hex),
+	// invoking this workspace's own compiler/ir/wasm pipeline.
+	register(scope, pluma, data, "compile-wasm-hex", cb_compile_wasm_hex);
 	// std/sys/io process surface (Process capability) — argv, env, exit.
 	register(scope, pluma, data, "io-args", cb_io_args);
 	register(scope, pluma, data, "io-env", cb_io_env);

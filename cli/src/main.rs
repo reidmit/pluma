@@ -40,6 +40,8 @@ fn main() {
 
 		Command::Test { filters, dir } => commands::test::test_command(filters, dir),
 
+		Command::Doc { module, out } => commands::doc::doc_command(module, out),
+
 		Command::LanguageServer => lsp::run(),
 
 		#[cfg(debug_assertions)]

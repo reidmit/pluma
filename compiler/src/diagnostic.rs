@@ -8,8 +8,7 @@ pub struct Diagnostic {
 	pub kind: DiagnosticKind,
 	// Stable identifier (e.g. `"E0103"`) for errors that carry one. Ad-hoc
 	// diagnostics built from a bare `Display` (CLI/usage errors) leave this
-	// `None`. The registry lives in `site/content/docs/diagnostics.md`; the
-	// source of truth is each error kind's `code()` method.
+	// `None`. The source of truth is each error kind's `code()` method.
 	pub code: Option<&'static str>,
 	// The primary one-line message.
 	pub message: String,
