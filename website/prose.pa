@@ -7,6 +7,7 @@
 
 use std/css
 use std/list
+use std/string
 use std/view
 use theme
 
@@ -175,6 +176,70 @@ public def note :: fun (list view) -> view = using view {
 public def doc-section :: fun string string (list view) -> view = using view {
 	fun id title body {
 		.section [.id id, .styled sect] [.h2 [.styled doc-h2] [.text title], ...body]
+	}
+}
+
+# --- inline markdown --------------------------------------------------------
+#
+# Doc comments use a little Markdown — `code`, **bold**, *italic*. We parse it by
+# splitting on each marker in turn: a split alternates plain / delimited segments
+# (the odd-indexed ones sit between a pair of markers). Markers don't nest, and
+# inside `code` everything is literal — enough for the prose we render.
+
+def md-plain :: fun string -> list view = using view {
+	fun s {
+		if string.is-empty s {
+			[]
+		} else {
+			[.text s]
+		}
+	}
+}
+
+def md-italic :: fun string -> list view = using view {
+	fun s {
+		list.flat-map (list.enumerate (string.split s "*")) fun part {
+			let (i, seg) = part
+			if i % 2 == 1 {
+				[.em [] [.text seg]]
+			} else {
+				md-plain seg
+			}
+		}
+	}
+}
+
+def md-bold :: fun string -> list view = using view {
+	fun s {
+		list.flat-map (list.enumerate (string.split s "**")) fun part {
+			let (i, seg) = part
+			if i % 2 == 1 {
+				[.strong [] [.text seg]]
+			} else {
+				md-italic seg
+			}
+		}
+	}
+}
+
+# Parse a string of inline Markdown into a list of view spans.
+public def inline :: fun string -> list view = using view {
+	fun s {
+		list.flat-map (list.enumerate (string.split s "`")) fun part {
+			let (i, seg) = part
+			if i % 2 == 1 {
+				[.code [.styled inline-code] [.text seg]]
+			} else {
+				md-bold seg
+			}
+		}
+	}
+}
+
+# A body paragraph whose text is rendered as inline Markdown.
+public def markdown :: fun string -> view = using view {
+	fun s {
+		.p [.styled doc-p] (inline s)
 	}
 }
 

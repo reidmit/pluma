@@ -136,12 +136,12 @@ def current-module :: fun string -> stdlibdocs.doc-module = fun name {
 
 # --- rendering --------------------------------------------------------------
 
-# One doc paragraph: prose, or a fenced example block.
+# One doc paragraph: a fenced example block, or prose with inline markdown.
 def render-block :: fun stdlibdocs.doc-block -> view = fun b {
 	if b.kind == "code" {
 		prose.code b.text
 	} else {
-		prose.p b.text
+		prose.markdown b.text
 	}
 }
 
