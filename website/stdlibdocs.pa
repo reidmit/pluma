@@ -893,6 +893,11 @@ public def modules :: list doc-module = [
 							{class: "comment", text: "# => 'a-b-c'"},
 						],
 					},
+					{
+						kind: "p",
+						text: "Glues every part into one byte array in a single pass: sums the lengths, allocates the result once, and blits each part with `sep` between -- O(total) copying and one allocation (versus the O(k) intermediate arrays a `concat` fold or tree would build).",
+						spans: [],
+					},
 				],
 			},
 			{
@@ -9304,6 +9309,11 @@ public def modules :: list doc-module = [
 							{class: "comment", text: "# => \"abc\""},
 						],
 					},
+					{
+						kind: "p",
+						text: "Glues every part into one string in a single pass: sums the lengths, allocates the result once, and blits each part with `sep` between -- O(total) copying and one allocation (versus the O(k) intermediate strings a `concat` fold or tree would build). The hot path for SSR, interpolation, and serialization.",
+						spans: [],
+					},
 				],
 			},
 			{
@@ -10360,7 +10370,7 @@ public def modules :: list doc-module = [
 			},
 			{
 				kind: "p",
-				text: "It speaks HTTP/1.1 and closes the connection after each response (`Connection: close`); keep-alive, chunked transfer, HTTP/2, and WebSockets are not handled yet.",
+				text: "It speaks HTTP/1.1 with keep-alive: a connection serves requests in turn (framed by Content-Length, including pipelined ones) until the client sends `Connection: close` or hangs up. Chunked transfer, HTTP/2, and WebSockets are not handled yet.",
 				spans: [],
 			},
 		],
