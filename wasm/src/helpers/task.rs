@@ -118,9 +118,11 @@ pub(crate) fn build_run_task_fn(
 	empty_list(&mut w);
 	push_fiber(&mut w, ROOT_SCOPE, NO_SCOPE); // root fiber: not a scope body
 	w.call(list_append).global_set(g.fibers);
-	// The recycle free-list indexes `fibers`, so reset it alongside.
+	// The recycle free-lists index `fibers`/`scopes`, so reset them alongside.
 	empty_list(&mut w);
 	w.global_set(g.free_fibers);
+	empty_list(&mut w);
+	w.global_set(g.free_scopes);
 	// Seed the root fiber's binding env with the captured chain (empty at top level).
 	w.i32(0).local_set(root_fid);
 	set_fld(&mut w, g.fibers, root_fid, fiber::ENV, |w| {
@@ -325,9 +327,11 @@ fn emit_init_sched_state(
 	empty_list(w);
 	push_fiber(w, ROOT_SCOPE, NO_SCOPE);
 	w.call(list_append).global_set(g.fibers);
-	// The recycle free-list indexes `fibers`, so reset it alongside.
+	// The recycle free-lists index `fibers`/`scopes`, so reset them alongside.
 	empty_list(w);
 	w.global_set(g.free_fibers);
+	empty_list(w);
+	w.global_set(g.free_scopes);
 	// Initialise the ready queue BEFORE running the root body. The body
 	// (`seed_root` = the program's `main`) runs synchronously here, and a browser
 	// app's `main` can `spawn` during it (the initial mount kicking off a remote
@@ -785,10 +789,11 @@ pub(crate) fn build_spawn_sub_fn(list_append: u32, g: TaskGlobals) -> Function {
 	let bf = w.local(ValType::I32);
 	let cur = w.local(ValType::I32);
 
-	// sid = |scopes|. scopes.append(new scope { manual=0, awaiter=NONE, body patched below }).
-	list_len(&mut w, g.scopes);
-	w.local_set(sid);
-	w.global_get(g.scopes);
+	// Pick a scope slot (reuse a recycled one if free) for { manual=0, awaiter=NONE,
+	// body patched below }.
+	let reused = w.local(ValType::I32);
+	let stuple = w.local(types::value_ref());
+	acquire_slot(&mut w, g.free_scopes, g.scopes, sid, reused);
 	w.i32(types::TAG_TUPLE);
 	w.i32(0); // arity unused for internal records (read via rest)
 	w.ref_null(types::T_VALUE);
@@ -807,12 +812,13 @@ pub(crate) fn build_spawn_sub_fn(list_append: u32, g: TaskGlobals) -> Function {
 		},
 	);
 	w.struct_new(types::T_TUPLE);
-	w.call(list_append).global_set(g.scopes);
+	w.local_set(stuple);
+	store_slot(&mut w, list_append, g.scopes, sid, reused, stuple);
 
-	// bf = |fibers|. Append the body fiber (scope = runs_scope = sid), patch BODY.
-	list_len(&mut w, g.fibers);
-	w.local_set(bf);
-	w.global_get(g.fibers);
+	// Body fiber (scope = runs_scope = sid), patch BODY. Reuse a fiber slot too.
+	let reused_b = w.local(ValType::I32);
+	let ftuple = w.local(types::value_ref());
+	acquire_slot(&mut w, g.free_fibers, g.fibers, bf, reused_b);
 	w.i32(types::TAG_TUPLE);
 	w.i32(0); // arity unused for internal records (read via rest)
 	w.ref_null(types::T_VALUE);
@@ -828,7 +834,8 @@ pub(crate) fn build_spawn_sub_fn(list_append: u32, g: TaskGlobals) -> Function {
 		},
 	);
 	w.struct_new(types::T_TUPLE);
-	w.call(list_append).global_set(g.fibers);
+	w.local_set(ftuple);
+	store_slot(&mut w, list_append, g.fibers, bf, reused_b, ftuple);
 	set_fld_i(&mut w, g.scopes, sid, scope::BODY, |w| {
 		w.local_get(bf);
 	});
@@ -1790,12 +1797,14 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	let bf = w.local(ValType::I32);
 	let body_task = w.local(v);
 
-	// sid = |scopes|. scopes.append(new scope { manual, awaiter=fid, body=0 }).
-	// (BODY is patched below — calling a *non-async* body runs its `s.spawn`s now,
-	// appending child fibers, so the body fiber's index isn't known until after.)
-	list_len(&mut w, g.scopes);
-	w.local_set(sid);
-	w.global_get(g.scopes);
+	// Pick a scope slot (reuse a recycled one if free) for { manual, awaiter=fid,
+	// body=0 }. (BODY is patched below — calling a *non-async* body runs its
+	// `s.spawn`s now, appending child fibers, so the body fiber's index isn't known
+	// until after.) The slot is stored before the body runs, so the body's spawns
+	// see a valid scope.
+	let reused = w.local(ValType::I32);
+	let stuple = w.local(types::value_ref());
+	acquire_slot(&mut w, g.free_scopes, g.scopes, sid, reused);
 	w.i32(types::TAG_TUPLE);
 	w.i32(0); // arity unused for internal records (read via rest)
 	w.ref_null(types::T_VALUE);
@@ -1819,7 +1828,8 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 		},
 	);
 	w.struct_new(types::T_TUPLE);
-	w.call(list_append).global_set(g.scopes);
+	w.local_set(stuple);
+	store_slot(&mut w, list_append, g.scopes, sid, reused, stuple);
 
 	// body_task = body_fn(ScopeHandle(sid)).
 	call1(
@@ -1837,10 +1847,10 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 	);
 	w.local_set(body_task);
 
-	// bf = |fibers| (now, after any spawns). Append the body fiber, patch BODY.
-	list_len(&mut w, g.fibers);
-	w.local_set(bf);
-	w.global_get(g.fibers);
+	// Body fiber (after any spawns): reuse a fiber slot if free, patch BODY.
+	let reused_b = w.local(ValType::I32);
+	let ftuple = w.local(types::value_ref());
+	acquire_slot(&mut w, g.free_fibers, g.fibers, bf, reused_b);
 	w.i32(types::TAG_TUPLE);
 	w.i32(0); // arity unused for internal records (read via rest)
 	w.ref_null(types::T_VALUE);
@@ -1856,7 +1866,8 @@ pub(crate) fn build_start_scope_fn(list_append: u32, arity1: u32, g: TaskGlobals
 		},
 	);
 	w.struct_new(types::T_TUPLE);
-	w.call(list_append).global_set(g.fibers);
+	w.local_set(ftuple);
+	store_slot(&mut w, list_append, g.fibers, bf, reused_b, ftuple);
 	set_fld_i(&mut w, g.scopes, sid, scope::BODY, |w| {
 		w.local_get(bf);
 	});
@@ -3586,11 +3597,91 @@ fn reclaim_scope(w: &mut Wat, g: TaskGlobals, list_append: u32, sid: Local) {
 		});
 	});
 	// The lists are now dead; drop them so a finalized scope holds no per-child
-	// heap. (The scope tuple itself stays in `g.scopes` — small and bounded by
-	// the residual scope-slot growth, far below the per-child cost this clears.)
+	// heap.
 	set_fld(w, g.scopes, sid, scope::CHILDREN, empty_list);
 	set_fld(w, g.scopes, sid, scope::COMPLETED, empty_list);
 	set_fld(w, g.scopes, sid, scope::NEXT_WAITERS, empty_list);
+	// The body fiber is settled too (finalize needs BD_KIND set, and its outcome
+	// was copied to BD_VAL), so recycle its slot as well.
+	let body = w.local(ValType::I32);
+	fld_i(w, g, g.scopes, sid, scope::BODY);
+	w.local_set(body);
+	recycle_fiber(w, g, list_append, body);
+	// Return the scope's own slot to the scope free-list — but only for an awaited
+	// (structured `scope as s {}`) scope, whose handle never outlives the block. Its
+	// sid is then unreferenced once finalized: never cancelled again (`cancel_scope`
+	// bails on FINALIZED), no fiber still parked on it (the awaiter is woken here), the
+	// deferred-cancel queue drains fully before any pump can reuse the sid, and stale
+	// `fiber.SCOPE`/`RUNS_SCOPE == sid` are only read CHILDREN-scoped (guarded) or
+	// against `NO_SCOPE`. A subscription scope (no awaiter, `build_spawn_sub_fn`)
+	// instead hands its sid to user code, which may `cancel-sub` it after it has
+	// settled — so its slot must NOT be reused. The slot data stays readable until a
+	// later spawn overwrites it.
+	fld_i(w, g, g.scopes, sid, scope::AWAITER);
+	w.i32(NO_AWAITER as i32).i32_ne();
+	w.if_(|w| {
+		recycle_scope(w, g, list_append, sid);
+	});
+}
+
+/// Return a finalized scope's slot to the recycle free-list (a stack of sids). A
+/// future scope creation pops it and overwrites the slot in place, so a loop of
+/// structured scopes reuses slots rather than growing the `scopes` table forever.
+fn recycle_scope(w: &mut Wat, g: TaskGlobals, list_append: u32, sid: Local) {
+	w.global_get(g.free_scopes);
+	box_i(w, |w| {
+		w.local_get(sid);
+	});
+	w.call(list_append).global_set(g.free_scopes);
+}
+
+/// Pick a slot index for a new fiber/scope: pop a recycled index off `free` if it
+/// has one, else take a fresh index at the end of `table`. Sets `idx`/`reused`
+/// (a flag `store_slot` reads to overwrite-in-place vs append).
+fn acquire_slot(w: &mut Wat, free: u32, table: u32, idx: Local, reused: Local) {
+	list_len(w, free);
+	w.i32(0).i32_gt_s();
+	w.if_else(
+		|w| {
+			// idx = free[len-1]; free = drop-last.
+			w.global_get(free)
+				.ref_cast(types::T_LIST)
+				.struct_get(types::T_LIST, 1);
+			list_len(w, free);
+			w.i32(1).i32_sub().array_get(types::T_VALARRAY);
+			unbox_i(w);
+			w.local_set(idx);
+			drop_last(w, free);
+			w.i32(1).local_set(reused);
+		},
+		|w| {
+			list_len(w, table);
+			w.local_set(idx);
+			w.i32(0).local_set(reused);
+		},
+	);
+}
+
+/// Store a freshly-built fiber/scope `tuple` into `table`: overwrite the reused
+/// slot in place, else append a fresh one. Pairs with [`acquire_slot`].
+fn store_slot(w: &mut Wat, list_append: u32, table: u32, idx: Local, reused: Local, tuple: Local) {
+	w.local_get(reused);
+	w.if_else(
+		|w| {
+			w.global_get(table)
+				.ref_cast(types::T_LIST)
+				.struct_get(types::T_LIST, 1);
+			w.local_get(idx);
+			w.local_get(tuple);
+			w.array_set(types::T_VALARRAY);
+		},
+		|w| {
+			w.global_get(table)
+				.local_get(tuple)
+				.call(list_append)
+				.global_set(table);
+		},
+	);
 }
 
 fn drop_last(w: &mut Wat, gl: u32) {
