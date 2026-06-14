@@ -62,6 +62,11 @@ public def install-globals :: fun nothing -> nothing = fun {
 			css.property "-webkit-font-smoothing" "antialiased",
 		],
 		css.at "a" [css.property "color" "inherit", css.text-decoration "none"],
+		# Browsers give `code`/`pre` their own default monospace font, which
+		# overrides the family inherited from a styled `<pre>`. Pin both to our
+		# mono so every monospace surface — inline code, code blocks, the
+		# highlighted token spans inside them — uses the same typeface.
+		css.at "code, pre" [css.property "font-family" mono],
 		css.at "h1, h2, h3, p" [css.margin (css.px 0.0)],
 		css.at "::selection" [css.property "background" "rgba(109, 74, 163, 0.18)"],
 	]
