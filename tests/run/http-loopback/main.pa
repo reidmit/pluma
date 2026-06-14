@@ -28,7 +28,7 @@ def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
 
 def client :: fun string -> task string = fun addr {
 	try conn = task.unwrap (net.connect addr)
-	try _ = task.unwrap (net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\n\r\n"))
+	try _ = task.unwrap (net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"))
 	try raw = drain conn (string.to-bytes "")
 	let _ = net.close conn
 	task.return (bytes.to-string raw ?? "<bad utf8>")

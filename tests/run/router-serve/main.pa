@@ -31,7 +31,7 @@ def drain :: fun net.connection bytes -> task (result bytes string) = fun conn a
 def call :: fun string string string -> task string = fun addr verb path {
 	try c = net.connect addr
 	when c is ok conn {
-		let raw-req = verb ++ " " ++ path ++ " HTTP/1.1\r\nHost: x\r\n\r\n"
+		let raw-req = verb ++ " " ++ path ++ " HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
 		try _ = net.write conn (string.to-bytes raw-req)
 		try resp = drain conn (string.to-bytes "")
 		let _ = net.close conn

@@ -46,7 +46,7 @@ def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
 # Send one GET and return just the response body (past the blank line).
 def client :: fun string string -> task string = fun addr path {
 	try conn = task.unwrap (net.connect addr)
-	try _ = task.unwrap (net.write conn (string.to-bytes ("GET " ++ path ++ " HTTP/1.1\r\nHost: x\r\n\r\n")))
+	try _ = task.unwrap (net.write conn (string.to-bytes ("GET " ++ path ++ " HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")))
 	try raw = drain conn (string.to-bytes "")
 	let _ = net.close conn
 	let body = bytes.to-string raw ?? "<bad utf8>"

@@ -17,9 +17,10 @@
 # served concurrently -- each runs in its own task, so a slow handler
 # (a database call, a downstream request) never blocks the others.
 #
-# It speaks HTTP/1.1 and closes the connection after each response
-# (`Connection: close`); keep-alive, chunked transfer, HTTP/2, and
-# WebSockets are not handled yet.
+# It speaks HTTP/1.1 with keep-alive: a connection serves requests in turn
+# (framed by Content-Length, including pipelined ones) until the client sends
+# `Connection: close` or hangs up. Chunked transfer, HTTP/2, and WebSockets are
+# not handled yet.
 
 use std/bytes
 use std/dict
@@ -194,10 +195,11 @@ def accept-one :: fun net.listener -> task serve-event = fun server {
 	}
 }
 
-# A handler child: run one connection to completion, then report `served`.
-# `handle-one` never fails, so this child never fails the scope.
+# A handler child: serve every request on one connection (HTTP/1.1 keep-alive),
+# then report `served`. `handle-conn` never fails, so this child never fails the
+# scope.
 def handle-child :: fun net.connection (fun request -> task response) -> task serve-event = fun conn handler {
-	try handle-one conn handler
+	try handle-conn conn handler (string.to-bytes "")
 	task.return serve-event.served
 }
 
@@ -231,33 +233,61 @@ def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun reques
 
 # Read one request off `conn`, run the handler, write the response, close.
 # Never fails the server: a read/parse problem just ends this connection.
-def handle-one :: fun net.connection (fun request -> task response) -> task nothing = fun conn handler {
-	try raw-r = read-until-headers conn (string.to-bytes "")
+# Serve requests on one connection in turn until the client signals close, sends
+# no more, or a streaming response ends the connection. `leftover` carries bytes
+# already read past the previous request — empty for a non-pipelining client, but
+# a pipelined request buffered there is handled too, since `read-until-headers`
+# returns at once when it already holds the header terminator and `parse-head`
+# splits on the first one.
+def handle-conn :: fun net.connection (fun request -> task response) bytes -> task nothing = fun conn handler leftover {
+	try raw-r = read-until-headers conn leftover
 	when raw-r is ok raw {
-		let parsed = parse-head raw
-		try body-r = read-body conn parsed.body-start parsed.content-length
-		when body-r is ok body {
-			let req = {
-				method: parsed.method,
-				path: parsed.path,
-				query: parsed.query,
-				headers: parsed.headers,
-				body,
-			}
-			try resp = handler req
-			when resp.stream-body is some events {
-				try write-all conn (serialize-stream-head resp)
-				try write-events conn events
+		# No complete request head (the peer closed, or sent a partial) — done.
+		if bytes.contains raw crlf2 {
+			let parsed = parse-head raw
+			try body-r = read-body-framed conn parsed.body-start parsed.content-length
+			when body-r is ok bl {
+				let (body, rest) = bl
+				let req = {
+					method: parsed.method,
+					path: parsed.path,
+					query: parsed.query,
+					headers: parsed.headers,
+					body,
+				}
+				try resp = handler req
+				when resp.stream-body is some events {
+					# Streaming is framed by connection close — never keep-alive.
+					try write-all conn (serialize-stream-head resp)
+					try write-events conn events
+					finish conn
+				} is none {
+					let alive = wants-keep-alive parsed.headers
+					try write-all conn (serialize resp alive)
+					if alive {
+						handle-conn conn handler rest
+					} else {
+						finish conn
+					}
+				}
+			} is err _ {
 				finish conn
-			} is none {
-				try write-all conn (serialize resp)
-				finish conn
 			}
-		} is err _ {
+		} else {
 			finish conn
 		}
 	} is err _ {
 		finish conn
+	}
+}
+
+# HTTP/1.1 keeps a connection alive by default; the client closes it only by
+# sending `Connection: close`.
+def wants-keep-alive :: fun (dict string string) -> bool = fun headers {
+	when dict.lookup headers "connection" is some v {
+		string.to-lower (string.trim v) != "close"
+	} is none {
+		true
 	}
 }
 
@@ -282,6 +312,26 @@ def read-until-headers :: fun net.connection bytes -> task (result bytes string)
 				task.return (ok acc)
 			} else {
 				read-until-headers conn (bytes.concat acc chunk)
+			}
+		} is err e {
+			task.return (err e)
+		}
+	}
+}
+
+# Like `read-body`, but also returns the bytes read past this request's body —
+# the start of the next pipelined request (empty for a non-pipelining client).
+# The server keep-alive loop threads that leftover into the next iteration.
+def read-body-framed :: fun net.connection bytes int -> task (result (bytes, bytes) string) = fun conn acc need {
+	if bytes.length acc >= need {
+		task.return (ok (bytes.slice acc 0 need, bytes.slice acc need (bytes.length acc)))
+	} else {
+		try r = net.read conn 4096
+		when r is ok chunk {
+			if bytes.is-empty chunk {
+				task.return (ok (acc, string.to-bytes ""))
+			} else {
+				read-body-framed conn (bytes.concat acc chunk) need
 			}
 		} is err e {
 			task.return (err e)
@@ -405,13 +455,19 @@ def write-all :: fun net.connection bytes -> task (result int string) = fun conn
 	}
 }
 
-# Render a response as HTTP/1.1 bytes: status line, the handler's headers,
-# the computed Content-Length, Connection: close, a blank line, then body.
-def serialize :: fun response -> bytes = fun resp {
+# Render a response as HTTP/1.1 bytes: status line, the handler's headers, the
+# computed Content-Length, the Connection header (keep-alive or close), a blank
+# line, then body. The Content-Length lets a keep-alive client frame the reply.
+def serialize :: fun response bool -> bytes = fun resp keep-alive {
 	let status-line = "HTTP/1.1 " ++ to-string resp.status ++ " " ++ status-text resp.status ++ "\r\n"
 	let header-lines = string.join (list.map (dict.entries resp.headers) render-header) ""
 	let length-line = "Content-Length: " ++ to-string (bytes.length resp.body) ++ "\r\n"
-	let head = status-line ++ header-lines ++ length-line ++ "Connection: close\r\n\r\n"
+	let conn-line = if keep-alive {
+		"Connection: keep-alive\r\n"
+	} else {
+		"Connection: close\r\n"
+	}
+	let head = status-line ++ header-lines ++ length-line ++ conn-line ++ "\r\n"
 	bytes.concat (string.to-bytes head) resp.body
 }
 
