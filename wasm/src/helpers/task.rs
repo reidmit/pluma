@@ -160,6 +160,17 @@ pub(crate) fn build_run_task_fn(
 			});
 			// Root settled?
 			w.global_get(g.root_kind).br_if("exit");
+			// Reclaim the consumed prefix of the ready queue once it's grown large
+			// and is majority-consumed, so a long-lived fiber's re-readies don't
+			// pin every settled dispatch's entry (see `compact_ready`).
+			w.global_get(g.rhead).i32(64).i32_ge_s();
+			w.global_get(g.rhead).i32(1).i32_shl();
+			list_len(w, g.ready);
+			w.i32_ge_s();
+			w.i32_and();
+			w.if_(|w| {
+				compact_ready(w, g);
+			});
 			// A ready fiber?
 			w.global_get(g.rhead);
 			list_len(w, g.ready);
@@ -387,6 +398,17 @@ pub(crate) fn build_browser_run_fn(
 					w.call(cancel_scope).drop();
 					w.br("cancels");
 				});
+			});
+			// Reclaim the consumed prefix of the ready queue (see `compact_ready`).
+			// A browser app runs forever, so without this its ready queue would grow
+			// unboundedly for the life of the page.
+			w.global_get(g.rhead).i32(64).i32_ge_s();
+			w.global_get(g.rhead).i32(1).i32_shl();
+			list_len(w, g.ready);
+			w.i32_ge_s();
+			w.i32_and();
+			w.if_(|w| {
+				compact_ready(w, g);
 			});
 			// A ready fiber? (No root-settled check — the app outlives any one fiber.)
 			w.global_get(g.rhead);
@@ -4069,6 +4091,40 @@ fn drop_first_list(w: &mut Wat, arr: Local, n: Local) {
 	w.i32(1).local_set(one);
 	w.copy_loop(types::T_VALARRAY, out, None, arr, Some(one), len);
 	crate::helpers::list::mk_list(w, out);
+}
+
+/// Reclaim the consumed prefix of the ready queue. The queue is append-only with
+/// a moving head (`rhead`): dequeue advances `rhead`, re-ready appends to `ready`.
+/// Nothing ever drops the entries below `rhead`, so the backing array — and every
+/// consumed `(fid, kind, value)` tuple it pins — grows for the whole run. A
+/// long-lived fiber that re-readies on each suspension (the serve loop, a
+/// keep-alive connection, any `yield`/`await` loop) would leak O(total dispatches).
+///
+/// Compaction rebuilds `ready` as just the live suffix `ready[rhead..len]` and
+/// resets `rhead` to 0. The caller gates this on a large, majority-consumed prefix
+/// (`rhead >= floor && 2*rhead >= len`) so each entry is copied O(1) amortized and
+/// the queue stays within ~2x the concurrently-ready set.
+fn compact_ready(w: &mut Wat, g: TaskGlobals) {
+	let src = w.local(types::valarray_ref_null());
+	let out = w.local(types::valarray_ref());
+	let keep = w.local(ValType::I32);
+	let rhead = w.local(ValType::I32);
+	w.global_get(g.rhead).local_set(rhead);
+	// keep = len(ready) - rhead.
+	list_len(w, g.ready);
+	w.local_get(rhead).i32_sub().local_set(keep);
+	w.local_get(keep)
+		.array_new_default(types::T_VALARRAY)
+		.local_set(out);
+	w.global_get(g.ready)
+		.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(src);
+	// out[0..keep] = ready[rhead..len].
+	w.copy_loop(types::T_VALARRAY, out, None, src, Some(rhead), keep);
+	crate::helpers::list::mk_list(w, out);
+	w.global_set(g.ready);
+	w.i32(0).global_set(g.rhead);
 }
 
 /// Push i32 1 if every child of scope `sid` has settled (none alive), else 0.
