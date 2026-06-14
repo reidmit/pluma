@@ -2552,6 +2552,14 @@ pub(crate) fn build_try_finalize_scope_fn(
 		set_fld_i(w, g.scopes, sid, scope::FINALIZED, |w| {
 			w.i32(1);
 		});
+		// Structured (non-manual) scope: every child has settled and been observed,
+		// so recycle their fiber slots and drop the per-child lists (see
+		// `reclaim_scope`). Manual scopes recycle incrementally via `s.next`.
+		fld_i(w, g, g.scopes, sid, scope::MANUAL);
+		w.i32_eqz();
+		w.if_(|w| {
+			reclaim_scope(w, g, list_append, sid);
+		});
 		// result = fail-fast failure, else body outcome.
 		fld_i(w, g, g.scopes, sid, scope::FAIL_SET);
 		w.if_else(
@@ -3539,6 +3547,50 @@ fn recycle_fiber(w: &mut Wat, g: TaskGlobals, list_append: u32, fid: Local) {
 		w.local_get(fid);
 	});
 	w.call(list_append).global_set(g.free_fibers);
+}
+
+/// Reclaim a finalized non-manual scope's heap: recycle every child's fiber slot
+/// (a future spawn reuses the fid) and drop the bookkeeping lists.
+///
+/// A structured scope (`task.all`, a bare `scope as s { ... }`) keeps its
+/// children's slots live while it runs because the body reads them back through
+/// `try h` (RES_VAL). Once the body has finalized, every child has settled
+/// (finalize needs LIVE==0) and every outcome has been observed and folded into
+/// the scope's result — so the slots, and the CHILDREN/COMPLETED lists that pin
+/// one entry per child, are all dead. Without this a loop of structured scopes
+/// (a per-request fan-out, a server round) grows `g.fibers` and these lists for
+/// the whole run. Manual scopes are excluded: they recycle children incrementally
+/// as `s.next` drains them, so their CHILDREN fids may already be recycled.
+fn reclaim_scope(w: &mut Wat, g: TaskGlobals, list_append: u32, sid: Local) {
+	let kids = w.local(types::valarray_ref());
+	let n = w.local(ValType::I32);
+	let i = w.local(ValType::I32);
+	let cfid = w.local(ValType::I32);
+	fld(w, g, g.scopes, sid, scope::CHILDREN);
+	w.ref_cast(types::T_LIST)
+		.struct_get(types::T_LIST, 1)
+		.local_set(kids);
+	// Logical length (field 2), not array capacity.
+	fld_len(w, g, g.scopes, sid, scope::CHILDREN);
+	w.local_set(n);
+	w.i32(0).local_set(i);
+	w.block("rc_brk", |w| {
+		w.loop_("rc_lp", |w| {
+			w.local_get(i).local_get(n).i32_ge_s().br_if("rc_brk");
+			w.local_get(kids).local_get(i).array_get(types::T_VALARRAY);
+			unbox_i(w);
+			w.local_set(cfid);
+			recycle_fiber(w, g, list_append, cfid);
+			w.local_get(i).i32(1).i32_add().local_set(i);
+			w.br("rc_lp");
+		});
+	});
+	// The lists are now dead; drop them so a finalized scope holds no per-child
+	// heap. (The scope tuple itself stays in `g.scopes` — small and bounded by
+	// the residual scope-slot growth, far below the per-child cost this clears.)
+	set_fld(w, g.scopes, sid, scope::CHILDREN, empty_list);
+	set_fld(w, g.scopes, sid, scope::COMPLETED, empty_list);
+	set_fld(w, g.scopes, sid, scope::NEXT_WAITERS, empty_list);
 }
 
 fn drop_last(w: &mut Wat, gl: u32) {
