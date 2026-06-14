@@ -39,6 +39,24 @@ build:
 build-release:
   @ cargo build --release --bin pluma
 
+# regenerate the generated stdlib-docs data module (`website/stdlibdocs.pa`) that
+# the website's /std pages render — type signatures + doc comments straight from
+# the stdlib source. Run whenever the stdlib's public surface or doc comments change.
+gen-stdlib-docs:
+  @ cargo run --bin pluma --quiet -- doc std -o website/stdlibdocs.pa
+  @ cargo run --bin pluma --quiet -- format website/stdlibdocs.pa
+
+# build the pluma.fun website: regenerate the stdlib docs from source, then the
+# fullstack bundle (server.wasm + client bundle, written alongside website/).
+website: gen-stdlib-docs
+  @ cargo run --bin pluma --quiet -- build website/
+
+# run the pluma.fun website with live-reload: regenerate the stdlib docs, then
+# `pluma dev`. Note the /std pages won't pick up stdlib doc-comment edits until you
+# re-run this (or `just gen-stdlib-docs`), since `pluma dev` doesn't regenerate them.
+dev-website: gen-stdlib-docs
+  @ cargo run --bin pluma --quiet -- dev website/
+
 # run the snapshot test suite (analyze + run + format fixtures under tests/).
 # `run` compiles each fixture to WasmGC and runs it under V8 (the deploy engine).
 # Uses cargo-nextest when present — it pools every fixture across all cores
