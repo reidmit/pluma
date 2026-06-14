@@ -277,10 +277,10 @@ def hero-section :: fun nothing -> view = using view {
 						.text "Pluma is a small, statically-typed functional language with full type inference — and a fullstack framework that compiles to WebAssembly. Your API and your UI, the same syntax, the same backend.",
 					],
 					.div [.styled cta-row] [
-						.a [.styled theme.btn-primary, .href "/reference"] [
+						.a [.styled theme.btn-primary, .href "/start"] [.text "Get started"],
+						.a [.styled theme.btn-ghost, .href "/reference"] [
 							.text "Read the reference",
 						],
-						.a [.styled theme.btn-ghost, .href theme.repo] [.text "View source →"],
 					],
 				],
 				.div [.styled code-card] [

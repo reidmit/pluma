@@ -68,4 +68,4 @@ implement ord (option a) where (ord a) {
 }
 ```
 
-see the docs site under [`site/content/docs/`](site/content/docs/) for the full language reference.
+the full language reference lives in [`website/reference.pa`](website/reference.pa) — the Pluma fullstack app that powers [pluma.fun](https://pluma.fun); run it locally with `pluma dev website/`.

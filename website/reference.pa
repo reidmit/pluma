@@ -1,13 +1,36 @@
-# The language reference page. Long-form prose that builds up the language one
-# idea at a time, each section leaning on the ones before it. Like the landing
-# page, `page` is a pure `view` builder so the server can render it to HTML and the
-# client can hydrate the same tree. There are no remote calls here — it's a static
-# document — but it shares the site chrome (nav, footer, palette) through `theme`.
+# The language reference page. It opens with a narrative tour — the language one
+# idea at a time, each section leaning on the one before — then a reference half
+# (operators, type aliases, bytes, regexes, diagnostics) for the details you look
+# up rather than read straight through. Like the landing page, `page` is a pure
+# `view` builder so the server can render it to HTML and the client can hydrate the
+# same tree. There are no remote calls here — it's a static document — but it shares
+# the site chrome (nav, footer, palette) through `theme` and its prose primitives
+# through `prose`.
 
 use std/css
 use std/list
 use std/view
+use prose
 use theme
+
+# The prose toolkit lives in `prose`; alias the high-frequency helpers so the
+# section bodies below read as plain prose rather than `prose.this`, `prose.that`.
+
+def t :: fun string -> view = prose.t
+
+def p :: fun string -> view = prose.p
+
+def pr :: fun (list view) -> view = prose.pr
+
+def h3 :: fun string -> view = prose.h3
+
+def ic :: fun string -> view = prose.ic
+
+def code :: fun string -> view = prose.code
+
+def note :: fun (list view) -> view = prose.note
+
+def doc-section :: fun string string (list view) -> view = prose.doc-section
 
 # --- doc layout -------------------------------------------------------------
 
@@ -34,7 +57,7 @@ def side-title :: css.ruleset = css.rule [
 	css.font-size (css.rem 0.72),
 	css.font-weight "600",
 	css.color (css.hex theme.faint),
-	css.property "margin-bottom" "0.9rem",
+	css.property "margin" "1.4rem 0 0.9rem",
 ]
 
 def side-list :: css.ruleset = css.rule [
@@ -58,140 +81,20 @@ def doc-main :: css.ruleset = css.rule [
 	css.property "max-width" "44rem",
 ]
 
-# --- prose ------------------------------------------------------------------
-
-def doc-title :: css.ruleset = css.rule [
+# The lead-in that separates the narrative tour from the reference half.
+def divider :: css.ruleset = css.rule [
 	css.property "font-family" theme.serif,
-	css.property "font-size" "2.6rem",
-	css.line-height 1.1,
-	css.property "letter-spacing" "-0.025em",
+	css.font-size (css.rem 1.9),
 	css.font-weight "600",
-	css.property "margin-bottom" "0.6rem",
-]
-
-def doc-sub :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.font-size (css.rem 1.25),
-	css.property "font-style" "italic",
-	css.color (css.hex theme.muted),
-	css.property "margin-bottom" "1rem",
-]
-
-def sect :: css.ruleset = css.rule [
-	css.property "scroll-margin-top" "1.5rem",
-	css.property "padding-top" "2.2rem",
-]
-
-def doc-h2 :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.font-size (css.rem 1.7),
 	css.property "letter-spacing" "-0.02em",
-	css.font-weight "600",
-	css.property "margin-bottom" "0.4rem",
+	css.property "border-top" "1px solid #e9e4dc",
+	css.property "margin-top" "3.5rem",
+	css.property "padding-top" "2.5rem",
 ]
-
-def doc-h3 :: css.ruleset = css.rule [
-	css.font-size (css.rem 1.12),
-	css.font-weight "600",
-	css.property "margin" "1.8rem 0 0.2rem",
-]
-
-def doc-p :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.font-size (css.rem 1.08),
-	css.line-height 1.75,
-	css.property "color" "#2b2823",
-	css.property "margin" "1rem 0",
-]
-
-def inline-code :: css.ruleset = css.rule [
-	css.property "font-family" theme.mono,
-	css.property "font-size" "0.88em",
-	css.background (css.hex theme.code-soft),
-	css.color (css.hex theme.accent-deep),
-	css.property "padding" "0.1em 0.36em",
-	css.border-radius (css.px 5.0),
-]
-
-def doc-pre :: css.ruleset = css.rule [
-	css.property "font-family" theme.mono,
-	css.font-size (css.rem 0.88),
-	css.line-height 1.6,
-	css.background (css.hex theme.code-soft),
-	css.property "border" "1px solid #e9e4dc",
-	css.property "color" "#2b2823",
-	css.border-radius (css.px 10.0),
-	css.property "padding" "1rem 1.2rem",
-	css.property "margin" "1.2rem 0",
-	css.property "white-space" "pre",
-	css.property "tab-size" "2",
-	css.property "overflow-x" "auto",
-]
-
-def callout :: css.ruleset = css.rule [
-	css.background (css.hex "#f3eefb"),
-	css.property "border-left" "3px solid #6d4aa3",
-	css.border-radius (css.px 8.0),
-	css.property "padding" "0.4rem 1.2rem",
-	css.property "margin" "1.4rem 0",
-]
-
-def doc-cta :: css.ruleset = css.rule [
-	css.display "flex",
-	css.gap (css.rem 0.8),
-	css.property "flex-wrap" "wrap",
-	css.property "margin-top" "1.6rem",
-]
-
-# --- prose helpers ----------------------------------------------------------
-
-def t :: fun string -> view = view.text
-
-def p :: fun string -> view = using view {
-	fun s {
-		.p [.styled doc-p] [.text s]
-	}
-}
-
-def pr :: fun (list view) -> view = using view {
-	fun kids {
-		.p [.styled doc-p] kids
-	}
-}
-
-def h3 :: fun string -> view = using view {
-	fun s {
-		.h3 [.styled doc-h3] [.text s]
-	}
-}
-
-def ic :: fun string -> view = using view {
-	fun s {
-		.code [.styled inline-code] [.text s]
-	}
-}
-
-def code :: fun string -> view = using view {
-	fun s {
-		.pre [.styled doc-pre] [.code [] [.text s]]
-	}
-}
-
-def note :: fun (list view) -> view = using view {
-	fun kids {
-		.div [.styled callout] kids
-	}
-}
-
-def doc-section :: fun string string (list view) -> view = using view {
-	fun id title body {
-		.section [.id id, .styled sect] [.h2 [.styled doc-h2] [.text title], ...body]
-	}
-}
 
 # --- table of contents ------------------------------------------------------
 
-def toc :: list (string, string) = [
+def toc-tour :: list (string, string) = [
 	("intro", "A first look"),
 	("values", "Values & types"),
 	("bindings", "let and def"),
@@ -208,6 +111,14 @@ def toc :: list (string, string) = [
 	("fullstack", "Going fullstack"),
 ]
 
+def toc-ref :: list (string, string) = [
+	("operators", "Operators"),
+	("aliases", "Type aliases"),
+	("bytes", "Bytes"),
+	("regex", "Regular expressions"),
+	("diagnostics", "Diagnostics"),
+]
+
 def side-link :: fun (string, string) -> view = using view {
 	fun entry {
 		let (id, title) = entry
@@ -215,7 +126,7 @@ def side-link :: fun (string, string) -> view = using view {
 	}
 }
 
-# --- sections ---------------------------------------------------------------
+# --- tour sections ----------------------------------------------------------
 
 def sec-intro :: view = doc-section "intro" "A first look" [
 	p "Pluma is a small functional language. This page walks through it from the ground up — each idea builds on the one before, so reading top to bottom is the intended path. You only need to know how to program; we'll define the rest as we go.",
@@ -522,13 +433,413 @@ def sec-fullstack :: view = doc-section "fullstack" "From here: the whole stack"
 	code "remote def greet :: fun string -> task string =\n\tfun name { task.return (\"hi, \" ++ name) }",
 	p "Pair that with signals for reactive UI and server-side rendering, and one language carries you from the database to the DOM. The example apps in the repository are the best next step — they're complete, runnable programs.",
 	using view {
-		.div [.styled doc-cta] [
-			.a [.styled theme.btn-primary, .href (theme.repo ++ "/tree/main/examples")] [
+		.div [.styled prose.doc-cta] [
+			.a [.styled theme.btn-primary, .href "/start"] [.text "Get started →"],
+			.a [.styled theme.btn-ghost, .href (theme.repo ++ "/tree/main/examples")] [
 				.text "Browse the examples",
 			],
-			.a [.styled theme.btn-ghost, .href "/"] [.text "← Back to home"],
 		]
 	},
+]
+
+# --- reference sections -----------------------------------------------------
+
+def sec-operators :: view = doc-section "operators" "Operators" [
+	pr [
+		t "Arithmetic and comparison operators are overloaded over ",
+		ic "int",
+		t " and ",
+		ic "float",
+		t " through traits — the same ",
+		ic "+",
+		t " works on both, and a generic ",
+		ic "fun x { x + x }",
+		t " stays polymorphic. There is no dotted float operator set, and no implicit promotion.",
+	],
+	h3 "Arithmetic",
+	prose.table3 ("Operator", "Signature", "Meaning") [
+		("+", "numeric a => a a -> a", "Addition"),
+		("-", "numeric a => a a -> a", "Subtraction, and unary negation"),
+		("*", "numeric a => a a -> a", "Multiplication"),
+		(
+			"/",
+			"numeric a => a a -> a",
+			"Division — integer division on int, true division on float",
+		),
+		("%", "int int -> int / float float -> float", "Remainder"),
+	],
+	pr [
+		t "The two operands must have the same type, so ",
+		ic "2 + 3.5",
+		t " is a type error rather than a silent promotion. ",
+		ic "%",
+		t " is not a trait method; it resolves to int or float by its operands.",
+	],
+	h3 "Comparison",
+	pr [
+		t "The ordering operators desugar to ",
+		ic "compare",
+		t " (the ",
+		ic "ord",
+		t " trait) plus a check on the result, so they work on any ordered type. ",
+		ic "==",
+		t " and ",
+		ic "!=",
+		t " compare any two values of the same type structurally.",
+	],
+	prose.table3 ("Operator", "Signature", "Meaning") [
+		("<", "ord a => a a -> bool", "Less than"),
+		(">", "ord a => a a -> bool", "Greater than"),
+		("<=", "ord a => a a -> bool", "Less than or equal"),
+		(">=", "ord a => a a -> bool", "Greater than or equal"),
+		("==", "a a -> bool", "Structural equality"),
+		("!=", "a a -> bool", "Structural inequality"),
+	],
+	h3 "Logical, string, and coalesce",
+	prose.table3 ("Operator", "Signature", "Meaning") [
+		("&&", "bool bool -> bool", "Logical and (short-circuiting)"),
+		("||", "bool bool -> bool", "Logical or (short-circuiting)"),
+		("++", "string string -> string", "String concatenation"),
+		("??", "(option a) a -> a", "The contained value if some/ok, else the right-hand default"),
+	],
+	pr [
+		t "The coalesce operator ",
+		ic "??",
+		t " also works on ",
+		ic "result",
+		t ". It is lazy in its right operand and right-associative, so defaults chain: ",
+		ic "a ?? b ?? c",
+		t ". It is the recovering dual of ",
+		ic "try",
+		t ".",
+	],
+	h3 "Bitwise",
+	pr [
+		t "These treat an ",
+		ic "int",
+		t " as 64 two's-complement bits. They are int-only, and each is also a function in ",
+		ic "std/bit",
+		t " for use in pipelines.",
+	],
+	prose.table3 ("Operator", "Signature", "Meaning") [
+		("&", "int int -> int", "Bitwise and"),
+		("|", "int int -> int", "Bitwise or"),
+		("^", "int int -> int", "Bitwise xor"),
+		("<<", "int int -> int", "Shift left (zero-fill)"),
+		(">>", "int int -> int", "Shift right, arithmetic (sign-preserving)"),
+		(">>>", "int int -> int", "Shift right, logical (zero-fill)"),
+		("~", "int -> int", "Bitwise not (prefix)"),
+	],
+	pr [
+		t "Unlike C, the bitwise operators bind ",
+		t "tighter",
+		t " than comparison, so ",
+		ic "x & mask == 0",
+		t " parses as ",
+		ic "(x & mask) == 0",
+		t ". Among themselves: shifts tightest, then ",
+		ic "&",
+		t ", then ",
+		ic "^",
+		t ", then ",
+		ic "|",
+		t ".",
+	],
+	h3 "Pipe",
+	pr [
+		t "The pipe ",
+		ic "|>",
+		t " threads its left operand in as the ",
+		t "first",
+		t " argument of the call on its right, so ",
+		ic "x |> f a b",
+		t " is ",
+		ic "f x a b",
+		t ". It binds looser than everything else and is left-associative, so a chain reads top to bottom:",
+	],
+	code "[1, 2, 3, 4, 5]\n\t|> list.filter fun n { n > 2 }\n\t|> list.map fun n { n * 10 }\n\t|> print",
+]
+
+def sec-aliases :: view = doc-section "aliases" "Type aliases and nominal types" [
+	p "The tour built up records and enums. Two rules round out the type system: how to give a type a name, and when two types count as the same.",
+	h3 "Aliases",
+	pr [
+		t "An ",
+		ic "alias",
+		t " introduces a named type. There are two forms — a record shape (fields use ",
+		ic "::",
+		t "), and a bare type expression:",
+	],
+	code "alias point {\n\tx :: float\n\ty :: float\n}\n\nalias number-list list int",
+	pr [
+		t "An alias is just a name for a type — it introduces no new identity. ",
+		ic "point",
+		t " and ",
+		ic "{x: float, y: float}",
+		t " are the very same type, interchangeable everywhere.",
+	],
+	h3 "Nominal enums, structural records",
+	pr [
+		t "Enums are ",
+		t "nominal",
+		t ": each carries a fully-qualified name internally, so two enums with identical variants but different names (or modules) are distinct types and won't unify. That's why a variant is always reached through its enum — ",
+		ic "color.red",
+		t ", ",
+		ic "shape.circle",
+		t " — mirroring how you name the type itself.",
+	],
+	pr [
+		t "Records, by contrast, are ",
+		t "structural",
+		t " and row-polymorphic: there's no nominal record type. A function that reads a couple of fields stays generic over whatever else the record carries.",
+	],
+	code "# name-of has type {name: a, ...} -> a\ndef name-of = fun r { r.name }",
+	pr [
+		t "The two built-in enums ",
+		ic "option",
+		t " and ",
+		ic "result",
+		t " are seeded into every module — no ",
+		ic "use",
+		t " needed — and they are the one exception to qualified variants: ",
+		ic "some",
+		t ", ",
+		ic "none",
+		t ", ",
+		ic "ok",
+		t ", and ",
+		ic "err",
+		t " are written bare.",
+	],
+]
+
+def sec-bytes :: view = doc-section "bytes" "Bytes" [
+	pr [
+		t "Use ",
+		ic "bytes",
+		t " for binary data — wire formats, hashes, anything that isn't necessarily text. Literals use single quotes:",
+	],
+	code "let greeting   = 'hello'\nlet png-header = '\\x89PNG\r\n\\x1a\n'\nlet empty      = ''",
+	pr [
+		t "Literals support ",
+		ic "\\\\",
+		t ", ",
+		ic "\\'",
+		t ", ",
+		ic "\\0",
+		t ", ",
+		ic "\t",
+		t ", ",
+		ic "\r",
+		t ", ",
+		ic "\n",
+		t ", and ",
+		ic "\\xNN",
+		t ". They do not interpolate — ",
+		ic (theme.dol ++ "(...)"),
+		t " lives on ",
+		ic "string",
+		t ".",
+	],
+	h3 "Distinct from string",
+	pr [
+		t "Bytes and strings are different types with no implicit conversion. The bridge is explicit — encoding is infallible, decoding can fail:",
+	],
+	code "string.to-bytes :: fun string -> bytes\nbytes.to-string :: fun bytes -> result string string",
+	h3 "The std/bytes module",
+	p "A parallel surface to std/string, plus list conversions:",
+	code "use std/bytes\n\nbytes.length b           # int — byte count\nbytes.at b i             # option int — none if out of bounds\nbytes.slice b start end  # clamp-to-bounds\nbytes.concat a b\nbytes.to-list b          # list int\nbytes.from-list xs       # result bytes string\nbytes.split b sep\nbytes.join parts sep",
+	pr [
+		t "Bytes have prelude ",
+		ic "hash",
+		t " and ",
+		ic "ord",
+		t " instances (ordering is byte-lexicographic), so they work as map keys with no setup. Byte-aware file I/O lives in ",
+		ic "std/sys/fs",
+		t " (",
+		ic "fs.read-file-bytes",
+		t ", ",
+		ic "fs.write-file-bytes",
+		t "), and survives non-UTF-8 contents.",
+	],
+]
+
+def sec-regex :: view = doc-section "regex" "Regular expressions" [
+	pr [
+		t "Pluma's regexes are a structured, whitespace-tolerant DSL — closer to a small parser than to PCRE. Patterns compose ",
+		t "atoms",
+		t " (string literals, named classes, anchors) with combinators for sequence, alternation, grouping, and repetition. Whitespace between atoms is meaningless, so a pattern can lay out across lines:",
+	],
+	code "let phone = `\n\t^\n\t\"(\" digit{3} \")\"\n\t\" \"\n\tdigit{3} \"-\" digit{4}\n\t$\n`",
+	pr [
+		t "A literal is delimited by backticks and produces a value of the primitive type ",
+		ic "regex",
+		t ", which you test and extract from with ",
+		ic "std/regex",
+		t ". An empty regex is a parse error.",
+	],
+	h3 "Atoms and classes",
+	pr [
+		t "Unlike most flavors, the building block is a ",
+		t "string literal",
+		t ", not a single character — so metacharacters never need escaping at the regex level. For \"any character of a kind,\" use a named class instead of ",
+		ic "\\\\d",
+		t "-style shorthands:",
+	],
+	prose.table2 ("Name", "Matches") [
+		("digit", "A single ASCII digit (0–9)"),
+		("letter", "A single ASCII letter (A–Z, a–z)"),
+		("word", "A single letter, digit, or _"),
+		("whitespace", "A space, tab, newline, or carriage return"),
+		("any", "Any single character"),
+	],
+	code "`\"hello\"`               # the exact characters\n`\"color: \" \"red\"`       # two atoms, in sequence\n`digit \"-\" digit`       # a class mixed with literals\n`letter (digit | \"-\")*`  # alternation inside a group",
+	h3 "Alternation, grouping, captures",
+	pr [
+		ic "|",
+		t " tries the left side first, then the right. Parentheses group a sub-pattern (groups are non-capturing). To capture by name, use the angle-bracket form ",
+		ic "<name: ...>",
+		t ":",
+	],
+	code "`\"yes\" | \"no\"`\n`\"color: \" (\"red\" | \"green\" | \"blue\")`\n`<key: letter+> \"=\" <val: digit+>`",
+	h3 "Quantifiers",
+	p "A quantifier applies to the atom or group immediately to its left.",
+	prose.table2 ("Syntax", "Meaning") [
+		("x?", "Zero or one"),
+		("x*", "Zero or more"),
+		("x+", "One or more"),
+		("x{n}", "Exactly n"),
+		("x{n,}", "At least n"),
+		("x{,m}", "At most m"),
+		("x{n,m}", "Between n and m, inclusive"),
+	],
+	h3 "Anchors",
+	p "Anchors are zero-width — they assert a position rather than consume input. A quantifier on an anchor is a parse error.",
+	prose.table2 ("Symbol", "Asserts") [
+		("^", "The start of the input"),
+		("$", "The end of the input"),
+		("%", "A word boundary (between a word and non-word character)"),
+	],
+	h3 "Using std/regex",
+	code "use std/regex\n\nregex.matches       :: fun regex string -> bool\nregex.find          :: fun regex string -> option regex.match\nregex.find-all      :: fun regex string -> list regex.match\nregex.named-capture :: fun regex string string -> option string\nregex.replace       :: fun regex string string -> string\nregex.split         :: fun regex string -> list string",
+	p "Every match surfaces as a record — the text, its byte offsets, and the named captures that fired:",
+	code "alias regex.match {\n\ttext   :: string,\n\tstart  :: int,\n\tend    :: int,\n\tgroups :: dict string string,\n}",
+	code "use std/regex as re\n\ndef pair = `<key: letter+> \"=\" <val: digit+>`\n\ndef main = fun {\n\twhen re.find pair \"size=42\" is some m {\n\t\tprint m.text                     # size=42\n\t} is none {\n\t\tprint \"no match\"\n\t}\n}",
+	note [
+		pr [
+			t "Coming from PCRE: ",
+			ic "\\\\d \\\\w \\\\s .",
+			t " become the bare names ",
+			ic "digit word whitespace any",
+			t "; ",
+			ic "\\\\b",
+			t " becomes ",
+			ic "%",
+			t "; all groups are non-capturing; and ",
+			ic "matches",
+			t "/",
+			ic "find",
+			t " are unanchored — pin them with ",
+			ic "^",
+			t " and ",
+			ic "$",
+			t ".",
+		],
+	],
+]
+
+def sec-diagnostics :: view = doc-section "diagnostics" "Diagnostics and error codes" [
+	pr [
+		t "When the compiler rejects a program it emits one or more ",
+		t "diagnostics",
+		t ". Each carries a ",
+		t "stable code",
+		t " — it never changes meaning across releases, so it's safe to link to, filter on, or cite.",
+	],
+	code "error[E0100]: Name `lenght` is not defined.\n  ╭─▸ src/main.pa:3:12\n  │\n3 │ def main = lenght\n  │            ^^^^^^\n  │\n  ╰─ help: did you mean `length`?",
+	pr [
+		t "The severity (",
+		ic "error",
+		t " or ",
+		ic "warning",
+		t ") leads, then the code, then the primary location and the caret span. A ",
+		ic "help:",
+		t " line is a single actionable suggestion (misspelled names, fields, and variants get a ",
+		ic "did you mean ...?",
+		t " hint); a ",
+		ic "note:",
+		t " adds context. The language server surfaces all of it inline.",
+	],
+	h3 "Parse errors",
+	prose.table2 ("Code", "Meaning") [
+		("E0001", "Empty regular expression"),
+		("E0002", "Empty grouping in a regular expression"),
+		("E0003", "Empty repetition count in a regular expression"),
+		("E0008", "Invalid regular-expression count modifier"),
+		("E0009", "Quantifier applied to a regex anchor"),
+		("E0010", "Invalid expression after `.` (expected a field name or tuple index)"),
+		("E0011", "Invalid `def` body (expected an expression or a type)"),
+		("E0012", "Missing return type after `->`"),
+		("E0013", "Overflowing integer literal"),
+		("E0014", "Invalid duration literal"),
+		("E0015", "Duration units out of order"),
+		("E0017", "Unclosed string interpolation"),
+		("E0018", "Unclosed string"),
+		("E0020", "Invalid \\x escape in a bytes literal"),
+		("E0022", "Expected an expression after `...`"),
+		("E0023", "Expected an expression after `defer`"),
+		("E0024", "Misplaced record spread (`...` must come first, once)"),
+		("E0025", "Unexpected end of file"),
+		("E0026", "Unexpected token"),
+		("E0027", "Unexpected token at the top level"),
+		("E0028", "Misplaced `public` / `opaque`"),
+		("E0029", "Expected an expression"),
+	],
+	h3 "Analysis and type errors",
+	prose.table2 ("Code", "Meaning") [
+		("E0100", "Name is not defined"),
+		("E0101", "Name is never used (warning)"),
+		("E0102", "Type mismatch"),
+		("E0103", "Failed to unify a recursive type"),
+		("E0104", "Parameter count mismatch"),
+		("E0105", "Tuple size mismatch"),
+		("E0106", "Tuple index out of range"),
+		("E0107", "Record field does not exist"),
+		("E0108", "Enum variant does not exist"),
+		("E0109", "Non-exhaustive `when`"),
+		("E0111", "Ambiguous bare trait method"),
+		("E0112", "Duplicate top-level definition"),
+		("E0113", "No trait instance for a type"),
+		("E0114", "Type can't cross the wire"),
+		("E0116", "Incomplete trait instance (missing method)"),
+		("E0118", "Overlapping instance"),
+		("E0119", "Orphan instance"),
+		("E0120", "Refutable pattern in a `let`"),
+		("E0122", "`try` right-hand side has an undetermined type"),
+		("E0123", "`try` on an unsupported carrier"),
+		("E0132", "Item is private to its module"),
+		("E0133", "`remote def` (RPC endpoint) is not `public`"),
+		("E0134", "`remote def` has an invalid endpoint signature"),
+		("E0135", "Bare variant must be qualified by its enum"),
+	],
+	h3 "Lints",
+	pr [
+		t "Lints are advisory warnings from ",
+		ic "pluma lint",
+		t " — stylistic and correctness smells the type-checker tolerates. They never stop a run, build, or test, but ",
+		ic "pluma lint",
+		t " exits non-zero if any fire, so it can gate CI.",
+	],
+	prose.table2 ("Code", "Meaning") [
+		("L0001", "`let _ = expr` binds nothing — drop the `let _ =`"),
+		("L0002", "`try _ = expr` binds nothing — write just `try expr`"),
+		("L0003", "Comparing to a boolean literal (`x == true`) is redundant"),
+		("L0004", "`if c { true } else { false }` is just the condition"),
+		("L0005", "Boolean-literal operand of `&&` / `||` is redundant"),
+		("L0006", "Function only forwards its arguments (`fun x { f x }` is `f`)"),
+		("L0007", "Both branches of an `if` are identical"),
+		("L0008", "A binding returned immediately doesn't need the `let`"),
+	],
 ]
 
 # --- page -------------------------------------------------------------------
@@ -541,12 +852,16 @@ public def page :: fun nothing -> view = using view {
 				theme.top-nav (),
 				.div [.styled doc-grid] [
 					.aside [.styled sidebar] [
-						.div [.styled side-title] [.text "On this page"],
-						.div [.styled side-list] (list.map toc side-link),
+						.div [.styled side-title] [.text "The tour"],
+						.div [.styled side-list] (list.map toc-tour side-link),
+						.div [.styled side-title] [.text "Reference"],
+						.div [.styled side-list] (list.map toc-ref side-link),
 					],
 					.main [.styled doc-main] [
-						.h1 [.styled doc-title] [.text "Language reference"],
-						.p [.styled doc-sub] [.text "The whole language, one idea at a time."],
+						.h1 [.styled prose.doc-title] [.text "Language reference"],
+						.p [.styled prose.doc-sub] [
+							.text "The whole language, one idea at a time.",
+						],
 						sec-intro,
 						sec-values,
 						sec-bindings,
@@ -561,6 +876,12 @@ public def page :: fun nothing -> view = using view {
 						sec-traits,
 						sec-modules,
 						sec-fullstack,
+						.div [.styled divider] [.text "Reference"],
+						sec-operators,
+						sec-aliases,
+						sec-bytes,
+						sec-regex,
+						sec-diagnostics,
 					],
 				],
 				theme.site-footer (),

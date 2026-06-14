@@ -166,6 +166,7 @@ public def top-nav :: fun nothing -> view = using view {
 				.span [] [.text "pluma"],
 			],
 			.div [.styled nav-links] [
+				.a [.styled nav-link, .href "/start"] [.text "Get started"],
 				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
 				.a [.styled nav-link, .href "/playground"] [.text "Playground"],
 				.a [.styled nav-link, .href repo] [.text "GitHub"],

@@ -64,9 +64,6 @@ test-grammar:
   @ cd vsix && npm test
   @ cd tree-sitter && ./node_modules/.bin/tree-sitter test && ./script/test.sh
 
-site:
-  @ zola -r site serve -p 7586
-
 # build & run the vscode extension in a new window for local testing
 vs-extension:
   cargo build --bin pluma
@@ -88,5 +85,4 @@ zed-extension:
 
 # install all deps on macos
 install-depencies-macos:
-  brew install zola
   brew install just

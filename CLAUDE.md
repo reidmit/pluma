@@ -4,7 +4,7 @@ Guidance for Claude Code (claude.ai/code) working in this repo.
 
 ## Project
 
-This repo implements **Pluma**, a small statically-typed functional language. CLI binary `pluma`, source files `.pa`. Docs live under `site/content/docs/` (zola site).
+This repo implements **Pluma**, a small statically-typed functional language. CLI binary `pluma`, source files `.pa`. The language reference and docs are the in-app pages of `website/` — the Pluma fullstack app served at pluma.fun; `website/reference.pa` is the full reference.
 
 Pluma has **one backend**: the **WasmGC** backend. `pluma run` and `pluma test` both compile to WasmGC and run under V8 via the `host` crate — run what you deploy. Every builtin lowers to wasm; the only surface the backend can't emit is the browser-only `std/web/dom` (unbuilt). "Server" and "browser" are host-capability *profiles* (`compiler::Platform`), not separate backends.
 
@@ -12,7 +12,7 @@ Crate layout is a normal Cargo workspace — frontend (`compiler`: tokenize → 
 
 ## Pluma syntax
 
-Pluma's syntax has some unique quirks. When in doubt, mirror a fixture in `tests/run/` (`grep tests/run/*/main.pa` for a working example); the full syntax is documented in `site/content/docs/`. The traps worth memorizing:
+Pluma's syntax has some unique quirks. When in doubt, mirror a fixture in `tests/run/` (`grep tests/run/*/main.pa` for a working example); the full syntax is documented in `website/reference.pa`. The traps worth memorizing:
 
 - **Calls are uncurried and mostly paren-free.** Single arg: `print x`, `fact 5`. Multiple: `add x y`. Parens only group sub-expressions: `print (fact 5)`. `add 5` is an arity error, not partial application — wrap it: `fun y { add 5 y }`.
 - **Zero-arg calls use `()`, not `{}`.** `dict.empty ()`, `io.read ()`. `{}` is a block.

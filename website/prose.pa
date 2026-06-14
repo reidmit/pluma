@@ -1,0 +1,226 @@
+# Shared long-form prose toolkit for pluma.fun's documentation pages. The
+# `reference` and `start` pages are both static `view` documents with the same
+# look — headings, body paragraphs, inline code, code blocks, callouts, and
+# tables — so those primitives live here once and each page only describes its
+# own content. Everything is a pure `view` builder, so the server renders it to
+# HTML and the client hydrates the same tree.
+
+use std/css
+use std/list
+use std/view
+use theme
+
+# --- prose styles -----------------------------------------------------------
+
+public def doc-title :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.property "font-size" "2.6rem",
+	css.line-height 1.1,
+	css.property "letter-spacing" "-0.025em",
+	css.font-weight "600",
+	css.property "margin-bottom" "0.6rem",
+]
+
+public def doc-sub :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 1.25),
+	css.property "font-style" "italic",
+	css.color (css.hex theme.muted),
+	css.property "margin-bottom" "1rem",
+]
+
+def sect :: css.ruleset = css.rule [
+	css.property "scroll-margin-top" "1.5rem",
+	css.property "padding-top" "2.2rem",
+]
+
+def doc-h2 :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 1.7),
+	css.property "letter-spacing" "-0.02em",
+	css.font-weight "600",
+	css.property "margin-bottom" "0.4rem",
+]
+
+def doc-h3 :: css.ruleset = css.rule [
+	css.font-size (css.rem 1.12),
+	css.font-weight "600",
+	css.property "margin" "1.8rem 0 0.2rem",
+]
+
+def doc-p :: css.ruleset = css.rule [
+	css.property "font-family" theme.serif,
+	css.font-size (css.rem 1.08),
+	css.line-height 1.75,
+	css.property "color" "#2b2823",
+	css.property "margin" "1rem 0",
+]
+
+def inline-code :: css.ruleset = css.rule [
+	css.property "font-family" theme.mono,
+	css.property "font-size" "0.88em",
+	css.background (css.hex theme.code-soft),
+	css.color (css.hex theme.accent-deep),
+	css.property "padding" "0.1em 0.36em",
+	css.border-radius (css.px 5.0),
+]
+
+def doc-pre :: css.ruleset = css.rule [
+	css.property "font-family" theme.mono,
+	css.font-size (css.rem 0.88),
+	css.line-height 1.6,
+	css.background (css.hex theme.code-soft),
+	css.property "border" "1px solid #e9e4dc",
+	css.property "color" "#2b2823",
+	css.border-radius (css.px 10.0),
+	css.property "padding" "1rem 1.2rem",
+	css.property "margin" "1.2rem 0",
+	css.property "white-space" "pre",
+	css.property "tab-size" "2",
+	css.property "overflow-x" "auto",
+]
+
+def callout :: css.ruleset = css.rule [
+	css.background (css.hex "#f3eefb"),
+	css.property "border-left" "3px solid #6d4aa3",
+	css.border-radius (css.px 8.0),
+	css.property "padding" "0.4rem 1.2rem",
+	css.property "margin" "1.4rem 0",
+]
+
+public def doc-cta :: css.ruleset = css.rule [
+	css.display "flex",
+	css.gap (css.rem 0.8),
+	css.property "flex-wrap" "wrap",
+	css.property "margin-top" "1.6rem",
+]
+
+# --- table styles -----------------------------------------------------------
+
+def doc-table :: css.ruleset = css.rule [
+	css.property "width" "100%",
+	css.property "border-collapse" "collapse",
+	css.font-size (css.rem 0.98),
+	css.property "margin" "1.2rem 0",
+]
+
+def th :: css.ruleset = css.rule [
+	css.property "text-align" "left",
+	css.property "padding" "0.5rem 0.9rem 0.5rem 0",
+	css.property "border-bottom" "1px solid #d8d2c8",
+	css.font-size (css.rem 0.72),
+	css.property "text-transform" "uppercase",
+	css.property "letter-spacing" "0.08em",
+	css.font-weight "600",
+	css.color (css.hex theme.faint),
+]
+
+def td :: css.ruleset = css.rule [
+	css.property "padding" "0.5rem 0.9rem 0.5rem 0",
+	css.property "border-bottom" "1px solid #efeae2",
+	css.property "vertical-align" "top",
+	css.property "font-family" theme.serif,
+	css.line-height 1.55,
+	css.property "color" "#2b2823",
+]
+
+# --- prose helpers ----------------------------------------------------------
+
+# A bare text run, for splicing into a mixed paragraph (`pr`).
+public def t :: fun string -> view = view.text
+
+# A plain paragraph.
+public def p :: fun string -> view = using view {
+	fun s {
+		.p [.styled doc-p] [.text s]
+	}
+}
+
+# A paragraph built from mixed runs — interleave `t` and `ic`.
+public def pr :: fun (list view) -> view = using view {
+	fun kids {
+		.p [.styled doc-p] kids
+	}
+}
+
+# A sub-heading inside a section.
+public def h3 :: fun string -> view = using view {
+	fun s {
+		.h3 [.styled doc-h3] [.text s]
+	}
+}
+
+# Inline code, for a symbol or identifier mid-sentence.
+public def ic :: fun string -> view = using view {
+	fun s {
+		.code [.styled inline-code] [.text s]
+	}
+}
+
+# A fenced code block. The whole string is rendered verbatim (tabs indent).
+public def code :: fun string -> view = using view {
+	fun s {
+		.pre [.styled doc-pre] [.code [] [.text s]]
+	}
+}
+
+# A highlighted aside.
+public def note :: fun (list view) -> view = using view {
+	fun kids {
+		.div [.styled callout] kids
+	}
+}
+
+# A titled, anchored section — `id` is the fragment a sidebar link points at.
+public def doc-section :: fun string string (list view) -> view = using view {
+	fun id title body {
+		.section [.id id, .styled sect] [.h2 [.styled doc-h2] [.text title], ...body]
+	}
+}
+
+# --- tables -----------------------------------------------------------------
+
+# A two-column reference table. The header is a `(left, right)` pair; each row
+# is a `(code, meaning)` pair — the left cell is rendered as inline code, the
+# right as prose. Handy for "symbol → meaning" and "code → description" lists.
+public def table2 :: fun (string, string) (list (string, string)) -> view = using view {
+	fun headers rows {
+		let (ha, hb) = headers
+		.table [.styled doc-table] [
+			.thead [] [.tr [] [.th [.styled th] [.text ha], .th [.styled th] [.text hb]]],
+			.tbody [] (list.map rows fun row {
+				let (a, b) = row
+				.tr [] [
+					.td [.styled td] [.code [.styled inline-code] [.text a]],
+					.td [.styled td] [.text b],
+				]
+			}),
+		]
+	}
+}
+
+# A three-column reference table. Header is a `(c1, c2, c3)` triple; each row is
+# a `(code, code, meaning)` triple — the first two cells render as inline code,
+# the third as prose. Used for the operator tables (operator, signature, meaning).
+public def table3 :: fun (string, string, string) (list (string, string, string)) -> view = using view {
+	fun headers rows {
+		let (ha, hb, hc) = headers
+		.table [.styled doc-table] [
+			.thead [] [
+				.tr [] [
+					.th [.styled th] [.text ha],
+					.th [.styled th] [.text hb],
+					.th [.styled th] [.text hc],
+				],
+			],
+			.tbody [] (list.map rows fun row {
+				let (a, b, c) = row
+				.tr [] [
+					.td [.styled td] [.code [.styled inline-code] [.text a]],
+					.td [.styled td] [.code [.styled inline-code] [.text b]],
+					.td [.styled td] [.text c],
+				]
+			}),
+		]
+	}
+}
