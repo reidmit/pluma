@@ -8,6 +8,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 mod analysis;
+mod completion;
 mod goto;
 mod hover;
 mod inlay_hints;
@@ -61,6 +62,12 @@ impl LanguageServer for Backend {
 				definition_provider: Some(OneOf::Left(true)),
 				document_symbol_provider: Some(OneOf::Left(true)),
 				inlay_hint_provider: Some(OneOf::Left(true)),
+				completion_provider: Some(CompletionOptions {
+					// `.` re-triggers completion for member access (`list.`); the
+					// client also triggers on identifier characters on its own.
+					trigger_characters: Some(vec![".".to_string()]),
+					..CompletionOptions::default()
+				}),
 				..ServerCapabilities::default()
 			},
 		})
@@ -264,6 +271,31 @@ impl LanguageServer for Backend {
 		Ok(Some(DocumentSymbolResponse::Nested(symbols)))
 	}
 
+	async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+		let pos = params.text_document_position;
+		let uri = pos.text_document.uri;
+
+		let text = match self.document_map.get(&uri.to_string()) {
+			Some(text) => text.clone(),
+			None => return Ok(None),
+		};
+		// A non-file URI can't anchor cross-module lookups; in-file completion
+		// (scope names, local enums) still works with an empty path.
+		let path = uri.to_file_path().unwrap_or_default();
+
+		let items: Vec<CompletionItem> = completion::complete(
+			text.as_bytes(),
+			&path,
+			pos.position.line,
+			pos.position.character,
+		)
+		.into_iter()
+		.map(completion_to_lsp)
+		.collect();
+
+		Ok(Some(CompletionResponse::Array(items)))
+	}
+
 	async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
 		let uri = params.text_document.uri.to_string();
 		let hints = match self.inlay_map.get(&uri) {
@@ -438,6 +470,32 @@ fn pluma_diagnostic_to_lsp(d: &PlumaDiagnostic, uri: &Url) -> Diagnostic {
 		related_information,
 		tags: None,
 		data: None,
+	}
+}
+
+fn completion_to_lsp(c: completion::Completion) -> CompletionItem {
+	use completion::CompletionKind;
+	let kind = match c.kind {
+		CompletionKind::Function => CompletionItemKind::FUNCTION,
+		CompletionKind::Value => CompletionItemKind::CONSTANT,
+		CompletionKind::EnumType => CompletionItemKind::ENUM,
+		CompletionKind::Trait => CompletionItemKind::INTERFACE,
+		CompletionKind::Alias => CompletionItemKind::CLASS,
+		CompletionKind::Variant => CompletionItemKind::ENUM_MEMBER,
+		CompletionKind::Module => CompletionItemKind::MODULE,
+		CompletionKind::Keyword => CompletionItemKind::KEYWORD,
+	};
+	CompletionItem {
+		label: c.label,
+		kind: Some(kind),
+		detail: c.detail,
+		documentation: c.doc.map(|d| {
+			Documentation::MarkupContent(MarkupContent {
+				kind: MarkupKind::Markdown,
+				value: d,
+			})
+		}),
+		..CompletionItem::default()
 	}
 }
 

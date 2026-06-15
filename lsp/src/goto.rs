@@ -221,6 +221,56 @@ pub fn imported_module(module_name: &str, current: &Path) -> Option<Module> {
 	load_imported_module(module_name, current).map(|(m, _)| m)
 }
 
+/// The category of a name visible at a cursor, used to pick a completion icon.
+#[derive(Clone, Copy, PartialEq)]
+pub enum SymKind {
+	Value,
+	Type,
+	Namespace,
+	Variant,
+}
+
+/// Every locally-introduced name in scope at (`line`, `character`): top-level
+/// defs, imports, and the params/lets/patterns whose scope contains the cursor.
+/// Completion offers these in open (non-member) position. Deduplicated by
+/// (name, kind), keeping the syntactic order they were collected in.
+pub fn visible_symbols(source: &[u8], line: u32, character: u32) -> Vec<(String, SymKind)> {
+	let mut module = Module::new("<lsp>".to_string(), PathBuf::new());
+	let mut diagnostics: Vec<Diagnostic> = Vec::new();
+	module.parse_from_bytes(source.to_vec(), &mut diagnostics);
+	let Some(ast) = module.ast.as_ref() else {
+		return Vec::new();
+	};
+
+	let mut r = Resolver::new(ast);
+	r.walk_module(ast);
+
+	let l = line as usize;
+	let c = character as usize;
+	let mut out: Vec<(String, SymKind)> = Vec::new();
+	let mut seen: HashSet<(String, u8)> = HashSet::new();
+	let mut push = |out: &mut Vec<(String, SymKind)>, name: &str, kind: SymKind| {
+		let tag = kind as u8;
+		if seen.insert((name.to_string(), tag)) {
+			out.push((name.to_string(), kind));
+		}
+	};
+
+	for (table, kind) in [
+		(&r.namespaces, SymKind::Namespace),
+		(&r.types, SymKind::Type),
+		(&r.variants, SymKind::Variant),
+		(&r.values, SymKind::Value),
+	] {
+		for b in table {
+			if scope_contains(&b.scope, l, c) {
+				push(&mut out, &b.name, kind);
+			}
+		}
+	}
+	out
+}
+
 // Load and parse an imported module. Baked-in stdlib source takes precedence
 // over a same-named file on disk, matching the compiler's own load order.
 // Returns `None` for a module with no source we can find.
