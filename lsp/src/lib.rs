@@ -14,6 +14,7 @@ mod goto;
 mod hover;
 mod inlay_hints;
 mod semantic_tokens;
+mod signature_help;
 mod symbols;
 
 // How long to wait for typing to pause before analyzing. A burst of
@@ -109,6 +110,15 @@ impl LanguageServer for Backend {
 					// contents). The client also triggers on identifier characters.
 					trigger_characters: Some(vec![".".to_string(), "/".to_string()]),
 					..CompletionOptions::default()
+				}),
+				signature_help_provider: Some(SignatureHelpOptions {
+					// `(` opens a parenthesized/interpolated call; ` ` advances to the
+					// next argument in Pluma's paren-free application syntax. Both
+					// also re-trigger while the popup is open so the active-parameter
+					// highlight tracks each argument as it's typed.
+					trigger_characters: Some(vec!["(".to_string(), " ".to_string()]),
+					retrigger_characters: Some(vec![" ".to_string()]),
+					work_done_progress_options: WorkDoneProgressOptions::default(),
 				}),
 				..ServerCapabilities::default()
 			},
@@ -374,6 +384,27 @@ impl LanguageServer for Backend {
 
 		Ok(Some(result))
 	}
+
+	async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
+		let tdp = params.text_document_position_params;
+		let uri = tdp.text_document.uri;
+		let pos = tdp.position;
+
+		let text = match self.document_map.get(&uri.to_string()) {
+			Some(text) => text.clone(),
+			None => return Ok(None),
+		};
+		// A non-file URI can't anchor cross-module resolution; bare local calls
+		// still resolve with an empty path.
+		let path = uri.to_file_path().unwrap_or_default();
+
+		let Some(help) =
+			signature_help::signature_help(text.as_bytes(), &path, pos.line, pos.character)
+		else {
+			return Ok(None);
+		};
+		Ok(Some(sig_help_to_lsp(help)))
+	}
 }
 
 fn position_in_range(line: u32, col: u32, range: &Range) -> bool {
@@ -597,6 +628,38 @@ fn completion_to_lsp(c: completion::Completion) -> CompletionItem {
 		text_edit,
 		command,
 		..CompletionItem::default()
+	}
+}
+
+fn sig_help_to_lsp(help: signature_help::SigHelp) -> SignatureHelp {
+	let parameters: Vec<ParameterInformation> = help
+		.params
+		.iter()
+		.map(|(start, end)| ParameterInformation {
+			// Offsets into the signature label, so the client highlights the
+			// active parameter in place — the label is ASCII, so char offsets
+			// equal the UTF-16 units the protocol wants.
+			label: ParameterLabel::LabelOffsets([*start, *end]),
+			documentation: None,
+		})
+		.collect();
+
+	let documentation = help.doc.map(|d| {
+		Documentation::MarkupContent(MarkupContent {
+			kind: MarkupKind::Markdown,
+			value: d,
+		})
+	});
+
+	SignatureHelp {
+		signatures: vec![SignatureInformation {
+			label: help.label,
+			documentation,
+			parameters: Some(parameters),
+			active_parameter: Some(help.active_param),
+		}],
+		active_signature: Some(0),
+		active_parameter: Some(help.active_param),
 	}
 }
 

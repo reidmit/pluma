@@ -61,7 +61,7 @@ impl Completion {
 
 // Pluma keywords offered in open position. Deliberately small: only the words
 // that start or structure an expression/definition, not punctuation.
-const KEYWORDS: &[&str] = &[
+pub(crate) const KEYWORDS: &[&str] = &[
 	"def", "let", "fun", "use", "public", "opaque", "enum", "alias", "trait", "instance", "if",
 	"else", "when", "is", "while", "try", "defer", "scope", "as", "remote",
 ];
@@ -85,7 +85,7 @@ pub fn complete(source: &[u8], path: &Path, line: u32, character: u32) -> Vec<Co
 // The text of `line` up to `character` (a UTF-16 column, but Pluma's surface is
 // ASCII outside string/comment bodies, so treating it as a byte/char count is
 // exact for the identifiers we scan here).
-fn line_prefix(source: &[u8], line: u32, character: u32) -> String {
+pub(crate) fn line_prefix(source: &[u8], line: u32, character: u32) -> String {
 	let text = String::from_utf8_lossy(source);
 	let Some(line_text) = text.lines().nth(line as usize) else {
 		return String::new();
@@ -93,7 +93,7 @@ fn line_prefix(source: &[u8], line: u32, character: u32) -> String {
 	line_text.chars().take(character as usize).collect()
 }
 
-fn is_ident_char(c: char) -> bool {
+pub(crate) fn is_ident_char(c: char) -> bool {
 	c.is_alphanumeric() || c == '_' || c == '-'
 }
 
@@ -333,7 +333,7 @@ fn def_kind(def: &DefinitionNode) -> CompletionKind {
 // The one-line signature of a def, sliced from source: the header up to the
 // def's `=` (value defs) or opening `{` (enum/trait), with the `public`/`opaque`
 // keyword trimmed. e.g. `def map :: fun (list a) (fun a -> b) -> list b`.
-fn signature_of(source: &str, def: &DefinitionNode) -> Option<String> {
+pub(crate) fn signature_of(source: &str, def: &DefinitionNode) -> Option<String> {
 	let line = source.lines().nth(def.range.start.line)?.trim();
 	let cut = [line.find(" ="), line.find('{')]
 		.into_iter()
@@ -352,7 +352,7 @@ fn signature_of(source: &str, def: &DefinitionNode) -> Option<String> {
 // The source text of a loaded module: baked-in stdlib source by name, or the
 // file on disk for a user module. Used to slice signatures (the `Module` itself
 // doesn't retain its text).
-fn module_source(module: &Module, full_name: &str) -> Option<String> {
+pub(crate) fn module_source(module: &Module, full_name: &str) -> Option<String> {
 	if let Some(src) = compiler::lookup_stdlib_source(full_name) {
 		return Some(src.to_string());
 	}
@@ -362,7 +362,7 @@ fn module_source(module: &Module, full_name: &str) -> Option<String> {
 // Lexically scan `use` lines for `(full_module_name, local_name)` pairs. Robust
 // to an unparseable body (the common state mid-keystroke): imports sit at the
 // top of the file and these lines parse on their own.
-fn scan_uses(source: &[u8]) -> Vec<(String, String)> {
+pub(crate) fn scan_uses(source: &[u8]) -> Vec<(String, String)> {
 	let text = String::from_utf8_lossy(source);
 	let mut out = Vec::new();
 	for raw in text.lines() {
