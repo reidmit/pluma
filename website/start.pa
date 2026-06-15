@@ -129,8 +129,8 @@ public def page :: fun nothing -> view = using view {
 	fun {
 		let _ = theme.install-globals ()
 		.div [.id "app"] [
+			theme.top-nav (),
 			.div [.styled theme.shell] [
-				theme.top-nav (),
 				.div [.styled wrap] [
 					.h1 [.styled prose.doc-title] [.text "Get started"],
 					.p [.styled prose.doc-sub] [

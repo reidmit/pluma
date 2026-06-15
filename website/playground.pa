@@ -219,8 +219,8 @@ public def page :: fun (fun string -> result string string) (fun nothing -> stri
 		let out = signal.new placeholder
 		let shared = signal.new false
 		.div [.id "app"] [
+			theme.top-nav (),
 			.div [.styled theme.shell] [
-				theme.top-nav (),
 				.section [.styled wrap] [
 					.div [.styled head] [
 						.h1 [.styled title] [.text "The playground"],

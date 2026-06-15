@@ -69,9 +69,9 @@ public def attempt :: fun (task a e) -> task (result a e) f = built-in "task-att
 # Transforms a task's successful value with a plain function. `map t f` runs
 # `t` and applies `f` to its result; a failure passes through untouched. Note
 # the task-first argument order (like the other combinators here, and so it
-# composes with `|`):
+# composes with `|>`):
 #
-#     http.get url | task.map parse-body
+#     http.get url |> task.map parse-body
 public def map :: fun (task a e) (fun a -> b) -> task b e = built-in "task-map"
 
 # Runs `t` in an uninterruptible region: a concurrent cancellation (a sibling

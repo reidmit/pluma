@@ -135,7 +135,7 @@ def section-sub :: css.ruleset = css.rule [
 
 def feature-grid :: css.ruleset = css.rule [
 	css.display "grid",
-	css.property "grid-template-columns" "repeat(3, 1fr)",
+	css.property "grid-template-columns" "repeat(2, 1fr)",
 	css.gap (css.rem 1.4),
 	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr"],
 ]
@@ -272,9 +272,9 @@ def hero-section :: fun nothing -> view = using view {
 			.div [.styled hero-grid] [
 				.div [] [
 					.div [.styled eyebrow] [.text "A functional language · server to browser"],
-					.h1 [.styled headline] [.text "Write the whole app in one calm language."],
+					.h1 [.styled headline] [.text "Write your whole app in one language."],
 					.p [.styled lead] [
-						.text "Pluma is a small, statically-typed functional language with full type inference — and a fullstack framework that compiles to WebAssembly. Your API and your UI, the same syntax, the same backend.",
+						.text "Pluma is a small, statically-typed functional language with full type inference. Build a fullstack app, a server, a script, or a browser frontend — the same language end to end, with one toolchain and no glue between the pieces.",
 					],
 					.div [.styled cta-row] [
 						.a [.styled theme.btn-primary, .href "/start"] [.text "Get started"],
@@ -303,18 +303,16 @@ def features-section :: fun nothing -> view = using view {
 	fun {
 		.section [.styled section] [
 			.div [.styled section-head] [
-				.div [.styled section-title] [.text "Small surface, serious reach."],
+				.div [.styled section-title] [.text "One language, whatever you're building."],
 				.p [.styled section-sub] [
-					.text "A handful of ideas that compose — inference, immutability, traits, and a fullstack story that doesn't leave the language.",
+					.text "A fullstack app, a standalone server, a quick script, a browser frontend — the same syntax and the same tools, top to bottom.",
 				],
 			],
 			.div [.styled feature-grid] [
-				feature "🪶" "Inference that gets out of the way" "Full Hindley–Milner inference. Write zero annotations and still get end-to-end static types — add `::` only where it sharpens intent.",
-				feature "🧊" "Immutable by default" "Values don't change out from under you. `ref` is the one mutation primitive; reach for it only when you genuinely need a cell.",
-				feature "🌐" "One language, server to browser" "`remote def` turns a function into a typed RPC. The compiler writes the client stub and the server route, so the two agree by construction.",
-				feature "⚡" "Fine-grained reactivity" "Signals track exactly what changed — no virtual DOM, no re-render guesswork. Server-render and hydrate from the very same view.",
-				feature "🧩" "Traits & row-polymorphic records" "Ad-hoc polymorphism through traits; structural records that accept extra fields. Composition without the ceremony.",
-				feature "📦" "Compiles to WasmGC" "One backend. `pluma run` and `pluma test` execute the exact artifact you deploy — under V8 today, the open web tomorrow.",
+				feature "🌐" "Fullstack apps" "Your API and your UI in one codebase. A function you mark for the browser becomes a typed call it can make directly — the compiler writes both sides, so they never drift apart.",
+				feature "🖥" "Servers" "Stand up an HTTP server with typed routes and real concurrency. Reach for a database, the filesystem, or the network — and failures come back as values you handle, not surprises that escape.",
+				feature "⚡" "Scripts & CLIs" "Use it like a scripting language: read arguments, touch files, print output. Types catch the typo before it runs, and there's no startup wait.",
+				feature "🎨" "Frontends" "Build a reactive browser UI that updates exactly what changed — nothing to re-render by hand, and no separate framework to learn beyond the language itself.",
 			],
 		]
 	}
@@ -354,8 +352,8 @@ public def page :: fun nothing -> view = using view {
 		let _ = theme.install-globals ()
 		let loved = signal.new 0
 		.div [.id "app"] [
+			theme.top-nav (),
 			.div [.styled theme.shell] [
-				theme.top-nav (),
 				hero-section (),
 				features-section (),
 				meta-section loved,

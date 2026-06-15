@@ -757,9 +757,23 @@ fn proxy_rpc(
 	};
 	let mut req = Vec::new();
 	req.extend_from_slice(request_line.as_bytes());
+	// Forward one request per upstream connection: drop the browser's own
+	// `Connection` header and force `Connection: close`. The server speaks HTTP/1.1
+	// keep-alive by default, so without this it holds the connection open after a
+	// unary reply — the `io::copy` relay below would never see EOF (it would block
+	// forever), and the browser, told `keep-alive`, would pool this proxy socket and
+	// reuse it for its next navigation, which the stuck relay thread never services.
+	// A streaming reply already frames itself by close, so this is a no-op there.
 	for h in headers {
+		if h
+			.split_once(':')
+			.is_some_and(|(k, _)| k.trim().eq_ignore_ascii_case("connection"))
+		{
+			continue;
+		}
 		req.extend_from_slice(h.as_bytes());
 	}
+	req.extend_from_slice(b"Connection: close\r\n");
 	req.extend_from_slice(b"\r\n");
 	req.extend_from_slice(body);
 	if up.write_all(&req).and_then(|_| up.flush()).is_err() {

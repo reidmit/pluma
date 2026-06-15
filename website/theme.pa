@@ -80,11 +80,13 @@ public def shell :: css.ruleset = css.rule [
 	css.property "padding" "0 1.5rem",
 ]
 
+# The nav spans the full window width: brand pinned to the left gutter, links to
+# the right. Only the side padding (matching the page gutter) keeps it off the edge.
 def nav :: css.ruleset = css.rule [
+	css.property "padding" "1.4rem 1.5rem",
 	css.display "flex",
 	css.align-items "center",
 	css.justify-content "space-between",
-	css.property "padding" "1.4rem 0",
 ]
 
 def brand :: css.ruleset = css.rule [
@@ -175,7 +177,6 @@ public def top-nav :: fun nothing -> view = using view {
 				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
 				.a [.styled nav-link, .href "/std/list"] [.text "Stdlib"],
 				.a [.styled nav-link, .href "/playground"] [.text "Playground"],
-				.a [.styled nav-link, .href repo] [.text "GitHub"],
 			],
 		]
 	}
