@@ -180,28 +180,21 @@ impl HostIo for CapturingIo {
 
 /// Streams stdout/stderr live to the process and reads stdin from it. Each write
 /// flushes so output appears promptly (current artifacts are short-lived; a
-/// long-running net server may revisit buffering).
+/// long-running net server may revisit buffering). Reads pull one line at a time
+/// off a buffered stdin so an interactive REPL sees each line as it's entered,
+/// rather than blocking until the whole stream reaches EOF.
 struct StdioIo {
-	stdin_buf: Vec<u8>,
-	stdin_pos: usize,
-	stdin_eof: bool,
+	stdin: Option<std::io::BufReader<std::io::Stdin>>,
 }
 
 impl StdioIo {
 	fn new() -> Self {
-		StdioIo {
-			stdin_buf: Vec::new(),
-			stdin_pos: 0,
-			stdin_eof: false,
-		}
+		StdioIo { stdin: None }
 	}
-	/// Pull all of process stdin into the buffer once, on first read. (Reads are
-	/// whole-input oriented; live line streaming is a later concern.)
-	fn fill_stdin(&mut self) {
-		if !self.stdin_eof {
-			let _ = std::io::stdin().read_to_end(&mut self.stdin_buf);
-			self.stdin_eof = true;
-		}
+	fn reader(&mut self) -> &mut std::io::BufReader<std::io::Stdin> {
+		self
+			.stdin
+			.get_or_insert_with(|| std::io::BufReader::new(std::io::stdin()))
 	}
 }
 
@@ -217,14 +210,26 @@ impl HostIo for StdioIo {
 		let _ = err.flush();
 	}
 	fn read_line(&mut self) -> Option<String> {
-		self.fill_stdin();
-		read_line_from(&self.stdin_buf, &mut self.stdin_pos)
+		use std::io::BufRead;
+		let mut buf = Vec::new();
+		match self.reader().read_until(b'\n', &mut buf) {
+			Ok(0) => None,
+			Ok(_) => {
+				if buf.last() == Some(&b'\n') {
+					buf.pop();
+				}
+				if buf.last() == Some(&b'\r') {
+					buf.pop();
+				}
+				Some(String::from_utf8_lossy(&buf).into_owned())
+			}
+			Err(_) => None,
+		}
 	}
 	fn read_rest(&mut self) -> Vec<u8> {
-		self.fill_stdin();
-		let rest = self.stdin_buf[self.stdin_pos..].to_vec();
-		self.stdin_pos = self.stdin_buf.len();
-		rest
+		let mut buf = Vec::new();
+		let _ = self.reader().read_to_end(&mut buf);
+		buf
 	}
 }
 
