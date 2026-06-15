@@ -102,6 +102,11 @@ pub struct Module {
 	// Top-level definitions exposed to importing modules. `None` means not
 	// yet analyzed.
 	pub exports: Option<ModuleExports>,
+	// Hash of the source bytes this module was last parsed from. Lets a
+	// caller that re-compiles repeatedly (the LSP, once per keystroke) tell
+	// whether a module's source actually changed and skip re-analyzing it
+	// when it didn't. `0` until parsed.
+	pub source_hash: u64,
 }
 
 impl Module {
@@ -113,6 +118,7 @@ impl Module {
 			comments: HashMap::new(),
 			line_break_starts: Vec::new(),
 			exports: None,
+			source_hash: 0,
 		}
 	}
 
@@ -162,6 +168,11 @@ impl Module {
 	}
 
 	fn build_ast(&mut self, bytes: Vec<u8>, diagnostics: &mut Vec<Diagnostic>) {
+		use std::hash::{Hash, Hasher};
+		let mut hasher = std::collections::hash_map::DefaultHasher::new();
+		bytes.hash(&mut hasher);
+		self.source_hash = hasher.finish();
+
 		let tokenizer = Tokenizer::from_source(&bytes);
 
 		let (ast, comments, errors) = Parser::new(&bytes, tokenizer).parse_module();

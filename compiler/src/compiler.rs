@@ -30,6 +30,24 @@ pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 	// whole combinator surface into every module's namespace.
 ];
 
+// One module's analyzed exports plus the hash of the source they came from.
+// The hash gates reuse: a cached entry is valid only while the module's
+// source is byte-identical to what produced it. Only diagnostic-free
+// analyses are cached (see `load_module`), so reusing an entry can never
+// silently drop a diagnostic.
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone)]
+pub struct ModuleCacheEntry {
+	pub source_hash: u64,
+	pub exports: ModuleExports,
+}
+
+// A persistent, content-addressed export cache keyed by fully-qualified
+// module name. A long-lived caller (the LSP) owns one across `Compiler`
+// instances, swapping it in before `check()` and back out after, so an edit
+// to one file doesn't force re-analysis of the unchanged modules it imports.
+pub type ModuleCache = HashMap<String, ModuleCacheEntry>;
+
 // PLUMA_TIMING=1 prints per-module parse/analyze wall-clock to stderr.
 fn timing_log(module: &str, phase: &str, dur: std::time::Duration) {
 	if std::env::var("PLUMA_TIMING").is_ok() {
@@ -78,6 +96,16 @@ pub struct Compiler {
 	// shapes + per-route fingerprint. The lowerer reads this to synthesize the
 	// client stub bodies and the `rpc-dispatch` routing table directly as IR.
 	pub rpc_endpoints: Vec<crate::rpc::RpcEndpointMeta>,
+	// Optional cross-compile export cache for incremental re-analysis. When
+	// set (the LSP swaps one in per keystroke), a module whose source is
+	// unchanged and whose dependencies were all reused skips re-analysis and
+	// reuses its cached exports. `None` for one-shot compiles (CLI), which
+	// always analyze everything.
+	incremental: Option<ModuleCache>,
+	// Modules (re)analyzed during the current `check()` pass — its source
+	// changed, or a dependency was reanalyzed. A module isn't reused if any of
+	// its imports is in here, so a signature change propagates to dependents.
+	reanalyzed: HashSet<String>,
 }
 
 impl Compiler {
@@ -96,6 +124,8 @@ impl Compiler {
 			fullstack: false,
 			rpc_base_url: None,
 			rpc_endpoints: Vec::new(),
+			incremental: None,
+			reanalyzed: HashSet::new(),
 		})
 	}
 
@@ -132,6 +162,8 @@ impl Compiler {
 			fullstack: false,
 			rpc_base_url: None,
 			rpc_endpoints: Vec::new(),
+			incremental: None,
+			reanalyzed: HashSet::new(),
 		}
 	}
 
@@ -154,6 +186,29 @@ impl Compiler {
 			compiler.load_module(name, &mut visiting);
 		}
 		compiler.exports_cache
+	}
+
+	// Enable incremental re-analysis backed by `cache` (see `ModuleCache`).
+	// `check()` reuses any cached module whose source is unchanged and whose
+	// dependencies were all reused; reclaim the updated cache afterward with
+	// `take_incremental_cache`. Must be called before `check()`.
+	pub fn enable_incremental(&mut self, cache: ModuleCache) {
+		self.incremental = Some(cache);
+	}
+
+	// Reclaim the incremental cache after `check()`, with entries for every
+	// module analyzed cleanly this pass refreshed. Returns an empty map if
+	// incremental mode wasn't enabled.
+	pub fn take_incremental_cache(&mut self) -> ModuleCache {
+		self.incremental.take().unwrap_or_default()
+	}
+
+	// The modules (re)analyzed during the last `check()` — those whose source
+	// changed or whose dependencies did. A module absent here was reused from
+	// the incremental cache. Exposed for tests and tooling that want to see
+	// what an edit actually re-touched.
+	pub fn reanalyzed_modules(&self) -> &HashSet<String> {
+		&self.reanalyzed
 	}
 
 	// Pre-populate the export cache with a precomputed table (see
@@ -541,13 +596,13 @@ impl Compiler {
 		// qualified enum type names can be reconstructed at use sites.
 		let mut imports_map: HashMap<String, ModuleExports> = HashMap::new();
 		let mut import_qualified: HashMap<String, String> = HashMap::new();
-		for (full_name, local_name, _, _) in imports {
-			if rejected_imports.contains(&full_name) {
+		for (full_name, local_name, _, _) in &imports {
+			if rejected_imports.contains(full_name) {
 				continue;
 			}
-			if let Some(exports) = self.exports_cache.get(&full_name) {
+			if let Some(exports) = self.exports_cache.get(full_name) {
 				imports_map.insert(local_name.clone(), exports.clone());
-				import_qualified.insert(local_name, full_name);
+				import_qualified.insert(local_name.clone(), full_name.clone());
 			}
 		}
 
@@ -576,12 +631,48 @@ impl Compiler {
 			}
 		}
 
+		// Incremental reuse: skip re-analysis when this module's source is
+		// byte-identical to a prior clean analysis AND none of its
+		// dependencies were reanalyzed this pass (a changed dependency could
+		// shift this module's inferred signatures). An entry module is never
+		// reused — its typed AST is the analysis result a caller reads, so it
+		// must be freshly analyzed every pass. Only diagnostic-free analyses
+		// are cached, so reuse yields exactly the diagnostics a full compile
+		// would (a module with errors re-analyzes every pass).
+		let source_hash = self
+			.modules
+			.get(module_name)
+			.map(|m| m.source_hash)
+			.unwrap_or(0);
+		let is_entry = self.entry_modules.iter().any(|e| e == module_name);
+		let deps_reanalyzed = imports
+			.iter()
+			.any(|(full, ..)| self.reanalyzed.contains(full));
+		let reusable = !is_entry
+			&& !deps_reanalyzed
+			&& self
+				.incremental
+				.as_ref()
+				.and_then(|c| c.get(module_name))
+				.is_some_and(|e| e.source_hash == source_hash);
+		if reusable {
+			let exports = self.incremental.as_ref().unwrap()[module_name]
+				.exports
+				.clone();
+			self.exports_cache.insert(module_name.to_string(), exports);
+			visiting.remove(module_name);
+			return;
+		}
+
 		// Analyze this module. The prelude's exports (enums, variant
 		// constructors, instances) are implicitly available — pass them
 		// in alongside explicit imports so name resolution + discharge
 		// can use them.
 		let prelude_exports = self.exports_cache.get("__prelude__").cloned();
 		let hmr = self.hmr;
+		// Snapshot the diagnostic count before the analyzer borrows the buffer:
+		// a clean analysis (count unchanged) is the only kind we cache.
+		let diag_before = self.diagnostics.len();
 		let module = self.modules.get_mut(module_name).unwrap();
 		let mut analyzer = Analyzer::new(&mut self.diagnostics);
 		analyzer.set_imports(imports_map, import_qualified);
@@ -596,12 +687,37 @@ impl Compiler {
 
 		// Collect any `remote def` endpoint metadata this module declared (with
 		// resolved wire shapes + per-route fingerprints), for the lowerer to
-		// synthesize client stubs / the dispatch table from.
-		self.rpc_endpoints.extend(analyzer.take_endpoint_meta());
+		// synthesize client stubs / the dispatch table from. This is the
+		// analyzer's last use, ending its `&mut self.diagnostics` borrow.
+		let endpoint_meta = analyzer.take_endpoint_meta();
+		let analysis_was_clean = self.diagnostics.len() == diag_before;
+		self.reanalyzed.insert(module_name.to_string());
+		self.rpc_endpoints.extend(endpoint_meta);
 
-		// Cache its exports for any later importer.
-		if let Some(exports) = module.exports.clone() {
-			self.exports_cache.insert(module_name.to_string(), exports);
+		// Cache its exports for any later importer (this pass), and — when the
+		// analysis was clean — persist them for reuse on a later pass. Drop any
+		// stale entry on a dirty analysis so its hash can't linger.
+		if let Some(exports) = self
+			.modules
+			.get(module_name)
+			.and_then(|m| m.exports.clone())
+		{
+			self
+				.exports_cache
+				.insert(module_name.to_string(), exports.clone());
+			if let Some(cache) = self.incremental.as_mut() {
+				if analysis_was_clean {
+					cache.insert(
+						module_name.to_string(),
+						ModuleCacheEntry {
+							source_hash,
+							exports,
+						},
+					);
+				} else {
+					cache.remove(module_name);
+				}
+			}
 		}
 
 		visiting.remove(module_name);
