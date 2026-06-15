@@ -1561,30 +1561,33 @@ fn interpolation_block_safe(parts: &[ExprNode]) -> bool {
 }
 
 // Render a sequence of block-string segments as a `"""..."""` literal. The
-// opening and closing quotes sit on their own lines and every content line is
-// laid at the current indentation — the same margin the parser strips back off
-// when the string is read again, which keeps formatting idempotent.
+// content and the closing quote are indented one level past the opening quote,
+// so the block reads as a unit nested under its context rather than jammed
+// against the left margin. That extra indentation is exactly the margin the
+// parser strips back off when the string is read again (it dedents by the
+// closing `"""`'s indentation), so the reindentation is content-preserving and
+// formatting stays idempotent.
 fn render_block_string(segs: &[BlockSeg]) -> Doc {
-	let mut docs: Vec<Doc> = vec![text("\"\"\""), hardline()];
+	let mut body: Vec<Doc> = vec![hardline()];
 	for seg in segs {
 		match seg {
 			BlockSeg::Lit(s) => {
 				let escaped = escape_block_segment(s);
 				for (j, line) in escaped.split('\n').enumerate() {
 					if j > 0 {
-						docs.push(hardline());
+						body.push(hardline());
 					}
 					if !line.is_empty() {
-						docs.push(text(line.to_string()));
+						body.push(text(line.to_string()));
 					}
 				}
 			}
-			BlockSeg::Expr(inner) => docs.push(text(format!("$({})", inner))),
+			BlockSeg::Expr(inner) => body.push(text(format!("$({})", inner))),
 		}
 	}
-	docs.push(hardline());
-	docs.push(text("\"\"\""));
-	concat(docs)
+	body.push(hardline());
+	body.push(text("\"\"\""));
+	concat(vec![text("\"\"\""), nest(concat(body))])
 }
 
 fn escape_string(s: &str) -> String {

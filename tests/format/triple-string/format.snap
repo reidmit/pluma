@@ -3,18 +3,18 @@ source: tests/format.rs
 expression: once
 ---
 def block = """
-<div>
-	hi $(user)
-</div>
-"""
+	<div>
+		hi $(user)
+	</div>
+	"""
 
 def oneline = """
-has "quotes" in it
-"""
+	has "quotes" in it
+	"""
 
 def shell = """
-run \$(date) — literal, not interpolated
-"""
+	run \$(date) — literal, not interpolated
+	"""
 
 def regular_with_newline = "stays\nregular"
 
