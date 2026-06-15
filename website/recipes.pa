@@ -1,0 +1,153 @@
+# The "Recipes" page for pluma.fun — one small, complete program in each flavor
+# Pluma is built for: a command-line script, an HTTP server, and a fullstack app.
+# Like the reference and start pages, it's a pure `view` document built from the
+# shared `prose` toolkit, so the server renders it to HTML and the client hydrates
+# the same tree. No remote calls; it shares the site chrome through `theme`.
+
+use std/css
+use std/view
+use prose
+use theme
+
+def t :: fun string -> view = prose.t
+
+def p :: fun string -> view = prose.p
+
+def pr :: fun (list view) -> view = prose.pr
+
+def ic :: fun string -> view = prose.ic
+
+def code :: fun string -> view = prose.code
+
+def h3 :: fun string -> view = prose.h3
+
+def doc-section :: fun string string (list view) -> view = prose.doc-section
+
+# --- layout -----------------------------------------------------------------
+
+def wrap :: css.ruleset = css.rule [
+	css.property "max-width" "46rem",
+	css.property "margin" "0 auto",
+	css.property "padding" "1rem 0 2rem",
+]
+
+# --- recipe sources ---------------------------------------------------------
+#
+# Display-only Pluma source. The CLI snippet shows string interpolation, so its
+# `$(` is spliced in via `theme.dollar` rather than written literally (which would
+# interpolate when *this* file compiles).
+
+def cli-src :: string = "use std/list\nuse std/sys/process\n\n# Run it with:  pluma run greet.pa -- Ada Grace\ndef main = fun {\n\tlet names = process.args ()\n\tif list.is-empty names {\n\t\tprint \"usage: greet <name>...\"\n\t} else {\n\t\tlist.each names fun name {\n\t\t\tprint \"hello, " ++ theme.dollar ++ "(name)!\"\n\t\t}\n\t}\n}"
+
+def server-src :: string = "use std/router\nuse std/task\nuse std/sys/http\n\ndef app :: fun http.request -> task http.response = router.handler [\n\trouter.get \"/\" fun _req {\n\t\ttask.return (http.text 200 \"hello from Pluma\")\n\t},\n\trouter.get \"/health\" fun _req {\n\t\ttask.return (http.text 200 \"ok\")\n\t},\n]\n\ndef main = fun {\n\thttp.serve \"127.0.0.1:8080\" app\n}"
+
+def fs-api-src :: string = "# api.pa -- the shared contract, compiled into both sides.\nuse std/task\n\n# Runs on the server; the browser calls it as if it were local.\npublic remote def add :: fun int int -> task int = fun a b {\n\ttask.return (a + b)\n}"
+
+def fs-server-src :: string = "# server.pa -- serve the page, let the compiler route the RPC calls.\nuse std/rpc\nuse std/task\nuse std/sys/http\nuse ui\n\ndef handler :: fun http.request -> task http.response = fun req {\n\tif req.path == \"/\" {\n\t\ttask.return (http.html 200 (ui.document ()))\n\t} else {\n\t\trpc.dispatch req\n\t}\n}\n\ndef main = fun {\n\thttp.serve \"127.0.0.1:8080\" handler\n}"
+
+def fs-client-src :: string = "# client.pa -- boot the browser by hydrating the server's HTML.\nuse std/web/dom\nuse std/web/render\nuse ui\n\ndef main = fun {\n\trender.hydrate (dom.body ()) ui.page\n}"
+
+# --- sections ---------------------------------------------------------------
+
+def sec-cli :: view = doc-section "cli" "A command-line script" [
+	pr [
+		t "Pluma works as a scripting language: a single file with a ",
+		ic "main",
+		t ", run on the spot. This one greets every name you pass on the command line.",
+	],
+	code cli-src,
+	pr [
+		t "Run it with ",
+		ic "pluma run greet.pa -- Ada Grace",
+		t ". ",
+		ic "process.args",
+		t " hands you the arguments as a ",
+		ic "list string",
+		t ", and the source compiles to WebAssembly and runs with no startup wait.",
+	],
+]
+
+def sec-server :: view = doc-section "server" "A web server" [
+	pr [
+		t "Stand up an HTTP server with typed routes. ",
+		ic "router.handler",
+		t " turns a list of routes into a request handler, and ",
+		ic "http.serve",
+		t " runs it.",
+	],
+	code server-src,
+	pr [
+		t "Run ",
+		ic "pluma run server.pa",
+		t " and open ",
+		ic "http://127.0.0.1:8080",
+		t ". Each route returns a ",
+		ic "task http.response",
+		t ", so the server handles many requests at once — and failures come back as values you handle, not surprises that escape.",
+	],
+]
+
+def sec-fullstack :: view = doc-section "fullstack" "A fullstack app" [
+	pr [
+		t "A fullstack app is a directory with a ",
+		ic "server.pa",
+		t " and a ",
+		ic "client.pa",
+		t ". Mark a function ",
+		ic "remote def",
+		t " and the compiler writes both the server route and the browser stub, so the two never drift apart. Four small files:",
+	],
+	code "app/\n\tapi.pa      # shared contract: the remote defs\n\tserver.pa   # serves the page, dispatches RPC\n\tclient.pa   # hydrates the server's HTML\n\tui.pa       # the shared view (server + browser)",
+	h3 "api.pa",
+	pr [
+		t "The contract. A ",
+		ic "remote def",
+		t " runs on the server; the browser calls it like a local function.",
+	],
+	code fs-api-src,
+	h3 "server.pa",
+	p "Serve the page for the first paint, and hand everything else to the router the compiler generates from your remote defs.",
+	code fs-server-src,
+	h3 "client.pa",
+	p "Adopt the server's HTML instead of rebuilding it — no flash, no duplicate tree.",
+	code fs-client-src,
+	pr [
+		t "The ",
+		ic "ui.pa",
+		t " module holds the shared ",
+		ic "view",
+		t " — built once, rendered to HTML on the server and brought to life in the browser. Develop with live-reload, then build the deployable bundle:",
+	],
+	code "pluma dev app/      # live-reload dev server\npluma build app/    # server .wasm + browser bundle",
+	using view {
+		.div [.styled prose.doc-cta] [
+			.a [.styled theme.btn-primary, .href "/start"] [.text "Get started →"],
+			.a [.styled theme.btn-ghost, .href (theme.repo ++ "/tree/main/examples")] [
+				.text "Browse the examples",
+			],
+		]
+	},
+]
+
+# --- page -------------------------------------------------------------------
+
+public def page :: fun nothing -> view = using view {
+	fun {
+		let _ = theme.install-globals ()
+		.div [.id "app"] [
+			theme.top-nav (),
+			.div [.styled theme.shell] [
+				.div [.styled wrap] [
+					.h1 [.styled prose.doc-title] [.text "Recipes"],
+					.p [.styled prose.doc-sub] [
+						.text "One small, complete program in each flavor Pluma is built for — a command-line script, an HTTP server, and a fullstack app.",
+					],
+					sec-cli,
+					sec-server,
+					sec-fullstack,
+				],
+				theme.site-footer (),
+			],
+		]
+	}
+}

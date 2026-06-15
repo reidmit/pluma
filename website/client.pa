@@ -57,6 +57,10 @@ def main = fun {
 		render.hydrate (dom.body ()) reference.page
 	} else if dom.path () == "/start" {
 		render.hydrate (dom.body ()) start.page
+	} else if dom.path () == "/recipes" {
+		# Static prose, no interactivity — nothing to hydrate (and it stays out
+		# of the client bundle, like the stdlib docs below).
+		task.return ()
 	} else if string.starts-with (dom.path ()) "/std" {
 		# The stdlib reference is static — server-rendered, no interactivity — so
 		# the client does nothing. Keeping it out of the bundle means the (large,

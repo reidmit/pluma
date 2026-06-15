@@ -16,6 +16,7 @@ use std/sys/fs
 use std/sys/http
 use docdata
 use playground
+use recipes
 use reference
 use start
 use stddocs
@@ -48,6 +49,8 @@ def handler :: fun http.request -> task http.response = fun req {
 		task.return (http.html 200 (theme.document-html "Language reference — Pluma" (reference.page ())))
 	} else if req.path == "/start" {
 		task.return (http.html 200 (theme.document-html "Get started — Pluma" (start.page ())))
+	} else if req.path == "/recipes" {
+		task.return (http.html 200 (theme.document-html "Recipes — Pluma" (recipes.page ())))
 	} else if string.starts-with req.path "/std" {
 		# The path is the module name: `/std/list` → `std/list`. Bare `/std` (and
 		# any unknown name) falls back to the first module.

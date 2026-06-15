@@ -25,7 +25,7 @@ use theme
 #
 # Short, self-contained programs that show off one idea each. They're plain
 # `\n`/`\t` strings (a literal `$(` would interpolate when *this* file compiles,
-# so the one example that shows interpolation splices it in via `theme.dol`).
+# so the one example that shows interpolation splices it in via `theme.dollar`).
 
 def ex-list :: string = "use std/list\n\n# Edit this, then press Run.\ndef main = fun {\n\tlet xs = [1, 2, 3, 4, 5]\n\tprint \"numbers:\"\n\tprint xs\n\tprint \"doubled:\"\n\tprint (list.map xs fun n { n * 2 })\n\tprint \"kept > 2:\"\n\tprint (list.filter xs fun n { n > 2 })\n}\n"
 
@@ -35,7 +35,7 @@ def ex-enum :: string = "# An enum, matched with `when` (checked for exhaustiven
 
 def ex-trait :: string = "# One name, many types — a trait with an instance.\ntrait to-text a {\n\tto-text :: a -> string\n}\n\nimplement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}\n\ndef main = fun {\n\tprint (to-text true)\n\tprint (to-text false)\n}\n"
 
-def ex-record :: string = "# Records are structural; " ++ theme.dol ++ "(...) interpolates into a string.\ndef main = fun {\n\tlet user = { name: \"Ada\", age: 36 }\n\tprint \"" ++ theme.dol ++ "(user.name) is " ++ theme.dol ++ "(to-string user.age)\"\n}\n"
+def ex-record :: string = "# Records are structural; " ++ theme.dollar ++ "(...) interpolates into a string.\ndef main = fun {\n\tlet user = { name: \"Ada\", age: 36 }\n\tprint \"" ++ theme.dollar ++ "(user.name) is " ++ theme.dollar ++ "(to-string user.age)\"\n}\n"
 
 # (label, source). The first is what loads on first paint.
 def examples :: list (string, string) = [

@@ -222,10 +222,10 @@ def sec-functions :: view = doc-section "functions" "Functions" [
 def sec-strings :: view = doc-section "strings" "Strings and text" [
 	pr [
 		t "Strings are written with double quotes. To drop a value into the middle of one, use ",
-		ic (theme.dol ++ "(...)"),
+		ic (theme.dollar ++ "(...)"),
 		t " — whatever's inside the parentheses is evaluated and spliced in.",
 	],
-	code ("let name = \"Ada\"\nprint \"hello, " ++ theme.dol ++ "(name)\"               # hello, Ada\n\nlet n = 42\nprint \"the answer is " ++ theme.dol ++ "(to-string n)\""),
+	code ("let name = \"Ada\"\nprint \"hello, " ++ theme.dollar ++ "(name)\"               # hello, Ada\n\nlet n = 42\nprint \"the answer is " ++ theme.dollar ++ "(to-string n)\""),
 	pr [
 		t "Text is always text — a number isn't automatically a string, so you call ",
 		ic "to-string",
@@ -306,7 +306,7 @@ def sec-patterns :: view = doc-section "patterns" "Patterns and destructuring" [
 	code "let (x, y) = (10, 20)\nlet {name: n, age: a} = person",
 	p "Some patterns always match — naming a value, or splitting a tuple of known size. Others might not, like checking for a specific number. Patterns that can fail belong in if, when, or while, where there's a branch to take when they don't. The always-match kind can also be used in a let.",
 	p "Lists can be matched by shape, too — the empty list, or a first element and \"the rest\":",
-	code ("when items is [] {\n\t\"nothing here\"\n} is [first, ...rest] {\n\t\"starts with " ++ theme.dol ++ "(to-string first)\"\n}"),
+	code ("when items is [] {\n\t\"nothing here\"\n} is [first, ...rest] {\n\t\"starts with " ++ theme.dollar ++ "(to-string first)\"\n}"),
 ]
 
 def sec-enums :: view = doc-section "enums" "Your own types: enums" [
@@ -636,7 +636,7 @@ def sec-bytes :: view = doc-section "bytes" "Bytes" [
 		t ", and ",
 		ic "\\xNN",
 		t ". They do not interpolate — ",
-		ic (theme.dol ++ "(...)"),
+		ic (theme.dollar ++ "(...)"),
 		t " lives on ",
 		ic "string",
 		t ".",

@@ -44,7 +44,7 @@ public def repo :: string = "https://github.com/reidmit/pluma"
 
 # Pluma interpolates `$(expr)` inside string literals, so a literal dollar that
 # should survive into displayed code is spliced in from this single-character def.
-public def dol :: string = "$"
+public def dollar :: string = "$"
 
 # --- global (unscoped) styles -----------------------------------------------
 #
@@ -174,6 +174,7 @@ public def top-nav :: fun nothing -> view = using view {
 			],
 			.div [.styled nav-links] [
 				.a [.styled nav-link, .href "/start"] [.text "Get started"],
+				.a [.styled nav-link, .href "/recipes"] [.text "Recipes"],
 				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
 				.a [.styled nav-link, .href "/std/list"] [.text "Stdlib"],
 				.a [.styled nav-link, .href "/playground"] [.text "Playground"],
