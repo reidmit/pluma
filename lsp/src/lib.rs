@@ -63,9 +63,10 @@ impl LanguageServer for Backend {
 				document_symbol_provider: Some(OneOf::Left(true)),
 				inlay_hint_provider: Some(OneOf::Left(true)),
 				completion_provider: Some(CompletionOptions {
-					// `.` re-triggers completion for member access (`list.`); the
-					// client also triggers on identifier characters on its own.
-					trigger_characters: Some(vec![".".to_string()]),
+					// `.` re-triggers for member access (`list.`); `/` drills into
+					// the next segment of a `use` module path (`std/` → its
+					// contents). The client also triggers on identifier characters.
+					trigger_characters: Some(vec![".".to_string(), "/".to_string()]),
 					..CompletionOptions::default()
 				}),
 				..ServerCapabilities::default()
@@ -484,6 +485,7 @@ fn completion_to_lsp(c: completion::Completion) -> CompletionItem {
 		CompletionKind::Variant => CompletionItemKind::ENUM_MEMBER,
 		CompletionKind::Field => CompletionItemKind::FIELD,
 		CompletionKind::Module => CompletionItemKind::MODULE,
+		CompletionKind::Folder => CompletionItemKind::FOLDER,
 		CompletionKind::Keyword => CompletionItemKind::KEYWORD,
 	};
 	let text_edit = c.edit.map(|(range, new_text)| {
@@ -491,6 +493,13 @@ fn completion_to_lsp(c: completion::Completion) -> CompletionItem {
 			range: pluma_range_to_lsp(&range),
 			new_text,
 		})
+	});
+	// A directory item re-opens completion on accept, so drilling through a
+	// module path (`std/` → `sys/` → `process`) stays a single flow.
+	let command = c.retrigger.then(|| Command {
+		title: "Suggest".to_string(),
+		command: "editor.action.triggerSuggest".to_string(),
+		arguments: None,
 	});
 	CompletionItem {
 		label: c.label,
@@ -504,6 +513,7 @@ fn completion_to_lsp(c: completion::Completion) -> CompletionItem {
 		}),
 		filter_text: c.filter_text,
 		text_edit,
+		command,
 		..CompletionItem::default()
 	}
 }

@@ -17,6 +17,7 @@ pub enum CompletionKind {
 	Variant,
 	Field,
 	Module,
+	Folder,
 	Keyword,
 }
 
@@ -27,13 +28,16 @@ pub struct Completion {
 	pub detail: Option<String>,
 	pub doc: Option<String>,
 	// What the client filters this item against, when it differs from `label`.
-	// Module paths set this so a `/`-containing label still matches the typed
-	// prefix (clients treat `/` as a word boundary otherwise).
+	// A `use`-path directory filters on its bare name while its label carries a
+	// trailing `/`, so the partial segment still matches it.
 	pub filter_text: Option<String>,
-	// An explicit replacement: `(range, new_text)`. Module-path completion
-	// replaces the whole path token (which spans a `/`) rather than just the
-	// word under the cursor.
+	// An explicit replacement: `(range, new_text)`. `use`-path completion
+	// replaces just the current path segment (the text after the last `/`).
 	pub edit: Option<(compiler::Range, String)>,
+	// Ask the client to re-open completion after accepting this item. Set on
+	// `use`-path directories so accepting `sys/` immediately offers its
+	// contents — the drill-down feel.
+	pub retrigger: bool,
 }
 
 impl Completion {
@@ -50,6 +54,7 @@ impl Completion {
 			doc,
 			filter_text: None,
 			edit: None,
+			retrigger: false,
 		}
 	}
 }
@@ -69,7 +74,7 @@ pub fn complete(source: &[u8], path: &Path, line: u32, character: u32) -> Vec<Co
 	let prefix = line_prefix(source, line, character);
 	// `use std/…` paths have no `.` and aren't expressions, so check that first.
 	if let Some(path_start) = use_path_start(&prefix) {
-		return module_path_completions(path, line, path_start, character);
+		return module_path_completions(&prefix, path, line, path_start, character);
 	}
 	match member_receiver(&prefix) {
 		Some(receiver) => member_completions(source, path, line, character, &receiver),
@@ -410,16 +415,29 @@ fn use_path_start(prefix: &str) -> Option<usize> {
 		.then_some(p0)
 }
 
-// Every module name a `use` could name: the baked-in stdlib plus the project's
-// own `.pa` modules. Each replaces the whole path token so a `/`-containing
-// name inserts cleanly regardless of how the client tokenizes the line.
+// `use`-path completion, one path segment at a time. A bare `use ` offers the
+// top-level modules and directories; inside `use std/sys/` it offers that
+// directory's contents. The candidate tree is *derived* from the flat list of
+// reachable module names (baked-in stdlib + the project's `.pa` files), so it
+// tracks the real filesystem while folding the stdlib in as a virtual `std/…`
+// subtree. Accepting a directory re-triggers completion, so the drill-down is
+// continuous.
 fn module_path_completions(
+	prefix: &str,
 	current: &Path,
 	line: u32,
 	path_start: usize,
 	cursor: u32,
 ) -> Vec<Completion> {
-	let range = compiler::Range::within_line(line as usize, path_start, cursor as usize);
+	// Split the path typed so far into the committed directory prefix and the
+	// in-progress final segment, which is the only text an item replaces.
+	let path: String = prefix.chars().skip(path_start).collect();
+	let (dir_prefix, partial_start) = match path.rfind('/') {
+		// Module paths are ASCII, so a byte index is also the char column.
+		Some(slash) => (&path[..slash], path_start + slash + 1),
+		None => ("", path_start),
+	};
+	let range = compiler::Range::within_line(line as usize, partial_start, cursor as usize);
 
 	let mut names: Vec<String> = compiler::stdlib_sources()
 		.iter()
@@ -429,14 +447,61 @@ fn module_path_completions(
 	names.sort();
 	names.dedup();
 
-	names
+	let mut out = Vec::new();
+	for (segment, is_leaf, is_dir) in next_segments(&names, dir_prefix) {
+		// A segment can be both: `std/rpc` is an importable module *and* has
+		// children (`std/rpc/context`). Offer the leaf and the directory as
+		// distinct items so neither path is hidden.
+		if is_leaf {
+			let mut c = Completion::new(segment.clone(), CompletionKind::Module, None, None);
+			c.filter_text = Some(segment.clone());
+			c.edit = Some((range, segment.clone()));
+			out.push(c);
+		}
+		if is_dir {
+			let label = format!("{}/", segment);
+			let mut c = Completion::new(label.clone(), CompletionKind::Folder, None, None);
+			c.filter_text = Some(segment);
+			c.edit = Some((range, label));
+			c.retrigger = true;
+			out.push(c);
+		}
+	}
+	out
+}
+
+// The distinct next path segments under `dir_prefix`, derived from full module
+// names. Each is flagged `is_leaf` (a module is exactly `dir_prefix/segment`)
+// and/or `is_dir` (some module lives deeper under `dir_prefix/segment/…`).
+// Sorted by segment name.
+fn next_segments(names: &[String], dir_prefix: &str) -> Vec<(String, bool, bool)> {
+	use std::collections::BTreeMap;
+	let mut segs: BTreeMap<String, (bool, bool)> = BTreeMap::new();
+	for name in names {
+		// The part of `name` below `dir_prefix` (the whole name at the root).
+		let remainder = if dir_prefix.is_empty() {
+			Some(name.as_str())
+		} else {
+			name
+				.strip_prefix(dir_prefix)
+				.and_then(|r| r.strip_prefix('/'))
+		};
+		let Some(remainder) = remainder.filter(|r| !r.is_empty()) else {
+			continue;
+		};
+		let mut parts = remainder.splitn(2, '/');
+		let seg = parts.next().unwrap().to_string();
+		let has_more = parts.next().is_some();
+		let entry = segs.entry(seg).or_insert((false, false));
+		if has_more {
+			entry.1 = true;
+		} else {
+			entry.0 = true;
+		}
+	}
+	segs
 		.into_iter()
-		.map(|name| {
-			let mut c = Completion::new(name.clone(), CompletionKind::Module, None, None);
-			c.filter_text = Some(name.clone());
-			c.edit = Some((range, name));
-			c
-		})
+		.map(|(seg, (leaf, dir))| (seg, leaf, dir))
 		.collect()
 }
 
@@ -527,28 +592,77 @@ mod tests {
 	}
 
 	#[test]
-	fn completes_stdlib_module_paths() {
-		// `use std/` offers stdlib module names, each replacing the whole path.
-		let src = "use std/\n";
-		let items = complete(src.as_bytes(), &PathBuf::from("/proj/main.pa"), 0, 8);
-		let labels: Vec<&str> = items.iter().map(|c| c.label.as_str()).collect();
+	fn stdlib_paths_drill_down_one_segment() {
+		// `use ` at top level: `std` is a directory (all stdlib lives under it),
+		// offered with a trailing slash and a re-trigger.
+		let top = complete(b"use \n", &PathBuf::from("/proj/main.pa"), 0, 4);
+		let std_dir = top
+			.iter()
+			.find(|c| c.label == "std/")
+			.expect("expected std/ dir");
+		assert!(std_dir.retrigger, "directory should re-trigger completion");
+		assert!(matches!(std_dir.kind, CompletionKind::Folder));
+		// It inserts just `std/` at the cursor (cols 4..4), not a full path.
+		let (range, new_text) = std_dir.edit.as_ref().unwrap();
+		assert_eq!((range.start.col, range.end.col), (4, 4));
+		assert_eq!(new_text, "std/");
+
+		// `use std/`: the next level — leaf modules (`list`) and subdirectories
+		// (`sys/`), as bare segments, not `std/list`.
+		let lvl = complete(b"use std/\n", &PathBuf::from("/proj/main.pa"), 0, 8);
+		let labels: Vec<&str> = lvl.iter().map(|c| c.label.as_str()).collect();
 		assert!(
-			labels.contains(&"std/list"),
-			"expected std/list in {:?}",
+			labels.contains(&"list"),
+			"expected leaf `list` in {:?}",
 			labels
 		);
-		assert!(labels.contains(&"std/string"), "expected std/string");
+		assert!(labels.contains(&"string"), "expected leaf `string`");
+		assert!(labels.contains(&"sys/"), "expected `sys/` directory");
 		assert!(
-			labels.contains(&"std/sys/process"),
-			"expected nested module"
+			!labels.contains(&"std/list"),
+			"should be segments, not full paths"
 		);
-		// The item replaces the path token (cols 4..8) with the full name, and
-		// filters against the full path so `std/` still matches `std/list`.
-		let list = items.iter().find(|c| c.label == "std/list").unwrap();
-		assert_eq!(list.filter_text.as_deref(), Some("std/list"));
-		let (range, new_text) = list.edit.as_ref().expect("expected a text edit");
-		assert_eq!((range.start.col, range.end.col), (4, 8));
-		assert_eq!(new_text, "std/list");
+		// The `list` leaf inserts at the segment slot (col 8), not the whole path.
+		let list = lvl.iter().find(|c| c.label == "list").unwrap();
+		let (range, new_text) = list.edit.as_ref().unwrap();
+		assert_eq!((range.start.col, range.end.col), (8, 8));
+		assert_eq!(new_text, "list");
+
+		// `use std/sys/`: drilled into the subdirectory.
+		let sys = complete(b"use std/sys/\n", &PathBuf::from("/proj/main.pa"), 0, 12);
+		let labels: Vec<&str> = sys.iter().map(|c| c.label.as_str()).collect();
+		assert!(
+			labels.contains(&"process"),
+			"expected `process` in {:?}",
+			labels
+		);
+		assert!(labels.contains(&"io"), "expected `io`");
+	}
+
+	#[test]
+	fn module_that_is_both_leaf_and_dir() {
+		// `std/rpc` is importable *and* has children (`std/rpc/context`), so it
+		// shows up twice: the module `rpc` and the directory `rpc/`.
+		let lvl = complete(b"use std/\n", &PathBuf::from("/proj/main.pa"), 0, 8);
+		let labels: Vec<&str> = lvl.iter().map(|c| c.label.as_str()).collect();
+		assert!(
+			labels.contains(&"rpc"),
+			"expected leaf `rpc` in {:?}",
+			labels
+		);
+		assert!(labels.contains(&"rpc/"), "expected `rpc/` directory");
+	}
+
+	#[test]
+	fn partial_segment_replacement() {
+		// Mid-segment (`use std/li`), an item replaces only the partial `li`
+		// (cols 8..10) and filters on the bare segment, so `li` still matches.
+		let items = complete(b"use std/li\n", &PathBuf::from("/proj/main.pa"), 0, 10);
+		let list = items.iter().find(|c| c.label == "list").unwrap();
+		assert_eq!(list.filter_text.as_deref(), Some("list"));
+		let (range, new_text) = list.edit.as_ref().unwrap();
+		assert_eq!((range.start.col, range.end.col), (8, 10));
+		assert_eq!(new_text, "list");
 	}
 
 	#[test]
@@ -561,24 +675,29 @@ mod tests {
 		std::fs::write(dir.join("util/math.pa"), "public def b = 1\n").unwrap();
 		std::fs::write(dir.join("main.test.pa"), "def tests = []\n").unwrap();
 
+		// `use ` at the project root: top-level leaf `helpers`, directory `util/`,
+		// and the stdlib root `std/` — derived straight from the filesystem.
 		let main_path = dir.join("main.pa");
-		let items = complete(b"use \n", &main_path, 0, 4);
-		let labels: Vec<&str> = items.iter().map(|c| c.label.as_str()).collect();
+		let top = complete(b"use \n", &main_path, 0, 4);
+		let labels: Vec<&str> = top.iter().map(|c| c.label.as_str()).collect();
 		assert!(
 			labels.contains(&"helpers"),
 			"expected helpers in {:?}",
 			labels
 		);
-		assert!(labels.contains(&"util/math"), "expected nested user module");
-		// Test files and the project marker aren't importable modules.
+		assert!(labels.contains(&"util/"), "expected util/ directory");
+		assert!(labels.contains(&"std/"), "expected stdlib root");
+		// Test files and the project marker aren't importable.
+		assert!(!labels.contains(&"main"), "leaked editing file");
 		assert!(
-			!labels.contains(&"main.test"),
-			"leaked test module: {:?}",
-			labels
+			!labels.contains(&"main.test") && !labels.contains(&"pluma"),
+			"leaked non-module"
 		);
-		assert!(!labels.contains(&"pluma"), "leaked project marker");
-		// stdlib still offered alongside user modules.
-		assert!(labels.contains(&"std/list"), "stdlib missing");
+
+		// `use util/`: the subdirectory's contents.
+		let inside = complete(b"use util/\n", &main_path, 0, 9);
+		let labels: Vec<&str> = inside.iter().map(|c| c.label.as_str()).collect();
+		assert!(labels.contains(&"math"), "expected math in {:?}", labels);
 		let _ = std::fs::remove_dir_all(&dir);
 	}
 
