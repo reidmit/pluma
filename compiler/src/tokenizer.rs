@@ -105,6 +105,18 @@ impl<'a> Tokenizer<'a> {
 		self.source.get(self.index).copied()
 	}
 
+	// Whether the byte at `i` is escaped — preceded by an odd run of
+	// backslashes. Used to tell an interpolation `$(` from an escaped `\$(`.
+	fn is_escaped(&self, i: usize) -> bool {
+		let mut backslashes = 0;
+		let mut j = i;
+		while j > 0 && self.source[j - 1] == b'\\' {
+			backslashes += 1;
+			j -= 1;
+		}
+		backslashes % 2 == 1
+	}
+
 	// Whether the three bytes starting at `i` are `"""` — the opener/closer of
 	// a triple-quoted string.
 	fn is_triple_quote(&self, i: usize) -> bool {
@@ -198,10 +210,16 @@ impl<'a> Iterator for Tokenizer<'a> {
 					}
 				}
 
-				if byte == b'$' && start_index + 1 < self.length && self.source[start_index + 1] == b'(' {
-					// We must be at the beginning of an interpolation, so create a token for
-					// the string literal portion leading up to the interpolation, one for the
-					// interpolation start, and add to the interpolation stack.
+				if byte == b'$'
+					&& start_index + 1 < self.length
+					&& self.source[start_index + 1] == b'('
+					&& !self.is_escaped(start_index)
+				{
+					// We must be at the beginning of an interpolation (an unescaped
+					// `$(`), so create a token for the string literal portion leading
+					// up to the interpolation, one for the interpolation start, and
+					// add to the interpolation stack. An escaped `\$(` is left to the
+					// content branch and decodes to a literal `$(`.
 					let string_start_index = *self.string_stack.last().unwrap();
 					let string_end_index = self.index;
 

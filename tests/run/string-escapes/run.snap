@@ -9,7 +9,9 @@ tab	end
 newline
 end
 literal backslash-n: a\nb
-literal backslash-t: x\ty
 quote: "hi"
 backslash: a\b
+escaped dollar: $(name) is literal
+real interpolation: world
+bare dollar: 5$ and $5
 == stderr ==

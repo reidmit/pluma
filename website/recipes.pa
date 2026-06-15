@@ -33,11 +33,26 @@ def wrap :: css.ruleset = css.rule [
 
 # --- recipe sources ---------------------------------------------------------
 #
-# Display-only Pluma source. The CLI snippet shows string interpolation, so its
-# `$(` is spliced in via `theme.dollar` rather than written literally (which would
-# interpolate when *this* file compiles).
+# Display-only Pluma source. The CLI snippet shows string interpolation; its `$(`
+# is written `\$(` so it stays literal instead of interpolating when this file
+# compiles.
 
-def cli-src :: string = "use std/list\nuse std/sys/process\n\n# Run it with:  pluma run greet.pa -- Ada Grace\ndef main = fun {\n\tlet names = process.args ()\n\tif list.is-empty names {\n\t\tprint \"usage: greet <name>...\"\n\t} else {\n\t\tlist.each names fun name {\n\t\t\tprint \"hello, " ++ theme.dollar ++ "(name)!\"\n\t\t}\n\t}\n}"
+def cli-src :: string = """
+use std/list
+use std/sys/process
+
+# Run it with:  pluma run greet.pa -- Ada Grace
+def main = fun {
+	let names = process.args ()
+	if list.is-empty names {
+		print "usage: greet <name>..."
+	} else {
+		list.each names fun name {
+			print "hello, \$(name)!"
+		}
+	}
+}
+"""
 
 def server-src :: string = """
 use std/router

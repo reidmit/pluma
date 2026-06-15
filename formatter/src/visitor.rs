@@ -1504,12 +1504,21 @@ enum BlockSeg {
 	Expr(String),
 }
 
-// Escape a literal run for emission inside a block string. Only backslashes
-// need escaping: quotes are literal in block form, and newlines become real
-// line breaks. Doubling backslashes keeps them from forming escape sequences
-// when the string is read back.
+// Escape a literal run for emission inside a block string. Quotes are literal
+// in block form and newlines become real line breaks, so only two things need
+// escaping: backslashes (doubled, so they don't forge escape sequences when read
+// back) and a `$` directly before `(` (so it isn't read as interpolation).
 fn escape_block_segment(s: &str) -> String {
-	s.replace('\\', "\\\\")
+	let mut out = String::with_capacity(s.len());
+	let mut chars = s.chars().peekable();
+	while let Some(c) = chars.next() {
+		match c {
+			'\\' => out.push_str("\\\\"),
+			'$' if chars.peek() == Some(&'(') => out.push_str("\\$"),
+			_ => out.push(c),
+		}
+	}
+	out
 }
 
 // Whether a plain string value can be rendered as a block string without losing
@@ -1580,13 +1589,17 @@ fn render_block_string(segs: &[BlockSeg]) -> Doc {
 
 fn escape_string(s: &str) -> String {
 	let mut out = String::with_capacity(s.len());
-	for c in s.chars() {
+	let mut chars = s.chars().peekable();
+	while let Some(c) = chars.next() {
 		match c {
 			'\\' => out.push_str("\\\\"),
 			'"' => out.push_str("\\\""),
 			'\t' => out.push_str("\\t"),
 			'\r' => out.push_str("\\r"),
 			'\n' => out.push_str("\\n"),
+			// A literal `$` immediately before `(` must be escaped so it isn't
+			// read back as interpolation. A `$` anywhere else stays bare.
+			'$' if chars.peek() == Some(&'(') => out.push_str("\\$"),
 			_ => out.push(c),
 		}
 	}

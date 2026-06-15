@@ -217,7 +217,13 @@ def heart-btn :: css.ruleset = css.rule [
 def snippets :: list (string, string) = [
 	(
 		"hello",
-		"def main = fun {\n\tlet xs = [1, 2, 3, 4]\n\tlet ys = list.map xs fun n { n * 2 }\n\tprint \"sum = " ++ theme.dollar ++ "(to-string (list.sum ys))\"\n}",
+		"""
+		def main = fun {
+			let xs = [1, 2, 3, 4]
+			let ys = list.map xs fun n { n * 2 }
+			print "sum = \$(to-string (list.sum ys))"
+		}
+		""",
 	),
 	(
 		"types",

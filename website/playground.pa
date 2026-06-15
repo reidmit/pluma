@@ -23,9 +23,9 @@ use theme
 
 # --- curated examples -------------------------------------------------------
 #
-# Short, self-contained programs that show off one idea each. They're plain
-# `\n`/`\t` strings (a literal `$(` would interpolate when *this* file compiles,
-# so the one example that shows interpolation splices it in via `theme.dollar`).
+# Short, self-contained programs that show off one idea each. The one example that
+# shows interpolation writes `\$(` so the `$(` stays literal instead of
+# interpolating when this file compiles.
 
 def ex-list :: string = """
 use std/list
@@ -97,7 +97,14 @@ def main = fun {
 
 """
 
-def ex-record :: string = "# Records are structural; " ++ theme.dollar ++ "(...) interpolates into a string.\ndef main = fun {\n\tlet user = { name: \"Ada\", age: 36 }\n\tprint \"" ++ theme.dollar ++ "(user.name) is " ++ theme.dollar ++ "(to-string user.age)\"\n}\n"
+def ex-record :: string = """
+# Records are structural; \$(...) interpolates into a string.
+def main = fun {
+	let user = { name: "Ada", age: 36 }
+	print "\$(user.name) is \$(to-string user.age)"
+}
+
+"""
 
 # (label, source). The first is what loads on first paint.
 def examples :: list (string, string) = [

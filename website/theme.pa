@@ -42,10 +42,6 @@ public def mono :: string = "'Source Code Pro', ui-monospace, 'SF Mono', Menlo, 
 
 public def repo :: string = "https://github.com/reidmit/pluma"
 
-# Pluma interpolates `$(expr)` inside string literals, so a literal dollar that
-# should survive into displayed code is spliced in from this single-character def.
-public def dollar :: string = "$"
-
 # --- global (unscoped) styles -----------------------------------------------
 #
 # Registered into the CSS collector when a page builds, on both server and client.

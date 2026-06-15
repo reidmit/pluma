@@ -55,6 +55,9 @@ fn decode_string_escapes(s: &str) -> String {
 			Some('r') => out.push('\r'),
 			Some('"') => out.push('"'),
 			Some('\\') => out.push('\\'),
+			// `\$` escapes a dollar so a following `(` isn't read as
+			// interpolation; it decodes to a plain `$`.
+			Some('$') => out.push('$'),
 			Some(other) => {
 				out.push('\\');
 				out.push(other);

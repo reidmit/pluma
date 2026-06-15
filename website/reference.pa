@@ -247,10 +247,20 @@ def sec-functions :: view = doc-section "functions" "Functions" [
 def sec-strings :: view = doc-section "strings" "Strings and text" [
 	pr [
 		t "Strings are written with double quotes. To drop a value into the middle of one, use ",
-		ic (theme.dollar ++ "(...)"),
-		t " — whatever's inside the parentheses is evaluated and spliced in.",
+		ic "\$(...)",
+		t " — whatever's inside the parentheses is evaluated and spliced in. Only ",
+		ic "\$(",
+		t " starts interpolation; to write one literally (a shell snippet, say) escape the dollar as ",
+		ic "\\\$(",
+		t ".",
 	],
-	code ("let name = \"Ada\"\nprint \"hello, " ++ theme.dollar ++ "(name)\"               # hello, Ada\n\nlet n = 42\nprint \"the answer is " ++ theme.dollar ++ "(to-string n)\""),
+	code """
+	let name = "Ada"
+	print "hello, \$(name)"               # hello, Ada
+
+	let n = 42
+	print "the answer is \$(to-string n)"
+	""",
 	pr [
 		t "Text is always text — a number isn't automatically a string, so you call ",
 		ic "to-string",
@@ -266,10 +276,10 @@ def sec-strings :: view = doc-section "strings" "Strings and text" [
 		t " is followed by a line break, and the indentation of the closing ",
 		ic "\"\"\"",
 		t " sets the left margin — that much leading whitespace is stripped from every line, so the text lines up with your code without the indentation leaking into the value. Double quotes need no escaping inside, and ",
-		ic (theme.dollar ++ "(...)"),
+		ic "\$(...)",
 		t " interpolation works just as it does in an ordinary string.",
 	],
-	code ("def page = \"\"\"\n\t<ul>\n\t\t<li>" ++ theme.dollar ++ "(name)</li>\n\t</ul>\n\t\"\"\"\n\n# page is \"<ul>\\n\\t<li>...</li>\\n</ul>\""),
+	code "def page = \"\"\"\n\t<ul>\n\t\t<li>\$(name)</li>\n\t</ul>\n\t\"\"\"\n\n# page is \"<ul>\\n\\t<li>...</li>\\n</ul>\"",
 ]
 
 def sec-collections :: view = doc-section "collections" "Lists, tuples, and records" [
@@ -379,7 +389,13 @@ def sec-patterns :: view = doc-section "patterns" "Patterns and destructuring" [
 	""",
 	p "Some patterns always match — naming a value, or splitting a tuple of known size. Others might not, like checking for a specific number. Patterns that can fail belong in if, when, or while, where there's a branch to take when they don't. The always-match kind can also be used in a let.",
 	p "Lists can be matched by shape, too — the empty list, or a first element and \"the rest\":",
-	code ("when items is [] {\n\t\"nothing here\"\n} is [first, ...rest] {\n\t\"starts with " ++ theme.dollar ++ "(to-string first)\"\n}"),
+	code """
+	when items is [] {
+		"nothing here"
+	} is [first, ...rest] {
+		"starts with \$(to-string first)"
+	}
+	""",
 ]
 
 def sec-enums :: view = doc-section "enums" "Your own types: enums" [
@@ -802,7 +818,7 @@ def sec-bytes :: view = doc-section "bytes" "Bytes" [
 		t ", and ",
 		ic "\\xNN",
 		t ". They do not interpolate — ",
-		ic (theme.dollar ++ "(...)"),
+		ic "\$(...)",
 		t " lives on ",
 		ic "string",
 		t ".",

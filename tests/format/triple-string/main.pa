@@ -6,10 +6,15 @@ def block = """
 
 def oneline = """has "quotes" in it"""
 
+def shell = """
+	run \$(date) — literal, not interpolated
+	"""
+
 def regular_with_newline = "stays\nregular"
 
 def main = fun {
 	print block
 	print oneline
+	print shell
 	print regular_with_newline
 }
