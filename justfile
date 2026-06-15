@@ -91,6 +91,19 @@ test-grammar:
   @ cd vsix && npm test
   @ cd tree-sitter && ./node_modules/.bin/tree-sitter test && ./script/test.sh
 
+# package the vscode extension into a .vsix and install it into your local
+# VS Code (not the dev-host window — the real, persistent install). Folds in
+# `install` so a fresh `pluma` (which hosts the language server) is on PATH.
+# Reload the VS Code window afterward to pick up the new build. Note: VS Code
+# must be able to see `pluma` on PATH — launch it from a shell (`code .`), or
+# `just install /usr/local/bin` if you start it from the Dock/Spotlight.
+vs-install: install
+  cd vsix && npm install --silent \
+    && rm -rf dist \
+    && node_modules/.bin/esbuild src/extension.ts --outdir=dist --platform=node --format=cjs \
+    && npx --yes @vscode/vsce package -o pluma-language-client.vsix \
+    && code --install-extension pluma-language-client.vsix --force
+
 # build & run the vscode extension in a new window for local testing
 vs-extension:
   cargo build --bin pluma

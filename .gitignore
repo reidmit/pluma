@@ -7,6 +7,7 @@
 /site/public
 dist
 node_modules
+*.vsix
 .claude/settings.local.json
 /out
 memory/
