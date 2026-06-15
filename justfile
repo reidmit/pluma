@@ -39,6 +39,15 @@ build:
 build-release:
   @ cargo build --release --bin pluma
 
+# build the release cli and install it onto PATH so `pluma` runs from anywhere.
+# Defaults to ~/.cargo/bin (rustup already puts it on PATH, no sudo needed);
+# override the destination with e.g. `just install /usr/local/bin`.
+install dir="$HOME/.cargo/bin": build-release
+  @ mkdir -p {{dir}}
+  @ install -m 0755 target/release/pluma {{dir}}/pluma
+  @ echo "installed $(target/release/pluma version) -> {{dir}}/pluma"
+  @ command -v pluma >/dev/null 2>&1 || echo "note: {{dir}} isn't on your PATH yet — add it to use \`pluma\` directly"
+
 # regenerate the stdlib-docs JSON artifact (`website/stdlib.json`) that the
 # website's /std pages render — type signatures + doc comments straight from the
 # stdlib source, decoded by the server at startup. Run whenever the stdlib's
