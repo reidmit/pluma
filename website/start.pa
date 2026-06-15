@@ -31,6 +31,16 @@ def wrap :: css.ruleset = css.rule [
 
 # --- sections ---------------------------------------------------------------
 
+def sec-try :: view = doc-section "try" "Try it first" [
+	p "Nothing to install to get going: the playground runs the real compiler and your program right in the browser. Write a little Pluma, press Run, and watch it work.",
+	using view {
+		.div [.styled prose.doc-cta] [
+			.a [.styled theme.btn-primary, .href "/playground"] [.text "Open the playground"],
+		]
+	},
+	p "When you want it on your own machine, install the compiler below.",
+]
+
 def sec-install :: view = doc-section "install" "Install" [
 	pr [
 		t "Pluma builds from source with a stable ",
@@ -136,6 +146,7 @@ public def page :: fun nothing -> view = using view {
 					.p [.styled prose.doc-sub] [
 						.text "From the playground to the compiler on your machine, in a few minutes.",
 					],
+					sec-try,
 					sec-install,
 					sec-first,
 					sec-toolbelt,
