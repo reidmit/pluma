@@ -1,19 +1,21 @@
 # The standard-library reference. Unlike the hand-written `reference`, every word
 # here comes from the source: `pluma doc std` walks each analyzed module and emits
-# `stdlibdocs.pa` (signatures from the compiler's own inferred types, prose from the
-# `#` doc comments), and this page renders that data with the shared `prose`
-# toolkit. Regenerate the data and the docs update — they can't drift.
+# `stdlib.json` (signatures from the compiler's own inferred types, prose from
+# the `#` doc comments); the server decodes that artifact at startup (`docdata`)
+# and this page renders the data with the shared `prose` toolkit. Regenerate the
+# data and the docs update — they can't drift.
 #
 # One module per page, at the module's own path (`/std/list`, `/std/sys/http`): a
 # left sidebar picks the module, a right sidebar jumps to a name within it. `page`
-# takes the module name; the server passes it from the path and the client reads it
-# back at hydration, so both render the same tree.
+# takes the decoded module list (loaded once, server-side) plus the selected
+# module name, which the server passes from the path. The `/std` pages are
+# server-rendered only, so the data never ships to the browser.
 
 use std/css
 use std/list
 use std/view
+use docdata
 use prose
-use stdlibdocs
 use theme
 
 # --- layout -----------------------------------------------------------------
@@ -118,15 +120,15 @@ def sig :: css.ruleset = css.rule [
 
 # --- module lookup ----------------------------------------------------------
 
-def empty-module :: stdlibdocs.doc-module = {name: "", namespace: "", blocks: [], items: []}
+def empty-module :: docdata.doc-module = {name: "", namespace: "", blocks: [], items: []}
 
 # The module a path selects (by its full name, e.g. `std/list`), falling back to
 # the first when the name is empty (`/std`) or unknown.
-def current-module :: fun string -> stdlibdocs.doc-module = fun name {
-	when list.find stdlibdocs.modules fun m { m.name == name } is some m {
+def current-module :: fun (list docdata.doc-module) string -> docdata.doc-module = fun mods name {
+	when list.find mods fun m { m.name == name } is some m {
 		m
 	} else {
-		when list.head stdlibdocs.modules is some m {
+		when list.head mods is some m {
 			m
 		} else {
 			empty-module
@@ -139,7 +141,7 @@ def current-module :: fun string -> stdlibdocs.doc-module = fun name {
 # One highlighted token of a code block — a class-tagged span, or bare text for
 # the unclassified runs (whitespace, punctuation). The `tok-*` classes are
 # themed by `install-highlight`.
-def render-span :: fun stdlibdocs.doc-span -> view = using view {
+def render-span :: fun docdata.doc-span -> view = using view {
 	fun s {
 		if s.class == "" {
 			.text s.text
@@ -151,7 +153,7 @@ def render-span :: fun stdlibdocs.doc-span -> view = using view {
 
 # One doc paragraph: a syntax-highlighted example block, or prose with inline
 # markdown.
-def render-block :: fun stdlibdocs.doc-block -> view = fun b {
+def render-block :: fun docdata.doc-block -> view = fun b {
 	if b.kind == "code" {
 		prose.code-of (list.map b.spans render-span)
 	} else {
@@ -182,7 +184,7 @@ def install-highlight :: fun nothing -> nothing = fun {
 
 # One documented item — `list.map :: <signature>`, anchored at `<ns>-<name>`,
 # followed by its prose and examples.
-def render-item :: fun string stdlibdocs.doc-item -> view = using view {
+def render-item :: fun string docdata.doc-item -> view = using view {
 	fun ns it {
 		.div [.id (ns ++ "-" ++ it.name), .styled item] [
 			.div [.styled sig] [.text (it.name ++ " :: " ++ it.signature)],
@@ -192,7 +194,7 @@ def render-item :: fun string stdlibdocs.doc-item -> view = using view {
 }
 
 # Left rail: every module, linking to its page; the current one highlighted.
-def module-link :: fun string stdlibdocs.doc-module -> view = using view {
+def module-link :: fun string docdata.doc-module -> view = using view {
 	fun current m {
 		.a [
 			.styled if m.name == current {
@@ -206,7 +208,7 @@ def module-link :: fun string stdlibdocs.doc-module -> view = using view {
 }
 
 # Right rail: every item name on this page, linking to its anchor.
-def toc-link :: fun string stdlibdocs.doc-item -> view = using view {
+def toc-link :: fun string docdata.doc-item -> view = using view {
 	fun ns it {
 		.a [.styled toc-item, .href ("#" ++ ns ++ "-" ++ it.name)] [.text it.name]
 	}
@@ -214,20 +216,18 @@ def toc-link :: fun string stdlibdocs.doc-item -> view = using view {
 
 # --- page -------------------------------------------------------------------
 
-public def page :: fun string -> view = using view {
-	fun name {
+public def page :: fun (list docdata.doc-module) string -> view = using view {
+	fun mods name {
 		let _ = theme.install-globals ()
 		let _ = install-highlight ()
-		let cur = current-module name
+		let cur = current-module mods name
 		.div [.id "app"] [
+			theme.top-nav (),
 			.div [.styled theme.shell] [
-				theme.top-nav (),
 				.div [.styled layout] [
 					.aside [.styled rail-left] [
 						.div [.styled side-title] [.text "Modules"],
-						.div [.styled side-list] (list.map stdlibdocs.modules fun m {
-							module-link cur.name m
-						}),
+						.div [.styled side-list] (list.map mods fun m { module-link cur.name m }),
 					],
 					.main [.styled main-col] [
 						.h1 [.styled prose.doc-title] [.text cur.name],

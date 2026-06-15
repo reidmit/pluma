@@ -1,0 +1,91 @@
+# The doc data schema + JSON decoder. `pluma doc <module>` emits a JSON artifact
+# describing a module's public surface (signatures from the compiler's inferred
+# types, prose from `#` comments); this module decodes that JSON back into records
+# a renderer can walk. The shape is generic — it isn't tied to the stdlib, so any
+# published package's docs decode the same way.
+
+use std/json
+use std/list
+
+public alias doc-span {class :: string, text :: string}
+
+public alias doc-block {kind :: string, text :: string, spans :: list doc-span}
+
+public alias doc-item {name :: string, signature :: string, blocks :: list doc-block}
+
+public alias doc-module {
+	name :: string,
+	namespace :: string,
+	blocks :: list doc-block,
+	items :: list doc-item,
+}
+
+# A string field of a JSON object, or `""` if absent or not a string.
+def str-field :: fun json.value string -> string = fun v k {
+	when json.get-field v k is some fv {
+		when json.get-string fv is some s {
+			s
+		} else {
+			""
+		}
+	} else {
+		""
+	}
+}
+
+# An array field of a JSON object, or `[]` if absent or not an array.
+def arr-field :: fun json.value string -> list json.value = fun v k {
+	when json.get-field v k is some fv {
+		when json.get-array fv is some xs {
+			xs
+		} else {
+			[]
+		}
+	} else {
+		[]
+	}
+}
+
+def decode-span :: fun json.value -> doc-span = fun v {
+	{class: str-field v "class", text: str-field v "text"}
+}
+
+def decode-block :: fun json.value -> doc-block = fun v {
+	{
+		kind: str-field v "kind",
+		text: str-field v "text",
+		spans: list.map (arr-field v "spans") decode-span,
+	}
+}
+
+def decode-item :: fun json.value -> doc-item = fun v {
+	{
+		name: str-field v "name",
+		signature: str-field v "signature",
+		blocks: list.map (arr-field v "blocks") decode-block,
+	}
+}
+
+def decode-module :: fun json.value -> doc-module = fun v {
+	{
+		name: str-field v "name",
+		namespace: str-field v "namespace",
+		blocks: list.map (arr-field v "blocks") decode-block,
+		items: list.map (arr-field v "items") decode-item,
+	}
+}
+
+# Decode the JSON text emitted by `pluma doc` into a list of module docs. Malformed
+# or unexpected JSON yields an empty list rather than failing — a docs page with no
+# data renders empty, which is the right degradation for a missing artifact.
+public def decode :: fun string -> list doc-module = fun text {
+	when json.parse text is ok v {
+		when json.get-array v is some xs {
+			list.map xs decode-module
+		} else {
+			[]
+		}
+	} else {
+		[]
+	}
+}

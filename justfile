@@ -39,12 +39,12 @@ build:
 build-release:
   @ cargo build --release --bin pluma
 
-# regenerate the generated stdlib-docs data module (`website/stdlibdocs.pa`) that
-# the website's /std pages render — type signatures + doc comments straight from
-# the stdlib source. Run whenever the stdlib's public surface or doc comments change.
+# regenerate the stdlib-docs JSON artifact (`website/stdlib.json`) that the
+# website's /std pages render — type signatures + doc comments straight from the
+# stdlib source, decoded by the server at startup. Run whenever the stdlib's
+# public surface or doc comments change.
 gen-stdlib-docs:
-  @ cargo run --bin pluma --quiet -- doc std -o website/stdlibdocs.pa
-  @ cargo run --bin pluma --quiet -- format website/stdlibdocs.pa
+  @ cargo run --bin pluma --quiet -- doc std -o website/stdlib.json
 
 # build the pluma.fun website: regenerate the stdlib docs from source, then the
 # fullstack bundle (server.wasm + client bundle, written alongside website/).

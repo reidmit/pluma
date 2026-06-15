@@ -1,10 +1,10 @@
 //! `pluma doc <module>` — generate documentation for a module from its source.
 //!
 //! Analyzes the named module (the stdlib is baked in, so `std/list` resolves
-//! without anything on disk) and emits a self-contained Pluma data module
-//! describing its public surface. A docs site `use`s that module and renders
-//! it, so the docs come straight from the source — signatures from the
-//! compiler's own inferred types, prose from the `#` doc comments.
+//! without anything on disk) and emits a JSON data artifact describing its
+//! public surface. A docs site reads that JSON at runtime and renders it, so the
+//! docs come straight from the source — signatures from the compiler's own
+//! inferred types, prose from the `#` doc comments.
 //!
 //! The special target `std` documents every baked-in stdlib module at once.
 
@@ -25,7 +25,7 @@ pub(crate) fn doc_command(module: String, out: Option<String>) {
 		})]
 	};
 
-	let source = docs::to_pluma_source(&models);
+	let source = docs::to_json(&models);
 	match out {
 		Some(path) => match std::fs::write(&path, source) {
 			Ok(()) => eprintln!("wrote docs for {} module(s) to {path}", models.len()),
