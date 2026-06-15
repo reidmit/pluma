@@ -114,7 +114,9 @@ fn count_projections<'a>(
 			count_projections(left, ctx, params, suppressed, counts);
 			count_projections(right, ctx, params, suppressed, counts);
 		}
-		ExprKind::UnaryOperation { right, .. } => count_projections(right, ctx, params, suppressed, counts),
+		ExprKind::UnaryOperation { right, .. } => {
+			count_projections(right, ctx, params, suppressed, counts)
+		}
 		ExprKind::ElementAccess { receiver, .. } => {
 			count_projections(receiver, ctx, params, suppressed, counts)
 		}
