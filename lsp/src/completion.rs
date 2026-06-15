@@ -25,6 +25,32 @@ pub struct Completion {
 	// The type signature, shown dimmed beside the label (`fun (list a) -> int`).
 	pub detail: Option<String>,
 	pub doc: Option<String>,
+	// What the client filters this item against, when it differs from `label`.
+	// Module paths set this so a `/`-containing label still matches the typed
+	// prefix (clients treat `/` as a word boundary otherwise).
+	pub filter_text: Option<String>,
+	// An explicit replacement: `(range, new_text)`. Module-path completion
+	// replaces the whole path token (which spans a `/`) rather than just the
+	// word under the cursor.
+	pub edit: Option<(compiler::Range, String)>,
+}
+
+impl Completion {
+	fn new(
+		label: impl Into<String>,
+		kind: CompletionKind,
+		detail: Option<String>,
+		doc: Option<String>,
+	) -> Self {
+		Completion {
+			label: label.into(),
+			kind,
+			detail,
+			doc,
+			filter_text: None,
+			edit: None,
+		}
+	}
 }
 
 // Pluma keywords offered in open position. Deliberately small: only the words
@@ -40,6 +66,10 @@ const KEYWORDS: &[&str] = &[
 /// keywords.
 pub fn complete(source: &[u8], path: &Path, line: u32, character: u32) -> Vec<Completion> {
 	let prefix = line_prefix(source, line, character);
+	// `use std/…` paths have no `.` and aren't expressions, so check that first.
+	if let Some(path_start) = use_path_start(&prefix) {
+		return module_path_completions(path, line, path_start, character);
+	}
 	match member_receiver(&prefix) {
 		Some(receiver) => member_completions(source, path, &receiver),
 		None => scope_completions(source, line, character),
@@ -133,12 +163,7 @@ fn module_member_completions(module: &Module, full_name: &str) -> Vec<Completion
 		let kind = def_kind(def);
 		let detail = source.as_deref().and_then(|s| signature_of(s, def));
 		let doc = doc_comment_for(module, def.range.start.line);
-		out.push(Completion {
-			label: def.name.name.clone(),
-			kind,
-			detail,
-			doc,
-		});
+		out.push(Completion::new(def.name.name.clone(), kind, detail, doc));
 	}
 	out
 }
@@ -161,11 +186,13 @@ fn local_enum_variants(source: &[u8], receiver: &str) -> Option<Vec<Completion>>
 		let items = en
 			.variants
 			.iter()
-			.map(|v| Completion {
-				label: v.name.name.clone(),
-				kind: CompletionKind::Variant,
-				detail: None,
-				doc: doc_comment_for(&module, v.name.range.start.line),
+			.map(|v| {
+				Completion::new(
+					v.name.name.clone(),
+					CompletionKind::Variant,
+					None,
+					doc_comment_for(&module, v.name.range.start.line),
+				)
 			})
 			.collect();
 		return Some(items);
@@ -178,26 +205,19 @@ fn local_enum_variants(source: &[u8], receiver: &str) -> Option<Vec<Completion>>
 fn scope_completions(source: &[u8], line: u32, character: u32) -> Vec<Completion> {
 	let mut out: Vec<Completion> = goto::visible_symbols(source, line, character)
 		.into_iter()
-		.map(|(name, kind)| Completion {
-			label: name,
-			kind: match kind {
+		.map(|(name, kind)| {
+			let kind = match kind {
 				SymKind::Value => CompletionKind::Value,
 				SymKind::Type => CompletionKind::Alias,
 				SymKind::Namespace => CompletionKind::Module,
 				SymKind::Variant => CompletionKind::Variant,
-			},
-			detail: None,
-			doc: None,
+			};
+			Completion::new(name, kind, None, None)
 		})
 		.collect();
 
 	for kw in KEYWORDS {
-		out.push(Completion {
-			label: (*kw).to_string(),
-			kind: CompletionKind::Keyword,
-			detail: None,
-			doc: None,
-		});
+		out.push(Completion::new(*kw, CompletionKind::Keyword, None, None));
 	}
 	out
 }
@@ -281,6 +301,111 @@ fn scan_uses(source: &[u8]) -> Vec<(String, String)> {
 	out
 }
 
+// -- use-path completion --------------------------------------------------
+
+// If the cursor sits in the path of a `use` line (`use std/lis|`, `use |`),
+// return the column where the path starts. `None` once the line moves past the
+// path into `as <alias>`, or when the line isn't a `use` at all.
+fn use_path_start(prefix: &str) -> Option<usize> {
+	let chars: Vec<char> = prefix.chars().collect();
+	let s = chars.iter().position(|c| !c.is_whitespace())?;
+	// `use` followed by whitespace (not `used`, not a bare `use`).
+	if chars.get(s..s + 3)? != ['u', 's', 'e'] {
+		return None;
+	}
+	if !chars.get(s + 3).is_some_and(|c| c.is_whitespace()) {
+		return None;
+	}
+	let mut p0 = s + 3;
+	while chars.get(p0).is_some_and(|c| c.is_whitespace()) {
+		p0 += 1;
+	}
+	// The path-so-far must be only module-path characters: an embedded space
+	// means we've reached `as`, where module names no longer apply.
+	chars[p0..]
+		.iter()
+		.all(|c| is_ident_char(*c) || *c == '/')
+		.then_some(p0)
+}
+
+// Every module name a `use` could name: the baked-in stdlib plus the project's
+// own `.pa` modules. Each replaces the whole path token so a `/`-containing
+// name inserts cleanly regardless of how the client tokenizes the line.
+fn module_path_completions(
+	current: &Path,
+	line: u32,
+	path_start: usize,
+	cursor: u32,
+) -> Vec<Completion> {
+	let range = compiler::Range::within_line(line as usize, path_start, cursor as usize);
+
+	let mut names: Vec<String> = compiler::stdlib_sources()
+		.iter()
+		.map(|(n, _)| (*n).to_string())
+		.collect();
+	names.extend(project_module_names(current));
+	names.sort();
+	names.dedup();
+
+	names
+		.into_iter()
+		.map(|name| {
+			let mut c = Completion::new(name.clone(), CompletionKind::Module, None, None);
+			c.filter_text = Some(name.clone());
+			c.edit = Some((range, name));
+			c
+		})
+		.collect()
+}
+
+// User modules reachable in the current project: every non-test `.pa` file
+// under the project root, as a slash-separated module name, excluding the file
+// being edited. stdlib and build/VCS dirs are skipped.
+fn project_module_names(current: &Path) -> Vec<String> {
+	let Some(root) =
+		compiler::find_project_root(current).or_else(|| current.parent().map(Path::to_path_buf))
+	else {
+		return Vec::new();
+	};
+	let current_module = module_name_of(&root, current);
+
+	let mut out = Vec::new();
+	let mut stack = vec![root.clone()];
+	while let Some(dir) = stack.pop() {
+		let Ok(entries) = std::fs::read_dir(&dir) else {
+			continue;
+		};
+		for entry in entries.flatten() {
+			let path = entry.path();
+			let name = entry.file_name();
+			let name = name.to_string_lossy();
+			if path.is_dir() {
+				if !name.starts_with('.') && name != "target" && name != "node_modules" {
+					stack.push(path);
+				}
+			} else if name.ends_with(".pa")
+				&& !name.ends_with(".test.pa")
+				&& name != compiler::PROJECT_MARKER_FILE
+			{
+				if let Some(m) = module_name_of(&root, &path) {
+					if Some(&m) != current_module.as_ref() {
+						out.push(m);
+					}
+				}
+			}
+		}
+	}
+	out
+}
+
+// A file's module name relative to the project root: path separators become
+// `/`, the `.pa` suffix is dropped (`src/util.pa` → `src/util`).
+fn module_name_of(root: &Path, file: &Path) -> Option<String> {
+	let rel = file.strip_prefix(root).ok()?;
+	let s = rel.to_string_lossy().replace('\\', "/");
+	Some(s.strip_suffix(".pa").unwrap_or(&s).to_string())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -304,6 +429,75 @@ mod tests {
 		assert_eq!(member_receiver("\tx."), Some("x".to_string()));
 		// Leading dot (implicit-member sugar) has no receiver.
 		assert_eq!(member_receiver("\t."), None);
+	}
+
+	#[test]
+	fn use_path_context_detection() {
+		assert_eq!(use_path_start("use "), Some(4));
+		assert_eq!(use_path_start("use std"), Some(4));
+		assert_eq!(use_path_start("use std/li"), Some(4));
+		assert_eq!(use_path_start("use std/sys/"), Some(4));
+		// Past the path, in alias position — no longer module names.
+		assert_eq!(use_path_start("use std/list as "), None);
+		// Not a use line.
+		assert_eq!(use_path_start("def x = list"), None);
+		assert_eq!(use_path_start("used"), None);
+	}
+
+	#[test]
+	fn completes_stdlib_module_paths() {
+		// `use std/` offers stdlib module names, each replacing the whole path.
+		let src = "use std/\n";
+		let items = complete(src.as_bytes(), &PathBuf::from("/proj/main.pa"), 0, 8);
+		let labels: Vec<&str> = items.iter().map(|c| c.label.as_str()).collect();
+		assert!(
+			labels.contains(&"std/list"),
+			"expected std/list in {:?}",
+			labels
+		);
+		assert!(labels.contains(&"std/string"), "expected std/string");
+		assert!(
+			labels.contains(&"std/sys/process"),
+			"expected nested module"
+		);
+		// The item replaces the path token (cols 4..8) with the full name, and
+		// filters against the full path so `std/` still matches `std/list`.
+		let list = items.iter().find(|c| c.label == "std/list").unwrap();
+		assert_eq!(list.filter_text.as_deref(), Some("std/list"));
+		let (range, new_text) = list.edit.as_ref().expect("expected a text edit");
+		assert_eq!((range.start.col, range.end.col), (4, 8));
+		assert_eq!(new_text, "std/list");
+	}
+
+	#[test]
+	fn completes_user_module_paths() {
+		let dir = std::env::temp_dir().join(format!("pluma-usepath-{}", std::process::id()));
+		let _ = std::fs::remove_dir_all(&dir);
+		std::fs::create_dir_all(dir.join("util")).unwrap();
+		std::fs::write(dir.join("pluma.pa"), "").unwrap();
+		std::fs::write(dir.join("helpers.pa"), "public def a = 1\n").unwrap();
+		std::fs::write(dir.join("util/math.pa"), "public def b = 1\n").unwrap();
+		std::fs::write(dir.join("main.test.pa"), "def tests = []\n").unwrap();
+
+		let main_path = dir.join("main.pa");
+		let items = complete(b"use \n", &main_path, 0, 4);
+		let labels: Vec<&str> = items.iter().map(|c| c.label.as_str()).collect();
+		assert!(
+			labels.contains(&"helpers"),
+			"expected helpers in {:?}",
+			labels
+		);
+		assert!(labels.contains(&"util/math"), "expected nested user module");
+		// Test files and the project marker aren't importable modules.
+		assert!(
+			!labels.contains(&"main.test"),
+			"leaked test module: {:?}",
+			labels
+		);
+		assert!(!labels.contains(&"pluma"), "leaked project marker");
+		// stdlib still offered alongside user modules.
+		assert!(labels.contains(&"std/list"), "stdlib missing");
+		let _ = std::fs::remove_dir_all(&dir);
 	}
 
 	#[test]

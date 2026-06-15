@@ -485,6 +485,12 @@ fn completion_to_lsp(c: completion::Completion) -> CompletionItem {
 		CompletionKind::Module => CompletionItemKind::MODULE,
 		CompletionKind::Keyword => CompletionItemKind::KEYWORD,
 	};
+	let text_edit = c.edit.map(|(range, new_text)| {
+		CompletionTextEdit::Edit(TextEdit {
+			range: pluma_range_to_lsp(&range),
+			new_text,
+		})
+	});
 	CompletionItem {
 		label: c.label,
 		kind: Some(kind),
@@ -495,6 +501,8 @@ fn completion_to_lsp(c: completion::Completion) -> CompletionItem {
 				value: d,
 			})
 		}),
+		filter_text: c.filter_text,
+		text_edit,
 		..CompletionItem::default()
 	}
 }
