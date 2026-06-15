@@ -1,0 +1,16 @@
+def name = "Ada"
+
+def block = """
+hello
+  indented two more
+back
+"""
+
+def interp = """
+name: $(name)
+"""
+
+def main = fun {
+	print block
+	print interp
+}

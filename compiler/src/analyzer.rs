@@ -2640,7 +2640,7 @@ impl<'compiler> Analyzer<'compiler> {
 		let name_arg = ExprNode {
 			ty: Type::Unknown,
 			kind: ExprKind::Literal(LiteralNode {
-				kind: LiteralKind::String(name),
+				kind: LiteralKind::String(name, false),
 				range,
 			}),
 			range,
@@ -3321,7 +3321,7 @@ impl<'compiler> Analyzer<'compiler> {
 							ExprNode {
 								ty: Type::Unknown,
 								kind: ExprKind::Literal(LiteralNode {
-									kind: LiteralKind::String(callsite),
+									kind: LiteralKind::String(callsite, false),
 									range: callee.range,
 								}),
 								range: callee.range,

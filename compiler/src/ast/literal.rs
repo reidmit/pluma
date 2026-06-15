@@ -17,7 +17,10 @@ pub enum LiteralKind {
 	IntOctal(usize),
 	IntHex(usize),
 	IntBinary(usize),
-	String(String),
+	/// A string literal. The bool records whether the source used the
+	/// triple-quoted (`"""..."""`) form, so the formatter can preserve it.
+	/// It carries no semantic meaning — analysis and lowering ignore it.
+	String(String, bool),
 	Bytes(Vec<u8>),
 }
 
@@ -41,7 +44,7 @@ impl std::fmt::Debug for LiteralKind {
 			IntHex(v) => write!(f, "hex int {}", v),
 			IntOctal(v) => write!(f, "octal int {}", v),
 			IntBinary(v) => write!(f, "binary int {}", v),
-			String(v) => write!(f, "string \"{}\"", v),
+			String(v, _) => write!(f, "string \"{}\"", v),
 			Bytes(b) => {
 				write!(f, "bytes '")?;
 				for &byte in b.iter() {

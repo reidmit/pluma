@@ -221,15 +221,49 @@ def snippets :: list (string, string) = [
 	),
 	(
 		"types",
-		"enum tree a {\n\tleaf\n\tnode (tree a) a (tree a)\n}\n\n# inferred: fun (tree int) -> int\ndef total = fun t {\n\twhen t is tree.leaf {\n\t\t0\n\t} is tree.node l v r {\n\t\ttotal l + v + total r\n\t}\n}",
+		"""
+		enum tree a {
+			leaf
+			node (tree a) a (tree a)
+		}
+
+		# inferred: fun (tree int) -> int
+		def total = fun t {
+			when t is tree.leaf {
+				0
+			} is tree.node l v r {
+				total l + v + total r
+			}
+		}
+		""",
 	),
 	(
 		"traits",
-		"trait to-text a {\n\tto-text :: a -> string\n}\n\nimplement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}\n\n# one name, dispatched on the type\ndef shout = fun x { to-text x ++ \"!\" }",
+		"""
+		trait to-text a {
+			to-text :: a -> string
+		}
+
+		implement to-text bool {
+			def to-text = fun b {
+				if b { "yes" } else { "no" }
+			}
+		}
+
+		# one name, dispatched on the type
+		def shout = fun x { to-text x ++ "!" }
+		""",
 	),
 	(
 		"fullstack",
-		"# api.pa — one signature, two sides\nremote def hi :: fun string -> task string =\n\tfun name { task.return (\"hi, \" ++ name) }\n\n# ui.pa — the browser just calls it\nlet msg = api.hi \"you\"",
+		"""
+		# api.pa — one signature, two sides
+		remote def hi :: fun string -> task string =
+			fun name { task.return ("hi, " ++ name) }
+
+		# ui.pa — the browser just calls it
+		let msg = api.hi "you"
+		""",
 	),
 ]
 

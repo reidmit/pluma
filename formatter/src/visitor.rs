@@ -664,7 +664,13 @@ impl<'a> Formatter<'a> {
 			LiteralKind::IntBinary(n) => text(format!("0b{:b}", n)),
 			LiteralKind::FloatDecimal(f) => text(format_float(*f)),
 			LiteralKind::Duration(n) => text(format_duration(*n)),
-			LiteralKind::String(s) => text(format!("\"{}\"", escape_string(s))),
+			LiteralKind::String(s, block) => {
+				if *block && block_string_safe(s) {
+					render_block_string(&[BlockSeg::Lit(s.clone())])
+				} else {
+					text(format!("\"{}\"", escape_string(s)))
+				}
+			}
 			LiteralKind::Bytes(b) => text(format!("'{}'", escape_bytes(b))),
 		}
 	}
@@ -936,12 +942,40 @@ impl<'a> Formatter<'a> {
 
 	fn format_interpolation(&self, parts: &[ExprNode]) -> Doc {
 		// Parts alternate: string literal, expression, string literal, ...
+		// The triple-quoted form is recorded on the first (literal) part.
+		let is_block = matches!(
+			parts.first().map(|p| &p.kind),
+			Some(ExprKind::Literal(LiteralNode {
+				kind: LiteralKind::String(_, true),
+				..
+			}))
+		);
+
+		if is_block && interpolation_block_safe(parts) {
+			let mut segs = Vec::with_capacity(parts.len());
+			for (i, part) in parts.iter().enumerate() {
+				if i % 2 == 0 {
+					let s = match &part.kind {
+						ExprKind::Literal(LiteralNode {
+							kind: LiteralKind::String(s, _),
+							..
+						}) => s.clone(),
+						_ => String::new(),
+					};
+					segs.push(BlockSeg::Lit(s));
+				} else {
+					segs.push(BlockSeg::Expr(render(&self.format_expr(part), 1_000_000)));
+				}
+			}
+			return render_block_string(&segs);
+		}
+
 		let mut buf = String::from("\"");
 		for (i, part) in parts.iter().enumerate() {
 			if i % 2 == 0 {
 				// String literal segment — already de-escaped in the AST.
 				if let ExprKind::Literal(LiteralNode {
-					kind: LiteralKind::String(s),
+					kind: LiteralKind::String(s, _),
 					..
 				}) = &part.kind
 				{
@@ -1460,6 +1494,88 @@ fn bracketed_collection(open: &str, close: &str, items: Vec<Doc>) -> Doc {
 		softbreak(),
 		text(close.to_string()),
 	]))
+}
+
+// One piece of a triple-quoted (block) string as rendered by the formatter:
+// either a literal run of text or an already-formatted interpolation
+// expression (the inner text, without the surrounding `$( )`).
+enum BlockSeg {
+	Lit(String),
+	Expr(String),
+}
+
+// Escape a literal run for emission inside a block string. Only backslashes
+// need escaping: quotes are literal in block form, and newlines become real
+// line breaks. Doubling backslashes keeps them from forming escape sequences
+// when the string is read back.
+fn escape_block_segment(s: &str) -> String {
+	s.replace('\\', "\\\\")
+}
+
+// Whether a plain string value can be rendered as a block string without losing
+// information. It can't if it is empty, carries a carriage return, contains a
+// `"""` that would close the block early, or has a line with trailing
+// whitespace (which the final trailing-whitespace trim would silently eat).
+fn block_string_safe(s: &str) -> bool {
+	if s.is_empty() || s.contains('\r') || s.contains("\"\"\"") {
+		return false;
+	}
+	s.split('\n').all(|line| line == line.trim_end())
+}
+
+// The interpolation equivalent of `block_string_safe`. Interpolation
+// expressions sit mid-line and can't introduce newlines or trailing
+// whitespace, so they're stood in for by a non-whitespace placeholder while the
+// literal runs are checked.
+fn interpolation_block_safe(parts: &[ExprNode]) -> bool {
+	let mut synth = String::new();
+	for (i, part) in parts.iter().enumerate() {
+		if i % 2 == 0 {
+			if let ExprKind::Literal(LiteralNode {
+				kind: LiteralKind::String(s, _),
+				..
+			}) = &part.kind
+			{
+				if s.contains("\"\"\"") {
+					return false;
+				}
+				synth.push_str(s);
+			}
+		} else {
+			synth.push('\u{1}');
+		}
+	}
+	if synth.is_empty() || synth.contains('\r') {
+		return false;
+	}
+	synth.split('\n').all(|line| line == line.trim_end())
+}
+
+// Render a sequence of block-string segments as a `"""..."""` literal. The
+// opening and closing quotes sit on their own lines and every content line is
+// laid at the current indentation — the same margin the parser strips back off
+// when the string is read again, which keeps formatting idempotent.
+fn render_block_string(segs: &[BlockSeg]) -> Doc {
+	let mut docs: Vec<Doc> = vec![text("\"\"\""), hardline()];
+	for seg in segs {
+		match seg {
+			BlockSeg::Lit(s) => {
+				let escaped = escape_block_segment(s);
+				for (j, line) in escaped.split('\n').enumerate() {
+					if j > 0 {
+						docs.push(hardline());
+					}
+					if !line.is_empty() {
+						docs.push(text(line.to_string()));
+					}
+				}
+			}
+			BlockSeg::Expr(inner) => docs.push(text(format!("$({})", inner))),
+		}
+	}
+	docs.push(hardline());
+	docs.push(text("\"\"\""));
+	concat(docs)
 }
 
 fn escape_string(s: &str) -> String {

@@ -3665,7 +3665,7 @@ fn record_shape_of(ty: &Type) -> Option<RecordShape> {
 fn literal_to_const(kind: &LiteralKind) -> Result<Const, String> {
 	Ok(match kind {
 		LiteralKind::Bool(b) => Const::Bool(*b),
-		LiteralKind::String(s) => Const::Str(s.clone()),
+		LiteralKind::String(s, _) => Const::Str(s.clone()),
 		LiteralKind::Bytes(b) => Const::Bytes(b.clone()),
 		LiteralKind::FloatDecimal(f) => Const::Float(*f),
 		LiteralKind::IntDecimal(n)

@@ -27,13 +27,75 @@ use theme
 # `\n`/`\t` strings (a literal `$(` would interpolate when *this* file compiles,
 # so the one example that shows interpolation splices it in via `theme.dollar`).
 
-def ex-list :: string = "use std/list\n\n# Edit this, then press Run.\ndef main = fun {\n\tlet xs = [1, 2, 3, 4, 5]\n\tprint \"numbers:\"\n\tprint xs\n\tprint \"doubled:\"\n\tprint (list.map xs fun n { n * 2 })\n\tprint \"kept > 2:\"\n\tprint (list.filter xs fun n { n > 2 })\n}\n"
+def ex-list :: string = """
+use std/list
 
-def ex-fact :: string = "# Plain recursion — the type is inferred, no annotations needed.\ndef fact = fun n {\n\tif n <= 1 { 1 } else { n * fact (n - 1) }\n}\n\ndef main = fun {\n\tprint (fact 5)\n\tprint (fact 10)\n}\n"
+# Edit this, then press Run.
+def main = fun {
+	let xs = [1, 2, 3, 4, 5]
+	print "numbers:"
+	print xs
+	print "doubled:"
+	print (list.map xs fun n { n * 2 })
+	print "kept > 2:"
+	print (list.filter xs fun n { n > 2 })
+}
 
-def ex-enum :: string = "# An enum, matched with `when` (checked for exhaustiveness).\nenum shape {\n\tcircle float\n\trect float float\n}\n\ndef area = fun s {\n\twhen s is shape.circle r {\n\t\t3.14159 * r * r\n\t} is shape.rect w h {\n\t\tw * h\n\t}\n}\n\ndef main = fun {\n\tprint (area (shape.circle 2.0))\n\tprint (area (shape.rect 3.0 4.0))\n}\n"
+"""
 
-def ex-trait :: string = "# One name, many types — a trait with an instance.\ntrait to-text a {\n\tto-text :: a -> string\n}\n\nimplement to-text bool {\n\tdef to-text = fun b {\n\t\tif b { \"yes\" } else { \"no\" }\n\t}\n}\n\ndef main = fun {\n\tprint (to-text true)\n\tprint (to-text false)\n}\n"
+def ex-fact :: string = """
+# Plain recursion — the type is inferred, no annotations needed.
+def fact = fun n {
+	if n <= 1 { 1 } else { n * fact (n - 1) }
+}
+
+def main = fun {
+	print (fact 5)
+	print (fact 10)
+}
+
+"""
+
+def ex-enum :: string = """
+# An enum, matched with `when` (checked for exhaustiveness).
+enum shape {
+	circle float
+	rect float float
+}
+
+def area = fun s {
+	when s is shape.circle r {
+		3.14159 * r * r
+	} is shape.rect w h {
+		w * h
+	}
+}
+
+def main = fun {
+	print (area (shape.circle 2.0))
+	print (area (shape.rect 3.0 4.0))
+}
+
+"""
+
+def ex-trait :: string = """
+# One name, many types — a trait with an instance.
+trait to-text a {
+	to-text :: a -> string
+}
+
+implement to-text bool {
+	def to-text = fun b {
+		if b { "yes" } else { "no" }
+	}
+}
+
+def main = fun {
+	print (to-text true)
+	print (to-text false)
+}
+
+"""
 
 def ex-record :: string = "# Records are structural; " ++ theme.dollar ++ "(...) interpolates into a string.\ndef main = fun {\n\tlet user = { name: \"Ada\", age: 36 }\n\tprint \"" ++ theme.dollar ++ "(user.name) is " ++ theme.dollar ++ "(to-string user.age)\"\n}\n"
 

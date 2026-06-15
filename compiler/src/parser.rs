@@ -38,6 +38,118 @@ fn hex_digit(byte: u8) -> Option<u8> {
 	}
 }
 
+// Escape decoding for string literals: a single left-to-right pass, so a
+// literal backslash (written `\\`) can never combine with a following letter to
+// forge another escape. Unknown escapes keep both characters.
+fn decode_string_escapes(s: &str) -> String {
+	let mut out = String::with_capacity(s.len());
+	let mut chars = s.chars();
+	while let Some(c) = chars.next() {
+		if c != '\\' {
+			out.push(c);
+			continue;
+		}
+		match chars.next() {
+			Some('n') => out.push('\n'),
+			Some('t') => out.push('\t'),
+			Some('r') => out.push('\r'),
+			Some('"') => out.push('"'),
+			Some('\\') => out.push('\\'),
+			Some(other) => {
+				out.push('\\');
+				out.push(other);
+			}
+			None => out.push('\\'),
+		}
+	}
+	out
+}
+
+// Apply block-string layout rules to the raw literal portions of a
+// triple-quoted string, in source order (with interpolations spliced between
+// them). A block string is one whose content begins with a newline (after
+// optional trailing spaces on the opening line): the opening newline is
+// dropped, the indentation of the closing `"""` is stripped from every line,
+// and the final newline before the closing delimiter is dropped. A
+// triple-quoted string written all on one line is left untouched.
+fn apply_block_dedent(parts: &mut [String]) {
+	if parts.is_empty() {
+		return;
+	}
+
+	// Block mode iff the first part opens with optional spaces/tabs then `\n`.
+	let first = parts[0].as_bytes();
+	let mut i = 0;
+	while i < first.len() && (first[i] == b' ' || first[i] == b'\t') {
+		i += 1;
+	}
+	if i >= first.len() || first[i] != b'\n' {
+		return;
+	}
+
+	// The closing `"""` sits at the end of the last part, on its own line. The
+	// whitespace before it sets how far every line is indented.
+	let indent_len = match parts.last().unwrap().rfind('\n') {
+		Some(p) => {
+			let tail = &parts.last().unwrap()[p + 1..];
+			if tail.chars().all(|c| c == ' ' || c == '\t') {
+				tail.chars().count()
+			} else {
+				0
+			}
+		}
+		None => 0,
+	};
+
+	// Drop the opening line up to and including its newline.
+	if let Some(p) = parts[0].find('\n') {
+		parts[0] = parts[0][p + 1..].to_string();
+	}
+
+	// Drop the final newline (and the closing indentation that trails it).
+	let last = parts.last_mut().unwrap();
+	if let Some(p) = last.rfind('\n') {
+		if last[p + 1..].chars().all(|c| c == ' ' || c == '\t') {
+			last.truncate(p);
+		}
+	}
+
+	// Strip up to `indent_len` leading whitespace from every line. A line begins
+	// at the very start of the content and after each newline; interpolations
+	// only ever sit mid-line, so a non-first part never begins a line.
+	let mut first_part = true;
+	for part in parts.iter_mut() {
+		let mut out = String::with_capacity(part.len());
+		let mut at_line_start = first_part;
+		first_part = false;
+		let mut chars = part.chars().peekable();
+		loop {
+			if at_line_start {
+				let mut stripped = 0;
+				while stripped < indent_len {
+					match chars.peek() {
+						Some(&c) if c == ' ' || c == '\t' => {
+							chars.next();
+							stripped += 1;
+						}
+						_ => break,
+					}
+				}
+				at_line_start = false;
+			}
+			match chars.next() {
+				None => break,
+				Some('\n') => {
+					out.push('\n');
+					at_line_start = true;
+				}
+				Some(c) => out.push(c),
+			}
+		}
+		*part = out;
+	}
+}
+
 macro_rules! current_token_is {
 	($self:ident, $tokType:path) => {
 		match $self.current_token {
@@ -909,7 +1021,7 @@ impl<'a> Parser<'a> {
 			Some(Token::LeftBrace(..)) if !restrict_brace => self.parse_record(),
 			Some(Token::LeftBracket(..)) => self.parse_list(),
 			Some(Token::Backtick(..)) => self.parse_regular_expression(),
-			Some(Token::StringLiteral(..)) => self.parse_string(),
+			Some(Token::StringLiteral(..) | Token::TripleStringLiteral(..)) => self.parse_string(),
 			Some(Token::BytesLiteral(..)) => self.parse_bytes(),
 			Some(Token::BoolTrue(..)) => self.parse_bool(),
 			Some(Token::BoolFalse(..)) => self.parse_bool(),
@@ -1545,17 +1657,19 @@ impl<'a> Parser<'a> {
 				})
 			}
 
-			Some(Token::StringLiteral(..)) => self.parse_string().map(|expr_node| match expr_node.kind {
-				ExprKind::Literal(literal) => PatternNode {
-					range: literal.range,
-					kind: PatternKind::Literal(literal),
-				},
-				ExprKind::Interpolation(parts) => PatternNode {
-					range: expr_node.range,
-					kind: PatternKind::Interpolation(parts),
-				},
-				_ => unreachable!(),
-			}),
+			Some(Token::StringLiteral(..) | Token::TripleStringLiteral(..)) => {
+				self.parse_string().map(|expr_node| match expr_node.kind {
+					ExprKind::Literal(literal) => PatternNode {
+						range: literal.range,
+						kind: PatternKind::Literal(literal),
+					},
+					ExprKind::Interpolation(parts) => PatternNode {
+						range: expr_node.range,
+						kind: PatternKind::Interpolation(parts),
+					},
+					_ => unreachable!(),
+				})
+			}
 
 			Some(Token::BytesLiteral(..)) => self.parse_bytes().map(|expr_node| match expr_node.kind {
 				ExprKind::Literal(literal) => PatternNode {
@@ -1870,17 +1984,19 @@ impl<'a> Parser<'a> {
 				}
 			}
 
-			Some(Token::StringLiteral(..)) => self.parse_string().map(|expr_node| match expr_node.kind {
-				ExprKind::Literal(literal) => PatternNode {
-					range: literal.range,
-					kind: PatternKind::Literal(literal),
-				},
-				ExprKind::Interpolation(parts) => PatternNode {
-					range: expr_node.range,
-					kind: PatternKind::Interpolation(parts),
-				},
-				_ => unreachable!(),
-			}),
+			Some(Token::StringLiteral(..) | Token::TripleStringLiteral(..)) => {
+				self.parse_string().map(|expr_node| match expr_node.kind {
+					ExprKind::Literal(literal) => PatternNode {
+						range: literal.range,
+						kind: PatternKind::Literal(literal),
+					},
+					ExprKind::Interpolation(parts) => PatternNode {
+						range: expr_node.range,
+						kind: PatternKind::Interpolation(parts),
+					},
+					_ => unreachable!(),
+				})
+			}
 
 			Some(Token::BytesLiteral(..)) => self.parse_bytes().map(|expr_node| match expr_node.kind {
 				ExprKind::Literal(literal) => PatternNode {
@@ -3012,7 +3128,7 @@ impl<'a> Parser<'a> {
 		let string_expr = self.parse_string()?;
 		let tag = match &string_expr.kind {
 			ExprKind::Literal(literal) => match &literal.kind {
-				LiteralKind::String(value) => value.clone(),
+				LiteralKind::String(value, _) => value.clone(),
 				_ => {
 					return self.error(ParseError {
 						range: string_expr.range,
@@ -3036,86 +3152,150 @@ impl<'a> Parser<'a> {
 		})
 	}
 
-	fn parse_string(&mut self) -> Option<ExprNode> {
-		// There's a bit of trickiness here around start/end offsets. The token start/end
-		// refers to the "readable" portion of the token (i.e. not including any surrounding
-		// quotes). To get the full span of a basic string literal, with quotes on both sides,
-		// we'd just do (start - 1, end + 1). But string literals that appear in the middle of
-		// interpolations don't have quotes on either side, so things work a little differently.
-
-		let (start, end) = expect_token_and_advance!(self, Token::StringLiteral);
-		let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
-
-		let value = read_string_with_escapes!(self, start_offset, end_offset);
-
-		let end = if current_token_is!(self, Token::InterpolationStart) {
-			end
-		} else {
-			Point::at(end.line, end.col + 1)
-		};
-
-		let literal = LiteralNode {
-			range: Range::between(start, end), // TODO off-by-one?
-			kind: LiteralKind::String(value),
-		};
-
-		let expr_node = ExprNode {
-			range: literal.range,
-			kind: ExprKind::Literal(literal),
-			ty: Type::Unknown,
-			trait_dispatch: None,
-			dispatch_sink: None,
-		};
-
-		// If we have an interpolation-start after this, we need to collect all
-		// the parts and return an interpolation expression, not just a literal
-		// expression for the part we already found.
-		if current_token_is!(self, Token::InterpolationStart) {
-			let mut parts = vec![expr_node];
-			let mut interpolation_end = end;
-
-			while current_token_is!(self, Token::InterpolationStart) {
+	// Consume one string-literal part — either an ordinary `"..."` token or a
+	// triple-quoted `"""..."""` token — returning its inner span (excluding the
+	// quotes) as points plus whether it was triple-quoted. The token spans only
+	// the readable portion: an interior part of an interpolation has no
+	// surrounding quotes, so callers add the quote width themselves when needed.
+	fn expect_string_part(&mut self) -> Option<(Point, Point, bool)> {
+		match self.current_token {
+			Some(Token::StringLiteral(start, end)) => {
 				self.advance();
+				Some((
+					self.offset_to_point(start),
+					self.offset_to_point(end),
+					false,
+				))
+			}
+			Some(Token::TripleStringLiteral(start, end)) => {
+				self.advance();
+				Some((self.offset_to_point(start), self.offset_to_point(end), true))
+			}
+			Some(tok) => {
+				let (start, end) = tok.get_span();
+				let range = Range::between(self.offset_to_point(start), self.offset_to_point(end));
+				self.error(ParseError {
+					range,
+					kind: ParseErrorKind::UnexpectedToken {
+						actual: tok,
+						expected: Token::StringLiteral(0, 0),
+					},
+				})
+			}
+			None => self.error(ParseError {
+				range: Range::collapsed(self.current_line, 0),
+				kind: ParseErrorKind::UnexpectedEOF {
+					expected: Token::StringLiteral(0, 0),
+				},
+			}),
+		}
+	}
 
-				match self.parse_expression() {
-					Some(node) => parts.push(node),
-					_ => break,
-				}
+	// Newlines inside a string don't reach the parser as line-break tokens (the
+	// tokenizer folds them into the string's content), so the parser's notion of
+	// the current line would drift after a multiline string. Walk the consumed
+	// span and register each contained newline so spans for whatever follows
+	// stay accurate.
+	fn advance_lines_through(&mut self, start_offset: usize, end_offset: usize) {
+		let mut i = start_offset;
+		while i < end_offset {
+			if self.source[i] == b'\n' {
+				self.current_line += 1;
+				self.line_start_offsets.insert(self.current_line, i + 1);
+			}
+			i += 1;
+		}
+	}
 
-				expect_token_and_advance!(self, Token::InterpolationEnd);
+	fn parse_string(&mut self) -> Option<ExprNode> {
+		let (first_start, first_end, triple) = self.expect_string_part()?;
+		let first_start_off = self.point_to_offset(first_start);
+		let first_end_off = self.point_to_offset(first_end);
+		self.advance_lines_through(first_start_off, first_end_off);
 
-				let (start, end) = expect_token_and_advance!(self, Token::StringLiteral);
+		// Raw (still escaped, still indented) literal portions and their ranges,
+		// interleaved in source order with the interpolation expressions.
+		let mut raw_parts: Vec<String> = vec![read_string!(self, first_start_off, first_end_off)];
+		let mut part_ranges: Vec<Range> = vec![Range::between(first_start, first_end)];
+		let mut exprs: Vec<ExprNode> = Vec::new();
+		let mut last_end_off = first_end_off;
 
-				let (start_offset, end_offset) = (self.point_to_offset(start), self.point_to_offset(end));
+		while current_token_is!(self, Token::InterpolationStart) {
+			self.advance();
 
-				let part_range = Range::between(start, end);
-
-				interpolation_end = end;
-
-				let value = read_string_with_escapes!(self, start_offset, end_offset);
-
-				parts.push(ExprNode {
-					range: part_range,
-					kind: ExprKind::Literal(LiteralNode {
-						range: part_range,
-						kind: LiteralKind::String(value),
-					}),
-					ty: Type::Unknown,
-					trait_dispatch: None,
-					dispatch_sink: None,
-				});
+			match self.parse_expression() {
+				Some(node) => exprs.push(node),
+				_ => break,
 			}
 
+			expect_token_and_advance!(self, Token::InterpolationEnd);
+
+			let (pstart, pend, _) = self.expect_string_part()?;
+			let pstart_off = self.point_to_offset(pstart);
+			let pend_off = self.point_to_offset(pend);
+			self.advance_lines_through(pstart_off, pend_off);
+
+			raw_parts.push(read_string!(self, pstart_off, pend_off));
+			part_ranges.push(Range::between(pstart, pend));
+			last_end_off = pend_off;
+		}
+
+		// Triple-quoted strings are block strings: before decoding escapes, strip
+		// the opening newline and the indentation set by the closing `"""`.
+		if triple {
+			apply_block_dedent(&mut raw_parts);
+		}
+		let values: Vec<String> = raw_parts.iter().map(|p| decode_string_escapes(p)).collect();
+
+		// The closing quotes (3 for triple, 1 otherwise) sit just past the final
+		// part's content. Derive the end point from the byte offset rather than
+		// the part's start-of-token point, so a multiline string reports the line
+		// it actually ends on (line tracking has advanced through it by now).
+		let quote_len = if triple { 3 } else { 1 };
+
+		if exprs.is_empty() {
+			let outer_end = self.offset_to_point(last_end_off + quote_len);
+			let range = Range::between(first_start, outer_end);
 			return Some(ExprNode {
-				range: Range::between(start, interpolation_end),
-				kind: ExprKind::Interpolation(parts),
+				range,
+				kind: ExprKind::Literal(LiteralNode {
+					range,
+					kind: LiteralKind::String(values[0].clone(), triple),
+				}),
 				ty: Type::Unknown,
 				trait_dispatch: None,
 				dispatch_sink: None,
 			});
 		}
 
-		Some(expr_node)
+		let mut parts: Vec<ExprNode> = Vec::with_capacity(values.len() + exprs.len());
+		for (i, value) in values.iter().enumerate() {
+			let range = part_ranges[i];
+			parts.push(ExprNode {
+				range,
+				kind: ExprKind::Literal(LiteralNode {
+					range,
+					kind: LiteralKind::String(value.clone(), triple),
+				}),
+				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
+			});
+			if i < exprs.len() {
+				parts.push(exprs[i].clone());
+			}
+		}
+
+		// An interpolation's range historically ends at the closing quote rather
+		// than past it; keep that so spans stay stable.
+		let outer_end = self.offset_to_point(last_end_off);
+		Some(ExprNode {
+			range: Range::between(first_start, outer_end),
+			kind: ExprKind::Interpolation(parts),
+			ty: Type::Unknown,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		})
 	}
 
 	// Bytes literals: `'...'`. No interpolation, no nesting. Escapes

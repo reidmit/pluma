@@ -1,0 +1,21 @@
+---
+source: tests/format.rs
+expression: once
+---
+def block = """
+<div>
+	hi $(user)
+</div>
+"""
+
+def oneline = """
+has "quotes" in it
+"""
+
+def regular_with_newline = "stays\nregular"
+
+def main = fun {
+	print block
+	print oneline
+	print regular_with_newline
+}

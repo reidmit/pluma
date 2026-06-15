@@ -1,0 +1,75 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/triple-string/main.pa) {
+    comments: {},
+    ast: Some(
+        module(0:0-15:1) [
+            def(0:0-0:16) :: nothing {
+                name: ident(0:4-0:8) `name`,
+                kind: expr(0:12-0:16) :: string {
+                    kind: literal(0:12-0:16) string "Ada",
+                },
+            },
+            def(2:0-6:3) :: nothing {
+                name: ident(2:4-2:9) `block`,
+                kind: expr(2:15-6:3) :: string {
+                    kind: literal(2:15-6:3) string "hello
+                      indented two more
+                    back",
+                },
+            },
+            def(8:0-10:0) :: nothing {
+                name: ident(8:4-8:10) `interp`,
+                kind: expr(8:16-10:0) :: string {
+                    kind: interpolation [
+                        expr(8:16-8:23) :: string {
+                            kind: literal(8:16-8:23) string "name: ",
+                        },
+                        expr(9:8-9:12) :: string {
+                            kind: ident(9:8-9:12) `name`,
+                        },
+                        expr(9:13-9:14) :: string {
+                            kind: literal(9:13-9:14) string "",
+                        },
+                    ],
+                },
+            },
+            def(12:0-15:1) :: nothing {
+                name: ident(12:4-12:8) `main`,
+                kind: expr(12:11-15:1) :: nothing -> nothing {
+                    kind: fun(12:11-15:1) {
+                        params: [],
+                        body: [
+                            expr(13:1-13:12) :: nothing {
+                                kind: call(13:1-13:12) {
+                                    callee: expr(13:1-13:6) :: string -> nothing {
+                                        kind: ident(13:1-13:6) `print`,
+                                    },
+                                    args: [
+                                        expr(13:7-13:12) :: string {
+                                            kind: ident(13:7-13:12) `block`,
+                                        },
+                                    ],
+                                },
+                            },
+                            expr(14:1-14:13) :: nothing {
+                                kind: call(14:1-14:13) {
+                                    callee: expr(14:1-14:6) :: string -> nothing {
+                                        kind: ident(14:1-14:6) `print`,
+                                    },
+                                    args: [
+                                        expr(14:7-14:13) :: string {
+                                            kind: ident(14:7-14:13) `interp`,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

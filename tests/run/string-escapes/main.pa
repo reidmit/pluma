@@ -1,0 +1,8 @@
+def main = fun {
+	print "tab\tend"
+	print "newline\nend"
+	print "literal backslash-n: a\\nb"
+	print "literal backslash-t: x\\ty"
+	print "quote: \"hi\""
+	print "backslash: a\\b"
+}

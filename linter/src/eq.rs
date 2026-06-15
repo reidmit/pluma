@@ -136,7 +136,7 @@ fn literal_eq(a: &LiteralKind, b: &LiteralKind) -> bool {
 		(Bool(x), Bool(y)) => x == y,
 		(FloatDecimal(x), FloatDecimal(y)) => x == y,
 		(Duration(x), Duration(y)) => x == y,
-		(String(x), String(y)) => x == y,
+		(String(x, _), String(y, _)) => x == y,
 		(Bytes(x), Bytes(y)) => x == y,
 		// Integers compare by value regardless of the base they were written in.
 		(

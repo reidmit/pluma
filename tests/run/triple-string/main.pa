@@ -1,0 +1,39 @@
+def name = "Ada"
+
+def html = """
+<ul>
+	<li>$(name)</li>
+</ul>
+"""
+
+def oneline = """
+no need to escape "quotes" here
+"""
+
+def with_escapes = """
+tab	and newline
+stay literal? no
+backslash \\ kept
+"""
+
+def with_blank_line = """
+first
+
+third
+"""
+
+def main = fun {
+	let indented = """
+	margin
+	  is stripped
+	"""
+	print html
+	print "==="
+	print oneline
+	print "==="
+	print with_escapes
+	print "==="
+	print with_blank_line
+	print "==="
+	print indented
+}

@@ -39,13 +39,65 @@ def wrap :: css.ruleset = css.rule [
 
 def cli-src :: string = "use std/list\nuse std/sys/process\n\n# Run it with:  pluma run greet.pa -- Ada Grace\ndef main = fun {\n\tlet names = process.args ()\n\tif list.is-empty names {\n\t\tprint \"usage: greet <name>...\"\n\t} else {\n\t\tlist.each names fun name {\n\t\t\tprint \"hello, " ++ theme.dollar ++ "(name)!\"\n\t\t}\n\t}\n}"
 
-def server-src :: string = "use std/router\nuse std/task\nuse std/sys/http\n\ndef app :: fun http.request -> task http.response = router.handler [\n\trouter.get \"/\" fun _req {\n\t\ttask.return (http.text 200 \"hello from Pluma\")\n\t},\n\trouter.get \"/health\" fun _req {\n\t\ttask.return (http.text 200 \"ok\")\n\t},\n]\n\ndef main = fun {\n\thttp.serve \"127.0.0.1:8080\" app\n}"
+def server-src :: string = """
+use std/router
+use std/task
+use std/sys/http
 
-def fs-api-src :: string = "# api.pa -- the shared contract, compiled into both sides.\nuse std/task\n\n# Runs on the server; the browser calls it as if it were local.\npublic remote def add :: fun int int -> task int = fun a b {\n\ttask.return (a + b)\n}"
+def app :: fun http.request -> task http.response = router.handler [
+	router.get "/" fun _req {
+		task.return (http.text 200 "hello from Pluma")
+	},
+	router.get "/health" fun _req {
+		task.return (http.text 200 "ok")
+	},
+]
 
-def fs-server-src :: string = "# server.pa -- serve the page, let the compiler route the RPC calls.\nuse std/rpc\nuse std/task\nuse std/sys/http\nuse ui\n\ndef handler :: fun http.request -> task http.response = fun req {\n\tif req.path == \"/\" {\n\t\ttask.return (http.html 200 (ui.document ()))\n\t} else {\n\t\trpc.dispatch req\n\t}\n}\n\ndef main = fun {\n\thttp.serve \"127.0.0.1:8080\" handler\n}"
+def main = fun {
+	http.serve "127.0.0.1:8080" app
+}
+"""
 
-def fs-client-src :: string = "# client.pa -- boot the browser by hydrating the server's HTML.\nuse std/web/dom\nuse std/web/render\nuse ui\n\ndef main = fun {\n\trender.hydrate (dom.body ()) ui.page\n}"
+def fs-api-src :: string = """
+# api.pa -- the shared contract, compiled into both sides.
+use std/task
+
+# Runs on the server; the browser calls it as if it were local.
+public remote def add :: fun int int -> task int = fun a b {
+	task.return (a + b)
+}
+"""
+
+def fs-server-src :: string = """
+# server.pa -- serve the page, let the compiler route the RPC calls.
+use std/rpc
+use std/task
+use std/sys/http
+use ui
+
+def handler :: fun http.request -> task http.response = fun req {
+	if req.path == "/" {
+		task.return (http.html 200 (ui.document ()))
+	} else {
+		rpc.dispatch req
+	}
+}
+
+def main = fun {
+	http.serve "127.0.0.1:8080" handler
+}
+"""
+
+def fs-client-src :: string = """
+# client.pa -- boot the browser by hydrating the server's HTML.
+use std/web/dom
+use std/web/render
+use ui
+
+def main = fun {
+	render.hydrate (dom.body ()) ui.page
+}
+"""
 
 # --- sections ---------------------------------------------------------------
 
@@ -97,7 +149,13 @@ def sec-fullstack :: view = doc-section "fullstack" "A fullstack app" [
 		ic "remote def",
 		t " and the compiler writes both the server route and the browser stub, so the two never drift apart. Four small files:",
 	],
-	code "app/\n\tapi.pa      # shared contract: the remote defs\n\tserver.pa   # serves the page, dispatches RPC\n\tclient.pa   # hydrates the server's HTML\n\tui.pa       # the shared view (server + browser)",
+	code """
+	app/
+		api.pa      # shared contract: the remote defs
+		server.pa   # serves the page, dispatches RPC
+		client.pa   # hydrates the server's HTML
+		ui.pa       # the shared view (server + browser)
+	""",
 	h3 "api.pa",
 	pr [
 		t "The contract. A ",
@@ -118,7 +176,10 @@ def sec-fullstack :: view = doc-section "fullstack" "A fullstack app" [
 		ic "view",
 		t " — built once, rendered to HTML on the server and brought to life in the browser. Develop with live-reload, then build the deployable bundle:",
 	],
-	code "pluma dev app/      # live-reload dev server\npluma build app/    # server .wasm + browser bundle",
+	code """
+	pluma dev app/      # live-reload dev server
+	pluma build app/    # server .wasm + browser bundle
+	""",
 	using view {
 		.div [.styled prose.doc-cta] [
 			.a [.styled theme.btn-primary, .href "/start"] [.text "Get started →"],

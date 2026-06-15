@@ -281,6 +281,12 @@ pub enum Token {
 	/// e.g. `"hello"`
 	StringLiteral(usize, usize),
 
+	/// A literal portion of a triple-quoted string (`"""..."""`). Spans the
+	/// inner bytes only, like `StringLiteral`; the distinct variant lets the
+	/// parser apply block-string handling (leading-newline strip + dedent) and
+	/// lets the formatter preserve the triple-quoted form.
+	TripleStringLiteral(usize, usize),
+
 	/// e.g. `'\x89PNG'`. Span covers the inner bytes only, like StringLiteral.
 	BytesLiteral(usize, usize),
 
@@ -399,6 +405,7 @@ impl Token {
 			| RightParen(start, end)
 			| Star(start, end)
 			| StringLiteral(start, end)
+			| TripleStringLiteral(start, end)
 			| BytesLiteral(start, end)
 			| Tilde(start, end)
 			| Underscore(start, end)
@@ -410,11 +417,29 @@ impl Token {
 		use Token::*;
 
 		match self {
-			Identifier(..) | KeywordBuiltin(..) | KeywordFun(..) | KeywordIf(..) | KeywordWhen(..)
-			| KeywordUsing(..) | KeywordScope(..) | KeywordManual(..) | DecimalDigits(..)
-			| DurationLiteral(..) | HexDigits(..) | BinaryDigits(..) | OctalDigits(..)
-			| LeftParen(..) | LeftBracket(..) | LeftBrace(..) | Backtick(..) | StringLiteral(..)
-			| BytesLiteral(..) | BoolTrue(..) | BoolFalse(..) | UnaryMinus(..) => true,
+			Identifier(..)
+			| KeywordBuiltin(..)
+			| KeywordFun(..)
+			| KeywordIf(..)
+			| KeywordWhen(..)
+			| KeywordUsing(..)
+			| KeywordScope(..)
+			| KeywordManual(..)
+			| DecimalDigits(..)
+			| DurationLiteral(..)
+			| HexDigits(..)
+			| BinaryDigits(..)
+			| OctalDigits(..)
+			| LeftParen(..)
+			| LeftBracket(..)
+			| LeftBrace(..)
+			| Backtick(..)
+			| StringLiteral(..)
+			| TripleStringLiteral(..)
+			| BytesLiteral(..)
+			| BoolTrue(..)
+			| BoolFalse(..)
+			| UnaryMinus(..) => true,
 			_ => false,
 		}
 	}
@@ -511,6 +536,7 @@ impl fmt::Display for Token {
 			&RightParen(..) => "a ')'",
 			&Star(..) => "a '*'",
 			&StringLiteral(..) => "a string",
+			&TripleStringLiteral(..) => "a triple-quoted string",
 			&BytesLiteral(..) => "a bytes literal",
 			&Tilde(..) => "a '~'",
 			&Underscore(..) => "a '_'",

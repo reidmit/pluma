@@ -1,0 +1,24 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+<ul>
+	<li>Ada</li>
+</ul>
+===
+no need to escape "quotes" here
+===
+tab	and newline
+stay literal? no
+backslash \ kept
+===
+first
+
+third
+===
+margin
+  is stripped
+== stderr ==

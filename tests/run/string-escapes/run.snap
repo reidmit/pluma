@@ -1,0 +1,15 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+tab	end
+newline
+end
+literal backslash-n: a\nb
+literal backslash-t: x\ty
+quote: "hi"
+backslash: a\b
+== stderr ==

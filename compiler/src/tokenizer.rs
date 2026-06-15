@@ -21,7 +21,11 @@ pub struct Tokenizer<'a> {
 	line: usize,
 	line_start_offset: usize,
 	expect_import_path: bool,
+	// Per open string, the byte offset where its content begins (just past the
+	// opening `"` or `"""`). `string_is_triple` runs in lockstep, recording
+	// whether each open string is triple-quoted.
 	string_stack: Vec<usize>,
+	string_is_triple: Vec<bool>,
 	interpolation_stack: Vec<usize>,
 	// Per active interpolation, the depth of unmatched `(` inside the
 	// interpolation's expression. Lets the tokenizer tell apart `)` that
@@ -49,6 +53,7 @@ impl<'a> Tokenizer<'a> {
 			line_start_offset: 0,
 			expect_import_path: false,
 			string_stack: Vec::new(),
+			string_is_triple: Vec::new(),
 			interpolation_stack: Vec::new(),
 			interpolation_paren_depth: Vec::new(),
 			brace_depth: 0,
@@ -67,12 +72,46 @@ impl<'a> Tokenizer<'a> {
 		)
 	}
 
+	// The line index and byte offset of the start of the line containing
+	// `offset`, found by scanning from the beginning. Used on error paths where
+	// the running line cursor can't be trusted — an unterminated string may have
+	// swallowed newlines past where the error should be anchored.
+	fn line_and_start_of(&self, offset: usize) -> (usize, usize) {
+		let mut line = 0;
+		let mut line_start = 0;
+		let mut i = 0;
+		while i < offset && i < self.length {
+			if self.source[i] == b'\n' {
+				line += 1;
+				line_start = i + 1;
+			}
+			i += 1;
+		}
+		(line, line_start)
+	}
+
+	// A range anchored at the line of `start`, with both columns measured from
+	// that line's beginning (matching the historical single-line span shape).
+	fn span_from(&self, start: usize, end: usize) -> Range {
+		let (line, line_start) = self.line_and_start_of(start);
+		Range::within_line(line, start - line_start, end - line_start)
+	}
+
 	// The byte at the cursor, or `None` at end of input. Used by the two-char
 	// operator look-aheads (e.g. `+` → `++`, `?` → `??`) so a source that ends
 	// mid-operator reads `None` and falls through to the single-char token
 	// instead of indexing out of bounds.
 	fn peek_byte(&self) -> Option<u8> {
 		self.source.get(self.index).copied()
+	}
+
+	// Whether the three bytes starting at `i` are `"""` — the opener/closer of
+	// a triple-quoted string.
+	fn is_triple_quote(&self, i: usize) -> bool {
+		i + 2 < self.length
+			&& self.source[i] == b'"'
+			&& self.source[i + 1] == b'"'
+			&& self.source[i + 2] == b'"'
 	}
 }
 
@@ -98,10 +137,15 @@ impl<'a> Iterator for Tokenizer<'a> {
 			let byte = self.source[start_index];
 
 			if self.string_stack.is_empty() && byte == b'"' {
-				// If the string stack is empty and byte is ", we are at the beginning of
-				// a brand new string. Save the start index and advance.
-				self.string_stack.push(self.index);
-				self.index += 1;
+				// Beginning of a brand new string. `"""` opens a triple-quoted
+				// (block) string; a lone `"` opens an ordinary one. Record where
+				// the content begins (past the opening quotes) and its kind.
+				let triple = self.is_triple_quote(self.index);
+				self
+					.string_stack
+					.push(self.index + if triple { 3 } else { 1 });
+				self.string_is_triple.push(triple);
+				self.index += if triple { 3 } else { 1 };
 				continue;
 			}
 
@@ -109,36 +153,48 @@ impl<'a> Iterator for Tokenizer<'a> {
 				// If the string stack is not empty, we're somewhere inside a string (maybe
 				// in an interpolation, though). We must check if we need to end the string,
 				// start/end an interpolation, or just carry on.
+				let in_triple = *self.string_is_triple.last().unwrap();
 
 				if byte == b'"' && self.string_stack.len() == self.interpolation_stack.len() {
 					// If the two stacks have the same size, we must be inside of an interpolation,
-					// so the " indicates the beginning of a nested string literal. Save the index
-					// in the string stack and advance.
-					self.string_stack.push(self.index);
-					self.index += 1;
+					// so the " indicates the beginning of a nested string literal.
+					let triple = self.is_triple_quote(self.index);
+					self
+						.string_stack
+						.push(self.index + if triple { 3 } else { 1 });
+					self.string_is_triple.push(triple);
+					self.index += if triple { 3 } else { 1 };
 					continue;
 				}
 
 				if byte == b'"' {
-					// `\"` is an escaped quote, `\\"` is an escaped backslash
-					// followed by a string-terminating quote. Count consecutive
-					// backslashes — odd count means the quote is escaped.
-					let mut backslashes = 0;
-					let mut i = self.index;
-					while i > 0 && self.source[i - 1] == b'\\' {
-						backslashes += 1;
-						i -= 1;
-					}
-					let is_escaped = backslashes % 2 == 1;
+					// Decide whether this quote terminates the string. A triple
+					// string ends only on `"""`; an ordinary string ends on a
+					// `"` that isn't escaped (`\"` is a quote, `\\"` is a
+					// backslash then a terminator — count the run of backslashes).
+					let closes = if in_triple {
+						self.is_triple_quote(self.index)
+					} else {
+						let mut backslashes = 0;
+						let mut i = self.index;
+						while i > 0 && self.source[i - 1] == b'\\' {
+							backslashes += 1;
+							i -= 1;
+						}
+						backslashes % 2 == 0
+					};
 
-					if !is_escaped {
-						// Here, the " must indicate the end of a string literal section. Pop from
-						// the string stack, add a new token, then advance.
-						let start_index = self.string_stack.pop().unwrap() + 1;
+					if closes {
+						let start_index = self.string_stack.pop().unwrap();
+						self.string_is_triple.pop();
 						let end_index = self.index;
-						self.index += 1;
+						self.index += if in_triple { 3 } else { 1 };
 
-						return Some(StringLiteral(start_index, end_index));
+						return Some(if in_triple {
+							TripleStringLiteral(start_index, end_index)
+						} else {
+							StringLiteral(start_index, end_index)
+						});
 					}
 				}
 
@@ -146,7 +202,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 					// We must be at the beginning of an interpolation, so create a token for
 					// the string literal portion leading up to the interpolation, one for the
 					// interpolation start, and add to the interpolation stack.
-					let string_start_index = self.string_stack.last().unwrap() + 1;
+					let string_start_index = *self.string_stack.last().unwrap();
 					let string_end_index = self.index;
 
 					let interpolation_start_start_index = start_index + 1;
@@ -161,10 +217,17 @@ impl<'a> Iterator for Tokenizer<'a> {
 						interpolation_start_end_index,
 					));
 
-					return Some(StringLiteral(string_start_index, string_end_index));
+					return Some(if in_triple {
+						TripleStringLiteral(string_start_index, string_end_index)
+					} else {
+						StringLiteral(string_start_index, string_end_index)
+					});
 				}
 
-				if self.interpolation_stack.len() > 0 && byte == b')' {
+				if self.interpolation_stack.len() > 0
+					&& byte == b')'
+					&& self.string_stack.len() == self.interpolation_stack.len()
+				{
 					let depth = self.interpolation_paren_depth.last_mut().unwrap();
 					if *depth > 0 {
 						// `)` closes a nested grouping inside the interpolation's
@@ -172,13 +235,13 @@ impl<'a> Iterator for Tokenizer<'a> {
 						*depth -= 1;
 					} else {
 						// `)` ends the interpolation itself. Fix the string stack
-						// so the next string-literal portion starts here, and pop
-						// our paren-depth bookkeeping.
+						// so the next string-literal portion starts just past the
+						// `)`, and pop our paren-depth bookkeeping.
 						let start_index = self.index;
 						let end_index = self.index + 1;
 
 						self.string_stack.pop();
-						self.string_stack.push(self.index);
+						self.string_stack.push(self.index + 1);
 
 						self.interpolation_stack.pop();
 						self.interpolation_paren_depth.pop();
@@ -189,9 +252,13 @@ impl<'a> Iterator for Tokenizer<'a> {
 				}
 
 				if self.string_stack.len() > self.interpolation_stack.len() {
-					// If the string stack is larger than the interpolation stack, we must be
-					// inside of a string literal portion. Just advance past this char so we can
-					// include it in the string later.
+					// We're inside a string literal portion. Advance past this char so
+					// it's included in the string later; track newlines so line/column
+					// info stays right for whatever follows a multiline string.
+					if byte == b'\n' {
+						self.line += 1;
+						self.line_start_offset = self.index + 1;
+					}
 					self.index += 1;
 					continue;
 				}
@@ -749,16 +816,20 @@ impl<'a> Iterator for Tokenizer<'a> {
 			let start_index = self.interpolation_stack.pop().unwrap();
 
 			self.errors.push(ParseError {
-				range: self.span_to_single_line_range(start_index, self.index),
+				range: self.span_from(start_index, self.index),
 				kind: UnclosedInterpolation,
 			});
 		}
 
 		if !self.string_stack.is_empty() {
-			let start_index = self.string_stack.pop().unwrap();
+			// `string_stack` holds the content start; step back over the opening
+			// quote(s) so the error points at the quote that was never closed.
+			let content_start = self.string_stack.pop().unwrap();
+			let triple = self.string_is_triple.pop().unwrap_or(false);
+			let quote_start = content_start.saturating_sub(if triple { 3 } else { 1 });
 
 			self.errors.push(ParseError {
-				range: self.span_to_single_line_range(start_index, start_index + 1),
+				range: self.span_from(quote_start, quote_start + 1),
 				kind: UnclosedString,
 			});
 		}
