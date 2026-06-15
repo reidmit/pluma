@@ -46,5 +46,6 @@ pub fn render_diagnostics_string(diagnostics: &[Diagnostic]) -> String {
 		diagnostics,
 		|path: &Path| fs::read_to_string(path).ok(),
 		&palette,
+		colors::terminal_width(),
 	)
 }

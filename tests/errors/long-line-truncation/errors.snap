@@ -1,0 +1,10 @@
+---
+source: tests/errors.rs
+assertion_line: 54
+expression: output
+---
+error[E0102]: Type mismatch: expected `string`, but found `int`.
+  │
+2 │ …ind" ++ 42 ++ "and then everybody went home for supper and slept soundly until the morning cam…
+  │          ^^
+  ╰─𜱶 tests/errors/long-line-truncation/main.pa:2:125

@@ -105,10 +105,16 @@ impl Palette {
 // maps a source path to its contents; results are cached so a file shared by
 // several diagnostics is read once. A `None` from `load` (synthetic path, e.g.
 // stdin) drops the source excerpt — the header, help, and notes still render.
+//
+// `max_width`, when set, caps how wide a source line may be drawn (in columns):
+// a longer line is windowed around its caret with `…` on the clipped ends, so the
+// caret row stays aligned instead of being thrown off by the terminal wrapping
+// the line. `None` draws every line in full (piped output, snapshot tests).
 pub fn render_diagnostics(
 	diagnostics: &[Diagnostic],
 	mut load: impl FnMut(&Path) -> Option<String>,
 	palette: &Palette,
+	max_width: Option<usize>,
 ) -> String {
 	let cwd = std::env::current_dir().unwrap_or_default();
 	let mut cache: HashMap<PathBuf, Option<Vec<String>>> = HashMap::new();
@@ -118,7 +124,9 @@ pub fn render_diagnostics(
 		if i > 0 {
 			out.push('\n');
 		}
-		render_one(diagnostic, &mut load, palette, &cwd, &mut cache, &mut out);
+		render_one(
+			diagnostic, &mut load, palette, &cwd, max_width, &mut cache, &mut out,
+		);
 	}
 
 	out
@@ -129,6 +137,7 @@ fn render_one(
 	load: &mut impl FnMut(&Path) -> Option<String>,
 	palette: &Palette,
 	cwd: &Path,
+	max_width: Option<usize>,
 	cache: &mut HashMap<PathBuf, Option<Vec<String>>>,
 	out: &mut String,
 ) {
@@ -225,7 +234,16 @@ fn render_one(
 		if !trailers.is_empty() {
 			let _ = writeln!(out, "{}{}", rail_indent, palette.dim("│"));
 		}
-		render_snippet(range, &diagnostic.labels, lines, w, is_error, palette, out);
+		render_snippet(
+			range,
+			&diagnostic.labels,
+			lines,
+			w,
+			is_error,
+			palette,
+			max_width,
+			out,
+		);
 	} else if !trailers.is_empty() {
 		let _ = writeln!(out, "{}{}", rail_indent, palette.dim("│"));
 	}
@@ -271,6 +289,7 @@ fn render_snippet(
 	w: usize,
 	is_error: bool,
 	palette: &Palette,
+	max_width: Option<usize>,
 	out: &mut String,
 ) {
 	use std::fmt::Write;
@@ -283,6 +302,15 @@ fn render_snippet(
 		}
 	};
 	let rail_indent = " ".repeat(w + 1);
+
+	// Column budget for the source text itself. A line row is `{line_no} │ {text}`
+	// and the caret row `{indent}│ {carets}` — both put the text at column `w + 3`,
+	// so that prefix comes off the terminal width. A floor keeps a usable window on
+	// very narrow terminals; `None` means "don't clip".
+	let avail = match max_width {
+		Some(mw) => mw.saturating_sub(w + 3).max(16),
+		None => usize::MAX,
+	};
 
 	// Collect every (line, start_col, span, caption, is_primary) marker. The
 	// primary marker uses the severity color; secondary labels are blue.
@@ -325,7 +353,10 @@ fn render_snippet(
 		let Some(text) = lines.get(marker.line) else {
 			continue;
 		};
-		let shown = text.replace('\t', " ");
+		// Tabs render as single spaces so the caret column matches the byte offset.
+		let expanded = text.replace('\t', " ");
+		let (shown, caret_start, caret_span) =
+			clip_line(&expanded, marker.start_col, marker.span, avail);
 		let line_no = format!("{:>w$}", marker.line + 1, w = w);
 		let _ = writeln!(
 			out,
@@ -335,8 +366,8 @@ fn render_snippet(
 			shown
 		);
 
-		let pad = " ".repeat(marker.start_col);
-		let carets = "^".repeat(marker.span.max(1));
+		let pad = " ".repeat(caret_start);
+		let carets = "^".repeat(caret_span.max(1));
 		let painted = if marker.primary {
 			paint_caret(&carets)
 		} else {
@@ -363,6 +394,73 @@ fn render_snippet(
 			caption
 		);
 	}
+}
+
+// Windows a too-wide source line down to a slice around its caret so the caret row
+// beneath stays aligned with the text it points at instead of being thrown off by
+// the terminal wrapping the line. `avail` is the column budget for the line text
+// (the rail/gutter prefix is already subtracted); a clipped end gets a `…`. Columns
+// are counted in `char`s — for ASCII source (the common case) that matches the byte
+// offsets the caret uses, and for the rare multibyte line it keeps the caret
+// truthful. Returns the (possibly trimmed) text with the caret's start column and
+// span relative to it.
+fn clip_line(line: &str, start_col: usize, span: usize, avail: usize) -> (String, usize, usize) {
+	let n = line.chars().count();
+	if n <= avail {
+		return (line.to_string(), start_col, span);
+	}
+
+	let chars: Vec<char> = line.chars().collect();
+	// The caret's start/end as char indices (incoming columns are byte offsets).
+	let byte_to_char = |byte: usize| line[..byte.min(line.len())].chars().count();
+	let cstart = byte_to_char(start_col);
+	let cend = byte_to_char((start_col + span).min(line.len()))
+		.max(cstart + 1)
+		.min(n);
+
+	// A few columns of lead kept before the caret when the left has to be clipped.
+	let margin = 8usize;
+
+	// Show from the start unless the caret would fall past the right edge (a column
+	// is reserved there for the `…`); otherwise slide right to bring it into view.
+	let mut lo = if cend <= avail.saturating_sub(1) {
+		0
+	} else {
+		cstart.saturating_sub(margin)
+	};
+
+	// Fit the window to the budget, reserving a column for each `…` actually drawn.
+	let mut hi = (lo + avail.saturating_sub((lo > 0) as usize)).min(n);
+	if hi < n {
+		hi = (lo + avail.saturating_sub((lo > 0) as usize + 1)).min(n);
+	}
+	// When the caret sits near the end the window reaches the line end with budget to
+	// spare — pull the left edge back to fill it with leading context.
+	if hi == n && lo > 0 {
+		lo = lo.min(n.saturating_sub(avail.saturating_sub(1)));
+	}
+
+	let left = lo > 0;
+	let right = hi < n;
+	let mut shown = String::new();
+	if left {
+		shown.push('…');
+	}
+	shown.extend(&chars[lo..hi]);
+	if right {
+		shown.push('…');
+	}
+
+	// Re-anchor the caret in the trimmed text: a left `…` shifts everything one column
+	// right, and a caret clipped off the left edge collapses onto the first shown column.
+	let lead = left as usize;
+	let new_start = lead + cstart.saturating_sub(lo);
+	let last_text_col = lead + hi.saturating_sub(lo); // exclusive, before any right `…`
+	let new_span = (lead + cend.saturating_sub(lo))
+		.min(last_text_col)
+		.saturating_sub(new_start)
+		.max(1);
+	(shown, new_start, new_span)
 }
 
 // Caret width for a range: exact for single-line ranges, else to end-of-line.

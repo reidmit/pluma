@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 atty = "0.2.13"
 clap = { version = "4", features = ["derive"] }
+terminal_size = "0.4"
 compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
 # V8 is the `pluma run`/`pluma test` engine (ABI.md Phase 2): run the same WasmGC

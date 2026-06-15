@@ -1,0 +1,2 @@
+# A type error buried deep in a very long line: the caret row must stay aligned
+def greeting :: string = "the quick brown fox jumps over the lazy dog while the slow green turtle ambles quietly behind" ++ 42 ++ "and then everybody went home for supper and slept soundly until the morning came" ++ "done"

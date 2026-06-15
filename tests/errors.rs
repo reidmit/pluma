@@ -36,10 +36,14 @@ fn errors_fixture(path: &Path) -> datatest_stable::Result<()> {
 	let output = if diagnostics.is_empty() {
 		"(no diagnostics — fixture unexpectedly compiled)\n".to_string()
 	} else {
+		// A fixed width (not the live terminal) so over-wide source lines clip
+		// deterministically in the snapshot. Comfortably wider than every ordinary
+		// fixture line, so only the long-line cases exercise the `…` windowing.
 		render_diagnostics(
 			&diagnostics,
 			|p: &Path| fs::read_to_string(p).ok(),
 			&Palette::plain(),
+			Some(100),
 		)
 	};
 

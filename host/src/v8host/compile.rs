@@ -81,6 +81,7 @@ fn render(diags: &[compiler::Diagnostic], source: &str) -> String {
 		diags,
 		|_path| Some(source.to_string()),
 		&compiler::Palette::plain(),
+		None,
 	)
 }
 

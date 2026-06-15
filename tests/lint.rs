@@ -49,6 +49,7 @@ fn lint_fixture(path: &Path) -> datatest_stable::Result<()> {
 			&warnings,
 			|p: &Path| fs::read_to_string(p).ok(),
 			&Palette::plain(),
+			None,
 		)
 	};
 
