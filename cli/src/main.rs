@@ -3,6 +3,7 @@ mod cli;
 mod colors;
 mod commands;
 mod printing;
+mod watch;
 
 use clap::Parser;
 
@@ -38,7 +39,11 @@ fn main() {
 
 		Command::Lint { fix, paths } => commands::lint::lint_command(fix, paths),
 
-		Command::Test { filters, dir } => commands::test::test_command(filters, dir),
+		Command::Test {
+			filters,
+			watch,
+			dir,
+		} => commands::test::test_command(filters, watch, dir),
 
 		Command::Doc { module, out } => commands::doc::doc_command(module, out),
 

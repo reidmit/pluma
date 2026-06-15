@@ -142,10 +142,17 @@ pub(crate) enum Command {
 	///
 	/// Walks up from the given directory (or cwd) to the nearest `pluma.pa`
 	/// package root, then runs every suite it finds under V8.
+	///
+	/// With `--watch`, stays running and re-runs the suite on every source
+	/// change.
 	Test {
 		/// Only run modules whose name contains this (repeatable).
 		#[arg(short = 'f', value_name = "NAME")]
 		filters: Vec<String>,
+
+		/// Re-run the suite on every source change instead of running once.
+		#[arg(short = 'w', long)]
+		watch: bool,
 
 		/// Directory to start the walk-up from (default: current directory).
 		dir: Option<String>,

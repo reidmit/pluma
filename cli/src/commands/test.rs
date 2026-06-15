@@ -1,11 +1,11 @@
 use compiler::*;
+use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
 
 use crate::printing::*;
+use crate::watch::{POLL_INTERVAL, scan};
 
-pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
-	// PLUMA_TIMING=1 prints a per-phase wall-clock breakdown to stderr.
-	let timing = std::env::var("PLUMA_TIMING").is_ok();
-	let t_start = std::time::Instant::now();
+pub(crate) fn test_command(filters: Vec<String>, watch: bool, dir: Option<String>) {
 	let cwd = match std::env::current_dir() {
 		Ok(p) => p,
 		Err(err) => {
@@ -15,9 +15,9 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 	};
 
 	// No directory given means start the walk-up from cwd.
-	let start_dir: std::path::PathBuf = match dir {
+	let start_dir: PathBuf = match dir {
 		Some(arg) => {
-			let p = std::path::Path::new(&arg);
+			let p = Path::new(&arg);
 			if !p.is_dir() {
 				print_error(format!("`{}` is not a directory", arg));
 				std::process::exit(1);
@@ -45,6 +45,48 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 		}
 	};
 
+	if watch {
+		watch_suite(&filters, &root_dir);
+	} else {
+		std::process::exit(run_suite(&filters, &root_dir));
+	}
+}
+
+/// Re-run the suite on every source change, never returning. The initial run
+/// happens immediately; thereafter a cheap mtime fingerprint is polled and a
+/// change triggers a fresh run. Compile and test failures print and keep the
+/// loop alive — the point of watch mode is to fix-and-rerun without restarting.
+fn watch_suite(filters: &[String], root_dir: &Path) -> ! {
+	let clear = std::io::stdout().is_terminal();
+
+	loop {
+		if clear {
+			// Clear the screen and scrollback so each run reads as the whole
+			// picture, not a scroll of stale output.
+			print!("\x1b[2J\x1b[3J\x1b[H");
+		}
+		run_suite(filters, root_dir);
+		println!();
+		println!("watching for changes — press ctrl-c to exit");
+
+		// Baseline taken after the run, so anything the suite itself touched on
+		// disk doesn't read as a change and retrigger immediately.
+		let baseline = scan(root_dir);
+		while scan(root_dir) == baseline {
+			std::thread::sleep(POLL_INTERVAL);
+		}
+	}
+}
+
+/// Discover, compile, and run the suite once, returning the exit code the
+/// process should carry (0 = all passed). Diagnostics and errors are printed
+/// here rather than aborting, so a caller in watch mode can run again.
+fn run_suite(filters: &[String], root_dir: &Path) -> i32 {
+	// PLUMA_TIMING=1 prints a per-phase wall-clock breakdown to stderr.
+	let timing = std::env::var("PLUMA_TIMING").is_ok();
+	let t_start = std::time::Instant::now();
+	let root_dir = root_dir.to_path_buf();
+
 	// Module names below are paths relative to the package root, with `/`
 	// flipped to `.` and the `.pa` extension stripped — so
 	// `<root>/foo/bar.test.pa` becomes `foo.bar.test`.
@@ -64,7 +106,7 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 		} else {
 			eprintln!("no test files match {:?}", filters);
 		}
-		return;
+		return 0;
 	}
 
 	let count = test_modules.len();
@@ -108,7 +150,7 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 
 	if let Err(diagnostics) = compiler.check() {
 		if print_diagnostics_is_fatal(diagnostics) {
-			std::process::exit(1);
+			return 1;
 		}
 	}
 
@@ -118,25 +160,25 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 	// then run it under V8 (the deploy engine — `pluma test` exercises the exact
 	// artifact you ship). The runner is itself Pluma: `std/test.run-all` flattens
 	// each suite, runs the cases, prints the tree, and returns ok / err.
-	let use_color = std::io::IsTerminal::is_terminal(&std::io::stdout());
+	let use_color = std::io::stdout().is_terminal();
 	let program = match ir::lower_tests(&compiler, use_color) {
 		Ok(p) => p,
 		Err(msg) => {
 			print_error(format!("ir::lower: {msg}"));
-			std::process::exit(1);
+			return 1;
 		}
 	};
 
 	if program.test_suites.is_empty() {
 		eprintln!("no tests found (expected a `def tests :: test.suite` in a *.test.pa file)");
-		return;
+		return 0;
 	}
 
 	let bytes = match wasm::emit(&program) {
 		Ok(b) => b,
 		Err(diags) => {
 			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
-			std::process::exit(1);
+			return 1;
 		}
 	};
 
@@ -158,7 +200,7 @@ pub(crate) fn test_command(filters: Vec<String>, dir: Option<String>) {
 		eprintln!("  total          : {:>8.2} ms", ms(t_end - t_start));
 	}
 
-	std::process::exit(code);
+	code
 }
 
 // Recursively find every `*.test.pa` file under `root` and return its module

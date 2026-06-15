@@ -18,7 +18,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+
+use crate::watch::scan;
 
 use compiler::*;
 
@@ -897,42 +899,4 @@ fn watch_root(entry_path: &str) -> PathBuf {
 			.unwrap_or_else(|| PathBuf::from("."))
 	};
 	find_project_root(&start).unwrap_or(start)
-}
-
-/// A cheap change fingerprint: (count of `*.pa` files, latest mtime among them).
-/// Comparing this across polls catches edits, additions, and deletions. Hidden
-/// directories (`.git`, `target`, …) are skipped.
-fn scan(root: &Path) -> (usize, Option<SystemTime>) {
-	fn walk(dir: &Path, count: &mut usize, latest: &mut Option<SystemTime>) {
-		let entries = match std::fs::read_dir(dir) {
-			Ok(e) => e,
-			Err(_) => return,
-		};
-		for entry in entries.flatten() {
-			let name = entry.file_name();
-			let name = name.to_string_lossy();
-			if name.starts_with('.') || name == "target" {
-				continue;
-			}
-			let file_type = match entry.file_type() {
-				Ok(t) => t,
-				Err(_) => continue,
-			};
-			let path = entry.path();
-			if file_type.is_dir() {
-				walk(&path, count, latest);
-			} else if name.ends_with(".pa") {
-				*count += 1;
-				if let Ok(m) = entry.metadata().and_then(|m| m.modified()) {
-					if latest.map_or(true, |b| m > b) {
-						*latest = Some(m);
-					}
-				}
-			}
-		}
-	}
-	let mut count = 0;
-	let mut latest = None;
-	walk(root, &mut count, &mut latest);
-	(count, latest)
 }
