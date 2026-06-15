@@ -6,6 +6,6 @@ error: `secret` is private to module `lib`.
 > 5 | def out = lib.secret.reveal 5
                     ^^^^^^
 
-error: Type mismatch: expected `{reveal: 'a, ...}`, but found `?`.
+error: Type mismatch: expected `{reveal: a, ...}`, but found `?`.
 > 5 | def out = lib.secret.reveal 5
                 ^^^^^^^^^^^^^^^^^

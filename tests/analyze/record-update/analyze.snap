@@ -11,22 +11,22 @@ module `main` (tests/analyze/record-update/main.pa) {
         module(3:0-13:1) [
             def(3:0-5:1) :: nothing {
                 name: ident(3:4-3:13) `with-name`,
-                kind: expr(3:16-5:1) :: ({name: 'a, ...}) 'a -> {name: 'a, ...} {
+                kind: expr(3:16-5:1) :: ({name: a, ...}) a -> {name: a, ...} {
                     kind: fun(3:16-5:1) {
                         params: [
-                            ident(3:20-3:21) `r` :: {name: 'a, ...},
-                            ident(3:22-3:26) `name` :: 'a,
+                            ident(3:20-3:21) `r` :: {name: a, ...},
+                            ident(3:22-3:26) `name` :: a,
                         ],
                         body: [
-                            expr(4:1-4:13) :: {name: 'a, ...} {
+                            expr(4:1-4:13) :: {name: a, ...} {
                                 kind: record-update {
-                                    base: expr(4:5-4:6) :: {name: 'a, ...} {
+                                    base: expr(4:5-4:6) :: {name: a, ...} {
                                         kind: ident(4:5-4:6) `r`,
                                     },
                                     fields: [
                                         (
                                             ident(4:8-4:12) `name`,
-                                            expr(4:8-4:12) :: 'a {
+                                            expr(4:8-4:12) :: a {
                                                 kind: ident(4:8-4:12) `name`,
                                             },
                                         ),

@@ -12,13 +12,13 @@ module `main` (tests/analyze/record-pattern-named-rest/main.pa) {
         module(3:0-14:1) [
             def(3:0-7:1) :: nothing {
                 name: ident(3:4-3:18) `split-out-name`,
-                kind: expr(3:21-7:1) :: ({name: 'a, ...}) -> ('a, {...}) {
+                kind: expr(3:21-7:1) :: ({name: a, ...}) -> (a, {...}) {
                     kind: fun(3:21-7:1) {
                         params: [
-                            ident(3:25-3:26) `p` :: {name: 'a, ...},
+                            ident(3:25-3:26) `p` :: {name: a, ...},
                         ],
                         body: [
-                            expr(4:1-6:2) :: ('a, {...}) {
+                            expr(4:1-6:2) :: (a, {...}) {
                                 kind: when(4:1-6:2) [
                                     case(4:8-6:2) is pattern(4:11-4:29) Record {
                                         fields: [
@@ -38,9 +38,9 @@ module `main` (tests/analyze/record-pattern-named-rest/main.pa) {
                                             },
                                         ),
                                     } [
-                                        expr(5:2-5:11) :: ('a, {...}) {
+                                        expr(5:2-5:11) :: (a, {...}) {
                                             kind: tuple [
-                                                expr(5:3-5:4) :: 'a {
+                                                expr(5:3-5:4) :: a {
                                                     kind: ident(5:3-5:4) `n`,
                                                 },
                                                 expr(5:6-5:10) :: {...} {

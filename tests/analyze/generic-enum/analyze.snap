@@ -45,7 +45,7 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                                     ),
                                     value: expr(7:9-7:18) :: box int {
                                         kind: call(7:9-7:18) {
-                                            callee: expr(7:9-7:16) :: 'a -> box 'a {
+                                            callee: expr(7:9-7:16) :: a -> box a {
                                                 kind: namespace-access `box.one`,
                                             },
                                             args: [
@@ -62,7 +62,7 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                                     pattern: pattern(8:5-8:6) Identifier(
                                         ident(8:5-8:6) `b`,
                                     ),
-                                    value: expr(8:9-8:18) :: box 'a {
+                                    value: expr(8:9-8:18) :: box a {
                                         kind: namespace-access `box.empty`,
                                     },
                                 },
@@ -74,7 +74,7 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                                     ),
                                     value: expr(9:9-9:24) :: box string {
                                         kind: call(9:9-9:24) {
-                                            callee: expr(9:9-9:16) :: 'a 'a -> box 'a {
+                                            callee: expr(9:9-9:16) :: a a -> box a {
                                                 kind: namespace-access `box.two`,
                                             },
                                             args: [
@@ -103,11 +103,11 @@ module `main` (tests/analyze/generic-enum/main.pa) {
                             },
                             expr(11:1-11:8) :: nothing {
                                 kind: call(11:1-11:8) {
-                                    callee: expr(11:1-11:6) :: (box 'a) -> nothing {
+                                    callee: expr(11:1-11:6) :: (box a) -> nothing {
                                         kind: ident(11:1-11:6) `print`,
                                     },
                                     args: [
-                                        expr(11:7-11:8) :: box 'a {
+                                        expr(11:7-11:8) :: box a {
                                             kind: ident(11:7-11:8) `b`,
                                         },
                                     ],

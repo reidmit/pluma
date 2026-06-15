@@ -10,7 +10,7 @@ error[E0132]: `private-fn` is private to module `lib`.
   │               ^^^^^^^^^^
   ╰─𜱶 tests/errors/item-private/main.pa:3:15
 
-error[E0102]: Type mismatch: expected `int -> 'a`, but found `?`.
+error[E0102]: Type mismatch: expected `int -> a`, but found `?`.
   │
 3 │ def out = lib.private-fn 5
   │           ^^^^^^^^^^^^^^^^

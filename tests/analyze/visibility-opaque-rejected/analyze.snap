@@ -6,6 +6,6 @@ error: Variant `mk` does not exist in enum of type `token`.
 > 5 | def t = lib.token.mk "abc"
                         ^^
 
-error: Type mismatch: expected `string -> 'a`, but found `?`.
+error: Type mismatch: expected `string -> a`, but found `?`.
 > 5 | def t = lib.token.mk "abc"
               ^^^^^^^^^^^^^^^^^^

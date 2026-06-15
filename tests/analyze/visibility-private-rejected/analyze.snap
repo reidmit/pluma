@@ -1,12 +1,11 @@
 ---
 source: tests/analyze.rs
-assertion_line: 41
 expression: output
 ---
 error: `private-fn` is private to module `lib`.
 > 3 | def out = lib.private-fn 5
                     ^^^^^^^^^^
 
-error: Type mismatch: expected `int -> 'a`, but found `?`.
+error: Type mismatch: expected `int -> a`, but found `?`.
 > 3 | def out = lib.private-fn 5
                 ^^^^^^^^^^^^^^^^

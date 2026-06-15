@@ -16,16 +16,16 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
         ] [
             def(7:0-10:1) :: nothing {
                 name: ident(7:4-7:8) `beat`,
-                kind: expr(7:11-10:1) :: nothing -> task int 'a {
+                kind: expr(7:11-10:1) :: nothing -> task int a {
                     kind: fun(7:11-10:1) {
                         params: [],
                         body: [
-                            expr(8:1-9:14) :: task int 'a {
+                            expr(8:1-9:14) :: task int a {
                                 kind: try(8:1-9:14) {
                                     pattern: pattern(8:1-8:1) Underscore,
-                                    value: expr(8:5-8:18) :: task int 'a {
+                                    value: expr(8:5-8:18) :: task int a {
                                         kind: call(8:5-8:18) {
-                                            callee: expr(8:5-8:16) :: 'a -> task 'a 'b {
+                                            callee: expr(8:5-8:16) :: a -> task a b {
                                                 kind: namespace-access `task.return`,
                                             },
                                             args: [
@@ -36,9 +36,9 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                                         },
                                     },
                                     rest: [
-                                        expr(9:1-9:14) :: task int 'a {
+                                        expr(9:1-9:14) :: task int a {
                                             kind: call(9:1-9:14) {
-                                                callee: expr(9:1-9:12) :: 'a -> task 'a 'b {
+                                                callee: expr(9:1-9:12) :: a -> task a b {
                                                     kind: namespace-access `task.return`,
                                                 },
                                                 args: [
@@ -65,7 +65,7 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                         body: [
                             expr(13:1-15:11) :: result int string {
                                 kind: call(13:1-15:11) {
-                                    callee: expr(13:1-15:11) :: 'a {
+                                    callee: expr(13:1-15:11) :: a {
                                         kind: namespace-access `result.then`,
                                     },
                                     args: [
@@ -89,7 +89,7 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                                                 body: [
                                                     expr(14:1-15:11) :: result int string {
                                                         kind: call(14:1-15:11) {
-                                                            callee: expr(14:1-15:11) :: 'a {
+                                                            callee: expr(14:1-15:11) :: a {
                                                                 kind: namespace-access `result.then`,
                                                             },
                                                             args: [
@@ -122,7 +122,7 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                                                                         body: [
                                                                             expr(15:1-15:11) :: result int string {
                                                                                 kind: call(15:1-15:11) {
-                                                                                    callee: expr(15:1-15:3) :: 'a -> result 'a 'b {
+                                                                                    callee: expr(15:1-15:3) :: a -> result a b {
                                                                                         kind: ident(15:1-15:3) `ok`,
                                                                                     },
                                                                                     args: [
@@ -171,7 +171,7 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                                 ) [
                                     expr(20:2-20:6) :: result int string {
                                         kind: call(20:2-20:6) {
-                                            callee: expr(20:2-20:4) :: 'a -> result 'a 'b {
+                                            callee: expr(20:2-20:4) :: a -> result a b {
                                                 kind: ident(20:2-20:4) `ok`,
                                             },
                                             args: [
@@ -184,7 +184,7 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                                 ] else [
                                     expr(22:2-22:19) :: result int string {
                                         kind: call(22:2-22:19) {
-                                            callee: expr(22:2-22:5) :: 'a -> result 'b 'a {
+                                            callee: expr(22:2-22:5) :: a -> result b a {
                                                 kind: ident(22:2-22:5) `err`,
                                             },
                                             args: [

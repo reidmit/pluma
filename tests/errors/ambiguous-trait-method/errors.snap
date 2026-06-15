@@ -2,7 +2,7 @@
 source: tests/errors.rs
 expression: output
 ---
-error[E0117]: Can't resolve trait `showable` dispatch on type `option 'a`: the type contains unbound type variables.
+error[E0117]: Can't resolve trait `showable` dispatch on type `option a`: the type contains unbound type variables.
   │
   ├─𜱶 help: add a type annotation to disambiguate.
   │

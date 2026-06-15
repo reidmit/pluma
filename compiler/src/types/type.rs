@@ -276,9 +276,9 @@ impl Type {
 }
 
 // Type-variable display is canonicalized per top-level signature: the first
-// distinct `Type::Var` encountered in a rendering becomes `'a`, the next `'b`,
+// distinct `Type::Var` encountered in a rendering becomes `a`, the next `b`,
 // and so on, regardless of its internal numeric id. This keeps signatures
-// readable (`'a -> 'a` instead of `'t102 -> 't102`) and stable across analyzer
+// readable (`a -> a` instead of `t102 -> t102`) and stable across analyzer
 // changes that merely shift the fresh-var counter, so snapshots don't churn.
 //
 // The mapping lives in a thread-local that resets whenever the outermost
@@ -334,13 +334,15 @@ fn display_var_name(var: usize) -> String {
 		}
 	});
 
-	// 0..=25 -> 'a..'z, then 'a1, 'b1, ... for the rare signature with >26 vars.
+	// 0..=25 -> a..z, then a1, b1, ... for the rare signature with >26 vars.
+	// Bare letters (no leading apostrophe) so a displayed type reads exactly as
+	// you'd write it in source — `fun (list a) -> a`, not ML's `'a`.
 	let letter = char::from_u32((index % 26) as u32 + 97).unwrap();
 	let suffix = index / 26;
 	if suffix == 0 {
-		format!("'{}", letter)
+		letter.to_string()
 	} else {
-		format!("'{}{}", letter, suffix)
+		format!("{}{}", letter, suffix)
 	}
 }
 
@@ -404,8 +406,8 @@ impl std::fmt::Display for Type {
 			Type::PartialTuple(fields, tail) => {
 				// Render positionally, like a tuple: fill indices we never learned
 				// with `_` placeholders and mark an open tail with a trailing
-				// `...`. So `.0` + `.1` reads `('a, 'b, ...)`, `.0` + `.2` reads
-				// `('a, _, 'b, ...)`, and `.2` alone `(_, _, 'b, ...)`.
+				// `...`. So `.0` + `.1` reads `(a, b, ...)`, `.0` + `.2` reads
+				// `(a, _, b, ...)`, and `.2` alone `(_, _, b, ...)`.
 				if fields.is_empty() {
 					return match tail {
 						None => write!(f, "()"),

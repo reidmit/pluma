@@ -8,6 +8,6 @@ error: Name `std` is not defined.
 > 3 | def x = std.does-not-exist
               ^^^
 
-error: Type mismatch: expected `{does-not-exist: 'a, ...}`, but found `?`.
+error: Type mismatch: expected `{does-not-exist: a, ...}`, but found `?`.
 > 3 | def x = std.does-not-exist
               ^^^^^^^^^^^^^^^^^^

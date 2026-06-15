@@ -23,20 +23,20 @@ module `main` (tests/analyze/remote-stream/main.pa) {
                         body: [
                             expr(7:1-13:2) :: stream int {
                                 kind: call(7:1-13:2) {
-                                    callee: expr(7:1-7:17) :: 'a ('a -> task (option (('b, 'a))) 'c) -> stream 'b {
+                                    callee: expr(7:1-7:17) :: a (a -> task (option ((b, a))) c) -> stream b {
                                         kind: namespace-access `stream.from-seed`,
                                     },
                                     args: [
                                         expr(7:18-7:19) :: int {
                                             kind: literal(7:18-7:19) int 0,
                                         },
-                                        expr(7:20-13:2) :: int -> task (option ((int, int))) 'a {
+                                        expr(7:20-13:2) :: int -> task (option ((int, int))) a {
                                             kind: fun(7:20-13:2) {
                                                 params: [
                                                     ident(7:24-7:25) `i` :: int,
                                                 ],
                                                 body: [
-                                                    expr(8:2-12:3) :: task (option ((int, int))) 'a {
+                                                    expr(8:2-12:3) :: task (option ((int, int))) a {
                                                         kind: if(8:2-12:3) expr(8:5-8:10) :: bool {
                                                             kind: binary op(8:7-8:8) `<` {
                                                                 left: expr(8:5-8:6) :: int {
@@ -49,16 +49,16 @@ module `main` (tests/analyze/remote-stream/main.pa) {
                                                         } pattern(8:5-8:10) Literal(
                                                             literal(8:5-8:10) bool true,
                                                         ) [
-                                                            expr(9:3-9:32) :: task (option ((int, int))) 'a {
+                                                            expr(9:3-9:32) :: task (option ((int, int))) a {
                                                                 kind: call(9:3-9:32) {
-                                                                    callee: expr(9:3-9:14) :: 'a -> task 'a 'b {
+                                                                    callee: expr(9:3-9:14) :: a -> task a b {
                                                                         kind: namespace-access `task.return`,
                                                                     },
                                                                     args: [
                                                                         expr(9:15-9:32) :: option ((int, int)) {
                                                                             kind: expr(9:16-9:31) :: option ((int, int)) {
                                                                                 kind: call(9:16-9:31) {
-                                                                                    callee: expr(9:16-9:20) :: 'a -> option 'a {
+                                                                                    callee: expr(9:16-9:20) :: a -> option a {
                                                                                         kind: ident(9:16-9:20) `some`,
                                                                                     },
                                                                                     args: [
@@ -87,13 +87,13 @@ module `main` (tests/analyze/remote-stream/main.pa) {
                                                                 },
                                                             },
                                                         ] else [
-                                                            expr(11:3-11:19) :: task (option ((int, int))) 'a {
+                                                            expr(11:3-11:19) :: task (option ((int, int))) a {
                                                                 kind: call(11:3-11:19) {
-                                                                    callee: expr(11:3-11:14) :: 'a -> task 'a 'b {
+                                                                    callee: expr(11:3-11:14) :: a -> task a b {
                                                                         kind: namespace-access `task.return`,
                                                                     },
                                                                     args: [
-                                                                        expr(11:15-11:19) :: option 'a {
+                                                                        expr(11:15-11:19) :: option a {
                                                                             kind: ident(11:15-11:19) `none`,
                                                                         },
                                                                     ],

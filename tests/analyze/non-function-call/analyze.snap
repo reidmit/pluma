@@ -2,6 +2,6 @@
 source: tests/analyze.rs
 expression: output
 ---
-error: Type mismatch: expected `int`, but found `int -> 'a`.
+error: Type mismatch: expected `int`, but found `int -> a`.
 > 3 | def y = x 5
               ^

@@ -2,7 +2,7 @@
 source: tests/errors.rs
 expression: output
 ---
-error[E0103]: Failed to unify recursive type `'a -> 'b`.
+error[E0103]: Failed to unify recursive type `a -> b`.
   │
 3 │  x x
   │  ^^^
