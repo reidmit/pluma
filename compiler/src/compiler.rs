@@ -135,6 +135,40 @@ impl Compiler {
 		}
 	}
 
+	// Analyze the entire baked-in stdlib — the prelude plus every `std/*`
+	// module — once, and return the resulting export tables keyed by
+	// fully-qualified module name. The stdlib source is immutable for the life
+	// of the binary, so a long-lived consumer (the LSP, which re-analyzes the
+	// user's file on every keystroke) computes this table once and seeds each
+	// fresh per-edit `Compiler` with it via `seed_exports`. A seeded module
+	// short-circuits in `load_module` before parse+analyze, so the stdlib —
+	// the dominant fixed cost of a single-file analysis — is paid for once per
+	// process instead of once per keystroke. Standalone: builds a throwaway
+	// compiler carrying no entry modules or user state. No tier gating runs
+	// (`target` is `None`), so both the `sys` and `web` tiers are analyzed.
+	pub fn stdlib_export_table() -> HashMap<String, ModuleExports> {
+		let mut compiler = Compiler::for_root_dir(PathBuf::from("."));
+		compiler.load_prelude();
+		let mut visiting = HashSet::new();
+		for &(name, _) in crate::stdlib_sources() {
+			compiler.load_module(name, &mut visiting);
+		}
+		compiler.exports_cache
+	}
+
+	// Pre-populate the export cache with a precomputed table (see
+	// `stdlib_export_table`). Existing entries win, so a user module that
+	// happens to shadow a seeded name still takes precedence. Must be called
+	// before `check()`.
+	pub fn seed_exports(&mut self, seed: &HashMap<String, ModuleExports>) {
+		for (name, exports) in seed {
+			self
+				.exports_cache
+				.entry(name.clone())
+				.or_insert_with(|| exports.clone());
+		}
+	}
+
 	// Mark this as a FULLSTACK dual build (`server.pa` + `client.pa`). The driver
 	// sets `entry_modules = [server, client]`; this flag tells RPC codegen the
 	// client is web (`fetch.post` transport) and enables `gate_fullstack`.
@@ -336,6 +370,11 @@ impl Compiler {
 	fn load_prelude(&mut self) {
 		const PRELUDE_SOURCE: &str = include_str!("prelude.pa");
 		const NAME: &str = "__prelude__";
+		// Already seeded (e.g. from a long-lived consumer's stdlib export
+		// cache): the prelude's exports are immutable, so don't re-analyze.
+		if self.exports_cache.contains_key(NAME) {
+			return;
+		}
 		let mut module = Module::new(NAME.to_string(), PathBuf::from("<prelude>"));
 		module.parse_from_bytes(PRELUDE_SOURCE.as_bytes().to_vec(), &mut self.diagnostics);
 		self.modules.insert(NAME.to_string(), module);
