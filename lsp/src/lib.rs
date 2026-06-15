@@ -10,6 +10,7 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 mod analysis;
 mod goto;
 mod hover;
+mod inlay_hints;
 mod semantic_tokens;
 mod symbols;
 
@@ -22,6 +23,10 @@ struct Backend {
 	// The hover index is a precomputed `Vec<HoverHit>` of Send-only data
 	// (`Range` + `Type`), which is what hover actually needs anyway.
 	hover_map: DashMap<String, Arc<Vec<HoverHit>>>,
+	// Inferred-type inlay hints, rebuilt alongside the hover index from the
+	// same analysis pass. Send-only (`position` + `String`) for the same
+	// reason the hover index is.
+	inlay_map: DashMap<String, Arc<Vec<inlay_hints::InlayHint>>>,
 }
 
 #[tower_lsp::async_trait]
@@ -55,6 +60,7 @@ impl LanguageServer for Backend {
 				hover_provider: Some(HoverProviderCapability::Simple(true)),
 				definition_provider: Some(OneOf::Left(true)),
 				document_symbol_provider: Some(OneOf::Left(true)),
+				inlay_hint_provider: Some(OneOf::Left(true)),
 				..ServerCapabilities::default()
 			},
 		})
@@ -96,6 +102,7 @@ impl LanguageServer for Backend {
 		let uri_str = params.text_document.uri.to_string();
 		self.document_map.remove(&uri_str);
 		self.hover_map.remove(&uri_str);
+		self.inlay_map.remove(&uri_str);
 		// Clear diagnostics for the closed file so VS Code doesn't leave
 		// stale squiggles in the problems panel.
 		self
@@ -256,6 +263,46 @@ impl LanguageServer for Backend {
 		let symbols = symbols::document_symbols(text.as_bytes());
 		Ok(Some(DocumentSymbolResponse::Nested(symbols)))
 	}
+
+	async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+		let uri = params.text_document.uri.to_string();
+		let hints = match self.inlay_map.get(&uri) {
+			Some(h) => h.clone(),
+			None => return Ok(None),
+		};
+
+		// The client asks for hints over the visible range; only return the
+		// ones that fall inside it so off-screen hints aren't sent every scroll.
+		let range = params.range;
+		let result = hints
+			.iter()
+			.filter(|h| position_in_range(h.line, h.col, &range))
+			.map(|h| InlayHint {
+				position: Position {
+					line: h.line,
+					character: h.col,
+				},
+				label: InlayHintLabel::String(h.label.clone()),
+				kind: Some(InlayHintKind::TYPE),
+				text_edits: None,
+				tooltip: None,
+				// No left pad: the hint reads as `name: T`, sitting flush
+				// against the binder like a written annotation.
+				padding_left: Some(false),
+				padding_right: Some(false),
+				data: None,
+			})
+			.collect();
+
+		Ok(Some(result))
+	}
+}
+
+fn position_in_range(line: u32, col: u32, range: &Range) -> bool {
+	let after_start =
+		line > range.start.line || (line == range.start.line && col >= range.start.character);
+	let before_end = line < range.end.line || (line == range.end.line && col <= range.end.character);
+	after_start && before_end
 }
 
 impl Backend {
@@ -291,6 +338,9 @@ impl Backend {
 				self
 					.hover_map
 					.insert(uri_str.clone(), Arc::new(hover::build_index(module)));
+				self
+					.inlay_map
+					.insert(uri_str.clone(), Arc::new(inlay_hints::build_hints(module)));
 			}
 
 			let mut diags: Vec<Diagnostic> = result
@@ -312,6 +362,11 @@ impl Backend {
 		};
 
 		self.client.publish_diagnostics(uri, lsp_diags, None).await;
+
+		// The hint set was just rebuilt against the new text; ask the client to
+		// re-pull so inferred types track edits without waiting for the next
+		// incidental refresh. Ignored by clients that don't support it.
+		self.client.inlay_hint_refresh().await.ok();
 	}
 }
 
@@ -441,6 +496,7 @@ async fn serve() {
 		client,
 		document_map: DashMap::new(),
 		hover_map: DashMap::new(),
+		inlay_map: DashMap::new(),
 	})
 	.finish();
 
