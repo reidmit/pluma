@@ -40,14 +40,19 @@ public enum value {
 # `sql.value.int 5`. `sql.bool` encodes a boolean the way SQLite expects: 1 or 0.
 public def int :: fun int -> value = value.int
 
+# A REAL value: `sql.float 1.5`.
 public def float :: fun float -> value = value.float
 
+# A TEXT value: `sql.text "ada"`.
 public def text :: fun string -> value = value.text
 
+# A BLOB value from raw bytes.
 public def blob :: fun bytes -> value = value.blob
 
+# The SQL NULL value.
 public def null :: value = value.null
 
+# A boolean, stored as 1 or 0 (SQLite has no boolean type).
 public def bool :: fun bool -> value = fun b {
 	if b {
 		value.int 1
@@ -97,6 +102,7 @@ public def get-int :: fun row string -> result int string = fun r name {
 	}
 }
 
+# Reads a TEXT column, or an `err` naming the column if it's missing or not text.
 public def get-text :: fun row string -> result string string = fun r name {
 	if cell r name is value.text s {
 		ok s
@@ -117,6 +123,7 @@ public def get-float :: fun row string -> result float string = fun r name {
 	}
 }
 
+# Reads a BLOB column, or an `err` naming the column if it's missing or not a blob.
 public def get-blob :: fun row string -> result bytes string = fun r name {
 	if cell r name is value.blob b {
 		ok b
@@ -169,20 +176,28 @@ public enum predicate {
 	negate predicate
 }
 
+# Matches rows where the column equals the value: `sql.eq "id" (sql.int 5)`.
 public def eq :: fun string value -> predicate = predicate.equal
 
+# Matches rows where the column does not equal the value.
 public def ne :: fun string value -> predicate = predicate.not-equal
 
+# Matches rows where the column is greater than the value.
 public def gt :: fun string value -> predicate = predicate.greater
 
+# Matches rows where the column is greater than or equal to the value.
 public def ge :: fun string value -> predicate = predicate.greater-eq
 
+# Matches rows where the column is less than the value.
 public def lt :: fun string value -> predicate = predicate.less
 
+# Matches rows where the column is less than or equal to the value.
 public def le :: fun string value -> predicate = predicate.less-eq
 
+# Matches a SQL LIKE pattern: `sql.like "name" "ada%"`.
 public def like :: fun string string -> predicate = predicate.like
 
+# Matches rows whose column is one of the values (SQL `IN`).
 public def one-of :: fun string (list value) -> predicate = predicate.one-of
 
 # Boolean combinators over predicates, so a filter is a tree, not just a flat AND-list.
@@ -196,8 +211,10 @@ public def one-of :: fun string (list value) -> predicate = predicate.one-of
 #     # => ... WHERE ("role" = ? OR "age" > ?)
 public def all :: fun (list predicate) -> predicate = predicate.all
 
+# Matches when any of the given predicates hold (SQL `OR`).
 public def any :: fun (list predicate) -> predicate = predicate.any
 
+# Negates a predicate (SQL `NOT`).
 public def not :: fun predicate -> predicate = predicate.negate
 
 # A single ORDER BY term: a column and a direction. (Named `sort`, not `ordering`, because
@@ -207,8 +224,10 @@ public enum sort {
 	desc string
 }
 
+# Sorts ascending by a column: `sql.asc "name"`.
 public def asc :: fun string -> sort = sort.asc
 
+# Sorts descending by a column: `sql.desc "created"`.
 public def desc :: fun string -> sort = sort.desc
 
 # A SELECT query as plain, inspectable data. You build one by piping the stages below with
@@ -447,14 +466,17 @@ public enum column {
 	column string col-type
 }
 
+# Builds a named column with a declared type: `sql.col "id" sql.col-type.c-int`.
 public def col :: fun string col-type -> column = column.column
 
+# The column's name.
 public def col-name :: fun column -> string = fun c {
 	when c is column.column n _ {
 		n
 	}
 }
 
+# The column's declared storage type.
 public def col-affinity :: fun column -> col-type = fun c {
 	when c is column.column _ ty {
 		ty
@@ -478,12 +500,14 @@ opaque enum table a {
 #         decode-user encode-user
 public def table-of :: fun string (list column) (fun row -> result a string) (fun a -> list (string, value)) -> table a = table.table
 
+# The table's name.
 public def table-name :: fun (table a) -> string = fun t {
 	when t is table.table n _ _ _ {
 		n
 	}
 }
 
+# The table's columns, in declared order.
 public def table-columns :: fun (table a) -> list column = fun t {
 	when t is table.table _ cols _ _ {
 		cols
@@ -495,12 +519,14 @@ public def table-column-names :: fun (table a) -> list string = fun t {
 	list.map (table-columns t) col-name
 }
 
+# The table's row decoder: a `row` to your record type.
 public def table-decode :: fun (table a) -> (fun row -> result a string) = fun t {
 	when t is table.table _ _ decode _ {
 		decode
 	}
 }
 
+# The table's encoder: your record back to `(column, value)` cells.
 public def table-encode :: fun (table a) -> (fun a -> list (string, value)) = fun t {
 	when t is table.table _ _ _ encode {
 		encode

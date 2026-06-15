@@ -1,141 +1,161 @@
-# Stdlib doc-comment style guide
+# Documentation style guide
 
-These notes govern the `#` doc comments on `def`s in the standard
-library (`compiler/src/stdlib/*.pa`). They are the comments users will
-eventually read in editor hovers, go-to-definition, and the docs
-website — so they're documentation, not internal notes.
-
-`compiler/src/stdlib/list.pa` is the reference module. When in doubt,
-match it.
+These notes govern all the prose a Pluma user reads: the `#` doc
+comments on stdlib `def`s and types (`std/*.pa`) and the in-app pages of
+the website (`website/*.pa` — the tour, reference, and Get-started
+pages). One voice across both surfaces. `std/list.pa` is the reference
+module for comments; `website/reference.pa` for page prose. When in
+doubt, match them.
 
 ## Who we're writing for
 
-Picture a sharp high-schooler who builds real projects in Python,
-JavaScript, or Go, but has never taken a CS theory class. They're smart
-and curious; they just haven't met our vocabulary yet.
+A working developer who's new to Pluma — fluent in Python, JavaScript,
+or Go, comfortable with functions, types, and the rough idea that some
+operations cost more than others. What they *don't* have is our
+vocabulary or a functional-programming background. Write for a smart
+peer who just hasn't met these words yet, not for a novice.
 
 So:
 
-- **No functional-programming jargon.** Never write "monad", "functor",
-  "higher-order function", "thunk", "partial application", "structural
-  equality", "vacuously true", "short-circuit" (as a noun), "instance"
-  (in the typeclass sense), "desugars", "left fold", or "polymorphic".
-  If a concept needs one of these, explain the idea in plain words
-  instead. ("Compares by value" not "structural equality"; "an empty
-  list counts as true" not "vacuously true".)
+- **No FP-theory jargon.** Never write "monad", "functor", "thunk",
+  "partial application", "structural equality", "vacuously true",
+  "instance" (typeclass sense), "desugars", "left fold", or
+  "polymorphic". Explain the idea in plain words instead. ("Compares by
+  value", not "structural equality"; "an empty list counts as true",
+  not "vacuously true".)
+- **Precision terms are fine — as asides.** Words like "partial",
+  "primitive", and complexity notation (`O(1)`, `O(n^2)`, "amortized")
+  carry real information this audience can use. Keep them out of the
+  one-line summary, put them in an optional detail paragraph, and
+  explain the term the first time it appears in a module.
 - **No internal references.** The reader can't see our source tree.
-  Don't mention file names, builtins, backend internals, or commit
-  history. To point at another stdlib module, name it as `std/option`,
-  `std/bytes`, etc.
+  No file names, builtins, backend internals, or commit history. Point
+  at another module by its import path: `std/option`, `std/bytes`.
 - **Define a term the first time it earns its keep**, then reuse it.
-  `std/list` defines "predicate" once in the module header and then
-  uses the word freely.
 
 ## Voice: warm and plain-spoken
 
 Friendly and direct, like a good README — not a stuffy manual, not a
-stand-up comedian.
+stand-up comedian. The same register everywhere: the website tour is
+not "more marketing" than the stdlib.
 
-- Address the reader as "you" when it helps ("you get back `none`",
-  "you hand it three things").
+- Address the reader as "you" when it helps.
 - Explain the *why*, not just the *what*, when it's short and useful.
 - Prefer short, concrete sentences over precise-but-dense ones.
-- Skip the jokes. Warmth comes from clarity and the occasional plain
-  aside, not from gags — they get stale and don't translate.
-- Be consistent. Same tone in every module.
+- Skip the jokes. Warmth comes from clarity, not gags.
+- Be consistent. Same tone in every module and every page.
 
-## Structure of a comment
+## Length: as short as the idea allows
 
-Each `def` gets:
+Default to a one-sentence summary, one short detail paragraph, and an
+example. That's enough for almost everything.
 
-1. **A one-sentence summary**, present tense, describing what the
-   function returns or does. This line stands on its own — it's what
-   shows up in autocomplete and one-line listings.
-2. **Optional detail paragraph(s)** — edge cases, the *why*, gotchas.
-   Only if they add something the summary and example don't.
+- Earn every extra paragraph. If the summary and example already say
+  it, don't restate it in prose.
+- Genuine footguns (in-place mutation, aliasing, partiality) get a
+  single clear sentence of warning — not a multi-paragraph essay.
+- When you catch yourself writing a third paragraph, ask whether a
+  reader scanning a hover panel will read it. Usually: cut it.
+
+## Coverage: document everything public
+
+Every `public def` and every `public` type (enum, alias, opaque type)
+gets a doc comment. No exceptions — if it's exported, a user can see it
+in autocomplete and hovers, so it needs at least a one-line summary.
+Private defs are documented only when the comment helps the next person
+maintaining the module.
+
+A type's comment goes on the line(s) directly above its declaration,
+same as a `def`. Explain what the type represents and, when it's an
+enum, what the variants mean.
+
+## Structure of a stdlib comment
+
+Each documented `def` gets:
+
+1. **A one-sentence summary**, present tense — what it returns or does.
+   Stands on its own; it's the autocomplete/one-line listing.
+2. **An optional detail paragraph** — the edge case, the *why*, the one
+   caveat. Keep it to one paragraph where you can.
 3. **An example block**, indented under a blank `#` line.
 
-````
+```
 # One-sentence summary that reads on its own.
 #
-# Optional detail: the edge case or the reason this exists.
+# Optional one-paragraph detail: the edge case or why this exists.
 #
 #     module.name arg1 arg2   # => result
-````
+```
 
-Wrap comment prose at roughly 64 columns so it stays readable in narrow
-hover panels.
+**Wrap comment prose at roughly 80–90 columns.** Comfortable line length
+for reading in an editor; hover panels and the docs site reflow anyway.
 
 ### Module header
 
-The first comment in the file (before the first `def`) introduces the
-module. This is where you teach the cross-cutting concepts a newcomer
-needs before any single function makes sense: what the core type *is*,
-how to write a literal, conventions shared across the module (e.g. "a
-lookup that might fail returns an `option`"), and any vocabulary the
-function comments will lean on. Keep it to a few short paragraphs.
+The first comment in the file introduces the module: what the core type
+*is*, how to write a literal, conventions shared across the module, and
+any vocabulary the function comments lean on. A few short paragraphs.
 
-## Examples are required
+## Examples (stdlib)
 
-Every function gets at least one example. They're the fastest way for
-this audience to understand a function, and they double as a promise we
-keep correct.
+Every function gets at least one example — the fastest way in for this
+audience, and a promise we keep correct.
 
-- Format: the call, a few spaces, then `# =>` and the result. Writing
-  the result as a `#` comment means the example block stays valid Pluma
-  source — you could paste it into a program and it would parse, with
-  the result reading as "evaluates to". (`=>` also keeps it distinct
-  from the `->` in type signatures.) Use one space after `=>`, and
-  align the `# =>` column across a block of examples when it's easy.
-- Show two or three lines when a contrast teaches something: a normal
-  case plus an empty/edge case (`list.head [1,2,3]` *and* `list.head []`).
-- **Write results in source notation — the way you'd type the value —
-  not the way `io.print` happens to render it.** This matters:
-  - Strings keep their quotes: `["1", "2", "3"]`, never `[1, 2, 3]`.
-    (Printing a string list drops the quotes, which would make a list
-    of strings look identical to a list of numbers.)
-  - Options and results use their constructors: `some 1`, `none`,
-    `ok 42`, `err "bad input"` — not the printer's `option.some 1`.
-- **Every example must actually evaluate to the result shown.** Verify
-  by running it before committing — drop the calls into a scratch
-  `main.pa` and `io.print` them, or add them to the module's
-  `*.test.pa`. Don't eyeball outputs. This includes error messages: show
-  the real `err` text (run it), and if the real text is long or brittle,
-  describe the error's *shape* instead (e.g. `err {line, col, message}`)
-  rather than inventing a string.
-- **When the result isn't deterministic, don't fake a `# =>`.** For
-  random values, the current time, environment variables, or file
-  contents — anything that varies by run or machine — use a plain `#`
-  comment describing the outcome instead (`random.int ()   # a different
-  number each call`). Reserve `# =>` for things that always evaluate to
-  exactly the shown value.
-- **Qualify names the way a caller writes them.** Examples use
-  `list.map`, `json.value.int`, `package.dep.simple` — the module-
-  prefixed form a user types after importing — so they're copy-pasteable
-  as-is.
+- Format: the call, a few spaces, then `# =>` and the result. This
+  keeps the block valid Pluma source. One space after `=>`; align the
+  `# =>` column across a block when it's easy.
+- Show two or three lines when a contrast teaches something (a normal
+  case plus an empty/edge case).
+- **Write results in source notation** — the way you'd type the value,
+  not the way `io.print` renders it. Strings keep their quotes;
+  options/results use their constructors (`some 1`, `none`, `ok 42`,
+  `err "bad input"`).
+- **Every example must actually evaluate to the result shown.** Run it
+  before committing. For long/brittle errors, describe the *shape*
+  (`err {line, col, message}`) rather than inventing a string.
+- **Non-deterministic results don't get a `# =>`.** Random values, the
+  clock, env vars, file contents — use a plain `#` describing the
+  outcome (`random.int ()   # a different number each call`).
+- **Qualify names the way a caller writes them**: `list.map`,
+  `json.value.int` — copy-pasteable after importing.
+- **Families of near-identical wrappers share one example.** When a
+  module exposes a large set of trivial wrappers that all behave the
+  same way (HTML element helpers, CSS property shorthands, comparison
+  operators), each still gets a one-line summary, but one or two
+  representative examples in the module header cover the whole family.
+  Don't repeat an example block on every member.
+
+## Website prose
+
+Same audience, same voice. The pages teach sequentially, so:
+
+- Build from the ground up; each idea may assume the ones above it.
+- Introduce a keyword or symbol in code, then explain it in prose — the
+  reference's inline-code-then-sentence pattern.
+- Examples are runnable Pluma. Show output as a trailing `#` comment the
+  same way the stdlib does.
+- A page may use the precision-aside rule too: a complexity or
+  partiality note belongs in a `note` aside, not the main flow.
 
 ## Quick before/after
 
 Before (accurate, but written for an insider):
 
-````
+```
 # Left fold: `fold xs init f` reduces the list by applying
-# `f acc element` left-to-right, threading `acc` (starting at `init`)
-# through.
-````
+# `f acc element` left-to-right, threading `acc` through.
+```
 
-After (same facts, for our reader, with a worked example):
+After (same facts, for our reader, one paragraph, worked example):
 
-````
-# Boils the whole list down to a single value by combining the
-# elements one at a time, left to right.
+```
+# Boils the whole list down to a single value, combining elements
+# one at a time from left to right.
 #
-# You hand it three things: the list, a starting value, and a
-# function `f acc element`. Pluma walks the list front to back, and
-# at each element calls `f` with the running total so far (the
-# "accumulator") and that element; whatever `f` returns becomes the
-# new running total. When the elements run out, the final total is
-# the answer.
+# You hand it the list, a starting value, and a function `f acc
+# element`. Pluma walks front to back, calling `f` with the running
+# total and the next element; whatever `f` returns becomes the new
+# total. The final total is the answer.
 #
 #     list.fold [1, 2, 3, 4] 0 (fun acc n { acc + n })   # => 10
-````
+```

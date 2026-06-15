@@ -354,7 +354,7 @@ def sync-styles :: fun nothing -> nothing = fun {
 	}
 }
 
-# Mount the app under `parent`. The root view is a **thunk** (as in SolidJS's
+# Mount the app under `parent`. The root view is a zero-argument function (as in SolidJS's
 # `render(() => App(), root)`) -- so the dev variant can restore saved state
 # before any signal is constructed. Returns `task nothing` so the browser entry
 # can seed and pump it; the wasm instance then stays alive to dispatch DOM events.

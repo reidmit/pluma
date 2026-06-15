@@ -283,6 +283,8 @@ public def update :: fun connection (table a) (list (string, value)) (list predi
 #     ]
 public alias migration {version :: int, up :: string}
 
+# Applies every not-yet-applied migration in version order and returns how
+# many ran. A no-op if all are applied, so it's safe to call on every startup.
 public def migrate :: fun connection (list migration) -> task int string = fun conn migrations {
 	try batch conn "create table if not exists \"_pluma_migrations\" (version integer primary key)"
 	try applied = applied-versions conn

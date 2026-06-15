@@ -21,8 +21,8 @@
 #
 # Each middleware receives the `request` directly -- it needs no ambient context
 # -- and decides whether to delegate to the wrapped handler, rewrite the request
-# or response around it, or skip it entirely to short-circuit (reply 401 without
-# ever calling it). It's deliberately nothing more than function composition;
+# or response around it, or skip it entirely to end the request early (reply 401
+# without ever calling it). It's deliberately nothing more than function composition;
 # there's no registration, ordering magic, or framework here.
 use std/list
 use std/task
@@ -33,7 +33,7 @@ public alias handler fun http.request -> task http.response
 
 # A wrapper around a handler. Build one as `fun next { fun req { ... } }`: act on
 # `req` before calling `next` to do work on the way in, act on `next`'s response
-# to do work on the way out, or skip `next` to short-circuit the request.
+# to do work on the way out, or skip `next` to end the request early.
 public alias middleware fun handler -> handler
 
 # Wraps `base` in each middleware in `mws`. The first element is the *outermost*

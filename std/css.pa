@@ -115,68 +115,84 @@ public def vw :: fun float -> length = fun n {
 
 # --- declarations: color-valued properties ----------------------------------
 
+# Text color: `css.color (css.hex "#e11")` => `color: #e11`.
 public def color :: fun color-value -> declaration = fun c {
 	declaration.decl "color" (color-to-string c)
 }
 
+# Background: `css.background (css.hex "#fff")` => `background: #fff`.
 public def background :: fun color-value -> declaration = fun c {
 	declaration.decl "background" (color-to-string c)
 }
 
+# Border color: `css.border-color (css.hex "#ccc")` => `border-color: #ccc`.
 public def border-color :: fun color-value -> declaration = fun c {
 	declaration.decl "border-color" (color-to-string c)
 }
 
 # --- declarations: length-valued properties ---------------------------------
 
+# Padding on all sides: `css.padding (css.rem 1.0)` => `padding: 1rem`.
 public def padding :: fun length -> declaration = fun l {
 	declaration.decl "padding" (length-to-string l)
 }
 
+# Margin on all sides: `css.margin (css.rem 1.0)` => `margin: 1rem`.
 public def margin :: fun length -> declaration = fun l {
 	declaration.decl "margin" (length-to-string l)
 }
 
+# Width: `css.width (css.px 240.0)` => `width: 240px`.
 public def width :: fun length -> declaration = fun l {
 	declaration.decl "width" (length-to-string l)
 }
 
+# Height: `css.height (css.px 240.0)` => `height: 240px`.
 public def height :: fun length -> declaration = fun l {
 	declaration.decl "height" (length-to-string l)
 }
 
+# Minimum width: `css.min-width (css.rem 12.0)` => `min-width: 12rem`.
 public def min-width :: fun length -> declaration = fun l {
 	declaration.decl "min-width" (length-to-string l)
 }
 
+# Maximum width: `css.max-width (css.rem 40.0)` => `max-width: 40rem`.
 public def max-width :: fun length -> declaration = fun l {
 	declaration.decl "max-width" (length-to-string l)
 }
 
+# Gap between flex/grid items: `css.gap (css.rem 0.5)` => `gap: 0.5rem`.
 public def gap :: fun length -> declaration = fun l {
 	declaration.decl "gap" (length-to-string l)
 }
 
+# Font size: `css.font-size (css.rem 1.25)` => `font-size: 1.25rem`.
 public def font-size :: fun length -> declaration = fun l {
 	declaration.decl "font-size" (length-to-string l)
 }
 
+# Corner rounding: `css.border-radius (css.px 6.0)` => `border-radius: 6px`.
 public def border-radius :: fun length -> declaration = fun l {
 	declaration.decl "border-radius" (length-to-string l)
 }
 
+# Offset from the top edge when positioned: `css.top (css.px 0.0)`.
 public def top :: fun length -> declaration = fun l {
 	declaration.decl "top" (length-to-string l)
 }
 
+# Offset from the right edge when positioned: `css.right (css.px 0.0)`.
 public def right :: fun length -> declaration = fun l {
 	declaration.decl "right" (length-to-string l)
 }
 
+# Offset from the bottom edge when positioned: `css.bottom (css.px 0.0)`.
 public def bottom :: fun length -> declaration = fun l {
 	declaration.decl "bottom" (length-to-string l)
 }
 
+# Offset from the left edge when positioned: `css.left (css.px 0.0)`.
 public def left :: fun length -> declaration = fun l {
 	declaration.decl "left" (length-to-string l)
 }
@@ -204,46 +220,57 @@ public def line-height :: fun float -> declaration = fun n {
 # name is still checked, so it's a step up from a fully hand-rolled style string. A
 # typed keyword layer can come later.
 
+# Layout mode: `css.display "flex"` => `display: flex`.
 public def display :: fun string -> declaration = fun v {
 	declaration.decl "display" v
 }
 
+# Positioning scheme: `css.position "relative"` => `position: relative`.
 public def position :: fun string -> declaration = fun v {
 	declaration.decl "position" v
 }
 
+# Horizontal text alignment: `css.text-align "center"`.
 public def text-align :: fun string -> declaration = fun v {
 	declaration.decl "text-align" v
 }
 
+# Main-axis direction of a flex container: `css.flex-direction "column"`.
 public def flex-direction :: fun string -> declaration = fun v {
 	declaration.decl "flex-direction" v
 }
 
+# Main-axis alignment in a flex container: `css.justify-content "center"`.
 public def justify-content :: fun string -> declaration = fun v {
 	declaration.decl "justify-content" v
 }
 
+# Cross-axis alignment in a flex container: `css.align-items "center"`.
 public def align-items :: fun string -> declaration = fun v {
 	declaration.decl "align-items" v
 }
 
+# Font weight: `css.font-weight "bold"` => `font-weight: bold`.
 public def font-weight :: fun string -> declaration = fun v {
 	declaration.decl "font-weight" v
 }
 
+# Font family: `css.font-family "serif"` => `font-family: serif`.
 public def font-family :: fun string -> declaration = fun v {
 	declaration.decl "font-family" v
 }
 
+# Text decoration: `css.text-decoration "underline"`.
 public def text-decoration :: fun string -> declaration = fun v {
 	declaration.decl "text-decoration" v
 }
 
+# Mouse cursor over the element: `css.cursor "pointer"`.
 public def cursor :: fun string -> declaration = fun v {
 	declaration.decl "cursor" v
 }
 
+# How overflowing content is handled: `css.overflow "hidden"`.
 public def overflow :: fun string -> declaration = fun v {
 	declaration.decl "overflow" v
 }

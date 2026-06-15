@@ -6,8 +6,8 @@
 #     view.each todos keyed.by-id row     # not  (fun t { to-string t.id })
 #
 # Each reads one field and renders it with `to-string`, so it works for any field
-# type (an int `id`, a string `name`, ...). They're row-polymorphic: `by-id` applies
-# to *any* record carrying an `id`, whatever its other fields, so one helper serves
+# type (an int `id`, a string `name`, ...). They aren't tied to one record type:
+# `by-id` applies to *any* record carrying an `id`, whatever its other fields, so one helper serves
 # every keyed list in your app.
 
 # Key by the item's `id` field -- the usual choice for records with a unique id.

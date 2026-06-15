@@ -89,7 +89,7 @@ public def shielded :: fun (task a e) -> task a e = built-in "task-shielded"
 # remote call, a subscription) and returns immediately, letting the result flow
 # back into a `signal` later. `spawn` is that detached fire-and-forget; it's the
 # signals-era restatement of MVU's "a command is a task". `spawn-cancelable`
-# additionally hands back a thunk that tears the work down -- pair it with
+# additionally hands back a function that tears the work down -- pair it with
 # `signal.on-cleanup` to bind a subscription's lifetime to a dynamic subtree.
 
 def spawn-command :: fun (task nothing e) -> nothing = built-in "spawn-command"
@@ -103,7 +103,7 @@ def cancel-sub :: fun int -> nothing = built-in "cancel-sub"
 # `task.spawn (task.map (api.add 2 3) (fun n { signal.set sum n }))`.
 public def spawn :: fun (task nothing) -> nothing = spawn-command
 
-# Like `spawn`, but in its own cancellable scope; returns a thunk that cancels it
+# Like `spawn`, but in its own cancellable scope; returns a function that cancels it
 # (running the task's `defer`s / a stream's shielded release). Use it to drive a
 # `stream` into a signal and stop it on demand:
 # `let stop = task.spawn-cancelable (stream.for-each s (fun v { ... }))`.

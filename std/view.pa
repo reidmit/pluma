@@ -51,13 +51,14 @@ public enum attribute {
 }
 
 # A node in the view tree: an element, static text, a reactive text node, or
-# reactive control flow. `dyn-node` carries one thunk producing the current subtree
-# -- the renderer re-runs it (and swaps the built DOM) when a signal it read changes,
-# so a plain `if`/`when` inside chooses what to show. `for-node` carries a thunk
+# reactive control flow. `dyn-node` carries one function producing the
+# current subtree -- the renderer re-runs it (and swaps the built DOM) when
+# a signal it read changes, so a plain `if`/`when` inside chooses what to
+# show. `for-node` carries a function
 # producing the current keyed children. Each child is a `(key, fun nothing -> view)`
 # pair -- a *deferred* builder, not a built view, so the renderer can run it once per
 # new key (inside that row's owner) and skip it entirely for a surviving key. (The
-# generic element type is erased into the thunks so `view` stays monomorphic.)
+# generic element type is erased into the functions so `view` stays monomorphic.)
 public enum view {
 	el string (list attribute) (list view)
 	txt string
@@ -72,7 +73,7 @@ public enum view {
 public def text :: fun string -> view = view.txt
 
 # A reactive text node: `view.text-of (fun { to-string (signal.get n) })`. On the
-# browser the thunk re-runs (and patches the node) when its signals change; in
+# browser the function re-runs (and patches the node) when its signals change; in
 # `to-string` it's called once.
 public def text-of :: fun (fun nothing -> string) -> view = view.dynamic-text
 
@@ -82,7 +83,7 @@ public def element :: fun string (list attribute) (list view) -> view = view.el
 # --- reactive control flow --------------------------------------------------
 
 # A reactive subtree: re-run `f` (and swap the mounted DOM, disposing the old
-# subtree's effects) whenever a signal it read changes. The thunk is the reactive
+# subtree's effects) whenever a signal it read changes. The function is the reactive
 # boundary -- Pluma builds the view tree by evaluating it once, so a region that must
 # re-render on a signal change has to be deferred, exactly as `text-of`/`each` are.
 # Inside, a plain `if`/`when`/`else if` chooses what to show, with `view.empty` for
@@ -113,12 +114,12 @@ public def show :: fun (fun nothing -> bool) (fun nothing -> view) -> view = fun
 # Render one child per item, reconciled by a stable key. When the list changes,
 # rows with surviving keys are *reused* (their DOM and local state are kept);
 # new keys are built, vanished keys are disposed, and the order is updated.
-# `items` is a thunk so it tracks whatever signal it reads. (Named `each`, not
-# `for`, since `for` is the `<label for=...>` attribute builder.)
+# `items` is a function, so it tracks whatever signal it reads. (Named
+# `each`, not `for`, since `for` is the `<label for=...>` attribute builder.)
 #
 #     view.each (fun { signal.get todos }) (fun t { t.id }) (fun t { row t })
 #
-# `render item` is wrapped in a thunk, NOT called here: the renderer runs it once
+# `render item` is wrapped in a function, NOT called here: the renderer runs it once
 # per new key inside that row's owner, so a `signal.new` in the row is created
 # under the row's identity (its key) and reused -- not rebuilt -- on a list change.
 public def each :: fun (fun nothing -> list a) (fun a -> string) (fun a -> view) -> view = fun items key render {
@@ -140,7 +141,7 @@ public def property :: fun string string -> attribute = attribute.prop-str
 # A raw boolean DOM property.
 public def bool-property :: fun string bool -> attribute = attribute.prop-bool
 
-# A reactive attribute: re-read the thunk and re-set the attribute when its signals
+# A reactive attribute: re-read the function and re-set the attribute when its signals
 # change. `view.bind-attr "class" (fun { if signal.get active { "on" } else { "off" } })`.
 # (The two-way `view.bind` below is for form-control *properties* tied to a signal;
 # this is the one-way reactive *attribute* dual of `view.attr`.)
@@ -201,7 +202,7 @@ public def checked :: fun (signal bool) -> attribute = fun s {
 # Run `handler` (which receives the raw event) when the named event fires.
 public def on :: fun string (fun event -> nothing) -> attribute = attribute.handler
 
-# Run `handler` on click (the event is ignored -- it's a plain thunk).
+# Run `handler` on click (the event is ignored -- it takes no arguments).
 public def on-click :: fun (fun nothing -> nothing) -> attribute = fun handler {
 	attribute.handler "click" fun _e {
 		handler ()
@@ -247,7 +248,7 @@ public def on-mount :: fun (fun nothing -> nothing) -> attribute = attribute.on-
 # --- to-string: render a view to an HTML string (SSR / headless) -------------
 #
 # Pure: never touches the DOM. Static text and attribute values are HTML-escaped
-# (the output trust boundary); reactive thunks are evaluated once; event handlers
+# (the output trust boundary); reactive functions are evaluated once; event handlers
 # are dropped (re-attached on the client at hydration). Void elements self-close.
 
 # Void (self-closing) elements: no closing tag, no children rendered.
@@ -333,7 +334,7 @@ def render-attr :: fun attribute -> string = fun a {
 }
 
 # The `class` token an attribute contributes, if any: a `class` attribute's value
-# (static or reactive, the thunk run once) or a `styled-when` rule whose condition
+# (static or reactive, the function run once) or a `styled-when` rule whose condition
 # holds. These merge into one `class` so a node can stack a base `styled` rule and
 # several conditional ones.
 def class-fragment :: fun attribute -> option string = fun a {
@@ -361,7 +362,7 @@ def class-fragment :: fun attribute -> option string = fun a {
 }
 
 # The `style` text an attribute contributes, if any: a `style` attribute's value
-# (static or reactive, the thunk run once), or a `--name: value` custom property.
+# (static or reactive, the function run once), or a `--name: value` custom property.
 # Everything else contributes nothing. These merge into one `style` attribute so a
 # node can carry both an inline style and custom properties without a duplicate attr.
 def style-fragment :: fun attribute -> option string = fun a {
@@ -429,7 +430,7 @@ def render-attrs-nonempty :: fun (list attribute) -> string = fun attrs {
 	# order with its sole `class`/`style` inlined, skipping the `first-contributor`
 	# scans and the `enumerate` the merge path below needs. Output is identical:
 	# joining a single fragment is that fragment.
-	if (list.length class-frags < 2) && (list.length style-frags < 2) {
+	if list.length class-frags < 2 && list.length style-frags < 2 {
 		string.join (list.map attrs render-attr-solo) ""
 	} else {
 		let first-class = first-contributor attrs class-fragment
@@ -484,6 +485,11 @@ def at-index :: fun (option int) int -> bool = fun oi i {
 	}
 }
 
+# Renders a view to an HTML string. This is server-side rendering: the
+# same view that the browser mounts as live DOM becomes plain HTML here,
+# so a page can be sent fully-formed on first load and then hydrated.
+#
+# Reactive parts are rendered at their current value, with text escaped.
 public def to-string :: fun view -> string = fun v {
 	when v is view.txt s {
 		escape-text s
@@ -511,406 +517,513 @@ public def to-string :: fun view -> string = fun v {
 	}
 }
 
-# --- element builders (one per standard tag) --------------------------------
+# Element builders -- one per standard HTML tag. Each takes a list of
+# attributes and a list of child views and returns the matching element:
+#
+#     view.section [view.class "hero"] [view.h1 [] [view.text "Welcome"]]
 
+# The `<h1>` element: a level-1 (top) heading.
 public def h1 :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "h1" attrs kids
 }
 
+# The `<h2>` element: a level-2 heading.
 public def h2 :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "h2" attrs kids
 }
 
+# The `<h3>` element: a level-3 heading.
 public def h3 :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "h3" attrs kids
 }
 
+# The `<h4>` element: a level-4 heading.
 public def h4 :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "h4" attrs kids
 }
 
+# The `<h5>` element: a level-5 heading.
 public def h5 :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "h5" attrs kids
 }
 
+# The `<h6>` element: a level-6 (deepest) heading.
 public def h6 :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "h6" attrs kids
 }
 
+# The `<hgroup>` element: a heading grouped with related taglines.
 public def hgroup :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "hgroup" attrs kids
 }
 
+# The `<header>` element: introductory or navigational content.
 public def header :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "header" attrs kids
 }
 
+# The `<footer>` element: footer content for its nearest section.
 public def footer :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "footer" attrs kids
 }
 
+# The `<main>` element: the document's main content.
 public def main :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "main" attrs kids
 }
 
+# The `<section>` element: a thematic grouping of content.
 public def section :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "section" attrs kids
 }
 
+# The `<nav>` element: a block of navigation links.
 public def nav :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "nav" attrs kids
 }
 
+# The `<article>` element: a self-contained, independently distributable piece of content.
 public def article :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "article" attrs kids
 }
 
+# The `<aside>` element: content tangential to what surrounds it (a sidebar or callout).
 public def aside :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "aside" attrs kids
 }
 
+# The `<address>` element: contact information for its article or document.
 public def address :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "address" attrs kids
 }
 
+# The `<div>` element: a generic block-level container with no inherent meaning.
 public def div :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "div" attrs kids
 }
 
+# The `<p>` element: a paragraph of text.
 public def p :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "p" attrs kids
 }
 
+# The `<hr>` element: a thematic break between paragraphs.
 public def hr :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "hr" attrs kids
 }
 
+# The `<pre>` element: preformatted text, rendered with whitespace preserved.
 public def pre :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "pre" attrs kids
 }
 
+# The `<blockquote>` element: a section quoted from another source.
 public def blockquote :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "blockquote" attrs kids
 }
 
+# The `<figure>` element: self-contained content with an optional caption.
 public def figure :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "figure" attrs kids
 }
 
+# The `<figcaption>` element: a caption for its figure.
 public def figcaption :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "figcaption" attrs kids
 }
 
+# The `<ol>` element: an ordered (numbered) list.
 public def ol :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "ol" attrs kids
 }
 
+# The `<ul>` element: an unordered (bulleted) list.
 public def ul :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "ul" attrs kids
 }
 
+# The `<li>` element: an item in a list.
 public def li :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "li" attrs kids
 }
 
+# The `<dl>` element: a description list of term/description pairs.
 public def dl :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "dl" attrs kids
 }
 
+# The `<dt>` element: a term in a description list.
 public def dt :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "dt" attrs kids
 }
 
+# The `<dd>` element: the description for the preceding term.
 public def dd :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "dd" attrs kids
 }
 
+# The `<span>` element: a generic inline container with no inherent meaning.
 public def span :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "span" attrs kids
 }
 
+# The `<a>` element: a hyperlink.
 public def a :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "a" attrs kids
 }
 
+# The `<em>` element: text with stress emphasis.
 public def em :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "em" attrs kids
 }
 
+# The `<strong>` element: text with strong importance.
 public def strong :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "strong" attrs kids
 }
 
+# The `<small>` element: side comments such as fine print.
 public def small :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "small" attrs kids
 }
 
+# The `<s>` element: text that is no longer accurate or relevant.
 public def s :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "s" attrs kids
 }
 
+# The `<cite>` element: the title of a cited work.
 public def cite :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "cite" attrs kids
 }
 
+# The `<q>` element: a short inline quotation.
 public def q :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "q" attrs kids
 }
 
+# The `<dfn>` element: the defining instance of a term.
 public def dfn :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "dfn" attrs kids
 }
 
+# The `<abbr>` element: an abbreviation or acronym.
 public def abbr :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "abbr" attrs kids
 }
 
+# The `<time>` element: a machine-readable date or time.
 public def time :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "time" attrs kids
 }
 
+# The `<code>` element: a fragment of computer code.
 public def code :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "code" attrs kids
 }
 
+# The `<var>` element: a variable in a math expression or program.
 public def var :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "var" attrs kids
 }
 
+# The `<samp>` element: sample output from a program.
 public def samp :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "samp" attrs kids
 }
 
+# The `<kbd>` element: user keyboard input.
 public def kbd :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "kbd" attrs kids
 }
 
+# The `<sub>` element: subscript text.
 public def sub :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "sub" attrs kids
 }
 
+# The `<sup>` element: superscript text.
 public def sup :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "sup" attrs kids
 }
 
+# The `<i>` element: text in an alternate voice or mood.
 public def i :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "i" attrs kids
 }
 
+# The `<b>` element: text stylistically set off without extra importance.
 public def b :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "b" attrs kids
 }
 
+# The `<u>` element: text with a non-textual annotation, shown underlined.
 public def u :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "u" attrs kids
 }
 
+# The `<mark>` element: text highlighted for reference.
 public def mark :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "mark" attrs kids
 }
 
+# The `<ruby>` element: a ruby annotation, for East Asian typography.
 public def ruby :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "ruby" attrs kids
 }
 
+# The `<rt>` element: the pronunciation shown above a ruby annotation.
 public def rt :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "rt" attrs kids
 }
 
+# The `<rp>` element: fallback parentheses for browsers without ruby support.
 public def rp :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "rp" attrs kids
 }
 
+# The `<bdi>` element: text isolated from the surrounding text's direction.
 public def bdi :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "bdi" attrs kids
 }
 
+# The `<bdo>` element: text with an explicitly overridden writing direction.
 public def bdo :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "bdo" attrs kids
 }
 
+# The `<br>` element: a line break.
 public def br :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "br" attrs kids
 }
 
+# The `<wbr>` element: a point where the text may break if needed.
 public def wbr :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "wbr" attrs kids
 }
 
+# The `<ins>` element: text inserted into the document.
 public def ins :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "ins" attrs kids
 }
 
+# The `<del>` element: text deleted from the document.
 public def del :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "del" attrs kids
 }
 
+# The `<img>` element: an image.
 public def img :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "img" attrs kids
 }
 
+# The `<iframe>` element: another page embedded in an inline frame.
 public def iframe :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "iframe" attrs kids
 }
 
+# The `<embed>` element: external application or interactive content.
 public def embed :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "embed" attrs kids
 }
 
+# The `<object>` element: external content such as an image, page, or plugin.
 public def object :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "object" attrs kids
 }
 
+# The `<param>` element: a parameter for its object element.
 public def param :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "param" attrs kids
 }
 
+# The `<video>` element: a video player.
 public def video :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "video" attrs kids
 }
 
+# The `<audio>` element: an audio player.
 public def audio :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "audio" attrs kids
 }
 
+# The `<source>` element: a media source for video, audio, or picture.
 public def source :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "source" attrs kids
 }
 
+# The `<track>` element: a text track such as captions or subtitles.
 public def track :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "track" attrs kids
 }
 
+# The `<canvas>` element: a bitmap canvas for drawing with scripts.
 public def canvas :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "canvas" attrs kids
 }
 
+# The `<picture>` element: a container offering several image sources.
 public def picture :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "picture" attrs kids
 }
 
+# The `<table>` element: tabular data.
 public def table :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "table" attrs kids
 }
 
+# The `<caption>` element: a caption for its table.
 public def caption :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "caption" attrs kids
 }
 
+# The `<colgroup>` element: a group of columns in a table.
 public def colgroup :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "colgroup" attrs kids
 }
 
+# The `<col>` element: a column (or span of columns) in a table.
 public def col :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "col" attrs kids
 }
 
+# The `<tbody>` element: the body rows of a table.
 public def tbody :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "tbody" attrs kids
 }
 
+# The `<thead>` element: the header rows of a table.
 public def thead :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "thead" attrs kids
 }
 
+# The `<tfoot>` element: the footer rows of a table.
 public def tfoot :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "tfoot" attrs kids
 }
 
+# The `<tr>` element: a row of table cells.
 public def tr :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "tr" attrs kids
 }
 
+# The `<td>` element: a data cell in a table.
 public def td :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "td" attrs kids
 }
 
+# The `<th>` element: a header cell in a table.
 public def th :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "th" attrs kids
 }
 
+# The `<form>` element: an interactive form.
 public def form :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "form" attrs kids
 }
 
+# The `<fieldset>` element: a group of related form controls.
 public def fieldset :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "fieldset" attrs kids
 }
 
+# The `<legend>` element: a caption for its fieldset.
 public def legend :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "legend" attrs kids
 }
 
+# The `<label>` element: a caption for a form control.
 public def label :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "label" attrs kids
 }
 
+# The `<input>` element: a form input control.
 public def input :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "input" attrs kids
 }
 
+# The `<button>` element: a clickable button.
 public def button :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "button" attrs kids
 }
 
+# The `<select>` element: a drop-down list of options.
 public def select :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "select" attrs kids
 }
 
+# The `<datalist>` element: a list of suggested values for an input.
 public def datalist :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "datalist" attrs kids
 }
 
+# The `<optgroup>` element: a group of options in a select.
 public def optgroup :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "optgroup" attrs kids
 }
 
+# The `<option>` element: an option in a select or datalist.
 public def option :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "option" attrs kids
 }
 
+# The `<textarea>` element: a multi-line text input.
 public def textarea :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "textarea" attrs kids
 }
 
+# The `<output>` element: the result of a calculation or user action.
 public def output :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "output" attrs kids
 }
 
+# The `<progress>` element: a progress bar.
 public def progress :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "progress" attrs kids
 }
 
+# The `<meter>` element: a scalar measurement within a known range.
 public def meter :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "meter" attrs kids
 }
 
+# The `<details>` element: a disclosure widget that opens and closes.
 public def details :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "details" attrs kids
 }
 
+# The `<summary>` element: the visible heading for its details widget.
 public def summary :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "summary" attrs kids
 }
 
+# The `<dialog>` element: a dialog box or modal.
 public def dialog :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "dialog" attrs kids
 }
 
+# The `<menu>` element: a menu of commands.
 public def menu :: fun (list attribute) (list view) -> view = fun attrs kids {
 	view.el "menu" attrs kids
 }
 
-# --- attribute builders -----------------------------------------------------
+# Attribute builders -- one per common HTML attribute. Each takes the
+# attribute's value and returns an `attribute` for an element's first list:
+#
+#     view.a [view.href "/docs", view.class "link"] [view.text "Docs"]
 
+# The `class` attribute: the CSS classes applied to the element.
 public def class :: fun string -> attribute = fun v {
 	attribute.static "class" v
 }
 
+# The `id` attribute: a unique identifier for the element.
 public def id :: fun string -> attribute = fun v {
 	attribute.static "id" v
 }
 
+# The `style` attribute: inline CSS as a raw string (see `style-of` for
+# a typed `std/css` declaration list).
 public def style :: fun string -> attribute = fun v {
 	attribute.static "style" v
 }
@@ -974,142 +1087,178 @@ public def styled-when :: fun css.ruleset (fun nothing -> bool) -> attribute = f
 # style, and the client re-applies it via `node.style.setProperty`.
 public def css-var :: fun string (fun nothing -> string) -> attribute = attribute.style-var
 
+# The `title` attribute: advisory text, usually shown as a tooltip.
 public def title :: fun string -> attribute = fun v {
 	attribute.static "title" v
 }
 
+# The `lang` attribute: the language of the element's content.
 public def lang :: fun string -> attribute = fun v {
 	attribute.static "lang" v
 }
 
+# The `dir` attribute: the writing direction of the element's content.
 public def dir :: fun string -> attribute = fun v {
 	attribute.static "dir" v
 }
 
+# The `role` attribute: the ARIA role describing the element's purpose.
 public def role :: fun string -> attribute = fun v {
 	attribute.static "role" v
 }
 
+# The `tabindex` attribute: the element's place in the keyboard tab order.
 public def tabindex :: fun string -> attribute = fun v {
 	attribute.static "tabindex" v
 }
 
+# The `href` attribute: the URL a link points to.
 public def href :: fun string -> attribute = fun v {
 	attribute.static "href" v
 }
 
+# The `src` attribute: the URL of an embedded resource.
 public def src :: fun string -> attribute = fun v {
 	attribute.static "src" v
 }
 
+# The `alt` attribute: alternative text describing an image.
 public def alt :: fun string -> attribute = fun v {
 	attribute.static "alt" v
 }
 
+# The `rel` attribute: how a linked resource relates to this page.
 public def rel :: fun string -> attribute = fun v {
 	attribute.static "rel" v
 }
 
+# The `target` attribute: where to open a link, such as "_blank".
 public def target :: fun string -> attribute = fun v {
 	attribute.static "target" v
 }
 
+# The `width` attribute: the element's width.
 public def width :: fun string -> attribute = fun v {
 	attribute.static "width" v
 }
 
+# The `height` attribute: the element's height.
 public def height :: fun string -> attribute = fun v {
 	attribute.static "height" v
 }
 
+# The `placeholder` attribute: hint text shown in an empty input.
 public def placeholder :: fun string -> attribute = fun v {
 	attribute.static "placeholder" v
 }
 
+# The `input-type` attribute: the kind of input. Sets the HTML `type`;
+# named `input-type` because `type` is a keyword.
 public def input-type :: fun string -> attribute = fun v {
 	attribute.static "type" v
 }
 
+# The `name` attribute: the field name submitted with the value.
 public def name :: fun string -> attribute = fun v {
 	attribute.static "name" v
 }
 
+# The `for` attribute: the id of the form control a label describes.
 public def for :: fun string -> attribute = fun v {
 	attribute.static "for" v
 }
 
+# The `action` attribute: the URL a form submits to.
 public def action :: fun string -> attribute = fun v {
 	attribute.static "action" v
 }
 
+# The `method` attribute: the HTTP method a form submits with.
 public def method :: fun string -> attribute = fun v {
 	attribute.static "method" v
 }
 
+# The `min` attribute: the smallest allowed value.
 public def min :: fun string -> attribute = fun v {
 	attribute.static "min" v
 }
 
+# The `max` attribute: the largest allowed value.
 public def max :: fun string -> attribute = fun v {
 	attribute.static "max" v
 }
 
+# The `step` attribute: the spacing between allowed values.
 public def step :: fun string -> attribute = fun v {
 	attribute.static "step" v
 }
 
+# The `pattern` attribute: a regular expression the value must match.
 public def pattern :: fun string -> attribute = fun v {
 	attribute.static "pattern" v
 }
 
+# The `accept` attribute: the file types a file input accepts.
 public def accept :: fun string -> attribute = fun v {
 	attribute.static "accept" v
 }
 
+# The `autocomplete` attribute: how the browser should autofill the field.
 public def autocomplete :: fun string -> attribute = fun v {
 	attribute.static "autocomplete" v
 }
 
+# The `cols` attribute: the visible width of a textarea, in characters.
 public def cols :: fun string -> attribute = fun v {
 	attribute.static "cols" v
 }
 
+# The `rows` attribute: the visible number of lines in a textarea.
 public def rows :: fun string -> attribute = fun v {
 	attribute.static "rows" v
 }
 
+# The `colspan` attribute: how many columns a table cell spans.
 public def colspan :: fun string -> attribute = fun v {
 	attribute.static "colspan" v
 }
 
+# The `rowspan` attribute: how many rows a table cell spans.
 public def rowspan :: fun string -> attribute = fun v {
 	attribute.static "rowspan" v
 }
 
+# The `disabled` attribute: whether the control is disabled.
 public def disabled :: fun bool -> attribute = fun b {
 	attribute.prop-bool "disabled" b
 }
 
+# The `required` attribute: whether the control must be filled in before submit.
 public def required :: fun bool -> attribute = fun b {
 	attribute.prop-bool "required" b
 }
 
+# The `selected` attribute: whether the option starts out selected.
 public def selected :: fun bool -> attribute = fun b {
 	attribute.prop-bool "selected" b
 }
 
+# The `readonly` attribute: whether the value can be edited.
 public def readonly :: fun bool -> attribute = fun b {
 	attribute.prop-bool "readOnly" b
 }
 
+# The `multiple` attribute: whether several values are allowed.
 public def multiple :: fun bool -> attribute = fun b {
 	attribute.prop-bool "multiple" b
 }
 
+# The `autofocus` attribute: whether the control is focused when the page loads.
 public def autofocus :: fun bool -> attribute = fun b {
 	attribute.prop-bool "autofocus" b
 }
 
+# The `hidden` attribute: whether the element is hidden from rendering.
 public def hidden :: fun bool -> attribute = fun b {
 	attribute.prop-bool "hidden" b
 }

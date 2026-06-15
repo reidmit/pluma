@@ -2,9 +2,9 @@
 # at construction) so it renders identically on the server (`view.to-string`, via
 # `theme.document-html`) and the client (`render.hydrate`). The only effects — the
 # `api.cheer` remote calls — live inside event/mount handlers, which run only in the
-# browser after hydration; `view.to-string` drops them. That is what makes the page
-# isomorphic: the server emits the styled shell for an instant first paint, then the
-# client adopts those exact nodes and they come alive.
+# browser after hydration; `view.to-string` drops them. That is what lets the page
+# render on both sides: the server emits the styled shell for an instant first paint,
+# then the client adopts those exact nodes and they come alive.
 
 use std/css
 use std/list

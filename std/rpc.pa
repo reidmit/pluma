@@ -213,7 +213,7 @@ public def reject :: fun int -> task a = fun status {
 }
 
 # Runs one endpoint invocation and shapes its outcome into an HTTP response. The
-# synthesized dispatcher hands us the inbound request and a thunk that, when run,
+# synthesized dispatcher hands us the inbound request and a function that, when run,
 # calls the real handler and wire-encodes its result to bytes. We bind the request
 # as ambient `context` (so the handler can read headers) and a fresh `reject` box,
 # run the handler reifying any failure with `task.attempt` -- WITHOUT inspecting
@@ -241,7 +241,7 @@ public def respond :: fun http.request (fun nothing -> task bytes) -> task http.
 }
 
 # Runs one *streaming* endpoint invocation and shapes it into a streaming HTTP
-# response. The synthesized dispatcher hands us the request and a thunk that, when
+# response. The synthesized dispatcher hands us the request and a function that, when
 # run, calls the real handler and wire-encodes each element to bytes (a `stream
 # bytes`). We bind the request as ambient `context` and build the response inside
 # that binding, so the handler's *synchronous* context reads at stream

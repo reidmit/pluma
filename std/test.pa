@@ -84,7 +84,7 @@ public alias suite list test
 
 # --- constructors (the public surface) ---------------------------------------
 
-# A single case: a name and a thunk returning `ok ()` to pass / `err msg` to fail.
+# A single case: a name and a function returning `ok ()` to pass / `err msg` to fail.
 public def case :: fun string (fun nothing -> result nothing string) -> test = test.leaf
 
 # A named group of nested cases/groups.
@@ -110,7 +110,7 @@ enum run-status {
 }
 
 # One flattened case: its enclosing group names (outermost first), its name, how
-# it was marked, and the thunk to run.
+# it was marked, and the function to run.
 alias entry {
 	path :: list string,
 	name :: string,

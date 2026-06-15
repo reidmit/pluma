@@ -25,38 +25,47 @@ public def styled :: fun (list int) string -> string = fun codes s {
 	"$(esc)[$(nums)m$(s)$(esc)[0m"
 }
 
+# Wraps text in bold.
 public def bold :: fun string -> string = fun s {
 	styled [1] s
 }
 
+# Wraps text in dim (faint) styling.
 public def dim :: fun string -> string = fun s {
 	styled [2] s
 }
 
+# Wraps text in red.
 public def red :: fun string -> string = fun s {
 	styled [31] s
 }
 
+# Wraps text in green.
 public def green :: fun string -> string = fun s {
 	styled [32] s
 }
 
+# Wraps text in yellow.
 public def yellow :: fun string -> string = fun s {
 	styled [33] s
 }
 
+# Wraps text in bold red.
 public def bold-red :: fun string -> string = fun s {
 	styled [1, 31] s
 }
 
+# Wraps text in bold green.
 public def bold-green :: fun string -> string = fun s {
 	styled [1, 32] s
 }
 
+# Wraps text in bold yellow.
 public def bold-yellow :: fun string -> string = fun s {
 	styled [1, 33] s
 }
 
+# Wraps text in bold and dim.
 public def bold-dim :: fun string -> string = fun s {
 	styled [2, 1] s
 }

@@ -1,5 +1,6 @@
 use std/package
 
+# The standard library's own package manifest.
 public def package :: package.info = {
 	name: "core",
 	version: "0.0.1",

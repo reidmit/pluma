@@ -130,6 +130,7 @@ public def set-handler :: fun int (fun event -> nothing) -> nothing = built-in "
 # returns `""` when the key is absent.
 public def dev-store-set :: fun string string -> nothing = built-in "dom-dev-store-set"
 
+# Reads a dev-store value, or `""` if the key is absent (see `dev-store-set`).
 public def dev-store-get :: fun string -> string = built-in "dom-dev-store-get"
 
 # Sugar for the common case: run `handler` on every click.

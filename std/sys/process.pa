@@ -207,6 +207,7 @@ public def run :: fun string (list string) -> task output string = fun cmd args 
 	await-output (proc-op op-run cmd (encode-req {cmd, args, cwd: none, env: [], stdin: ""}))
 }
 
+# The blocking form of `process.run` -- returns a `result` instead of a `task`.
 public def run-sync :: fun string (list string) -> result output string = fun cmd args {
 	decode-output (proc-op-sync op-run cmd (encode-req {cmd, args, cwd: none, env: [], stdin: ""}))
 }
@@ -217,6 +218,7 @@ public def run-with :: fun command -> task output string = fun c {
 	await-output (proc-op op-run c.cmd (encode-req c))
 }
 
+# The blocking form of `process.run-with` -- returns a `result` instead of a `task`.
 public def run-with-sync :: fun command -> result output string = fun c {
 	decode-output (proc-op-sync op-run c.cmd (encode-req c))
 }
@@ -234,10 +236,12 @@ public def exec :: fun string (list string) -> task int string = fun cmd args {
 	})) decode-status)
 }
 
+# The blocking form of `process.exec` -- returns a `result` instead of a `task`.
 public def exec-sync :: fun string (list string) -> result int string = fun cmd args {
 	decode-status (proc-op-sync op-exec cmd (encode-req {cmd, args, cwd: none, env: [], stdin: ""}))
 }
 
+# Like `exec`, but takes a full `command` (working directory, environment, stdin).
 public def exec-with :: fun command -> task int string = fun c {
 	task.unwrap (task.map (proc-op op-exec c.cmd (encode-req c)) decode-status)
 }
@@ -249,6 +253,7 @@ public def shell :: fun string -> task output string = fun cmd {
 	await-output (proc-op op-shell cmd (encode-req {cmd, args: [], cwd: none, env: [], stdin: ""}))
 }
 
+# The blocking form of `process.shell` -- returns a `result` instead of a `task`.
 public def shell-sync :: fun string -> result output string = fun cmd {
 	decode-output (proc-op-sync op-shell cmd (encode-req {
 		cmd,

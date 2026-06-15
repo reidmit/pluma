@@ -454,7 +454,7 @@ def sec-operators :: view = doc-section "operators" "Operators" [
 		ic "+",
 		t " works on both, and a generic ",
 		ic "fun x { x + x }",
-		t " stays polymorphic. There is no dotted float operator set, and no implicit promotion.",
+		t " works for either. There is no dotted float operator set, and no implicit promotion.",
 	],
 	h3 "Arithmetic",
 	prose.table3 ("Operator", "Signature", "Meaning") [
@@ -477,7 +477,7 @@ def sec-operators :: view = doc-section "operators" "Operators" [
 	],
 	h3 "Comparison",
 	pr [
-		t "The ordering operators desugar to ",
+		t "The ordering operators are shorthand for ",
 		ic "compare",
 		t " (the ",
 		ic "ord",
@@ -591,7 +591,7 @@ def sec-aliases :: view = doc-section "aliases" "Type aliases and nominal types"
 	pr [
 		t "Records, by contrast, are ",
 		t "structural",
-		t " and row-polymorphic: there's no nominal record type. A function that reads a couple of fields stays generic over whatever else the record carries.",
+		t ": there's no named record type. A function that reads a couple of fields stays generic over whatever else the record carries.",
 	],
 	code "# name-of has type {name: a, ...} -> a\ndef name-of = fun r { r.name }",
 	pr [

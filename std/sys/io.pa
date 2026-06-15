@@ -45,6 +45,8 @@ public def read-all :: fun nothing -> result string string = built-in "io-read-a
 # assumption that the content is text.
 public def read-all-bytes :: fun nothing -> result bytes string = built-in "io-read-all-bytes"
 
+# Writes raw `bytes` to standard output, with no trailing newline.
 public def write-bytes :: fun bytes -> nothing = built-in "io-write-bytes"
 
+# Writes raw `bytes` to standard error, with no trailing newline.
 public def write-err-bytes :: fun bytes -> nothing = built-in "io-write-err-bytes"

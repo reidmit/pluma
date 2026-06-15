@@ -194,6 +194,7 @@ public def read-text :: fun string -> task string string = fun path {
 	run-result (fs-op-s op-read-text path "") to-text
 }
 
+# The blocking form of `fs.read-text` -- returns its value directly instead of a `task`.
 public def read-text-sync :: fun string -> result string string = fun path {
 	to-text (fs-op-sync-s op-read-text path "")
 }
@@ -206,6 +207,7 @@ public def read-bytes :: fun string -> task bytes string = fun path {
 	}
 }
 
+# The blocking form of `fs.read-bytes` -- returns its value directly instead of a `task`.
 public def read-bytes-sync :: fun string -> result bytes string = fun path {
 	fs-op-sync-s op-read-bytes path ""
 }
@@ -218,6 +220,7 @@ public def read-dir :: fun string -> task (list string) string = fun path {
 	run-result (fs-op-s op-read-dir path "") to-names
 }
 
+# The blocking form of `fs.read-dir` -- returns its value directly instead of a `task`.
 public def read-dir-sync :: fun string -> result (list string) string = fun path {
 	to-names (fs-op-sync-s op-read-dir path "")
 }
@@ -228,6 +231,7 @@ public def stat :: fun string -> task file-info string = fun path {
 	run-result (fs-op-s op-stat path "") to-info
 }
 
+# The blocking form of `fs.stat` -- returns its value directly instead of a `task`.
 public def stat-sync :: fun string -> result file-info string = fun path {
 	to-info (fs-op-sync-s op-stat path "")
 }
@@ -242,6 +246,7 @@ public def write-text :: fun string string -> task nothing string = fun path con
 	run-result (fs-op-s op-write path content) to-void
 }
 
+# The blocking form of `fs.write-text` -- returns its value directly instead of a `task`.
 public def write-text-sync :: fun string string -> result nothing string = fun path content {
 	to-void (fs-op-sync-s op-write path content)
 }
@@ -251,6 +256,7 @@ public def write-bytes :: fun string bytes -> task nothing string = fun path con
 	run-result (fs-op-b op-write path content) to-void
 }
 
+# The blocking form of `fs.write-bytes` -- returns its value directly instead of a `task`.
 public def write-bytes-sync :: fun string bytes -> result nothing string = fun path content {
 	to-void (fs-op-sync-b op-write path content)
 }
@@ -261,6 +267,7 @@ public def append-text :: fun string string -> task nothing string = fun path co
 	run-result (fs-op-s op-append path content) to-void
 }
 
+# The blocking form of `fs.append-text` -- returns its value directly instead of a `task`.
 public def append-text-sync :: fun string string -> result nothing string = fun path content {
 	to-void (fs-op-sync-s op-append path content)
 }
@@ -270,6 +277,7 @@ public def append-bytes :: fun string bytes -> task nothing string = fun path co
 	run-result (fs-op-b op-append path content) to-void
 }
 
+# The blocking form of `fs.append-bytes` -- returns its value directly instead of a `task`.
 public def append-bytes-sync :: fun string bytes -> result nothing string = fun path content {
 	to-void (fs-op-sync-b op-append path content)
 }
@@ -282,6 +290,7 @@ public def make-dir :: fun string -> task nothing string = fun path {
 	run-result (fs-op-s op-make-dir path "") to-void
 }
 
+# The blocking form of `fs.make-dir` -- returns its value directly instead of a `task`.
 public def make-dir-sync :: fun string -> result nothing string = fun path {
 	to-void (fs-op-sync-s op-make-dir path "")
 }
@@ -292,6 +301,7 @@ public def remove :: fun string -> task nothing string = fun path {
 	run-result (fs-op-s op-remove path "") to-void
 }
 
+# The blocking form of `fs.remove` -- returns its value directly instead of a `task`.
 public def remove-sync :: fun string -> result nothing string = fun path {
 	to-void (fs-op-sync-s op-remove path "")
 }
@@ -301,6 +311,7 @@ public def remove-all :: fun string -> task nothing string = fun path {
 	run-result (fs-op-s op-remove-all path "") to-void
 }
 
+# The blocking form of `fs.remove-all` -- returns its value directly instead of a `task`.
 public def remove-all-sync :: fun string -> result nothing string = fun path {
 	to-void (fs-op-sync-s op-remove-all path "")
 }
@@ -311,6 +322,7 @@ public def rename :: fun string string -> task nothing string = fun source dest 
 	run-result (fs-op-s op-rename source dest) to-void
 }
 
+# The blocking form of `fs.rename` -- returns its value directly instead of a `task`.
 public def rename-sync :: fun string string -> result nothing string = fun source dest {
 	to-void (fs-op-sync-s op-rename source dest)
 }
@@ -321,6 +333,7 @@ public def copy :: fun string string -> task nothing string = fun source dest {
 	run-result (fs-op-s op-copy source dest) to-void
 }
 
+# The blocking form of `fs.copy` -- returns its value directly instead of a `task`.
 public def copy-sync :: fun string string -> result nothing string = fun source dest {
 	to-void (fs-op-sync-s op-copy source dest)
 }
@@ -332,6 +345,7 @@ public def exists :: fun string -> task bool = fun path {
 	run (fs-op-s op-exists path "") to-bool
 }
 
+# The blocking form of `fs.exists` -- returns its value directly instead of a `task`.
 public def exists-sync :: fun string -> bool = fun path {
 	to-bool (fs-op-sync-s op-exists path "")
 }
@@ -341,6 +355,7 @@ public def is-file :: fun string -> task bool = fun path {
 	run (fs-op-s op-is-file path "") to-bool
 }
 
+# The blocking form of `fs.is-file` -- returns its value directly instead of a `task`.
 public def is-file-sync :: fun string -> bool = fun path {
 	to-bool (fs-op-sync-s op-is-file path "")
 }
@@ -350,6 +365,7 @@ public def is-dir :: fun string -> task bool = fun path {
 	run (fs-op-s op-is-dir path "") to-bool
 }
 
+# The blocking form of `fs.is-dir` -- returns its value directly instead of a `task`.
 public def is-dir-sync :: fun string -> bool = fun path {
 	to-bool (fs-op-sync-s op-is-dir path "")
 }

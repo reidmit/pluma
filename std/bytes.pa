@@ -201,7 +201,7 @@ def check-range :: fun (list int) int int -> result nothing string = fun xs n i 
 
 # Renders an int in base 10. The module-local `to-string` (the `bytes ->
 # result string string` decoder just below) shadows the prelude's
-# polymorphic `to-string`, so the error message above can't reach it;
+# general `to-string`, so the error message above can't reach it;
 # this is the small stand-in. Digit lookup rides `list.get`, so it stays
 # allocation-light and lowers without any new builtin.
 def dec :: fun int -> string = fun n {
