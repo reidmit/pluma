@@ -15,6 +15,7 @@ pub enum CompletionKind {
 	Trait,
 	Alias,
 	Variant,
+	Field,
 	Module,
 	Keyword,
 }
@@ -71,7 +72,7 @@ pub fn complete(source: &[u8], path: &Path, line: u32, character: u32) -> Vec<Co
 		return module_path_completions(path, line, path_start, character);
 	}
 	match member_receiver(&prefix) {
-		Some(receiver) => member_completions(source, path, &receiver),
+		Some(receiver) => member_completions(source, path, line, character, &receiver),
 		None => scope_completions(source, line, character),
 	}
 }
@@ -120,7 +121,13 @@ fn member_receiver(prefix: &str) -> Option<String> {
 
 // -- member completion ----------------------------------------------------
 
-fn member_completions(source: &[u8], path: &Path, receiver: &str) -> Vec<Completion> {
+fn member_completions(
+	source: &[u8],
+	path: &Path,
+	line: u32,
+	character: u32,
+	receiver: &str,
+) -> Vec<Completion> {
 	// Resolve the receiver as an imported module first (the common case:
 	// `list.`, `string.`, a `use … as alias`). The `use` set is scanned
 	// lexically so this works even when the current line doesn't parse.
@@ -139,7 +146,82 @@ fn member_completions(source: &[u8], path: &Path, receiver: &str) -> Vec<Complet
 		return variants;
 	}
 
-	Vec::new()
+	// Last: the receiver is a value. If its inferred type is a record, offer
+	// the record's fields.
+	record_field_completions(source, path, line, character)
+}
+
+// Fields of the receiver's record type at the cursor. The buffer is mid-edit
+// (`rec.<here>` doesn't parse), so we drop the partial member access at the
+// cursor — keeping the receiver and every *other* field access, which is how an
+// open record's fields get pinned — then analyze and read the receiver's type.
+fn record_field_completions(
+	source: &[u8],
+	path: &Path,
+	line: u32,
+	character: u32,
+) -> Vec<Completion> {
+	let prefix = line_prefix(source, line, character);
+	let total = prefix.chars().count();
+	let partial_len = prefix
+		.chars()
+		.rev()
+		.take_while(|c| is_ident_char(*c))
+		.count();
+	// `dot_col` is the `.`; the receiver's last char sits just before it.
+	let Some(dot_col) = total.checked_sub(partial_len + 1) else {
+		return Vec::new();
+	};
+
+	let sanitized = remove_on_line(source, line as usize, dot_col, character as usize);
+	let result = crate::analysis::analyze_document(path, sanitized.into_bytes());
+	let Some(module) = result.module else {
+		return Vec::new();
+	};
+
+	let index = crate::hover::build_index(&module);
+	let probe_col = dot_col.saturating_sub(1) as u32;
+	let Some(hit) = crate::hover::lookup(&index, line, probe_col) else {
+		return Vec::new();
+	};
+
+	let compiler::types::Type::Record(fields, _) = &hit.ty else {
+		return Vec::new();
+	};
+	fields
+		.iter()
+		.map(|(name, ty)| {
+			Completion::new(
+				name.clone(),
+				CompletionKind::Field,
+				Some(format!("{}", ty)),
+				None,
+			)
+		})
+		.collect()
+}
+
+// Rebuild `source` with the character range [`from`, `to`) deleted from `line`.
+// Other lines are untouched, so positions before `from` (and on every other
+// line) stay valid against the result.
+fn remove_on_line(source: &[u8], line: usize, from: usize, to: usize) -> String {
+	let text = String::from_utf8_lossy(source);
+	let mut out = String::new();
+	for (i, l) in text.lines().enumerate() {
+		if i > 0 {
+			out.push('\n');
+		}
+		if i == line {
+			let chars: Vec<char> = l.chars().collect();
+			let from = from.min(chars.len());
+			let to = to.min(chars.len());
+			out.extend(chars[..from].iter());
+			out.extend(chars[to..].iter());
+		} else {
+			out.push_str(l);
+		}
+	}
+	out
 }
 
 // Public top-level defs of an imported module, as completion items with their
@@ -548,6 +630,58 @@ mod tests {
 			!labels.contains(&"hidden"),
 			"leaked private def: {:?}",
 			labels
+		);
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	// A throwaway single-file project, returning the path to `main.pa`.
+	fn temp_main(src: &str) -> (PathBuf, std::path::PathBuf) {
+		let dir = std::env::temp_dir().join(format!("pluma-rec-{}-{}", std::process::id(), src.len()));
+		let _ = std::fs::remove_dir_all(&dir);
+		std::fs::create_dir_all(&dir).unwrap();
+		std::fs::write(dir.join("pluma.pa"), "").unwrap();
+		let main = dir.join("main.pa");
+		std::fs::write(&main, src).unwrap();
+		(dir, main)
+	}
+
+	#[test]
+	fn completes_record_fields_from_let_literal() {
+		// `rec` is a closed record from its literal; `rec.` offers its fields.
+		let src = "def main = fun {\n\tlet rec = { name: \"a\", age: 1 }\n\trec.\n}\n";
+		let (dir, main) = temp_main(src);
+		let items = complete(src.as_bytes(), &main, 2, 5);
+		let labels: Vec<&str> = items.iter().map(|c| c.label.as_str()).collect();
+		assert!(labels.contains(&"name"), "expected name in {:?}", labels);
+		assert!(labels.contains(&"age"), "expected age in {:?}", labels);
+		// The field's type rides along as the detail.
+		let age = items.iter().find(|c| c.label == "age").unwrap();
+		assert_eq!(age.detail.as_deref(), Some("int"));
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn completes_open_record_fields_pinned_by_other_access() {
+		// `r`'s type is only known through field accesses. The one at the cursor
+		// is dropped during completion, but `r.name` elsewhere still pins `name`.
+		let src = "def f = fun r {\n\tlet n = r.name\n\tr.\n}\n";
+		let (dir, main) = temp_main(src);
+		let items = complete(src.as_bytes(), &main, 2, 3);
+		let labels: Vec<&str> = items.iter().map(|c| c.label.as_str()).collect();
+		assert!(labels.contains(&"name"), "expected name in {:?}", labels);
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn no_fields_for_non_record_receiver() {
+		// `n` is an int — no fields to offer (and no crash / no garbage items).
+		let src = "def main = fun {\n\tlet n = 1\n\tn.\n}\n";
+		let (dir, main) = temp_main(src);
+		let items = complete(src.as_bytes(), &main, 2, 3);
+		assert!(
+			items.is_empty(),
+			"expected no items, got {:?}",
+			items.iter().map(|c| &c.label).collect::<Vec<_>>()
 		);
 		let _ = std::fs::remove_dir_all(&dir);
 	}

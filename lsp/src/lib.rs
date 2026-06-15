@@ -482,6 +482,7 @@ fn completion_to_lsp(c: completion::Completion) -> CompletionItem {
 		CompletionKind::Trait => CompletionItemKind::INTERFACE,
 		CompletionKind::Alias => CompletionItemKind::CLASS,
 		CompletionKind::Variant => CompletionItemKind::ENUM_MEMBER,
+		CompletionKind::Field => CompletionItemKind::FIELD,
 		CompletionKind::Module => CompletionItemKind::MODULE,
 		CompletionKind::Keyword => CompletionItemKind::KEYWORD,
 	};
