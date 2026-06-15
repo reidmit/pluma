@@ -100,6 +100,9 @@ impl LanguageServer for Backend {
 					},
 				)),
 				document_formatting_provider: Some(OneOf::Left(true)),
+				// Quick-fixes built from the linter's autofixes: each fixable lint
+				// at the cursor becomes a clickable edit.
+				code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
 				hover_provider: Some(HoverProviderCapability::Simple(true)),
 				definition_provider: Some(OneOf::Left(true)),
 				document_symbol_provider: Some(OneOf::Left(true)),
@@ -218,6 +221,79 @@ impl LanguageServer for Backend {
 			range: full_document_range(&text),
 			new_text: formatted,
 		}]))
+	}
+
+	async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+		// Only quick-fixes are offered here; if the client asked exclusively for
+		// other kinds (e.g. a refactor or organize-imports request), there's
+		// nothing to return.
+		if let Some(only) = &params.context.only {
+			if !only
+				.iter()
+				.any(|k| CodeActionKind::QUICKFIX.as_str().starts_with(k.as_str()))
+			{
+				return Ok(None);
+			}
+		}
+
+		let uri = params.text_document.uri;
+		let text = match self.document_map.get(&uri.to_string()) {
+			Some(text) => text.clone(),
+			None => return Ok(None),
+		};
+
+		// Re-run the linter against the current text to recover the structured
+		// fix edits (the published diagnostics keep only the message). On a parse
+		// error the linter returns `Err` and there are no fixes to offer.
+		let Ok(findings) = linter::lint_findings(text.as_bytes()) else {
+			return Ok(None);
+		};
+
+		let actions: Vec<CodeActionOrCommand> = findings
+			.into_iter()
+			.filter(|f| !f.fixes.is_empty())
+			.filter_map(|f| {
+				// Offer a finding's fix only when its diagnostic overlaps the range
+				// the client asked about (the cursor or selection).
+				let diag_range = pluma_range_to_lsp(&f.diagnostic.range?);
+				if !ranges_overlap(&diag_range, &params.range) {
+					return None;
+				}
+
+				let edits: Vec<TextEdit> = f
+					.fixes
+					.iter()
+					.map(|fix| TextEdit {
+						range: pluma_range_to_lsp(&fix.range),
+						new_text: fix.replacement.clone(),
+					})
+					.collect();
+
+				let mut changes = std::collections::HashMap::new();
+				changes.insert(uri.clone(), edits);
+
+				// The help line ("replace the wrapper with `f` directly") reads as
+				// the action; fall back to the diagnostic message if a rule has none.
+				let title = f
+					.diagnostic
+					.help
+					.clone()
+					.unwrap_or_else(|| f.diagnostic.message.clone());
+
+				Some(CodeActionOrCommand::CodeAction(CodeAction {
+					title,
+					kind: Some(CodeActionKind::QUICKFIX),
+					diagnostics: Some(vec![pluma_diagnostic_to_lsp(&f.diagnostic, &uri)]),
+					edit: Some(WorkspaceEdit {
+						changes: Some(changes),
+						..WorkspaceEdit::default()
+					}),
+					..CodeAction::default()
+				}))
+			})
+			.collect();
+
+		Ok(Some(actions))
 	}
 
 	async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
@@ -405,6 +481,18 @@ impl LanguageServer for Backend {
 		};
 		Ok(Some(sig_help_to_lsp(help)))
 	}
+}
+
+// Whether two LSP ranges share any position. Used to offer a lint's quick-fix
+// only when its diagnostic touches the range the client asked about. Touching at
+// a single boundary point counts (a zero-width cursor sitting at a span's edge).
+fn ranges_overlap(a: &Range, b: &Range) -> bool {
+	!(position_lt(&a.end, &b.start) || position_lt(&b.end, &a.start))
+}
+
+// Strict less-than on LSP positions: earlier line, or same line and earlier column.
+fn position_lt(a: &Position, b: &Position) -> bool {
+	a.line < b.line || (a.line == b.line && a.character < b.character)
 }
 
 fn position_in_range(line: u32, col: u32, range: &Range) -> bool {
@@ -742,6 +830,33 @@ async fn serve() {
 mod tests {
 	use super::*;
 	use std::sync::atomic::{AtomicU32, Ordering};
+
+	fn range(sl: u32, sc: u32, el: u32, ec: u32) -> Range {
+		Range {
+			start: Position {
+				line: sl,
+				character: sc,
+			},
+			end: Position {
+				line: el,
+				character: ec,
+			},
+		}
+	}
+
+	#[test]
+	fn ranges_overlap_detects_touching_and_disjoint() {
+		// A cursor (zero-width) sitting inside the span overlaps.
+		assert!(ranges_overlap(&range(2, 0, 2, 10), &range(2, 4, 2, 4)));
+		// Touching exactly at a boundary point counts.
+		assert!(ranges_overlap(&range(2, 0, 2, 5), &range(2, 5, 2, 8)));
+		// Fully disjoint on the same line does not.
+		assert!(!ranges_overlap(&range(2, 0, 2, 4), &range(2, 6, 2, 9)));
+		// Disjoint across lines does not.
+		assert!(!ranges_overlap(&range(1, 0, 1, 9), &range(3, 0, 3, 9)));
+		// Order-independent.
+		assert!(ranges_overlap(&range(2, 5, 2, 8), &range(2, 0, 2, 6)));
+	}
 
 	#[test]
 	fn revision_supersedes_and_forgets() {

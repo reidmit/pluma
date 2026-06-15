@@ -182,6 +182,14 @@ pub fn lint_source(source: &[u8]) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
 	collect(source).map(|findings| findings.into_iter().map(|f| f.diagnostic).collect())
 }
 
+/// Like [`lint_source`], but keeps each warning's autofix edits so a caller can
+/// offer them individually — e.g. the language server turning one finding into a
+/// single editor quick-fix. On parse failure, returns the parse diagnostics as
+/// `Err`, mirroring [`lint_source`]. Findings carry spans but no module path.
+pub fn lint_findings(source: &[u8]) -> Result<Vec<Finding>, Vec<Diagnostic>> {
+	collect(source)
+}
+
 /// Apply every available autofix to `source`, returning the rewritten text — or
 /// `None` when nothing changed. Fixes are applied right-to-left so earlier edits
 /// don't shift later spans; any fix overlapping an already-applied one is
