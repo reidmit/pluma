@@ -3,6 +3,7 @@ use dashmap::DashMap;
 use hover::HoverHit;
 use semantic_tokens::collect_semantic_tokens;
 use std::sync::Arc;
+use std::time::Duration;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -15,19 +16,59 @@ mod inlay_hints;
 mod semantic_tokens;
 mod symbols;
 
+// How long to wait for typing to pause before analyzing. A burst of
+// keystrokes only triggers one analysis — the last one — instead of one per
+// character. Short enough to feel instant, long enough to coalesce a fast
+// typist's run of edits.
+const ANALYSIS_DEBOUNCE: Duration = Duration::from_millis(150);
+
+// Per-URI monotonic edit counter, shared across `Backend` clones. Each edit
+// bumps a document's counter; a debounced analysis captures the value at
+// schedule time and proceeds only while it's still the latest. That single
+// predicate powers both debounce (a superseded edit's task bails before
+// analyzing) and cancellation (an analysis whose result went stale mid-run
+// bails before publishing).
+#[derive(Clone, Default)]
+struct Revisions(Arc<DashMap<String, u64>>);
+
+impl Revisions {
+	// Record a new edit and return the document's current revision.
+	fn bump(&self, uri: &str) -> u64 {
+		let mut entry = self.0.entry(uri.to_string()).or_insert(0);
+		*entry += 1;
+		*entry
+	}
+
+	// Whether `rev` is still the latest edit for `uri`.
+	fn is_current(&self, uri: &str, rev: u64) -> bool {
+		self.0.get(uri).map(|r| *r) == Some(rev)
+	}
+
+	// Forget a document (on close), so any pending analysis for it bails.
+	fn forget(&self, uri: &str) {
+		self.0.remove(uri);
+	}
+}
+
+// Shared state is `Arc`-wrapped so the whole `Backend` clones cheaply into a
+// spawned debounce task (which needs `'static`), while every clone still sees
+// the same maps. The DashMaps themselves are concurrent, so reads/writes from
+// request handlers and the analysis task don't need extra locking.
+#[derive(Clone)]
 struct Backend {
 	client: Client,
-	document_map: DashMap<String, String>,
+	document_map: Arc<DashMap<String, String>>,
 	// Per-URI hover index, rebuilt on each successful analysis. We can't
 	// store the analyzed `Module` directly: it carries `Rc<RefCell<_>>`
 	// dispatch cells, which aren't `Send` — DashMap values need to be.
 	// The hover index is a precomputed `Vec<HoverHit>` of Send-only data
 	// (`Range` + `Type`), which is what hover actually needs anyway.
-	hover_map: DashMap<String, Arc<Vec<HoverHit>>>,
+	hover_map: Arc<DashMap<String, Arc<Vec<HoverHit>>>>,
 	// Inferred-type inlay hints, rebuilt alongside the hover index from the
 	// same analysis pass. Send-only (`position` + `String`) for the same
 	// reason the hover index is.
-	inlay_map: DashMap<String, Arc<Vec<inlay_hints::InlayHint>>>,
+	inlay_map: Arc<DashMap<String, Arc<Vec<inlay_hints::InlayHint>>>>,
+	revisions: Revisions,
 }
 
 #[tower_lsp::async_trait]
@@ -88,7 +129,7 @@ impl LanguageServer for Backend {
 				version: params.text_document.version,
 			})
 			.await;
-		self.refresh_analysis(uri).await;
+		self.schedule_analysis(uri);
 	}
 
 	async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
@@ -101,7 +142,7 @@ impl LanguageServer for Backend {
 				version: params.text_document.version,
 			})
 			.await;
-		self.refresh_analysis(uri).await;
+		self.schedule_analysis(uri);
 	}
 
 	async fn did_save(&self, _: DidSaveTextDocumentParams) {}
@@ -111,6 +152,10 @@ impl LanguageServer for Backend {
 		self.document_map.remove(&uri_str);
 		self.hover_map.remove(&uri_str);
 		self.inlay_map.remove(&uri_str);
+		// Drop the revision too: any debounced analysis still pending for this
+		// file finds no matching revision and bails instead of re-publishing
+		// diagnostics for a closed document.
+		self.revisions.forget(&uri_str);
 		// Clear diagnostics for the closed file so VS Code doesn't leave
 		// stale squiggles in the problems panel.
 		self
@@ -345,10 +390,30 @@ impl Backend {
 			.insert(params.uri.to_string(), params.text.clone());
 	}
 
-	// Run the analyzer against the current in-memory text, cache the
-	// resulting hover index, and publish any diagnostics back to the
-	// client.
-	async fn refresh_analysis(&self, uri: Url) {
+	// Record a new edit for `uri` and schedule a debounced analysis. Returns
+	// immediately so a burst of keystrokes doesn't each block on a full
+	// analysis; only the last edit in the burst actually runs (see
+	// `is_current`). Spawns a detached task — hence the cheap `self.clone()`.
+	fn schedule_analysis(&self, uri: Url) {
+		let uri_str = uri.to_string();
+		let rev = self.revisions.bump(&uri_str);
+		let this = self.clone();
+		tokio::spawn(async move {
+			tokio::time::sleep(ANALYSIS_DEBOUNCE).await;
+			// A newer edit landed during the debounce window — let its own
+			// task do the analysis and skip this stale one.
+			if !this.revisions.is_current(&uri_str, rev) {
+				return;
+			}
+			this.refresh_analysis(uri, rev).await;
+		});
+	}
+
+	// Run the analyzer against the current in-memory text, cache the resulting
+	// hover/inlay indices, and publish diagnostics — unless a newer edit
+	// superseded `rev` while the analysis ran, in which case the result is
+	// dropped so the client never sees stale diagnostics.
+	async fn refresh_analysis(&self, uri: Url, rev: u64) {
 		let uri_str = uri.to_string();
 		let Some(text) = self.document_map.get(&uri_str).map(|s| s.clone()) else {
 			return;
@@ -358,23 +423,27 @@ impl Backend {
 		};
 
 		// Run analysis in a sync block and consume `AnalysisResult` fully
-		// before any await — `Module` carries `Rc<RefCell<_>>` dispatch
-		// cells, so it isn't `Send` and can't be held across the publish
-		// await. We extract everything we need (the hover index + a
-		// pre-converted LSP diagnostic list) into Send-only values.
+		// before any await — `Module` carries `Rc<RefCell<_>>` dispatch cells,
+		// so it isn't `Send` and can't be held across an await. We extract
+		// everything we need (the hover/inlay indices + a pre-converted LSP
+		// diagnostic list) into Send-only values.
 		let source = text.into_bytes();
-		let lsp_diags: Vec<Diagnostic> = {
+		let (hover_index, inlay_hints, lsp_diags): (
+			Option<Arc<Vec<HoverHit>>>,
+			Option<Arc<Vec<inlay_hints::InlayHint>>>,
+			Vec<Diagnostic>,
+		) = {
 			let result = analysis::analyze_document(&path, source.clone());
 
 			let module_name = result.module.as_ref().map(|m| m.module_name.clone());
-			if let Some(module) = result.module.as_ref() {
-				self
-					.hover_map
-					.insert(uri_str.clone(), Arc::new(hover::build_index(module)));
-				self
-					.inlay_map
-					.insert(uri_str.clone(), Arc::new(inlay_hints::build_hints(module)));
-			}
+			let hover_index = result
+				.module
+				.as_ref()
+				.map(|m| Arc::new(hover::build_index(m)));
+			let inlay_hints = result
+				.module
+				.as_ref()
+				.map(|m| Arc::new(inlay_hints::build_hints(m)));
 
 			let mut diags: Vec<Diagnostic> = result
 				.diagnostics
@@ -391,8 +460,21 @@ impl Backend {
 				diags.extend(warnings.iter().map(|d| pluma_diagnostic_to_lsp(d, &uri)));
 			}
 
-			diags
+			(hover_index, inlay_hints, diags)
 		};
+
+		// Superseded by a newer edit while we were analyzing: drop the result
+		// rather than overwrite fresh indices / publish stale diagnostics.
+		if !self.revisions.is_current(&uri_str, rev) {
+			return;
+		}
+
+		if let Some(index) = hover_index {
+			self.hover_map.insert(uri_str.clone(), index);
+		}
+		if let Some(hints) = inlay_hints {
+			self.inlay_map.insert(uri_str.clone(), hints);
+		}
 
 		self.client.publish_diagnostics(uri, lsp_diags, None).await;
 
@@ -560,8 +642,20 @@ fn full_document_range(text: &str) -> Range {
 /// Run the Pluma language server over stdio until the client disconnects. This
 /// is the entry point for `pluma language-server`; it owns its own Tokio runtime
 /// so the (synchronous) CLI can call it directly.
+///
+/// The runtime is deliberately single-threaded. Analysis reuses per-thread
+/// caches (the baked-in stdlib's exports and an incremental user-module
+/// cache); those carry `Rc`-based, non-`Send` data, so they can't be shared
+/// across threads. Pinning every task to one thread keeps the caches warm
+/// across edits — a multi-threaded runtime would scatter analyses over workers
+/// and rebuild the caches cold each time. An interactive editor is not a
+/// throughput workload, so one thread is ample, and debouncing keeps analysis
+/// off the critical path of fast requests like completion and hover.
 pub fn run() {
-	let runtime = tokio::runtime::Runtime::new().expect("failed to start the async runtime");
+	let runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.expect("failed to start the async runtime");
 	runtime.block_on(serve());
 }
 
@@ -571,11 +665,79 @@ async fn serve() {
 
 	let (service, socket) = LspService::build(|client| Backend {
 		client,
-		document_map: DashMap::new(),
-		hover_map: DashMap::new(),
-		inlay_map: DashMap::new(),
+		document_map: Arc::new(DashMap::new()),
+		hover_map: Arc::new(DashMap::new()),
+		inlay_map: Arc::new(DashMap::new()),
+		revisions: Revisions::default(),
 	})
 	.finish();
 
 	Server::new(stdin, stdout, socket).serve(service).await;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::sync::atomic::{AtomicU32, Ordering};
+
+	#[test]
+	fn revision_supersedes_and_forgets() {
+		let revs = Revisions::default();
+		let a = revs.bump("a");
+		assert_eq!(a, 1);
+		assert!(revs.is_current("a", 1));
+
+		// A second edit supersedes the first: only the latest is current.
+		let a2 = revs.bump("a");
+		assert_eq!(a2, 2);
+		assert!(!revs.is_current("a", 1), "the earlier revision is stale");
+		assert!(revs.is_current("a", 2));
+
+		// Documents are tracked independently.
+		assert_eq!(revs.bump("b"), 1);
+		assert!(revs.is_current("a", 2) && revs.is_current("b", 1));
+
+		// Forgetting (on close) makes every pending revision stale.
+		revs.forget("a");
+		assert!(!revs.is_current("a", 2));
+		assert!(
+			revs.is_current("b", 1),
+			"forgetting one document leaves others"
+		);
+	}
+
+	// The debounce contract, exercised with the real `Revisions` + the same
+	// sleep-then-recheck flow `schedule_analysis` uses: in a burst of edits,
+	// every task but the last finds its revision superseded and skips the
+	// (expensive) analysis. Drives wall-clock time via tokio's test clock so
+	// it's deterministic and instant.
+	#[tokio::test(start_paused = true)]
+	async fn debounce_runs_only_the_last_edit_in_a_burst() {
+		let revs = Revisions::default();
+		let analyses = Arc::new(AtomicU32::new(0));
+
+		// Five rapid edits, each 10ms apart — well inside the 150ms window.
+		let mut tasks = Vec::new();
+		for _ in 0..5 {
+			let rev = revs.bump("doc");
+			let revs = revs.clone();
+			let analyses = analyses.clone();
+			tasks.push(tokio::spawn(async move {
+				tokio::time::sleep(ANALYSIS_DEBOUNCE).await;
+				if revs.is_current("doc", rev) {
+					analyses.fetch_add(1, Ordering::SeqCst);
+				}
+			}));
+			tokio::time::sleep(Duration::from_millis(10)).await;
+		}
+		for t in tasks {
+			t.await.unwrap();
+		}
+
+		assert_eq!(
+			analyses.load(Ordering::SeqCst),
+			1,
+			"a burst of 5 edits should collapse to a single analysis"
+		);
+	}
 }
