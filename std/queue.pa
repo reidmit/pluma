@@ -1,0 +1,120 @@
+# Queues: a first-in, first-out (FIFO) collection. You `enqueue` values onto
+# the back and `dequeue` them from the front, so they come out in the order
+# they went in -- like a line at a counter. Reach for one when order of
+# arrival matters: work to process, a breadth-first search frontier, events
+# to replay.
+#
+# A queue is a *mutable* value, like a `list` grown with `push`/`pop`:
+# `enqueue` and `dequeue` change the queue in place rather than returning a
+# new one. The same aliasing caveat applies -- the change is visible through
+# every binding pointing at the same queue -- so treat a queue as owned by
+# the code that's filling and draining it. Use `to-list` to take a
+# non-destructive snapshot.
+#
+# Both `enqueue` and `dequeue` run in amortized O(1) time. Internally the
+# queue keeps two lists: a `front` it pops the oldest element off of, and a
+# `back` it pushes new elements onto. When the front runs dry it moves the
+# back over in one reversing pass, so each element is handled a constant
+# number of times across its lifetime.
+
+use std/list
+
+# A queue is two lists: `front` (popped from its end -- the oldest element)
+# and `back` (pushed onto -- the newest). Dequeueing from an empty `front`
+# first flips `back` into it (see `rebalance`).
+opaque enum queue a {
+	queue (list a) (list a)
+}
+
+# Flip `back` onto `front` when `front` has run dry, reversing as it goes so
+# the oldest element ends up at `front`'s pop-end. Each element moves at most
+# once between flips, which is what keeps `dequeue` amortized O(1).
+def rebalance :: fun (list a) (list a) -> nothing = fun front back {
+	if list.is-empty front {
+		while list.pop back is some x { list.push front x }
+	}
+}
+
+# An empty queue. The starting point you `enqueue` onto.
+#
+#     queue.empty ()   # => an empty queue
+public def empty :: fun nothing -> queue a = fun {
+	queue.queue [] []
+}
+
+# Builds a queue from a list, front of the list first (so `dequeue` returns
+# the list's elements left to right).
+#
+#     let q = queue.from-list [1, 2, 3]
+#     queue.dequeue q   # => some 1
+public def from-list :: fun (list a) -> queue a = fun xs {
+	let q = empty ()
+	list.each xs fun x {
+		enqueue q x
+	}
+	q
+}
+
+# Adds `x` to the back of the queue in place, in O(1).
+#
+#     let q = queue.empty ()
+#     queue.enqueue q 1
+#     queue.enqueue q 2   # q now dequeues 1 then 2
+public def enqueue :: fun (queue a) a -> nothing = fun q x {
+	when q is queue.queue _front back {
+		list.push back x
+	}
+}
+
+# Removes and returns the oldest element as `some oldest`, or `none` if the
+# queue is empty. Mutates the queue in place, in amortized O(1).
+#
+#     let q = queue.from-list [1, 2]
+#     queue.dequeue q   # => some 1   (q now holds just 2)
+#     queue.dequeue q   # => some 2   (q now empty)
+#     queue.dequeue q   # => none
+public def dequeue :: fun (queue a) -> option a = fun q {
+	when q is queue.queue front back {
+		rebalance front back
+		list.pop front
+	}
+}
+
+# Returns the oldest element as `some oldest` without removing it, or `none`
+# if the queue is empty.
+#
+#     let q = queue.from-list [1, 2]
+#     queue.peek q   # => some 1   (q is unchanged)
+public def peek :: fun (queue a) -> option a = fun q {
+	when q is queue.queue front back {
+		rebalance front back
+		list.last front
+	}
+}
+
+# How many elements the queue holds. O(1).
+#
+#     queue.size (queue.from-list [1, 2, 3])   # => 3
+public def size :: fun (queue a) -> int = fun q {
+	when q is queue.queue front back {
+		list.length front + list.length back
+	}
+}
+
+# Reports whether the queue has no elements.
+#
+#     queue.is-empty (queue.empty ())            # => true
+#     queue.is-empty (queue.from-list [1])       # => false
+public def is-empty :: fun (queue a) -> bool = fun q {
+	size q == 0
+}
+
+# The queue's elements as a list, oldest first, without changing the queue.
+# The order matches the order `dequeue` would hand them back.
+#
+#     queue.to-list (queue.from-list [1, 2, 3])   # => [1, 2, 3]
+public def to-list :: fun (queue a) -> list a = fun q {
+	when q is queue.queue front back {
+		list.concat (list.reverse front) back
+	}
+}

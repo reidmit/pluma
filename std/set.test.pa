@@ -1,0 +1,151 @@
+use std/assert
+use std/list
+use std/set
+use std/test
+
+# Sort a set's elements so order-independent results can be compared with
+# `assert.equals` against a literal list.
+def sorted :: fun (set int) -> list int = fun s {
+	list.sort (set.to-list s) ord.compare
+}
+
+def tests :: test.suite = [
+	test.case "empty has size 0 and is-empty" fun {
+		# --- empty / size / is-empty ---
+
+		assert.all [
+			assert.equals (set.size (set.empty ())) 0,
+			assert.is-true (set.is-empty (set.empty ())),
+		]
+	},
+	test.case "single holds one element" fun {
+		# --- single ---
+
+		let s = set.single 7
+		assert.all [
+			assert.equals (set.size s) 1,
+			assert.is-true (set.contains s 7),
+			assert.is-false (set.is-empty s),
+		]
+	},
+	test.case "from-list drops duplicates" fun {
+		# --- from-list ---
+
+		assert.equals (set.size (set.from-list [1, 2, 2, 3, 3, 3])) 3
+	},
+	test.case "insert adds a new element" fun {
+		# --- insert ---
+
+		let s = set.insert (set.from-list [1, 2]) 3
+		assert.equals (sorted s) [1, 2, 3]
+	},
+	test.case "insert of an existing element is a no-op" fun {
+		let s = set.insert (set.from-list [1, 2]) 2
+		assert.equals (sorted s) [1, 2]
+	},
+	test.case "remove drops an element" fun {
+		# --- remove ---
+
+		let s = set.remove (set.from-list [1, 2, 3]) 2
+		assert.equals (sorted s) [1, 3]
+	},
+	test.case "remove of a missing element is a no-op" fun {
+		let s = set.remove (set.from-list [1, 2, 3]) 9
+		assert.equals (sorted s) [1, 2, 3]
+	},
+	test.case "contains reports membership" fun {
+		# --- contains ---
+
+		let s = set.from-list ["a", "b"]
+		assert.all [assert.is-true (set.contains s "a"), assert.is-false (set.contains s "z")]
+	},
+	test.case "to-list yields every element" fun {
+		# --- to-list ---
+
+		assert.equals (sorted (set.from-list [3, 1, 2])) [1, 2, 3]
+	},
+	test.case "union takes elements from either" fun {
+		# --- union ---
+
+		let s = set.union (set.from-list [1, 2]) (set.from-list [2, 3])
+		assert.equals (sorted s) [1, 2, 3]
+	},
+	test.case "intersection keeps only shared elements" fun {
+		# --- intersection ---
+
+		let s = set.intersection (set.from-list [1, 2, 3]) (set.from-list [2, 3, 4])
+		assert.equals (sorted s) [2, 3]
+	},
+	test.case "difference drops the right side" fun {
+		# --- difference ---
+
+		let s = set.difference (set.from-list [1, 2, 3]) (set.from-list [2, 3])
+		assert.equals (sorted s) [1]
+	},
+	test.case "subset-of and superset-of" fun {
+		# --- subset-of / superset-of ---
+
+		let small = set.from-list [1, 2]
+		let big = set.from-list [1, 2, 3]
+		assert.all [
+			assert.is-true (set.subset-of small big),
+			assert.is-false (set.subset-of big small),
+			assert.is-true (set.superset-of big small),
+			assert.is-true (set.subset-of (set.from-list [1, 2]) (set.from-list [1, 2])),
+		]
+	},
+	test.case "disjoint reports no overlap" fun {
+		# --- disjoint ---
+
+		assert.all [
+			assert.is-true (set.disjoint (set.from-list [1, 2]) (set.from-list [3, 4])),
+			assert.is-false (set.disjoint (set.from-list [1, 2]) (set.from-list [2, 3])),
+		]
+	},
+	test.case "equals ignores order and duplicates" fun {
+		# --- equals ---
+
+		assert.all [
+			assert.is-true (set.equals (set.from-list [1, 2, 3]) (set.from-list [3, 2, 1, 1])),
+			assert.is-false (set.equals (set.from-list [1, 2]) (set.from-list [1, 2, 3])),
+		]
+	},
+	test.case "map applies and dedups collisions" fun {
+		# --- map ---
+
+		assert.all [
+			assert.equals (sorted (set.map (set.from-list [1, 2, 3]) fun x { x * x })) [1, 4, 9],
+			assert.equals (set.size (set.map (set.from-list [-1, 1, 2]) fun x {
+				# -1 and 1 collide under abs -> a smaller set
+				x * x
+			})) 2,
+		]
+	},
+	test.case "filter keeps matching elements" fun {
+		# --- filter ---
+
+		let s = set.filter (set.from-list [1, 2, 3, 4]) fun x {
+			x % 2 == 0
+		}
+		assert.equals (sorted s) [2, 4]
+	},
+	test.case "fold combines elements" fun {
+		# --- fold ---
+
+		let total = set.fold (set.from-list [1, 2, 3, 4]) 0 fun acc x {
+			acc + x
+		}
+		assert.equals total 10
+	},
+	test.case "any and all" fun {
+		# --- any / all ---
+
+		let s = set.from-list [2, 4, 6]
+		assert.all [
+			assert.is-true (set.all s fun x { x % 2 == 0 }),
+			assert.is-false (set.all s fun x { x > 4 }),
+			assert.is-true (set.any s fun x { x > 4 }),
+			assert.is-false (set.any s fun x { x > 10 }),
+		]
+	},
+]

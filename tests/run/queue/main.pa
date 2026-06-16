@@ -1,0 +1,49 @@
+use std/list
+use std/queue
+
+# A FIFO queue (`std/queue`): a mutable two-list structure with amortized O(1)
+# enqueue/dequeue. This exercises the back->front rebalance, interleaved churn,
+# and the non-destructive snapshot.
+def show :: fun (option int) -> string = fun o {
+	when o is some x {
+		"some $(to-string x)"
+	} else {
+		"none"
+	}
+}
+
+def main = fun {
+	let q = queue.empty ()
+	queue.enqueue q 1
+	queue.enqueue q 2
+	queue.enqueue q 3
+	print (to-string (queue.size q))
+	# peek is non-destructive; dequeue returns oldest-first.
+	print (show (queue.peek q))
+	print (show (queue.dequeue q))
+	print (show (queue.dequeue q))
+	# enqueue after a partial drain spans front and back.
+	queue.enqueue q 4
+	print (to-string (queue.to-list q))
+	print (to-string (queue.size q))
+	print (show (queue.dequeue q))
+	print (show (queue.dequeue q))
+	print (show (queue.dequeue q))
+	print (to-string (queue.is-empty q))
+	# from-list keeps arrival order.
+	let r = queue.from-list [10, 20, 30]
+	print (to-string (queue.to-list r))
+	print (show (queue.dequeue r))
+	# interleaved churn forces several rebalances; drain into a list.
+	let s = queue.empty ()
+	let out = []
+	queue.enqueue s 1
+	queue.enqueue s 2
+	let _ = queue.dequeue s
+	queue.enqueue s 3
+	let _ = queue.dequeue s
+	queue.enqueue s 4
+	queue.enqueue s 5
+	while queue.dequeue s is some v { list.push out v }
+	print (to-string out)
+}

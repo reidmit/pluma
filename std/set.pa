@@ -1,0 +1,220 @@
+# Sets: an unordered collection of distinct values. `set a` is read "a
+# set of `a`" -- `set int` is a set of whole numbers, `set string` a set
+# of strings, and so on.
+#
+# A set remembers *whether* a value is present, not how many times or in
+# what order. Adding a value that's already there changes nothing, so a
+# set never holds duplicates. Use one when you care about membership --
+# "have I seen this id?", "which tags are in use?" -- rather than position.
+#
+# Elements can be any type that knows how to `hash` itself -- the built-in
+# types (`int`, `float`, `string`, `bytes`, `bool`) all do, and your own
+# enums can by `implement`ing the `hash` trait. The functions that look an
+# element up (`insert`, `remove`, `contains`, `from-list`, the set-algebra
+# functions) carry a `where (hash a)` constraint that says so.
+#
+# A set is an immutable value, backed by the same persistent structure as
+# `dict`: `insert`, `remove`, `union`, and friends return a *new* set and
+# leave the original untouched, so two names for the same set never
+# interfere.
+#
+# Iteration order is unspecified: `to-list`, `map`, `filter`, `fold`, and
+# `each` walk the elements in an arbitrary (hash-determined) order.
+
+use std/dict
+use std/list
+
+# A set is a dict whose keys are the members; the value is a placeholder
+# (`contains` only ever asks whether the key is present).
+opaque enum set a {
+	set-of (dict a bool)
+}
+
+def backing :: fun (set a) -> dict a bool = fun s {
+	when s is set.set-of d {
+		d
+	}
+}
+
+# An empty set with no elements. The starting point you build up from with
+# `insert`.
+#
+#     set.empty ()   # => an empty set
+public def empty :: fun nothing -> set a = fun {
+	set.set-of (dict.empty ())
+}
+
+# A set holding exactly one element.
+#
+#     set.single 7   # => {7}
+public def single :: fun a -> set a where (hash a) = fun x {
+	insert (empty ()) x
+}
+
+# Builds a set from a list, dropping duplicates.
+#
+#     set.from-list [1, 2, 2, 3, 3, 3]   # => {1, 2, 3}
+public def from-list :: fun (list a) -> set a where (hash a) = fun xs {
+	list.fold xs (empty ()) insert
+}
+
+# Returns a new set with `x` added; the original is left unchanged. Adding
+# an element that's already present returns an equivalent set.
+#
+#     let s = set.from-list [1, 2]
+#     set.insert s 3   # => {1, 2, 3}
+#     set.insert s 2   # => {1, 2}     (already there)
+public def insert :: fun (set a) a -> set a where (hash a) = fun s x {
+	set.set-of (dict.insert (backing s) x true)
+}
+
+# Returns a new set without `x`; the original is left unchanged. Removing an
+# element that isn't there returns an equivalent set.
+#
+#     let s = set.from-list [1, 2, 3]
+#     set.remove s 2   # => {1, 3}
+#     set.remove s 9   # => {1, 2, 3}
+public def remove :: fun (set a) a -> set a where (hash a) = fun s x {
+	set.set-of (dict.remove (backing s) x)
+}
+
+# Reports whether `x` is a member of the set.
+#
+#     let s = set.from-list ["a", "b"]
+#     set.contains s "a"   # => true
+#     set.contains s "z"   # => false
+public def contains :: fun (set a) a -> bool where (hash a) = fun s x {
+	dict.contains-key (backing s) x
+}
+
+# How many elements the set holds.
+#
+#     set.size (set.from-list [1, 2, 2, 3])   # => 3
+public def size :: fun (set a) -> int = fun s {
+	dict.size (backing s)
+}
+
+# Reports whether the set has no elements.
+#
+#     set.is-empty (set.empty ())      # => true
+#     set.is-empty (set.single 1)      # => false
+public def is-empty :: fun (set a) -> bool = fun s {
+	dict.size (backing s) == 0
+}
+
+# The set's elements as a list, in an arbitrary order.
+#
+#     set.to-list (set.from-list [3, 1, 2])   # => [1, 2, 3] in some order
+public def to-list :: fun (set a) -> list a = fun s {
+	dict.keys (backing s)
+}
+
+# The union of two sets: every element that's in either one.
+#
+#     set.union (set.from-list [1, 2]) (set.from-list [2, 3])   # => {1, 2, 3}
+public def union :: fun (set a) (set a) -> set a where (hash a) = fun a b {
+	set.set-of (dict.merge (backing a) (backing b))
+}
+
+# The intersection of two sets: only the elements that are in both.
+#
+#     set.intersection (set.from-list [1, 2, 3]) (set.from-list [2, 3, 4])   # => {2, 3}
+public def intersection :: fun (set a) (set a) -> set a where (hash a) = fun a b {
+	set.set-of (dict.filter (backing a) fun k _v {
+		contains b k
+	})
+}
+
+# The difference of two sets: the elements of `a` that are not in `b`.
+#
+#     set.difference (set.from-list [1, 2, 3]) (set.from-list [2, 3])   # => {1}
+public def difference :: fun (set a) (set a) -> set a where (hash a) = fun a b {
+	set.set-of (dict.filter (backing a) fun k _v {
+		!contains b k
+	})
+}
+
+# Reports whether every element of `a` is also in `b`.
+#
+#     set.subset-of (set.from-list [1, 2]) (set.from-list [1, 2, 3])   # => true
+#     set.subset-of (set.from-list [1, 4]) (set.from-list [1, 2, 3])   # => false
+public def subset-of :: fun (set a) (set a) -> bool where (hash a) = fun a b {
+	list.all (to-list a) fun x {
+		contains b x
+	}
+}
+
+# Reports whether every element of `b` is also in `a` (the flip side of
+# `subset-of`).
+#
+#     set.superset-of (set.from-list [1, 2, 3]) (set.from-list [1, 2])   # => true
+public def superset-of :: fun (set a) (set a) -> bool where (hash a) = fun a b {
+	subset-of b a
+}
+
+# Reports whether two sets share no elements at all.
+#
+#     set.disjoint (set.from-list [1, 2]) (set.from-list [3, 4])   # => true
+#     set.disjoint (set.from-list [1, 2]) (set.from-list [2, 3])   # => false
+public def disjoint :: fun (set a) (set a) -> bool where (hash a) = fun a b {
+	list.all (to-list a) fun x {
+		!contains b x
+	}
+}
+
+# Reports whether two sets hold exactly the same elements.
+#
+#     set.equals (set.from-list [1, 2, 3]) (set.from-list [3, 2, 1])   # => true
+#     set.equals (set.from-list [1, 2]) (set.from-list [1, 2, 3])      # => false
+public def equals :: fun (set a) (set a) -> bool where (hash a) = fun a b {
+	size a == size b && subset-of a b
+}
+
+# Returns a new set with `f` applied to every element. Distinct elements
+# can collide under `f`, so the result may be smaller than the input.
+#
+#     set.map (set.from-list [1, 2, 3]) (fun x { x * x })   # => {1, 4, 9}
+public def map :: fun (set a) (fun a -> b) -> set b where (hash b) = fun s f {
+	list.fold (to-list s) (empty ()) fun acc x {
+		insert acc (f x)
+	}
+}
+
+# Returns a new set with only the elements for which `pred` answers true.
+#
+#     set.filter (set.from-list [1, 2, 3, 4]) (fun x { x % 2 == 0 })   # => {2, 4}
+public def filter :: fun (set a) (fun a -> bool) -> set a = fun s pred {
+	set.set-of (dict.filter (backing s) fun k _v {
+		pred k
+	})
+}
+
+# Combines the elements into a single value, starting from `acc` and folding
+# in one element at a time. Order is unspecified, so prefer a `f` that doesn't
+# depend on it (a commutative combine like `+`, `union`, `&&`).
+#
+#     set.fold (set.from-list [1, 2, 3, 4]) 0 (fun acc x { acc + x })   # => 10
+public def fold :: fun (set a) b (fun b a -> b) -> b = fun s acc f {
+	list.fold (to-list s) acc f
+}
+
+# Runs `f` on every element for its side effect, discarding the results.
+#
+#     set.each (set.from-list ["a", "b"]) (fun x { io.print x })
+public def each :: fun (set a) (fun a -> b) -> nothing = fun s f {
+	list.each (to-list s) f
+}
+
+# Reports whether any element satisfies `pred` (false for an empty set).
+#
+#     set.any (set.from-list [1, 2, 3]) (fun x { x > 2 })   # => true
+public def any :: fun (set a) (fun a -> bool) -> bool = fun s pred {
+	list.any (to-list s) pred
+}
+
+# Reports whether every element satisfies `pred` (true for an empty set).
+#
+#     set.all (set.from-list [2, 4, 6]) (fun x { x % 2 == 0 })   # => true
+public def all :: fun (set a) (fun a -> bool) -> bool = fun s pred {
+	list.all (to-list s) pred
+}

@@ -1,0 +1,92 @@
+use std/assert
+use std/list
+use std/queue
+use std/test
+
+def tests :: test.suite = [
+	test.case "empty queue is empty with size 0" fun {
+		# --- empty / size / is-empty ---
+
+		let q = queue.empty ()
+		assert.all [
+			assert.equals (queue.size q) 0,
+			assert.is-true (queue.is-empty q),
+			assert.equals (queue.dequeue q) none,
+			assert.equals (queue.peek q) none,
+		]
+	},
+	test.case "enqueue then dequeue is FIFO" fun {
+		# --- enqueue / dequeue ---
+
+		let q = queue.empty ()
+		queue.enqueue q 1
+		queue.enqueue q 2
+		queue.enqueue q 3
+		assert.all [
+			assert.equals (queue.dequeue q) (some 1),
+			assert.equals (queue.dequeue q) (some 2),
+			assert.equals (queue.dequeue q) (some 3),
+			assert.equals (queue.dequeue q) none,
+		]
+	},
+	test.case "size tracks enqueues and dequeues" fun {
+		let q = queue.empty ()
+		queue.enqueue q 1
+		queue.enqueue q 2
+		let after-two = queue.size q
+		let _ = queue.dequeue q
+		assert.all [assert.equals after-two 2, assert.equals (queue.size q) 1]
+	},
+	test.case "peek shows the oldest without removing it" fun {
+		# --- peek ---
+
+		let q = queue.from-list [1, 2]
+		assert.all [
+			assert.equals (queue.peek q) (some 1),
+			assert.equals (queue.peek q) (some 1),
+			assert.equals (queue.size q) 2,
+		]
+	},
+	test.case "from-list preserves order" fun {
+		# --- from-list / to-list ---
+
+		let q = queue.from-list [10, 20, 30]
+		assert.equals (queue.to-list q) [10, 20, 30]
+	},
+	test.case "to-list is non-destructive" fun {
+		let q = queue.from-list [1, 2, 3]
+		let snap = queue.to-list q
+		assert.all [assert.equals snap [1, 2, 3], assert.equals (queue.size q) 3]
+	},
+	test.case "interleaved enqueue and dequeue stays FIFO" fun {
+		# --- forces multiple back->front rebalances ---
+
+		let q = queue.empty ()
+		let out = []
+		queue.enqueue q 1
+		queue.enqueue q 2
+		let _ = queue.dequeue q
+		queue.enqueue q 3
+		let _ = queue.dequeue q
+		queue.enqueue q 4
+		queue.enqueue q 5
+		while queue.dequeue q is some v { list.push out v }
+		assert.equals out [3, 4, 5]
+	},
+	test.case "to-list reflects elements split across front and back" fun {
+		let q = queue.from-list [1, 2, 3]
+		# dequeue forces a rebalance, leaving elements in `front`...
+		let _ = queue.dequeue q
+		# ...then enqueue adds to `back`, so to-list spans both halves.
+		queue.enqueue q 4
+		assert.equals (queue.to-list q) [2, 3, 4]
+	},
+	test.case "reuse after draining to empty" fun {
+		let q = queue.from-list [1, 2]
+		let _ = queue.dequeue q
+		let _ = queue.dequeue q
+		assert.is-true (queue.is-empty q)
+		queue.enqueue q 9
+		assert.all [assert.is-false (queue.is-empty q), assert.equals (queue.dequeue q) (some 9)]
+	},
+]
