@@ -13,7 +13,7 @@
 #   - no-Origin / curl-shaped request -> 200 (non-browser, out of CSRF scope)
 use std/dict
 use std/router
-use std/rpc
+use std/sys/rpc
 use std/string
 use std/task
 use std/sys/http

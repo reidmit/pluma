@@ -1,4 +1,4 @@
-# std/rpc/web -- the browser transport for remote calls.
+# std/web/rpc -- the browser transport for remote calls.
 #
 # Installs a sender that POSTs each encoded call to `<origin>/rpc/<route>` via the
 # host page's `fetch` (std/web/fetch), mapping the HTTP outcome to reply bytes or a
@@ -30,7 +30,7 @@ def send :: fun string bytes (dict string string) -> task bytes = fun route body
 # server SSE frame as one stream element. The dual of `send` for `stream R`
 # endpoints. Transport/non-200 faults ride the stream as task failures (v1: not
 # yet remapped to a typed `rpc-error`, unlike the unary path). Mirrors
-# `std/rpc/sys`'s `send-stream`.
+# `std/sys/rpc`'s `send-stream`.
 def send-stream :: fun string bytes (dict string string) -> stream bytes = fun route body headers {
 	fetch.fetch-stream (rpc.server-origin ++ "/rpc/" ++ route) headers body
 }

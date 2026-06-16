@@ -10,7 +10,7 @@
 # (the build bakes the identical value into the client stub and this dispatcher);
 # if the fingerprint algorithm changes, update it here and re-accept the snapshot.
 use std/dict
-use std/rpc
+use std/sys/rpc
 use std/task
 use std/sys/http
 use std/sys/net

@@ -11,7 +11,7 @@
 
 use std/css
 use std/hex
-use std/rpc
+use std/sys/rpc
 use std/signal
 use std/string
 use std/task

@@ -1,4 +1,4 @@
-# std/rpc/context -- the ambient request context a handler reads.
+# std/sys/rpc/context -- the ambient request context a handler reads.
 #
 # A `remote def`'s contract is the pure logical signature (`fun A.. -> task R`) --
 # it has no `request` parameter, because the transport facts a handler sometimes

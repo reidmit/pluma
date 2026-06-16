@@ -627,7 +627,7 @@ impl<'a> Lowerer<'a> {
 		result: VarId,
 		ep: &compiler::rpc::RpcEndpointMeta,
 	) -> Result<(), String> {
-		let fpok_fn = self.rpc_global("std/rpc", "fingerprint-ok", SYNTHETIC)?;
+		let fpok_fn = self.rpc_global("std/sys/rpc", "fingerprint-ok", SYNTHETIC)?;
 		let fpok = self.emit_let(
 			Rvalue::CallClosure(
 				fpok_fn,
@@ -644,7 +644,7 @@ impl<'a> Lowerer<'a> {
 
 		// else: stale/missing fingerprint → 409.
 		let else_saved = self.take_stmts();
-		let skew = self.rpc_global("std/rpc", "skew-response", SYNTHETIC)?;
+		let skew = self.rpc_global("std/sys/rpc", "skew-response", SYNTHETIC)?;
 		let resp = self.emit_let(
 			Rvalue::CallClosure(skew, vec![Atom::Const(Const::Unit)]),
 			SYNTHETIC,
@@ -856,7 +856,7 @@ impl<'a> Lowerer<'a> {
 			compiler::rpc::EndpointKind::Unary => "respond",
 			compiler::rpc::EndpointKind::Stream => "respond-stream",
 		};
-		let respond = self.rpc_global("std/rpc", respond_name, SYNTHETIC)?;
+		let respond = self.rpc_global("std/sys/rpc", respond_name, SYNTHETIC)?;
 		let resp = self.emit_let(
 			Rvalue::CallClosure(respond, vec![req.clone(), thunk]),
 			SYNTHETIC,
@@ -3303,7 +3303,7 @@ impl<'a> Lowerer<'a> {
 			None => return Err(format!("module `{}` has no `main` def", main_module)),
 		};
 		if self.is_client_emit() && !self.compiler.rpc_endpoints.is_empty() {
-			if let Some(install) = self.globals.lookup("std/rpc/web", "install") {
+			if let Some(install) = self.globals.lookup("std/web/rpc", "install") {
 				let g = fresh_let(body, next, Rvalue::GlobalRef(install));
 				body.push(Stmt::synthetic(StmtKind::Discard(Rvalue::CallClosure(
 					Atom::Var(g),

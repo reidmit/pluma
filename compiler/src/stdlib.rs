@@ -31,9 +31,6 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std/request", include_str!("../../std/request.pa")),
 		("std/result", include_str!("../../std/result.pa")),
 		("std/rpc", include_str!("../../std/rpc.pa")),
-		("std/rpc/context", include_str!("../../std/rpc/context.pa")),
-		("std/rpc/sys", include_str!("../../std/rpc/sys.pa")),
-		("std/rpc/web", include_str!("../../std/rpc/web.pa")),
 		("std/router", include_str!("../../std/router.pa")),
 		("std/signal", include_str!("../../std/signal.pa")),
 		("std/sql", include_str!("../../std/sql.pa")),
@@ -51,6 +48,11 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std/sys/io", include_str!("../../std/sys/io.pa")),
 		("std/sys/net", include_str!("../../std/sys/net.pa")),
 		("std/sys/process", include_str!("../../std/sys/process.pa")),
+		("std/sys/rpc", include_str!("../../std/sys/rpc.pa")),
+		(
+			"std/sys/rpc/context",
+			include_str!("../../std/sys/rpc/context.pa"),
+		),
 		(
 			"std/sys/terminal",
 			include_str!("../../std/sys/terminal.pa"),
@@ -58,6 +60,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std/web/dom", include_str!("../../std/web/dom.pa")),
 		("std/web/fetch", include_str!("../../std/web/fetch.pa")),
 		("std/web/render", include_str!("../../std/web/render.pa")),
+		("std/web/rpc", include_str!("../../std/web/rpc.pa")),
 		("std/web/sandbox", include_str!("../../std/web/sandbox.pa")),
 	]
 }

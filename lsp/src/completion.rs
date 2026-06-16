@@ -449,8 +449,8 @@ fn module_path_completions(
 
 	let mut out = Vec::new();
 	for (segment, is_leaf, is_dir) in next_segments(&names, dir_prefix) {
-		// A segment can be both: `std/rpc` is an importable module *and* has
-		// children (`std/rpc/context`). Offer the leaf and the directory as
+		// A segment can be both: `std/sys/rpc` is an importable module *and* has
+		// children (`std/sys/rpc/context`). Offer the leaf and the directory as
 		// distinct items so neither path is hidden.
 		if is_leaf {
 			let mut c = Completion::new(segment.clone(), CompletionKind::Module, None, None);
@@ -641,9 +641,9 @@ mod tests {
 
 	#[test]
 	fn module_that_is_both_leaf_and_dir() {
-		// `std/rpc` is importable *and* has children (`std/rpc/context`), so it
-		// shows up twice: the module `rpc` and the directory `rpc/`.
-		let lvl = complete(b"use std/\n", &PathBuf::from("/proj/main.pa"), 0, 8);
+		// `std/sys/rpc` is importable *and* has children (`std/sys/rpc/context`), so
+		// it shows up twice: the module `rpc` and the directory `rpc/`.
+		let lvl = complete(b"use std/sys/\n", &PathBuf::from("/proj/main.pa"), 0, 12);
 		let labels: Vec<&str> = lvl.iter().map(|c| c.label.as_str()).collect();
 		assert!(
 			labels.contains(&"rpc"),

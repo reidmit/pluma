@@ -14,6 +14,7 @@ use std/stream
 use std/task
 use std/sys/http
 use std/sys/net
+use std/sys/rpc as sysrpc
 use api
 
 def route-fp :: string = "3785672902669336212"
@@ -37,7 +38,7 @@ def main = fun {
 	if net.listen "127.0.0.1:0" is ok server {
 		if net.local-addr server is ok addr {
 			scope as s {
-				s.spawn (http.serve-on server rpc.dispatch)
+				s.spawn (http.serve-on server sysrpc.dispatch)
 				rpc.configure-stream fun route body headers {
 					http.fetch-stream ("http://" ++ addr ++ "/rpc/" ++ route) http.method.post headers body
 				}

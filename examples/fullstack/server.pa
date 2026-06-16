@@ -14,7 +14,7 @@
 # fingerprint (rejecting a stale client with a 409), calls the matching handler in
 # `api.pa`, and encodes the reply.
 
-use std/rpc
+use std/sys/rpc
 use std/task
 use std/sys/http
 use ui

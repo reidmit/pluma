@@ -1,13 +1,27 @@
-# std/rpc/sys -- the native transport for remote calls.
+# std/sys/rpc -- the native-side RPC runtime.
 #
-# Installs a sender that POSTs each encoded call to `<origin>/rpc/<route>` over
-# std/sys/http, mapping the HTTP outcome to reply bytes or a typed `rpc-error`.
-# This module imports `std/sys/*`, so it only enters a native build (the neutral
-# `std/rpc` never imports a target module). The mirror of `std/rpc/web`.
+# Two halves, both host-specific (they speak `std/sys/http`), so this module only
+# enters a native build -- the neutral `std/rpc` core never imports a target
+# module:
+#
+#   - the server runtime: route an inbound `/rpc/<route>` request to the matching
+#     handler, guarding the per-route fingerprint and the cross-origin policy, and
+#     shape each handler's outcome (or `reject`) into an HTTP response. The
+#     compiler synthesizes `dispatch`'s body from the discovered `remote def`s.
+#   - the outbound transport: POST each encoded call to `<origin>/rpc/<route>`.
+#     The mirror of `std/web/rpc`, installed as the ambient sender at startup.
 use std/rpc
+use std/dict
+use std/list
+use std/local
+use std/string
 use std/stream
 use std/task
+use std/router
 use std/sys/http
+use std/sys/rpc/context
+
+# --- outbound transport --------------------------------------------------
 
 # POST the encoded body and translate the reply: 200 → bytes; any other status →
 # the matching typed `rpc-error` (`rpc.status-error`); a transport-level failure →
@@ -38,4 +52,245 @@ def send-stream :: fun string bytes (dict string string) -> stream bytes = fun r
 public def install :: fun nothing -> nothing = fun {
 	rpc.configure send
 	rpc.configure-stream send-stream
+}
+
+# --- fingerprint guard ---------------------------------------------------
+
+# Whether a request carries the per-route fingerprint this build expects. The
+# synthesized dispatcher checks it before decoding: a stale client (built against
+# drifted endpoint types) fails the check and gets a schema-skew response, so a
+# positional decode never runs against mismatched types.
+public def fingerprint-ok :: fun http.request string -> bool = fun req expected {
+	when dict.lookup req.headers "x-rpc-fingerprint" is some fp {
+		fp == expected
+	} is none {
+		false
+	}
+}
+
+# The response a dispatcher returns on a fingerprint mismatch (or a missing one):
+# 409, the status the client maps back to `schema-skew`.
+public def skew-response :: fun nothing -> http.response = fun {
+	http.text 409 "rpc: schema mismatch"
+}
+
+# --- handler invocation: ambient context + reject ------------------------
+
+# A handler aborts with a specific HTTP status by `reject`ing. The status can't
+# ride the (erased) task-failure value safely -- the dispatcher would have to
+# pattern-match an arbitrary failure, and matching a non-variant value traps -- so
+# it rides a per-request `ref` the dispatcher binds via `local`: `reject` writes
+# the status into it, then fails the task so the handler unwinds. `respond` reads
+# the ref after catching the failure, never inspecting the failure value itself.
+def reject-status :: local (ref (option int)) = local.new (ref.new none)
+
+# Aborts the current handler with `status` as the HTTP response code (which the
+# client maps back to an `rpc-error` -- 401 -> `unauthorized`, 403 -> `forbidden`,
+# ...). The in-handler authorization guard an app builds on `context`:
+#
+#     public def require-auth :: fun nothing -> task nothing = fun {
+#         when context.header "authorization" is some _tok { task.return () }
+#         is none { rpc.reject 401 }
+#     }
+public def reject :: fun int -> task a = fun status {
+	ref.set (local.get reject-status) (some status)
+	task.fail "rpc-reject"
+}
+
+# Runs one endpoint invocation and shapes its outcome into an HTTP response. The
+# synthesized dispatcher hands us the inbound request and a function that, when run,
+# calls the real handler and wire-encodes its result to bytes. We bind the request
+# as ambient `context` (so the handler can read headers) and a fresh `reject` box,
+# run the handler reifying any failure with `task.attempt` -- WITHOUT inspecting
+# the failure value, since matching an erased failure would trap -- and shape the
+# outcome: 200 + bytes on success, the rejected status on a `reject`, 500 on any
+# other failure. Running `produce` *inside* the bindings is what makes
+# `context`/`reject` visible to the handler (a synchronous read sees the binding
+# directly; an awaited one sees it reinstalled on resume).
+public def respond :: fun http.request (fun nothing -> task bytes) -> task http.response = fun req produce {
+	context.with-request req fun {
+		let box = ref.new none
+		local.with reject-status box fun {
+			try outcome = task.attempt (produce ())
+			when outcome is ok b {
+				task.return {status: 200, headers: dict.empty (), body: b, stream-body: none}
+			} is err _e {
+				when ref.get box is some status {
+					task.return (http.text status "")
+				} is none {
+					task.return (http.text 500 "rpc: handler failed")
+				}
+			}
+		}
+	}
+}
+
+# Runs one *streaming* endpoint invocation and shapes it into a streaming HTTP
+# response. The synthesized dispatcher hands us the request and a function that, when
+# run, calls the real handler and wire-encodes each element to bytes (a `stream
+# bytes`). We bind the request as ambient `context` and build the response inside
+# that binding, so the handler's *synchronous* context reads at stream
+# construction (e.g. an auth check that returns a fault stream) see it. v1 note:
+# the per-element pulls run later, when the server writes each frame, so an
+# *awaited* `context` read inside the producer is not bound -- a streaming
+# handler's rejection rides the stream's fault channel (a `fault` frame), not an
+# HTTP status, because the 200 head is already on the wire.
+public def respond-stream :: fun http.request (fun nothing -> stream bytes) -> task http.response = fun req produce {
+	context.with-request req fun {
+		let events = produce ()
+		task.return (http.stream-response 200 stream-headers events)
+	}
+}
+
+# The headers a streaming reply carries: it's an SSE event stream.
+def stream-headers :: dict string string = dict.from-entries [("content-type", "text/event-stream")]
+
+# The server-side RPC handler: routes a `/rpc/<route>` request to the matching
+# endpoint's real handler, guarding the per-route fingerprint and decoding /
+# encoding the wire payload. The compiler synthesizes this body from the
+# discovered `remote def`s; with none, it's an always-404 router.
+public def dispatch :: fun http.request -> task http.response = built-in "rpc-dispatch"
+
+# --- cross-origin (CSRF) gate --------------------------------------------
+#
+# RPC endpoints are public HTTP: we can't prove a call came from *our* code
+# (anything the browser sends, curl can replay), so this never tries to. What
+# it does enforce is the real framework-level threat -- another *website*
+# riding a victim's browser to call our endpoints (CSRF). A browser tags every
+# request with where it came from; we refuse the ones it tags as cross-site.
+# This is orthogonal to app-auth (who the user is): it only answers "which site
+# is calling". Non-browser clients (curl, server-to-server) carry no such tag
+# and pass the gate -- the per-route fingerprint and any app-auth still apply.
+
+# Which browser origins may call the mount. `same-origin` (the zero-config
+# default) admits only our own page; `allow` adds an explicit foreign allowlist
+# (and answers their CORS preflights) for the api-on-another-host case.
+public enum policy {
+	same-origin
+	allow (list string)
+}
+
+# Strip an Origin down to its host[:port] for comparison against the Host
+# header: "https://example.com:8080/" -> "example.com:8080".
+def origin-host :: fun string -> string = fun o {
+	let after-scheme = when list.head (list.drop (string.split o "://") 1) is some rest {
+		rest
+	} is none {
+		o
+	}
+	when list.head (string.split after-scheme "/") is some h {
+		h
+	} is none {
+		after-scheme
+	}
+}
+
+# Will a browser vouch for this as same-origin? Trust `Sec-Fetch-Site` first --
+# a forbidden header, so page JS can't forge it -- and fall back to matching
+# Origin's host against Host for browsers that don't send it. A request with no
+# Origin and no Sec-Fetch-Site is a non-browser client: out of CSRF scope, so
+# admitted here.
+def same-origin :: fun http.request -> bool = fun req {
+	when dict.lookup req.headers "sec-fetch-site" is some site {
+		site == "same-origin" || site == "none"
+	} is none {
+		when dict.lookup req.headers "origin" is some o {
+			when dict.lookup req.headers "host" is some h {
+				origin-host o == h
+			} is none {
+				false
+			}
+		} is none {
+			true
+		}
+	}
+}
+
+# Does `pol` admit `req`? Same-origin always; `allow` also admits a listed Origin.
+def admits :: fun policy http.request -> bool = fun pol req {
+	if same-origin req {
+		true
+	} else {
+		when pol is policy.allow origins {
+			when dict.lookup req.headers "origin" is some o {
+				list.contains origins o
+			} is none {
+				false
+			}
+		} is policy.same-origin {
+			false
+		}
+	}
+}
+
+# Tag an admitted cross-origin reply with the Origin the browser must see to let
+# the page read the response. Only ever echoes an Origin we've already admitted.
+def with-cors :: fun policy http.request http.response -> http.response = fun pol req resp {
+	when dict.lookup req.headers "origin" is some o {
+		if admits pol req {
+			{
+				...resp,
+				headers: dict.insert (dict.insert resp.headers "access-control-allow-origin" o) "vary" "Origin",
+			}
+		} else {
+			resp
+		}
+	} is none {
+		resp
+	}
+}
+
+# The CORS preflight reply for an admitted OPTIONS request: 204 plus the headers
+# the browser checks before letting the real POST (with its custom fingerprint
+# header) go through. Reached only after `admits`, so echoing Origin is safe.
+def preflight :: fun http.request -> http.response = fun req {
+	let origin = dict.lookup req.headers "origin" ?? ""
+	{
+		status: 204,
+		headers: dict.from-entries [
+			("access-control-allow-origin", origin),
+			("access-control-allow-methods", "POST, OPTIONS"),
+			("access-control-allow-headers", "content-type, x-rpc-fingerprint"),
+			("vary", "Origin"),
+		],
+		body: string.to-bytes "",
+		stream-body: none,
+	}
+}
+
+# Wraps a dispatcher with the cross-origin gate: reject calls a browser won't
+# vouch for (403), answer CORS preflights for admitted origins, and tag real
+# replies so an admitted cross-origin page can read them.
+public def guard :: fun policy (fun http.request -> task http.response) -> (fun http.request -> task http.response) = fun pol inner {
+	fun req {
+		if admits pol req {
+			if req.method is http.method.options {
+				task.return (preflight req)
+			} else {
+				try resp = inner req
+				task.return (with-cors pol req resp)
+			}
+		} else {
+			task.return (http.text 403 "rpc: cross-origin request rejected")
+		}
+	}
+}
+
+# `dispatch` as a mountable route under `/rpc`, behind the same-origin gate --
+# drop it into a `std/router` route list alongside hand-written endpoints. The
+# prefix is a build constant shared with the client stubs.
+public def mounted :: router.route = router.prefix "/rpc" (guard policy.same-origin dispatch)
+
+# `mounted` with an explicit cross-origin policy, for an api served from a
+# different host than its frontend:
+#
+#     router.serve addr [rpc.mounted-with (rpc.policy.allow ["https://app.example.com"])]
+public def mounted-with :: fun policy -> router.route = fun pol {
+	router.prefix "/rpc" (guard pol dispatch)
+}
+
+# The pure-RPC one-liner: serve every endpoint and nothing else. Sugar over
+# mounting `dispatch` in an otherwise-empty router.
+public def serve :: fun string -> task nothing = fun addr {
+	router.serve addr [mounted]
 }

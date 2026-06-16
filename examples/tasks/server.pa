@@ -3,7 +3,7 @@
 #   - everything else → `rpc.dispatch`, the route table the compiler synthesizes
 #                       from `api.pa`'s `remote def`s (handles the `/rpc/*` calls).
 
-use std/rpc
+use std/sys/rpc
 use std/task
 use std/sys/http
 use ui

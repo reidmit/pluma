@@ -324,7 +324,7 @@ impl Compiler {
 		// any artifact that doesn't install it.
 		let emits_client = self.fullstack || self.target == Some(crate::platform::Target::Web);
 		if emits_client && !self.rpc_endpoints.is_empty() {
-			self.load_module("std/rpc/web", &mut visiting);
+			self.load_module("std/web/rpc", &mut visiting);
 		}
 
 		self.gate_by_reachability();
