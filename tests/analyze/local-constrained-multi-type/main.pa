@@ -1,0 +1,9 @@
+# A local `let` bound to a constrained value binds monomorphically (a local has
+# no dict parameter to thread the dictionary through). Used at one type it
+# resolves fine; used at two types the single binding can't satisfy both, so it
+# is an ordinary type-mismatch — not a runtime trap.
+def main = fun {
+	let cmp = compare
+	print (cmp 1 2)
+	print (cmp 1.0 2.0)
+}

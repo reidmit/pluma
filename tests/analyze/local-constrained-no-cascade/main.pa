@@ -1,0 +1,12 @@
+# An unresolved local constrained binding only reports an ambiguity when the
+# program is otherwise well-typed. Here an unrelated arity error already fails
+# the program, so the stranded `cmp` dispatch is left alone rather than piling a
+# noisy cascade onto half-typed code — only the arity error is reported.
+def twice = fun a b {
+	a
+}
+
+def main = fun {
+	let cmp = compare
+	twice 1
+}

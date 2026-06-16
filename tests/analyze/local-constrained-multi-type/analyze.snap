@@ -1,0 +1,11 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Type mismatch: expected `float`, but found `int`.
+> 8 | 	print (cmp 1.0 2.0)
+              ^^^^^^^^^^^
+
+error: Type mismatch: expected `float`, but found `int`.
+> 8 | 	print (cmp 1.0 2.0)
+              ^^^^^^^^^^^

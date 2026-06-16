@@ -1,0 +1,8 @@
+# A local `let` bound to a constrained value that is never used at a concrete
+# type leaves its dispatch unresolved. Rather than fabricate a phantom dict
+# parameter on `main` (a runtime trap), this is reported as an ambiguous
+# dispatch — the user is told to add a type annotation.
+def main = fun {
+	let cmp = compare
+	print "nothing pins cmp to a type"
+}

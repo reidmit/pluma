@@ -1,0 +1,15 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+warning: Name `b` is never used.
+> 5 | def twice = fun a b {
+                        ^
+
+warning: Name `cmp` is never used.
+> 10 | 	let cmp = compare
+            ^^^
+
+error: Parameter count mismatch: expected 2, but found 1.
+> 11 | 	twice 1
+        ^^^^^

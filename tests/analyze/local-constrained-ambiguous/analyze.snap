@@ -1,0 +1,11 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+warning: Name `cmp` is never used.
+> 6 | 	let cmp = compare
+           ^^^
+
+error: Can't resolve trait `ord` dispatch on type `a`: the type contains unbound type variables.
+> 5 | def main = fun {
+          ^^^^
