@@ -29,7 +29,7 @@ format-check:
 # format the baked-in stdlib + prelude .pa sources in place (modules,
 # their *.test.pa suites, prelude, and the stdlib package marker)
 format-stdlib:
-  @ cargo run --bin pluma --quiet -- format $(find compiler/src/stdlib compiler/src/prelude.pa -name "*.pa")
+  @ cargo run --bin pluma --quiet -- format $(find std compiler/src/prelude.pa -name "*.pa")
 
 # build the cli in debug mode; produces target/debug/pluma
 build:
@@ -80,10 +80,10 @@ test:
 test-write:
   @ if command -v cargo-nextest >/dev/null 2>&1; then INSTA_UPDATE=always cargo nextest run -p tests; else INSTA_UPDATE=always cargo test -p tests; fi
 
-# run the stdlib's own Pluma test suite (compiler/src/stdlib/*.test.pa)
+# run the stdlib's own Pluma test suite (std/*.test.pa)
 # through `pluma test` — exercises the stdlib and the `std.test` runner under V8.
 test-stdlib:
-  @ cargo run --bin pluma --quiet -- test compiler/src/stdlib
+  @ cargo run --bin pluma --quiet -- test std
 
 # run the editor-grammar regression tests: TextMate (vsix/) + Tree-sitter
 # (tree-sitter/: corpus tests + parse every tests/run fixture)
