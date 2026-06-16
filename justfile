@@ -101,7 +101,7 @@ vs-install: install
   cp LICENSE vsix/LICENSE
   cd vsix && npm install --silent \
     && rm -rf dist \
-    && node_modules/.bin/esbuild src/extension.ts --outdir=dist --platform=node --format=cjs \
+    && node_modules/.bin/esbuild src/extension.ts --outdir=dist --bundle --minify --external:vscode --platform=node --format=cjs \
     && npx --yes @vscode/vsce package -o pluma-language-client.vsix \
     && code --install-extension pluma-language-client.vsix --force
 
@@ -111,6 +111,8 @@ vs-extension:
   rm -rf vsix/dist
   vsix/node_modules/.bin/esbuild vsix/src/extension.ts \
     --outdir=vsix/dist \
+    --bundle \
+    --external:vscode \
     --sourcemap \
     --platform=node \
     --format=cjs
