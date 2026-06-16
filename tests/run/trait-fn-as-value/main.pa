@@ -10,9 +10,7 @@ def step = fun acc x {
 	acc + x
 }
 
-def cmp = fun a b {
-	compare a b
-}
+def cmp = compare
 
 # A polymorphic wrapper: `step`'s dict here is forwarded from sum-with's own
 # hidden dict param rather than resolved to a concrete instance.

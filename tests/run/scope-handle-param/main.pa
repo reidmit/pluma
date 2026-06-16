@@ -5,7 +5,7 @@
 use std/task
 
 def sleeper = fun ms n {
-	try _ = task.sleep ms
+	try task.sleep ms
 	task.return n
 }
 
@@ -35,9 +35,9 @@ def spawn-pair :: fun scope-handle (task int) (task int) -> task (int, int) = fu
 
 def collect = fun {
 	manual scope as s {
-		let _ = s.spawn (sleeper 1ms 10)
-		let _ = s.spawn (sleeper 2ms 20)
-		let _ = s.spawn (sleeper 1ms 12)
+		s.spawn (sleeper 1ms 10)
+		s.spawn (sleeper 2ms 20)
+		s.spawn (sleeper 1ms 12)
 		drain-sum s 0
 	}
 }

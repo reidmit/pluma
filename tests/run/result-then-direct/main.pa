@@ -3,9 +3,7 @@
 
 def main = fun {
 	# ok input + continuation that passes the value through
-	let a = result.then (ok 5) fun n {
-		ok n
-	}
+	let a = result.then (ok 5) ok
 	when a is ok v {
 		print v
 	} is err e {
@@ -13,9 +11,7 @@ def main = fun {
 	}
 
 	# err input -> continuation skipped, err passes through
-	let b = result.then (err "boom") fun n {
-		ok n
-	}
+	let b = result.then (err "boom") ok
 	when b is ok v {
 		print v
 	} is err e {
@@ -23,9 +19,7 @@ def main = fun {
 	}
 
 	# Chained: ok -> ok -> ok
-	let c = result.then (result.then (ok 1) fun n { ok n }) fun n {
-		ok n
-	}
+	let c = result.then (result.then (ok 1) ok) ok
 	when c is ok v {
 		print v
 	} is err e {

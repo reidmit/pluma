@@ -32,13 +32,13 @@ def main = fun {
 	if net.listen "127.0.0.1:0" is ok server {
 		if net.local-addr server is ok addr {
 			scope as s {
-				let _ = s.spawn (http.serve-on server rpc.dispatch)
+				s.spawn (http.serve-on server rpc.dispatch)
 				rpc.configure-stream fun route body headers {
 					http.fetch-stream ("http://" ++ addr ++ "/rpc/" ++ route) http.method.post headers body
 				}
 
 				let ticks = decode-ints (rpc.call-stream "api.ticks" route-fp (wire.encode 4))
-				try _ = stream.for-each ticks fun n {
+				try stream.for-each ticks fun n {
 					print "tick $(to-string n)"
 					task.return ()
 				}

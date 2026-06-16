@@ -14,7 +14,7 @@ def guarded = fun {
 
 def slow-child = fun {
 	defer print "child-cleanup-ran"
-	try _ = task.sleep 5s
+	try task.sleep 5s
 	task.return 1
 }
 

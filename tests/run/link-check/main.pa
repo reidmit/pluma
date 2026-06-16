@@ -82,7 +82,7 @@ def check :: fun string string -> task (string, outcome) e = fun base path {
 
 def handler :: fun http.request -> task http.response = fun req {
 	if string.contains req.path "slow" {
-		try _ = task.sleep 1s
+		try task.sleep 1s
 		task.return (http.text 200 "eventually")
 	} else if string.contains req.path "redirect" {
 		task.return (http.text 301 "moved")
@@ -116,12 +116,12 @@ def main = fun {
 		if net.local-addr server is ok addr {
 			let base = "http://" ++ addr
 			scope as s {
-				let _ = s.spawn (http.serve-on server handler)
+				s.spawn (http.serve-on server handler)
 				try results = task.pool 3 (list.map paths fun p {
 					check base p
 				})
 				s.cancel ()
-				let _ = report results
+				report results
 				task.return 0
 			}
 		} else {

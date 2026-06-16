@@ -23,7 +23,7 @@ def main = fun {
 
 	# read it back
 	when fs.read-text-sync path is ok contents {
-		let _ = io.write contents
+		io.write contents
 	} is err msg {
 		print "read err: $(msg)"
 	}

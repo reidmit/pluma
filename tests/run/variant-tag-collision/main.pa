@@ -27,7 +27,7 @@ def describe = fun s {
 }
 
 def main = fun {
-	try _ = task.return 0
+	try task.return 0
 	print (describe status.idle)
 	print (describe status.pending)
 	print (describe status.done)

@@ -32,9 +32,9 @@ def call :: fun string string string -> task string = fun addr verb path {
 	try c = net.connect addr
 	when c is ok conn {
 		let raw-req = verb ++ " " ++ path ++ " HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
-		try _ = net.write conn (string.to-bytes raw-req)
+		try net.write conn (string.to-bytes raw-req)
 		try resp = drain conn (string.to-bytes "")
-		let _ = net.close conn
+		net.close conn
 		when resp is ok raw {
 			let text = bytes.to-string raw ?? "<bad utf8>"
 			let status = list.head (string.split text "\r\n") ?? ""
@@ -56,7 +56,7 @@ def main = fun {
 	if net.listen "127.0.0.1:0" is ok server {
 		if net.local-addr server is ok addr {
 			scope as s {
-				let _ = s.spawn (http.serve-on server app)
+				s.spawn (http.serve-on server app)
 				try a = call addr "GET" "/health" # 200, "ok"
 				try b = call addr "POST" "/echo" # 200, posted
 				try c = call addr "GET" "/missing" # 404 fallback

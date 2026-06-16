@@ -7,16 +7,18 @@ use std/view
 use std/sys/io
 
 def field :: fun nothing -> view = fun {
-	view.form [view.on-submit fun { io.print "submit" }] [
-		view.input [
-			view.input-type "text",
-			view.property "value" "a & b",
-			view.placeholder "name <here>",
-			view.on-input fun s { io.print s },
-			view.on-change fun s { io.print s },
-		] [],
-		view.button [view.on-click fun { io.print "go" }] [view.text "Save"],
-	]
+	using view {
+		.form [.on-submit fun { io.print "submit" }] [
+			.input [
+				.input-type "text",
+				.property "value" "a & b",
+				.placeholder "name <here>",
+				.on-input io.print,
+				.on-change io.print,
+			] [],
+			.button [.on-click fun { io.print "go" }] [.text "Save"],
+		]
+	}
 }
 
 def main = fun {

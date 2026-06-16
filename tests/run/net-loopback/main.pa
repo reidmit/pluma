@@ -14,8 +14,8 @@ def serve-one = fun server {
 	when c is ok conn {
 		try r = net.read conn 1024
 		when r is ok msg {
-			try _ = net.write conn msg
-			let _ = net.close conn
+			try net.write conn msg
+			net.close conn
 			task.return ()
 		} is err e {
 			task.fail e
@@ -29,9 +29,9 @@ def serve-one = fun server {
 def round-trip = fun addr {
 	try c = net.connect addr
 	when c is ok conn {
-		try _ = net.write conn (string.to-bytes "hello over tcp")
+		try net.write conn (string.to-bytes "hello over tcp")
 		try r = net.read conn 1024
-		let _ = net.close conn
+		net.close conn
 		when r is ok reply {
 			task.return (bytes.to-string reply ?? "<bad utf8>")
 		} is err e {
@@ -46,7 +46,7 @@ def main = fun {
 	if net.listen "127.0.0.1:0" is ok server {
 		if net.local-addr server is ok addr {
 			scope as s {
-				let _ = s.spawn (serve-one server)
+				s.spawn (serve-one server)
 				try reply = round-trip addr
 				print reply
 				task.return 0

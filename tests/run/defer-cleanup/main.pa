@@ -33,9 +33,9 @@ def cond = fun flag {
 }
 
 def main = fun {
-	let _ = run-it true
+	run-it true
 	print "---"
-	let _ = run-it false
+	run-it false
 	print "==="
 	cond true
 	print "---"

@@ -6,8 +6,6 @@ def main = fun {
 	}
 
 	# each returns nothing — `print` it to confirm
-	let result = list.each ["a", "b"] fun s {
-		print s
-	}
+	let result = list.each ["a", "b"] print
 	print result
 }

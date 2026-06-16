@@ -11,9 +11,7 @@ opaque enum counter {
 	mk int
 }
 
-public def counter-of :: fun int -> counter = fun n {
-	counter.mk n
-}
+public def counter-of :: fun int -> counter = counter.mk
 
 public def value-of :: fun counter -> int = fun c {
 	when c is counter.mk n {

@@ -24,6 +24,6 @@ def main = fun {
 	print (time.to-unix-nanos (time.now ()) > 1577836800000000000)
 	# monotonic advances across a sleep (sleep blocks; the clock has ns resolution).
 	let m1 = time.monotonic ()
-	let _ = time.sleep 5ms
+	time.sleep 5ms
 	print (time.as-nanos (time.monotonic ()) > time.as-nanos m1)
 }

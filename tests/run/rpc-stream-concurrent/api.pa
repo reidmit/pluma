@@ -17,7 +17,7 @@ public remote def ticks :: fun int -> stream int = fun n {
 public remote def slow :: fun int -> stream int = fun n {
 	stream.from-seed 0 fun i {
 		if i < n {
-			try _ = task.sleep 3ms
+			try task.sleep 3ms
 			task.return (some (i, i + 1))
 		} else {
 			task.return none

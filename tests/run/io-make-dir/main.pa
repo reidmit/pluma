@@ -24,12 +24,12 @@ def main = fun {
 
 	# The new directory is usable.
 	let f = d ++ "/hello.txt"
-	let _ = fs.write-text-sync f "hi"
+	fs.write-text-sync f "hi"
 	when fs.read-text-sync f is ok s {
 		print s
 	} is err msg {
 		print "read err: $(msg)"
 	}
-	let _ = fs.remove-sync f
+	fs.remove-sync f
 	print "done"
 }

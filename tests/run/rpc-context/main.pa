@@ -44,7 +44,7 @@ def main = fun {
 	if net.listen "127.0.0.1:0" is ok server {
 		if net.local-addr server is ok addr {
 			scope as s {
-				let _ = s.spawn (http.serve-on server rpc.dispatch)
+				s.spawn (http.serve-on server rpc.dispatch)
 				let url = "http://" ++ addr ++ "/rpc/api.guarded-add"
 				try anon = probe url (dict.empty ())
 				print "anonymous -> $(to-string anon)"

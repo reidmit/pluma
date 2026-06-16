@@ -9,7 +9,7 @@ def label :: local string = local.new "?"
 
 def slow :: fun nothing -> task nothing = fun {
 	defer print "cleanup sees label=$(local.get label)"
-	try _ = task.sleep 10s
+	try task.sleep 10s
 	print "slow finished (should NOT print)"
 	task.return ()
 }
@@ -19,8 +19,8 @@ def main = fun {
 		let h = local.with label "tagged" fun {
 			task.return (s.spawn (slow ()))
 		}
-		try _ = h
-		try _ = task.sleep 1ms
+		try h
+		try task.sleep 1ms
 		s.cancel ()
 		task.return ()
 	}

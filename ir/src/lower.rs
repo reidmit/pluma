@@ -999,12 +999,10 @@ impl<'a> Lowerer<'a> {
 	) -> Result<FuncId, String> {
 		let fun = match &expr.kind {
 			ExprKind::Fun(f) => f,
-			_ => {
-				return Err(format!(
-					"constrained def `{}` must have a function body",
-					name
-				));
-			}
+			// An eta-reduced alias whose body is itself a constrained value of
+			// function type (`def cmp = compare`). Eta-expand it so the hidden
+			// dicts are threaded through to the aliased value.
+			_ => return self.lower_constrained_alias(name, dict_param_count, expr),
 		};
 		let k = dict_param_count as usize;
 		let dict_names: Vec<String> = (0..k).map(|n| synthetic_dict_name(n as u16)).collect();
@@ -1015,6 +1013,62 @@ impl<'a> Lowerer<'a> {
 		self.push_scope(inner_name, &param_names);
 		let body_range = fun.body.last().map(|e| e.range).unwrap_or(fun.range);
 		let inner_fid = match self.lower_body_tail(&fun.body, body_range) {
+			Ok(()) => {
+				let scope = self.scopes.pop().unwrap();
+				self.add_function(finish_scope(scope))
+			}
+			Err(e) => {
+				self.scopes.pop();
+				return Err(e);
+			}
+		};
+
+		// Thunk: return a closure of the inner function (no captures).
+		let thunk_name = format!("{}.{}@thunk", self.current_module, name);
+		self.push_scope(thunk_name, &[]);
+		let c = self.emit_let(Rvalue::MakeClosure(inner_fid, Vec::new()), SYNTHETIC);
+		self.push_synthetic(StmtKind::Return(c));
+		let scope = self.scopes.pop().unwrap();
+		Ok(self.add_function(finish_scope(scope)))
+	}
+
+	/// An eta-reduced constrained def: a `def f = g` whose body `g` is itself a
+	/// constrained value (a trait method or another constrained def) of function
+	/// type. Eta-expand to an inner function of arity K+N — the K hidden dicts
+	/// (so the body's `Forwarded` dispatch resolves against them) followed by the
+	/// N user-visible params, which are forwarded straight to the aliased value.
+	fn lower_constrained_alias(
+		&mut self,
+		name: &str,
+		dict_param_count: u16,
+		expr: &ExprNode,
+	) -> Result<FuncId, String> {
+		let k = dict_param_count as usize;
+		let n = match &expr.ty {
+			Type::Fun(params, _) => params.len(),
+			_ => {
+				return Err(format!(
+					"constrained alias `{}` has a non-function type",
+					name
+				));
+			}
+		};
+		let dict_names: Vec<String> = (0..k).map(|i| synthetic_dict_name(i as u16)).collect();
+		let value_names: Vec<String> = (0..n).map(|i| format!("__eta_{}__", i)).collect();
+		let mut param_names: Vec<&str> = dict_names.iter().map(String::as_str).collect();
+		param_names.extend(value_names.iter().map(String::as_str));
+
+		let inner_name = format!("{}.{}", self.current_module, name);
+		self.push_scope(inner_name, &param_names);
+		let inner_fid = match (|| {
+			// Lower the aliased value in this scope so its dispatch cells resolve
+			// against the dict params, then forward the user-visible params on.
+			let callee = self.lower_expr(expr)?;
+			let arg_atoms: Vec<Atom> = (0..n).map(|i| Atom::Var(VarId((k + i) as u32))).collect();
+			let r = self.emit_let(Rvalue::CallClosure(callee, arg_atoms), expr.range);
+			self.push_synthetic(StmtKind::Return(r));
+			Ok::<(), String>(())
+		})() {
 			Ok(()) => {
 				let scope = self.scopes.pop().unwrap();
 				self.add_function(finish_scope(scope))
@@ -2021,8 +2075,18 @@ impl<'a> Lowerer<'a> {
 	) -> Result<Atom, String> {
 		let borrow = cell.borrow();
 		let method_idx = borrow.method_idx;
+		let is_wire = borrow.trait_name == "wire";
 		let resolved = borrow.resolved.clone().ok_or("unresolved dispatch cell")?;
 		drop(borrow);
+		// `wire`'s "dict" is a schema value, not a method dictionary — its methods
+		// are the `wire-encode`/`wire-decode`/`wire-fingerprint` builtins taking
+		// `(schema, value)`. A bare wire method as a value can't be a
+		// `GetDictMethod`; forward through a closure that captures the schema.
+		if is_wire {
+			if let Some(idx) = method_idx {
+				return self.lower_wire_method_value_ref(&resolved, idx as u32, range);
+			}
+		}
 		let dict = self.lower_dict_atom(&resolved, range)?;
 		match method_idx {
 			Some(idx) => Ok(self.emit_let(Rvalue::GetDictMethod(dict, idx as u32), range)),
@@ -2030,6 +2094,57 @@ impl<'a> Lowerer<'a> {
 			// name a method, so this branch is unused for them.
 			None => Ok(dict),
 		}
+	}
+
+	/// A bare `wire` method (`wire.encode`, `wire.decode`, `wire.fingerprint`)
+	/// referenced as a first-class value. Each method is the builtin `wire-<m>`
+	/// taking `(schema, value)`; wrap it in an arity-1 closure that captures the
+	/// resolved schema and prepends it, so callers see the user-visible
+	/// `fun value -> …` arity. The value-position analog of `try_lower_wire_call`.
+	fn lower_wire_method_value_ref(
+		&mut self,
+		resolved: &DispatchTarget,
+		method_idx: u32,
+		range: Range,
+	) -> Result<Atom, String> {
+		let tag = match method_idx {
+			0 => "wire-encode",
+			1 => "wire-decode",
+			2 => "wire-fingerprint",
+			_ => return Err("unknown wire method index".to_string()),
+		};
+		let global = self
+			.globals
+			.lookup("__prelude__", tag)
+			.ok_or("wire builtin global not registered")?;
+		// Wrapper: 1 user param, 1 schema capture; load the builtin, then call it
+		// with the schema prepended.
+		let v = VarId(0);
+		let schema_cap = VarId(1);
+		let g_var = VarId(2);
+		let r_var = VarId(3);
+		let wrapper = Function {
+			name: format!("{}.{}@wire-value", self.current_module, tag),
+			module: self.current_module.clone(),
+			params: vec![v],
+			captures: vec![schema_cap],
+			is_async: false,
+			poll_fn: None,
+			body: Block(vec![
+				Stmt::synthetic(StmtKind::Let(g_var, Rvalue::GlobalRef(global))),
+				Stmt::synthetic(StmtKind::Let(
+					r_var,
+					Rvalue::CallClosure(Atom::Var(g_var), vec![Atom::Var(schema_cap), Atom::Var(v)]),
+				)),
+				Stmt::synthetic(StmtKind::Return(Atom::Var(r_var))),
+			]),
+			var_reprs: Vec::new(),
+			param_reprs: vec![Repr::Boxed; 1],
+			ret_repr: Repr::Boxed,
+		};
+		let wrapper_fid = self.add_function(wrapper);
+		let schema = self.lower_dict_atom(resolved, range)?;
+		Ok(self.emit_let(Rvalue::MakeClosure(wrapper_fid, vec![schema]), range))
 	}
 
 	/// Load a dispatch dictionary value (no method extraction). The three

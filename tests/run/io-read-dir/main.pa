@@ -21,9 +21,7 @@ def main = fun {
 
 	when fs.read-dir-sync "target" is ok entries {
 		let ours = list.filter entries mine
-		let _ = list.each ours fun e {
-			print e
-		}
+		list.each ours print
 	} is err msg {
 		print "read-dir err: $(msg)"
 	}

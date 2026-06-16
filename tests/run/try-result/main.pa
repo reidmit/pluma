@@ -9,7 +9,7 @@ def all-ok = fun {
 
 def early-err = fun {
 	try a = ok 5
-	try _ = err "boom"
+	try err "boom"
 	ok a
 }
 

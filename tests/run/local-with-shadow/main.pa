@@ -8,22 +8,22 @@ use std/task
 def trace :: local string = local.new "-"
 
 def show :: fun string -> task nothing = fun label {
-	try _ = task.sleep 1ms
+	try task.sleep 1ms
 	print "$(label): $(local.get trace)"
 	task.return ()
 }
 
 def main = fun {
-	try _ = show "before"
-	try _ = local.with trace "outer" fun {
-		try _ = show "inside"
-		try _ = local.with trace "inner" fun {
-			try _ = show "nested"
+	try show "before"
+	try local.with trace "outer" fun {
+		try show "inside"
+		try local.with trace "inner" fun {
+			try show "nested"
 			task.return ()
 		}
-		try _ = show "back"
+		try show "back"
 		task.return ()
 	}
-	try _ = show "after"
+	try show "after"
 	task.return ()
 }

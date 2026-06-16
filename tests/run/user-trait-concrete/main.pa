@@ -3,9 +3,7 @@ trait showable a {
 }
 
 implement showable int {
-	def show = fun x {
-		to-string x
-	}
+	def show = to-string
 }
 
 implement showable bool {

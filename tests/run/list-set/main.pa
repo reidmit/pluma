@@ -4,12 +4,12 @@ def main = fun {
 	let xs = list.build 4 fun i {
 		i
 	}
-	let _ = list.set xs 0 10
-	let _ = list.set xs 3 99
+	list.set xs 0 10
+	list.set xs 3 99
 	print xs
 	# alias sees the mutation
 	let ys = xs
-	let _ = list.set xs 1 7
+	list.set xs 1 7
 	print ys
 	# build a fresh list and keep using list ops after set
 	print (list.map xs fun n {

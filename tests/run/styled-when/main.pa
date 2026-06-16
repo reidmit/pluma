@@ -4,16 +4,14 @@
 use std/css
 use std/view
 
-def base :: css.ruleset = css.rule [css.padding (css.rem 1.0)]
+def base :: css.ruleset = using css { .rule [.padding (.rem 1.0)] }
 
 def on :: css.ruleset = css.rule [css.opacity 1.0]
 
 def main = fun {
 	# active=true -> both classes; active=false -> only the base class.
-	print (view.to-string (view.div [view.styled base, view.styled-when on fun { true }] [
-		view.text "a",
-	]))
-	print (view.to-string (view.div [view.styled base, view.styled-when on fun { false }] [
-		view.text "b",
-	]))
+	using view {
+		print (.to-string (.div [.styled base, .styled-when on fun { true }] [.text "a"]))
+		print (.to-string (.div [.styled base, .styled-when on fun { false }] [.text "b"]))
+	}
 }

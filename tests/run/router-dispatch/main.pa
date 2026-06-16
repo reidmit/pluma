@@ -40,14 +40,14 @@ def main = fun {
 		router.prefix "/static" fun rq { task.return (http.text 200 ("file " ++ rq.path)) },
 	]
 
-	try _ = hit app http.method.get "/" # 200 home
-	try _ = hit app http.method.get "/health" # 200 ok
-	try _ = hit app http.method.post "/users" # 201 created
-	try _ = hit app http.method.get "/dup" # 200 first  (earlier route wins)
-	try _ = hit app http.method.get "/static/index.html" # 200 the index  (exact before prefix)
-	try _ = hit app http.method.get "/static/app.css" # 200 file /static/app.css  (prefix)
-	try _ = hit app http.method.get "/users" # 404  (path exists, wrong method)
-	try _ = hit app http.method.post "/" # 404  (path exists, wrong method)
-	try _ = hit app http.method.get "/missing" # 404  (no route)
+	try hit app http.method.get "/" # 200 home
+	try hit app http.method.get "/health" # 200 ok
+	try hit app http.method.post "/users" # 201 created
+	try hit app http.method.get "/dup" # 200 first  (earlier route wins)
+	try hit app http.method.get "/static/index.html" # 200 the index  (exact before prefix)
+	try hit app http.method.get "/static/app.css" # 200 file /static/app.css  (prefix)
+	try hit app http.method.get "/users" # 404  (path exists, wrong method)
+	try hit app http.method.post "/" # 404  (path exists, wrong method)
+	try hit app http.method.get "/missing" # 404  (no route)
 	task.return 0
 }

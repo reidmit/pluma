@@ -10,8 +10,8 @@ def step = fun n {
 }
 
 def chain = fun x {
-	try _ = step x
-	try _ = step (x + 1)
+	try step x
+	try step (x + 1)
 	ok x
 }
 

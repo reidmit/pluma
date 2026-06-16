@@ -23,11 +23,11 @@ def main = fun {
 	let doubled = stream.map evens fun n {
 		n * 10
 	}
-	try _ = stream.for-each (stream.take doubled 4) fun n {
+	try stream.for-each (stream.take doubled 4) fun n {
 		print "take: $(to-string n)"
 		task.return ()
 	}
-	try _ = stream.for-each (stream.take-while (counter 100) fun n {
+	try stream.for-each (stream.take-while (counter 100) fun n {
 		# take-while stops at the first element that fails the predicate.
 		n < 3
 	}) fun n {
@@ -40,7 +40,7 @@ def main = fun {
 		task.return (acc + n)
 	}
 	print "fold sum = $(to-string total)"
-	try _ = stream.drain (stream.take (counter 1000000) 3)
+	try stream.drain (stream.take (counter 1000000) 3)
 	print "drained"
 	let s = counter 2
 	try a = stream.next s

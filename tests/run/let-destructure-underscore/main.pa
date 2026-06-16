@@ -3,7 +3,7 @@
 # return value isn't needed.
 
 def main = fun {
-	let _ = side-effect ()
+	side-effect ()
 	print "after"
 }
 

@@ -11,7 +11,7 @@ use std/task
 def offload-sleep :: fun duration -> task nothing = built-in "offload-sleep"
 
 def nap = fun label {
-	try _ = offload-sleep 10ms
+	try offload-sleep 10ms
 	task.return label
 }
 

@@ -4,12 +4,12 @@
 use std/task
 
 def sleeper = fun ms n {
-	try _ = task.sleep ms
+	try task.sleep ms
 	task.return n
 }
 
 def boom = fun ms msg {
-	try _ = task.sleep ms
+	try task.sleep ms
 	task.fail msg
 }
 

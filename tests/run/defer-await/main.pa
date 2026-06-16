@@ -12,7 +12,7 @@ use std/task
 def tag :: local string = local.new "-"
 
 def async-cleanup :: fun string -> task nothing = fun name {
-	try _ = task.sleep 1ms
+	try task.sleep 1ms
 	print "async cleanup $(name) (tag=$(local.get tag))"
 	task.return ()
 }
@@ -22,7 +22,7 @@ def normal :: fun nothing -> task nothing = fun {
 	defer async-cleanup "A"
 	defer print "sync cleanup B"
 	defer async-cleanup "C"
-	try _ = task.sleep 1ms
+	try task.sleep 1ms
 	print "normal body"
 	task.return ()
 }
@@ -30,16 +30,16 @@ def normal :: fun nothing -> task nothing = fun {
 # The cleanup fires on the failure path, before the failure propagates.
 def failing :: fun nothing -> task nothing = fun {
 	defer async-cleanup "fail-cleanup"
-	try _ = task.sleep 1ms
-	try _ = task.fail "boom"
+	try task.sleep 1ms
+	try task.fail "boom"
 	print "unreachable"
 	task.return ()
 }
 
 def main = fun {
-	try _ = local.with tag "T" fun {
-		try _ = normal ()
-		try _ = task.attempt (failing ())
+	try local.with tag "T" fun {
+		try normal ()
+		try task.attempt (failing ())
 		task.return ()
 	}
 	print "done"

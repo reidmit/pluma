@@ -48,15 +48,15 @@ def main = fun {
 	# map-task awaits real async work per element and preserves source order.
 	print "map-task order:"
 	let doubled = stream.map-task (counter 4) fun n {
-		try _ = task.yield ()
+		try task.yield ()
 		task.return (n * 10)
 	}
-	try _ = stream.for-each doubled show
+	try stream.for-each doubled show
 	# A fault inside map-task must still release the upstream resource.
 	print "map-task fault releases:"
 	let faulting = stream.map-task (res "B" 10) fun n {
 		if n == 2 {
-			try _ = task.fail "boom"
+			try task.fail "boom"
 			task.return n
 		} else {
 			task.return n
@@ -70,11 +70,11 @@ def main = fun {
 	}
 	# `take 0` never pulls, so the lazy resource is never even opened.
 	print "take 0 (no open/close expected):"
-	try _ = stream.for-each (stream.take (res "C" 10) 0) show
+	try stream.for-each (stream.take (res "C" 10) 0) show
 	print "  done"
 	# take-while rejecting element 0: opens, pulls one, releases, emits nothing.
 	print "take-while reject-first:"
-	try _ = stream.for-each (stream.take-while (res "D" 10) fun n { n > 5 }) show
+	try stream.for-each (stream.take-while (res "D" 10) fun n { n > 5 }) show
 	print "  done"
 	# fold over an empty (take 0) stream returns the initial accumulator.
 	print "empty fold:"

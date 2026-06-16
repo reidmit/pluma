@@ -29,8 +29,8 @@ def main = fun {
 
 	# find-up over a real tree: marker at the root, search from a nested dir.
 	let root = "target/pluma-path-fixture"
-	let _ = fs.make-dir-sync "$(root)/a/b"
-	let _ = fs.write-text-sync "$(root)/pluma.pa" ""
+	fs.make-dir-sync "$(root)/a/b"
+	fs.write-text-sync "$(root)/pluma.pa" ""
 	when fs.find-up "$(root)/a/b" "pluma.pa" is some found {
 		print found
 	} is none {
@@ -41,5 +41,5 @@ def main = fun {
 	} is none {
 		print "<not found>"
 	}
-	let _ = fs.remove-all-sync root
+	fs.remove-all-sync root
 }

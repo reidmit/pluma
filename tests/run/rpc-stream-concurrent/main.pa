@@ -28,7 +28,7 @@ def decode-ints :: fun (stream bytes) -> stream int = fun frames {
 def sum-sub :: fun string int -> task int string = fun route n {
 	let s = decode-ints (rpc.call-stream route route-fp (wire.encode n))
 	stream.fold s 0 fun acc x {
-		try _ = task.sleep 2ms
+		try task.sleep 2ms
 		task.return (acc + x)
 	}
 }
@@ -37,7 +37,7 @@ def main = fun {
 	if net.listen "127.0.0.1:0" is ok server {
 		if net.local-addr server is ok addr {
 			scope as s {
-				let _ = s.spawn (http.serve-on server rpc.dispatch)
+				s.spawn (http.serve-on server rpc.dispatch)
 				rpc.configure-stream fun route body headers {
 					http.fetch-stream ("http://" ++ addr ++ "/rpc/" ++ route) http.method.post headers body
 				}

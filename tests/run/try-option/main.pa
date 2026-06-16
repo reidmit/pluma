@@ -9,7 +9,7 @@ def take-two = fun {
 
 def take-none = fun {
 	try a = some 1
-	try _ = none
+	try none
 	some a
 }
 

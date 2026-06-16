@@ -75,12 +75,12 @@ def main = fun {
 	let guarded = middleware.chain [require-auth] base # short-circuits without auth
 	let app = middleware.chain [wrap "log", require-auth, rewrite] base # all stacked
 
-	try _ = hit layered (req "/" []) # 200 [outer [inner base saw / inner] outer]
-	try _ = hit bare (req "/plain" []) # 200 base saw /plain
-	try _ = hit rewritten (req "/page" []) # 200 base saw /page/rewritten
-	try _ = hit guarded (req "/secret" []) # 401 unauthorized (base never runs)
-	try _ = hit guarded (req "/secret" [("authorization", "t")]) # 200 base saw /secret
-	try _ = hit app (req "/api" [("authorization", "t")]) # 200 [log base saw /api/rewritten log]
-	try _ = hit app (req "/api" []) # 401 [log unauthorized log] (outer wrap still shapes the 401)
+	try hit layered (req "/" []) # 200 [outer [inner base saw / inner] outer]
+	try hit bare (req "/plain" []) # 200 base saw /plain
+	try hit rewritten (req "/page" []) # 200 base saw /page/rewritten
+	try hit guarded (req "/secret" []) # 401 unauthorized (base never runs)
+	try hit guarded (req "/secret" [("authorization", "t")]) # 200 base saw /secret
+	try hit app (req "/api" [("authorization", "t")]) # 200 [log base saw /api/rewritten log]
+	try hit app (req "/api" []) # 401 [log unauthorized log] (outer wrap still shapes the 401)
 	task.return 0
 }

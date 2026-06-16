@@ -10,14 +10,14 @@ use std/task
 def tag :: local string = local.new "-"
 
 def cleanup :: fun nothing -> task nothing = fun {
-	try _ = task.sleep 1ms
+	try task.sleep 1ms
 	print "async cleanup on cancel (tag=$(local.get tag))"
 	task.return ()
 }
 
 def slow :: fun nothing -> task nothing = fun {
 	defer cleanup ()
-	try _ = task.sleep 10s
+	try task.sleep 10s
 	print "slow finished (should NOT print)"
 	task.return ()
 }
@@ -27,8 +27,8 @@ def main = fun {
 		let h = local.with tag "spawned" fun {
 			task.return (s.spawn (slow ()))
 		}
-		try _ = h
-		try _ = task.sleep 1ms
+		try h
+		try task.sleep 1ms
 		s.cancel ()
 		task.return ()
 	}

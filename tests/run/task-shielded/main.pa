@@ -7,7 +7,7 @@ use std/task
 # two prints stay adjacent — the `yield` doesn't hand control to the sibling.
 def critical = fun {
 	print "A"
-	try _ = task.yield ()
+	try task.yield ()
 	print "B"
 	task.return 7
 }
@@ -42,7 +42,7 @@ def guarded = fun {
 
 def slow-critical = fun {
 	print "slow-start"
-	try _ = task.sleep 5ms
+	try task.sleep 5ms
 	print "guarded-done"
 	task.return 99
 }

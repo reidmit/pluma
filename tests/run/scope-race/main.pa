@@ -4,20 +4,20 @@ use std/list
 use std/task
 
 def sleeper = fun ms n {
-	try _ = task.sleep ms
+	try task.sleep ms
 	task.return n
 }
 
 # A slow child whose cleanup must run when it's cancelled as a race loser.
 def slow = fun label {
 	defer print label
-	try _ = task.sleep 5s
+	try task.sleep 5s
 	task.return 0
 }
 
 def race = fun ts {
 	manual scope as s {
-		let _ = list.map ts fun t {
+		list.map ts fun t {
 			s.spawn t
 		}
 		try first = s.next ()

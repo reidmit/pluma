@@ -5,9 +5,9 @@ use std/task
 
 def main = fun {
 	defer print "deferred A (last)"
-	try _ = task.sleep 1ms
+	try task.sleep 1ms
 	defer print "deferred B (first)"
-	try _ = task.sleep 1ms
+	try task.sleep 1ms
 	print "body"
 	task.return 0
 }

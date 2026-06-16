@@ -17,7 +17,7 @@ def main = fun {
 	}
 	try a = add-one 41
 	try b = bump 5
-	try _ = task.sleep 1ms
+	try task.sleep 1ms
 	print (to-string a)
 	print (to-string b)
 	task.return 0

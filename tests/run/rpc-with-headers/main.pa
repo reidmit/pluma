@@ -15,7 +15,7 @@ use std/task
 def captured :: ref (dict string string) = ref.new (dict.empty ())
 
 def fake :: rpc.sender = fun _route body headers {
-	let _ = ref.set captured headers
+	ref.set captured headers
 	task.return body
 }
 
@@ -32,15 +32,15 @@ def call :: fun string -> task bytes = fun fp {
 }
 
 def main = fun {
-	let _ = rpc.configure fake
+	rpc.configure fake
 
 	# A bare call: only the fingerprint header is attached.
-	try _ = call "fp-1"
+	try call "fp-1"
 	let bare-trace = header-of "x-trace-id"
 	let bare-fp = header-of "x-rpc-fingerprint"
 	print "bare trace -> $(bare-trace)"
 	print "bare fp -> $(bare-fp)"
-	try _ = rpc.with-headers [("x-trace-id", "abc")] fun {
+	try rpc.with-headers [("x-trace-id", "abc")] fun {
 		# Inside with-headers: the scoped header rides along, fingerprint still there.
 		call "fp-2"
 	}
@@ -48,7 +48,7 @@ def main = fun {
 	let scoped-fp = header-of "x-rpc-fingerprint"
 	print "scoped trace -> $(scoped-trace)"
 	print "scoped fp -> $(scoped-fp)"
-	try _ = rpc.with-headers [("x-trace-id", "outer")] fun {
+	try rpc.with-headers [("x-trace-id", "outer")] fun {
 		# Nested scopes merge; the inner binding wins for a shared key.
 
 		rpc.with-headers [("x-trace-id", "inner")] fun {
@@ -57,7 +57,7 @@ def main = fun {
 	}
 	let nested-trace = header-of "x-trace-id"
 	print "nested trace -> $(nested-trace)"
-	try _ = call "fp-4"
+	try call "fp-4"
 	let after-trace = header-of "x-trace-id"
 	print "after trace -> $(after-trace)"
 	task.return 0
