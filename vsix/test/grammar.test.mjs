@@ -142,6 +142,19 @@ test("keywords the old grammar was missing", () => {
 	assert.ok(hasScope(scopesOf('def f = built-in "x"', "built-in"), "keyword.other.builtin.pluma"));
 });
 
+test("definition modifiers and scope/using keywords are highlighted", () => {
+	// Modifiers that prefix a declaration (mirrors compiler/src/tokenizer.rs).
+	assert.ok(hasScope(scopesOf("public def f = 1", "public"), "keyword.declaration.pluma"));
+	assert.ok(hasScope(scopesOf("opaque enum color { red }", "opaque"), "keyword.declaration.pluma"));
+	assert.ok(hasScope(scopesOf("manual def f = 1", "manual"), "keyword.declaration.pluma"));
+	assert.ok(hasScope(scopesOf("remote def f = 1", "remote"), "keyword.declaration.pluma"));
+	// The `public def` name still highlights as a function (modifier doesn't eat it).
+	assert.ok(hasScope(scopesOf("public def greet = fun { e }", "greet"), "entity.name.function.pluma"));
+	// Block constructs.
+	assert.ok(hasScope(scopesOf("def x = scope { e }", "scope"), "keyword.control.pluma"));
+	assert.ok(hasScope(scopesOf("def x = using r { e }", "using"), "keyword.control.pluma"));
+});
+
 test("true/false highlight as keywords (matching the LSP's semantic class)", () => {
 	// The shared classifier (compiler/src/highlight.rs) and the docs site render
 	// booleans as keywords; the grammar must agree so the first paint doesn't

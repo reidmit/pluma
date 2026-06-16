@@ -226,11 +226,11 @@
 			"patterns": [
 				{
 					"name": "keyword.control.pluma",
-					"match": "(?<![A-Za-z0-9_-])(if|else|when|while|is|in|try|defer)(?![A-Za-z0-9_-])"
+					"match": "(?<![A-Za-z0-9_-])(if|else|when|while|is|in|try|defer|scope|using)(?![A-Za-z0-9_-])"
 				},
 				{
 					"name": "keyword.declaration.pluma",
-					"match": "(?<![A-Za-z0-9_-])(def|let|alias|enum|trait|implement|where|use|as|fun|test)(?![A-Za-z0-9_-])"
+					"match": "(?<![A-Za-z0-9_-])(def|let|alias|enum|trait|implement|where|use|as|fun|test|public|opaque|manual|remote)(?![A-Za-z0-9_-])"
 				},
 				{
 					"name": "keyword.other.builtin.pluma",
