@@ -17,19 +17,19 @@ module `main` (tests/analyze/local-functions/main.pa) {
                                     pattern: pattern(1:5-1:8) Identifier(
                                         ident(1:5-1:8) `add`,
                                     ),
-                                    value: expr(1:11-3:2) :: a a -> a {
+                                    value: expr(1:11-3:2) :: int int -> int {
                                         kind: fun(1:11-3:2) {
                                             params: [
-                                                ident(1:15-1:16) `x` :: a,
-                                                ident(1:17-1:18) `y` :: a,
+                                                ident(1:15-1:16) `x` :: int,
+                                                ident(1:17-1:18) `y` :: int,
                                             ],
                                             body: [
-                                                expr(2:2-2:7) :: a {
+                                                expr(2:2-2:7) :: int {
                                                     kind: binary op(2:4-2:5) `+` {
-                                                        left: expr(2:2-2:3) :: a {
+                                                        left: expr(2:2-2:3) :: int {
                                                             kind: ident(2:2-2:3) `x`,
                                                         },
-                                                        right: expr(2:6-2:7) :: a {
+                                                        right: expr(2:6-2:7) :: int {
                                                             kind: ident(2:6-2:7) `y`,
                                                         },
                                                     },
@@ -59,18 +59,12 @@ module `main` (tests/analyze/local-functions/main.pa) {
                                                             kind: literal(5:12-5:13) int 2,
                                                         },
                                                     ],
-                                                    dict_args: [
-                                                        "Some(Global(\"__prelude__.numeric@int\"))",
-                                                    ],
                                                 },
                                             },
                                         },
                                         expr(5:15-5:16) :: int {
                                             kind: literal(5:15-5:16) int 3,
                                         },
-                                    ],
-                                    dict_args: [
-                                        "Some(Global(\"__prelude__.numeric@int\"))",
                                     ],
                                 },
                             },

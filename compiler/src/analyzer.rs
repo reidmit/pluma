@@ -3425,7 +3425,22 @@ impl<'compiler> Analyzer<'compiler> {
 						// them would wrongly decouple the binding from its inputs (and is
 						// unsound for effectful/aliasing results). A concrete-typed value
 						// also binds monomorphically so later uses see the resolved type.
-						if value.ty.free_vars().is_empty() || !is_syntactic_value(value) {
+						//
+						// A value carrying a trait constraint (`let cmp = compare`, `let add
+						// = fun x y { x + y }`) also binds monomorphically: a local binding
+						// has no hidden dict parameter to thread the dictionary through (only
+						// top-level defs do), so generalizing would strand the dispatch with no
+						// dict to satisfy it. Bound monomorphically, the constrained vars
+						// resolve from the use site — exactly as a `:: <concrete>` annotation
+						// would. Constraints are detected structurally: any dispatch cell in
+						// the value (a trait method, an overloaded operator, a reference to a
+						// constrained def) means a dictionary is needed.
+						let carries_dispatch = {
+							let mut cells = Vec::new();
+							collect_dispatch_cells(value, &mut cells);
+							!cells.is_empty()
+						};
+						if value.ty.free_vars().is_empty() || !is_syntactic_value(value) || carries_dispatch {
 							self.add_value_binding(
 								name.name.clone(),
 								Scheme::Forall(vec![], vec![], vec![], value.ty.clone()),
@@ -7068,12 +7083,27 @@ impl<'compiler> Analyzer<'compiler> {
 	//   - stash the slot count on `def.dict_param_count` so codegen knows
 	//     how many hidden leading params to prepend.
 	fn resolve_forwarded_dispatches(&mut self, module: &mut ModuleNode, subst: &Substitution) {
+		// A stranded local-`let` constraint reported below is only meaningful in
+		// otherwise-well-typed code: a program that already failed (e.g. an arity
+		// error) leaves half-typed expressions whose dispatch never resolved, and
+		// reporting those would be noisy cascade errors. Suppress when prior errors
+		// exist — compilation already fails, so a phantom dict param is harmless.
+		let had_prior_errors = self.diagnostics.iter().any(|d| d.is_error());
 		for def in &mut module.body {
+			let def_range = def.name.range;
 			match &mut def.kind {
 				DefinitionKind::Expr(body_expr) => {
 					// Collect every dispatch cell living in this def's body.
 					let mut cells: Vec<DispatchCell> = Vec::new();
 					collect_dispatch_cells(body_expr, &mut cells);
+
+					// The vars this def is itself polymorphic over — the only ones a
+					// hidden dict param can legitimately stand for. A leftover dispatch
+					// var outside this set escaped a local `let` that generalized a
+					// constrained value (which has no dict param); fabricating a slot for
+					// it would give the def a phantom dict param no caller supplies — a
+					// runtime trap. Report it as ambiguous instead.
+					let def_type_vars = subst.apply_to_type(&body_expr.ty).free_vars();
 
 					// First-seen ordering of (trait, var_id) → slot index.
 					// Lets callers and codegen agree on the dict-param layout
@@ -7086,9 +7116,24 @@ impl<'compiler> Analyzer<'compiler> {
 							continue;
 						}
 						let resolved_ty = subst.apply_to_type(&borrow.dispatch_var);
-						if let Type::Var(v) = resolved_ty {
-							let slot = lookup_or_alloc_slot(&mut slot_order, &borrow.trait_name, v);
-							borrow.resolved = Some(Resolved::Forwarded(slot));
+						if let Type::Var(v) = &resolved_ty {
+							let v = *v;
+							if def_type_vars.contains(&v) {
+								let slot = lookup_or_alloc_slot(&mut slot_order, &borrow.trait_name, v);
+								borrow.resolved = Some(Resolved::Forwarded(slot));
+							} else if !had_prior_errors {
+								// A constraint stranded by a local `let` that generalized a
+								// constrained value: no dict param can satisfy it.
+								let trait_name = borrow.trait_name.clone();
+								drop(borrow);
+								self.error(
+									def_range,
+									AnalysisErrorKind::AmbiguousTraitMethod {
+										trait_name,
+										ty: resolved_ty,
+									},
+								);
+							}
 						}
 						// Cells whose dispatch type is concrete but unresolved have
 						// already been errored on by `discharge`. Don't double-report.
