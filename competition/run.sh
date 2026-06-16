@@ -26,6 +26,17 @@
 #                                              you pay per `pluma run` of a source
 #                                              file — the dev-loop reality, where
 #                                              `pluma-v8` is the deploy reality.
+#   grain-wasm `grain compile --release`,    — Grain also compiles to wasm (linear
+#              then `grain run <out>.gr.wasm`   memory + a refcounting runtime, not
+#                                              WasmGC). The mirror of `pluma-v8`:
+#                                              build the release artifact once
+#                                              (build cost summed separately), then
+#                                              time executing it under Grain's WASI
+#                                              runner. n/a when `grain` is absent.
+#   grain-src  `grain <prog>.gr`            — the mirror of `pluma-src`: compile
+#                                              from source *and* run every
+#                                              invocation, so its time folds in the
+#                                              Grain compiler pipeline each run.
 #   python3    python3 <prog>.py            — CPython, a bytecode interpreter.
 #   ruby       ruby <prog>.rb               — CRuby (MRI), a bytecode interpreter.
 #   node       node <prog>.js               — V8, a JIT.
@@ -154,6 +165,22 @@ build_wasm() {
 	echo "$t"
 }
 
+# Compile a Grain <src> to a release WasmGC artifact at <out> (the deploy
+# artifact). Prints the build's wall-clock seconds, or "ERR" if it failed.
+grain_build_wasm() {
+	local src="$1" out="$2" err t
+	err="$(mktemp)"
+	timed_run /dev/null "$err" grain compile --release -o "$out" "$src"
+	if [ "$?" -ne 0 ]; then
+		rm -f "$err"
+		echo "ERR"
+		return 1
+	fi
+	t="$(awk '/^real/ { print $2 }' "$err")"
+	rm -f "$err"
+	echo "$t"
+}
+
 # Pretty ratio "x.y×" of $1/$2, or "—" if either is non-numeric.
 ratio() {
 	if [[ "$1" =~ ^[0-9.]+$ && "$2" =~ ^[0-9.]+$ ]]; then
@@ -168,14 +195,16 @@ if [ ! -x "$PLUMA" ]; then
 	exit 1
 fi
 
-echo "Pluma (WasmGC/V8) vs Python, Ruby, Node, Bun, Deno  —  best of $RUNS runs, seconds (lower is better)"
+echo "Pluma (WasmGC/V8) vs Grain (wasm/refcount), Python, Ruby, Node, Bun, Deno  —  best of $RUNS runs, seconds (lower is better)"
 echo
-printf '%-12s %8s %9s %8s %6s %6s %6s %6s %9s   %s\n' \
-	"benchmark" "pluma-v8" "pluma-src" "python3" "ruby" "node" "bun" "deno" "vs best" "output"
-printf '%s\n' "----------------------------------------------------------------------------------------"
+printf '%-12s %8s %9s %10s %9s %8s %6s %6s %6s %6s %9s   %s\n' \
+	"benchmark" "pluma-v8" "pluma-src" "grain-wasm" "grain-src" "python3" "ruby" "node" "bun" "deno" "vs best" "output"
+printf '%s\n' "----------------------------------------------------------------------------------------------------------------"
 
 pv8o="$(mktemp)"
 psrco="$(mktemp)"
+gwo="$(mktemp)"
+gso="$(mktemp)"
 pyo="$(mktemp)"
 rbo="$(mktemp)"
 jso="$(mktemp)"
@@ -183,9 +212,10 @@ buno="$(mktemp)"
 denoo="$(mktemp)"
 WASMDIR="$(mktemp -d)"
 
-md_rows=""    # accumulated markdown table rows for RESULTS.md
+md_rows=""          # accumulated markdown table rows for RESULTS.md
 mismatch="no"
-build_total=0 # summed one-time compile-to-wasm cost across all benchmarks
+build_total=0       # summed one-time pluma compile-to-wasm cost across all benchmarks
+grain_build_total=0 # summed one-time grain compile-to-wasm cost across all benchmarks
 
 for entry in "${BENCHES[@]}"; do
 	dir="${entry%%:*}"
@@ -214,6 +244,27 @@ for entry in "${BENCHES[@]}"; do
 	# into each run. The delta over `pluma-v8` is what compiling the source costs.
 	psrct="$(min_time "$psrco" "$PLUMA" run "$d/$base")"
 
+	# `grain-wasm`: Grain also compiles to WasmGC. Mirror `pluma-v8` — compile to a
+	# release `.wasm` artifact once (build cost summed separately), then time
+	# executing that artifact under Grain's WASI runner. `grain-src`: `grain <src>`
+	# compiles *and* runs from source every invocation, the analog of `pluma-src`.
+	if [ -f "$d/$base.gr" ] && have grain; then
+		gbt="$(grain_build_wasm "$d/$base.gr" "$WASMDIR/$base.gr.wasm")"
+		if [ "$gbt" = "ERR" ]; then
+			gwasm="ERR"
+			: >"$gwo"
+		else
+			[[ "$gbt" =~ ^[0-9.]+$ ]] && grain_build_total="$(awk "BEGIN { print $grain_build_total + $gbt }")"
+			gwasm="$(min_time "$gwo" grain run "$WASMDIR/$base.gr.wasm")"
+		fi
+		gsrc="$(min_time "$gso" grain "$d/$base.gr")"
+	else
+		gwasm="n/a"
+		gsrc="n/a"
+		: >"$gwo"
+		: >"$gso"
+	fi
+
 	pyt="$(time_src "$pyo" "$d/$base.py" python3 "$d/$base.py")"
 	rbt="$(time_src "$rbo" "$d/$base.rb" ruby "$d/$base.rb")"
 	jt="$(time_src "$jso" "$d/$base.js" node "$d/$base.js")"
@@ -227,7 +278,7 @@ for entry in "${BENCHES[@]}"; do
 		status="no-ref"
 	else
 		status="ok"
-		for f in "$psrco" "$pyo" "$rbo" "$jso" "$buno" "$denoo"; do
+		for f in "$psrco" "$gwo" "$gso" "$pyo" "$rbo" "$jso" "$buno" "$denoo"; do
 			if [ -s "$f" ] && ! diff -q "$pv8o" "$f" >/dev/null 2>&1; then
 				status="MISMATCH"
 				mismatch="yes"
@@ -236,20 +287,23 @@ for entry in "${BENCHES[@]}"; do
 	fi
 
 	# Fastest of all the competitors, and how the deploy artifact compares to it.
-	best_other="$(printf '%s\n' "$pyt" "$rbt" "$jt" "$bunt" "$denot" |
+	# Grain's deploy artifact (grain-wasm) is in the pool; grain-src, like
+	# pluma-src, folds in compile cost and is excluded — the same rule as above.
+	best_other="$(printf '%s\n' "$gwasm" "$pyt" "$rbt" "$jt" "$bunt" "$denot" |
 		awk '/^[0-9.]+$/ { if (m == "" || $1 < m) m = $1 } END { print (m == "" ? "n/a" : m) }')"
 	# `vs best` is the deploy reality — the artifact you ship vs the fastest column.
 	vs_v8="$(ratio "$pv8" "$best_other")"
 
-	printf '%-12s %8s %9s %8s %6s %6s %6s %6s %9s   %s\n' \
-		"$label" "$pv8" "$psrct" "$pyt" "$rbt" "$jt" "$bunt" "$denot" "$vs_v8" "$status"
-	md_rows+="| \`$label\` | $desc | $pv8 | $psrct | $pyt | $rbt | $jt | $bunt | $denot | $vs_v8 | $status |"$'\n'
+	printf '%-12s %8s %9s %10s %9s %8s %6s %6s %6s %6s %9s   %s\n' \
+		"$label" "$pv8" "$psrct" "$gwasm" "$gsrc" "$pyt" "$rbt" "$jt" "$bunt" "$denot" "$vs_v8" "$status"
+	md_rows+="| \`$label\` | $desc | $pv8 | $psrct | $gwasm | $gsrc | $pyt | $rbt | $jt | $bunt | $denot | $vs_v8 | $status |"$'\n'
 done
 
-rm -f "$pv8o" "$psrco" "$pyo" "$rbo" "$jso" "$buno" "$denoo"
+rm -f "$pv8o" "$psrco" "$gwo" "$gso" "$pyo" "$rbo" "$jso" "$buno" "$denoo"
 rm -rf "$WASMDIR"
 
 build_total="$(awk "BEGIN { printf \"%.2f\", $build_total }")"
+grain_build_total="$(awk "BEGIN { printf \"%.2f\", $grain_build_total }")"
 
 # ---- Write the markdown report -------------------------------------------------
 os="$(uname -sm)"
@@ -259,11 +313,12 @@ rb_ver="$(ruby --version 2>&1 | awk '{ print $1, $2 }')"
 node_ver="$(node --version 2>&1 | head -1)"
 bun_ver="$(bun --version 2>&1 | head -1)"
 deno_ver="$(deno --version 2>&1 | head -1)"
+grain_ver="$(grain --version 2>&1 | head -1)"
 overall="every implementation agreed on every output"
 [ "$mismatch" = "yes" ] && overall="**one or more benchmarks produced mismatched output — results are not comparable**"
 
 {
-	echo "# Pluma vs Python, Ruby, Node, Bun, and Deno — benchmark results"
+	echo "# Pluma vs Grain, Python, Ruby, Node, Bun, and Deno — benchmark results"
 	echo
 	echo "_Best of $RUNS runs, wall-clock seconds (lower is better). Generated $(date '+%Y-%m-%d %H:%M:%S %Z')._"
 	echo
@@ -280,20 +335,23 @@ overall="every implementation agreed on every output"
 	echo "| node | $node_ver |"
 	echo "| bun | $bun_ver |"
 	echo "| deno | $deno_ver |"
+	echo "| grain | $grain_ver |"
 	echo
 	echo "## Results"
 	echo
-	echo "| benchmark | exercises | pluma-v8 | pluma-src | python3 | ruby | node | bun | deno | vs best | output |"
-	echo "|---|---|--:|--:|--:|--:|--:|--:|--:|--:|:--:|"
+	echo "| benchmark | exercises | pluma-v8 | pluma-src | grain-wasm | grain-src | python3 | ruby | node | bun | deno | vs best | output |"
+	echo "|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|:--:|"
 	printf '%s' "$md_rows"
 	echo
 	echo "\`pluma-v8\` runs a prebuilt WasmGC artifact (\`pluma run <out>.wasm\`); \`pluma-src\` runs from source"
 	echo "(\`pluma run <prog>.pa\`), so its time folds the full tokenize/parse/analyze/IR/wasm pipeline into every"
-	echo "run — the gap between the two columns is that compile cost. \`vs best\` compares the deploy artifact"
-	echo "(\`pluma-v8\`) against the fastest other language."
+	echo "run — the gap between the two columns is that compile cost. \`grain-wasm\` is the analogous Grain deploy"
+	echo "artifact (\`grain compile --release\`, then \`grain run <out>.gr.wasm\`); \`grain-src\` is \`grain <prog>.gr\`,"
+	echo "compiling and running from source each invocation. \`vs best\` compares the deploy artifact (\`pluma-v8\`)"
+	echo "against the fastest other language (including \`grain-wasm\`)."
 	echo
 	echo "One-time build cost, summed across all ${#BENCHES[@]} benchmarks and **not** included in the per-run times above:"
-	echo "Pluma compile-to-WasmGC **${build_total}s**."
+	echo "Pluma compile-to-WasmGC **${build_total}s**; Grain compile-to-wasm **${grain_build_total}s**."
 	echo
 	echo "Regenerate with \`competition/run.sh [RUNS]\`."
 } >"$REPORT"

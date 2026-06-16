@@ -1,0 +1,15 @@
+// Count the primes below a limit by trial division — integer arithmetic, modulo,
+// and a tight tail-recursive inner loop.
+module Main
+
+let rec prime = (n, d) =>
+  if (d * d > n) true
+  else if (n % d == 0) false
+  else prime(n, d + 1)
+
+let rec count = (n, limit, acc) =>
+  if (n == limit) acc
+  else if (prime(n, 2)) count(n + 1, limit, acc + 1)
+  else count(n + 1, limit, acc)
+
+print(count(2, 300000, 0))

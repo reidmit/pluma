@@ -1,0 +1,146 @@
+// N-body gravitation — float64 arithmetic over record structs (positions,
+// velocities, mass). Each step rebuilds every body immutably (functional record
+// update), so this also leans on the allocator/GC. Output is the scaled energy
+// floored to an integer, so every language agrees bit-for-bit (IEEE-754
+// +,-,*,/,sqrt are identical everywhere; floor rounds toward -inf in all).
+//
+// Float64 operators are bound to named helpers so integer loop counters keep
+// Number's operators; the summation order matches every other language exactly.
+module Main
+
+from "list" include List
+from "array" include Array
+from "number" include Number
+from "float64" include Float64
+
+let addf = Float64.(+)
+let subf = Float64.(-)
+let mulf = Float64.(*)
+let divf = Float64.(/)
+let gtf = Float64.(>)
+let sqrtf = Float64.sqrt
+
+record Body {
+  x: Float64,
+  y: Float64,
+  z: Float64,
+  vx: Float64,
+  vy: Float64,
+  vz: Float64,
+  m: Float64,
+}
+
+let dt = 0.01d
+
+// New velocity for body `b`: accelerate it toward every other body. Folding in
+// list order (and skipping self, where the squared distance is exactly 0) fixes
+// the summation order so the floating-point result is reproducible.
+let kick = (bodies, b) => {
+  let (ax, ay, az) = List.reduce((acc, o) => {
+    let (ax, ay, az) = acc
+    let dx = subf(o.x, b.x)
+    let dy = subf(o.y, b.y)
+    let dz = subf(o.z, b.z)
+    let d2 = addf(addf(mulf(dx, dx), mulf(dy, dy)), mulf(dz, dz))
+    // d2 is a sum of squares, so it is 0 exactly when the bodies coincide (self).
+    if (!gtf(d2, 0.0d)) acc
+    else {
+      let dist = sqrtf(d2)
+      let mag = divf(o.m, mulf(d2, dist))
+      (addf(ax, mulf(dx, mag)), addf(ay, mulf(dy, mag)), addf(az, mulf(dz, mag)))
+    }
+  }, (0.0d, 0.0d, 0.0d), bodies)
+  { ...b, vx: addf(b.vx, mulf(dt, ax)), vy: addf(b.vy, mulf(dt, ay)), vz: addf(b.vz, mulf(dt, az)) }
+}
+
+let drift = (b) =>
+  { ...b, x: addf(b.x, mulf(dt, b.vx)), y: addf(b.y, mulf(dt, b.vy)), z: addf(b.z, mulf(dt, b.vz)) }
+
+let step = (bodies) => {
+  let kicked = List.map((b) => kick(bodies, b), bodies)
+  List.map((b) => drift(b), kicked)
+}
+
+let rec run = (bodies, i, steps) =>
+  if (i == steps) bodies
+  else run(step(bodies), i + 1, steps)
+
+let kinetic = (bodies) =>
+  List.reduce((acc, b) =>
+    addf(acc, mulf(mulf(0.5d, b.m), addf(addf(mulf(b.vx, b.vx), mulf(b.vy, b.vy)), mulf(b.vz, b.vz)))),
+    0.0d, bodies)
+
+// Potential energy: -sum over each unordered pair i<j of m_i*m_j / distance.
+let rec potential = (arr, i, j, n, acc) =>
+  if (i >= n) acc
+  else if (j >= n) potential(arr, i + 1, i + 2, n, acc)
+  else {
+    let bi = arr[i]
+    let bj = arr[j]
+    let dx = subf(bi.x, bj.x)
+    let dy = subf(bi.y, bj.y)
+    let dz = subf(bi.z, bj.z)
+    let dist = sqrtf(addf(addf(mulf(dx, dx), mulf(dy, dy)), mulf(dz, dz)))
+    potential(arr, i, j + 1, n, subf(acc, divf(mulf(bi.m, bj.m), dist)))
+  }
+
+let energy = (bodies) => {
+  let arr = Array.fromList(bodies)
+  addf(kinetic(bodies), potential(arr, 0, 1, Array.length(arr), 0.0d))
+}
+
+let report = (e) => Number.floor(Float64.toNumber(mulf(e, 1000000000.0d)))
+
+let pi = 3.141592653589793d
+let solar = mulf(mulf(4.0d, pi), pi)
+let dpy = 365.24d
+
+let sun = { x: 0.0d, y: 0.0d, z: 0.0d, vx: 0.0d, vy: 0.0d, vz: 0.0d, m: solar }
+let jupiter = {
+  x: 4.841431442464721d,
+  y: -1.1603200440274284d,
+  z: -0.10362204447112311d,
+  vx: mulf(0.001660076642744037d, dpy),
+  vy: mulf(0.007699011184197404d, dpy),
+  vz: mulf(-0.0000690460016972063d, dpy),
+  m: mulf(0.0009547919384243266d, solar),
+}
+let saturn = {
+  x: 8.34336671824458d,
+  y: 4.124798564124305d,
+  z: -0.4035234171143214d,
+  vx: mulf(-0.002767425107268624d, dpy),
+  vy: mulf(0.004998528012349172d, dpy),
+  vz: mulf(0.000023041729757376393d, dpy),
+  m: mulf(0.0002858859806661308d, solar),
+}
+let uranus = {
+  x: 12.894369562139131d,
+  y: -15.111151401698631d,
+  z: -0.22330757889265573d,
+  vx: mulf(0.002964601375647616d, dpy),
+  vy: mulf(0.0023784717395948095d, dpy),
+  vz: mulf(-0.000029658956854023756d, dpy),
+  m: mulf(0.00004366244043351563d, solar),
+}
+let neptune = {
+  x: 15.379697114850917d,
+  y: -25.919314609987964d,
+  z: 0.17925877295037118d,
+  vx: mulf(0.0026806777249038932d, dpy),
+  vy: mulf(0.001628241700382423d, dpy),
+  vz: mulf(-0.00009515922545197159d, dpy),
+  m: mulf(0.00023041729757376393d, solar),
+}
+
+let bodies0 = [sun, jupiter, saturn, uranus, neptune]
+let (px, py, pz) = List.reduce((acc, b) => {
+  let (px, py, pz) = acc
+  (addf(px, mulf(b.vx, b.m)), addf(py, mulf(b.vy, b.m)), addf(pz, mulf(b.vz, b.m)))
+}, (0.0d, 0.0d, 0.0d), bodies0)
+let sun2 = { ...sun, vx: subf(0.0d, divf(px, solar)), vy: subf(0.0d, divf(py, solar)), vz: subf(0.0d, divf(pz, solar)) }
+let bodies = [sun2, jupiter, saturn, uranus, neptune]
+
+print(report(energy(bodies)))
+let final = run(bodies, 0, 100000)
+print(report(energy(final)))

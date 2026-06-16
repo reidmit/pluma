@@ -1,0 +1,50 @@
+// Mandelbrot set — pure float64 arithmetic in a tight escape loop over a grid.
+// Counts how many grid points remain bounded (i.e. are in the set). Float64
+// operators are bound to named helpers so the integer counters keep Number's
+// operators; the arithmetic is plain IEEE-754 double, identical everywhere.
+module Main
+
+from "float64" include Float64
+
+let addf = Float64.(+)
+let subf = Float64.(-)
+let mulf = Float64.(*)
+let divf = Float64.(/)
+let gtf = Float64.(>)
+let ltf = Float64.(<)
+
+let inSet = (cr, ci) => {
+  let mut zr = 0.0d
+  let mut zi = 0.0d
+  let mut res = 1
+  let mut k = 0
+  while (k < 1000) {
+    let zr2 = mulf(zr, zr)
+    let zi2 = mulf(zi, zi)
+    if (gtf(addf(zr2, zi2), 4.0d)) {
+      res = 0
+      break
+    }
+    zi = addf(mulf(mulf(2.0d, zr), zi), ci)
+    zr = addf(subf(zr2, zi2), cr)
+    k += 1
+  }
+  res
+}
+
+let width = 150.0d
+let dx = divf(2.5d, width)
+let dy = divf(2.5d, width)
+let mut count = 0
+let mut py = 0.0d
+while (ltf(py, width)) {
+  let ci = addf(-1.25d, mulf(py, dy))
+  let mut px = 0.0d
+  while (ltf(px, width)) {
+    let cr = addf(-2.0d, mulf(px, dx))
+    count += inSet(cr, ci)
+    px = addf(px, 1.0d)
+  }
+  py = addf(py, 1.0d)
+}
+print(count)

@@ -1,0 +1,54 @@
+// Scan a large body of generated text with a regular expression. Each line
+// carries three `key=digits` pairs separated by text that almost-matches (a bare
+// word, then `=`-less noise) so the matcher does real backtracking on the
+// failing starts, not just clean hits.
+//
+// Output is two integers: the number of matches found, and the summed length of
+// every match, taken mod 1000000007. Length is ASCII so it agrees across byte-,
+// char-, and UTF-16-indexed engines.
+//
+// Two properties of Grain's pure-Grain regex engine shape this port:
+//   * It recurses per character, so `findAll` over the whole multi-line text
+//     overflows the stack — the scan is run per line instead (a pattern never
+//     spans a newline, so the match set is identical).
+//   * `findAll` reports a match at every valid start offset (overlapping:
+//     "user=42", "ser=42", "er=42", … in ascending start order), whereas every
+//     other engine reports leftmost-longest non-overlapping matches. A greedy
+//     `start >= lastEnd` pass per line reproduces that same match set.
+module Main
+
+from "regex" include Regex
+from "list" include List
+use Regex.*
+
+let line = (i) => {
+  let a = (i * 7) % 100000
+  let b = (i * 13) % 100000
+  let c = (i * 31) % 100000
+  "user=" ++ toString(a) ++ " noise word here id=" ++ toString(b) ++ " and ok=" ++ toString(c)
+}
+
+match (Regex.make("[A-Za-z]+=[0-9]+")) {
+  Ok(re) => {
+    let mut count = 0
+    let mut total = 0
+    List.forEach((i) => {
+      let matches = Regex.findAll(re, line(i))
+      let mut lastEnd = 0
+      List.forEach((m) => {
+        match (m.groupPosition(0)) {
+          Some((s, e)) =>
+            if (s >= lastEnd) {
+              count += 1
+              total = (total + (e - s)) % 1000000007
+              lastEnd = e
+            },
+          None => void,
+        }
+      }, matches)
+    }, List.init(12000, (i) => i))
+    print(count)
+    print(total)
+  },
+  Err(e) => print("bad pattern: " ++ e),
+}

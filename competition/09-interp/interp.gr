@@ -1,0 +1,45 @@
+// A tiny arithmetic-expression interpreter: build an AST of nominal enum nodes,
+// then evaluate it many times. Exercises exhaustive pattern matching, enum
+// dispatch, and recursion — the functional core of the language.
+module Main
+
+enum rec Expr {
+  Lit(Number),
+  Add(Expr, Expr),
+  Sub(Expr, Expr),
+  Mul(Expr, Expr),
+  Neg(Expr),
+}
+
+// All arithmetic is mod 1000003 so every operand stays a small non-negative
+// integer (exact in float64), so every language agrees bit-for-bit.
+let m = 1000003
+
+let rec eval = (e) =>
+  match (e) {
+    Lit(v) => v,
+    Add(l, r) => (eval(l) + eval(r)) % m,
+    Sub(l, r) => (eval(l) - eval(r) + m) % m,
+    Mul(l, r) => (eval(l) * eval(r)) % m,
+    Neg(x) => (m - eval(x)) % m,
+  }
+
+// Build a deterministic balanced expression tree.
+let rec build = (depth, seed) =>
+  if (depth == 0) Lit(seed % 7)
+  else {
+    let l = build(depth - 1, seed * 2 + 1)
+    let r = build(depth - 1, seed * 2 + 2)
+    match (seed % 4) {
+      0 => Add(l, r),
+      1 => Sub(l, r),
+      2 => Mul(l, r),
+      _ => Neg(l),
+    }
+  }
+
+let rec run = (e, i, limit, acc) =>
+  if (i == limit) acc
+  else run(e, i + 1, limit, (acc + eval(e)) % m)
+
+print(run(build(18, 1), 0, 2000, 0))

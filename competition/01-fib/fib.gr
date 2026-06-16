@@ -1,0 +1,9 @@
+// Naive recursive Fibonacci — stresses function-call overhead and the cost of
+// non-tail recursion.
+module Main
+
+let rec fib = (n) =>
+  if (n < 2) n
+  else fib(n - 1) + fib(n - 2)
+
+print(fib(32))

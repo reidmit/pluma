@@ -1,0 +1,20 @@
+// Build a perfect binary tree of nominal enum nodes, then fold it — recursive
+// data construction and pattern matching at depth.
+module Main
+
+enum rec Tree {
+  Leaf(Number),
+  Node(Tree, Tree),
+}
+
+let rec build = (depth, start) =>
+  if (depth == 0) Leaf(start)
+  else Node(build(depth - 1, start), build(depth - 1, start + 1))
+
+let rec sum = (t) =>
+  match (t) {
+    Leaf(v) => v,
+    Node(l, r) => sum(l) + sum(r),
+  }
+
+print(sum(build(21, 1)))

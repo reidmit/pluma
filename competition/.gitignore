@@ -1,0 +1,6 @@
+# Grain build byproducts: `grain <prog>.gr` writes a `.gro` object next to the
+# source and caches compiled stdlib objects under `target/`. The suite builds the
+# timed wasm artifacts into a tmpdir, so any wasm left here is a local byproduct.
+*.gro
+*.wasm
+target/

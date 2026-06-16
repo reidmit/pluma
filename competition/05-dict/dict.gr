@@ -1,0 +1,26 @@
+// Word-frequency tally over a stream of keys — exercises the hash map on both
+// the lookup and insert paths.
+module Main
+
+from "map" include Map
+
+let counts = Map.make()
+
+let rec tally = (i, limit, buckets) =>
+  if (i == limit) void
+  else {
+    let key = toString(i % buckets)
+    let prev = match (Map.get(key, counts)) {
+      Some(c) => c,
+      None => 0,
+    }
+    Map.set(key, prev + 1, counts)
+    tally(i + 1, limit, buckets)
+  }
+
+tally(0, 200000, 20000)
+print(Map.size(counts))
+print(match (Map.get("0", counts)) {
+  Some(c) => c,
+  None => 0,
+})

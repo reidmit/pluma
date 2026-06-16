@@ -1,0 +1,14 @@
+// Functional collection pipeline: range → map → filter → fold, materializing
+// each intermediate sequence. Grain's `List` is a cons list whose `map`/`filter`
+// recurse one frame per element (overflowing the stack past ~100k), so this
+// uses Grain's contiguous `Array` — the same shape Pluma's array-backed `list`
+// and the other languages' arrays use here.
+module Main
+
+from "array" include Array
+
+let nums = Array.init(1000000, (i) => i + 1)
+let squared = Array.map((x) => x * x, nums)
+let evens = Array.filter((x) => x % 2 == 0, squared)
+let total = Array.reduce((acc, x) => (acc + x) % 1000000007, 0, evens)
+print(total)

@@ -1,0 +1,15 @@
+// String round-trip: build many parts, join them, split back, uppercase — text
+// throughput across concat, join, split, and case mapping.
+module Main
+
+from "list" include List
+from "array" include Array
+from "string" include String
+
+let parts = List.init(50000, (i) => "item-" ++ toString(i))
+let joined = List.join(",", parts)
+let back = String.split(",", joined)
+let upper = String.toAsciiUppercase(joined)
+print(Array.length(back))
+print(String.length(joined))
+print(String.length(upper))

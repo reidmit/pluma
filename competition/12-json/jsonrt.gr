@@ -1,0 +1,77 @@
+// JSON round-trip — build a big document as text, parse it, aggregate integer
+// fields, then re-serialize and re-parse it. Real-world string + map throughput
+// through the JSON codec. Output is integer aggregates (sum mod p, count of true
+// flags, item count), so it is independent of key ordering and agrees across
+// every language.
+module Main
+
+from "json" include Json
+from "list" include List
+
+// Build N objects as one JSON array string. Integers and fixed strings only, so
+// every language constructs byte-identical input.
+let buildInput = (n) => {
+  let objs = List.init(n, (i) => {
+    let v = (i * 2654435761) % 100003
+    let flag = if (i % 2 == 0) "true" else "false"
+    "{\"id\":" ++ toString(i) ++ ",\"name\":\"item-" ++ toString(i) ++
+      "\",\"value\":" ++ toString(v) ++ ",\"flag\":" ++ flag ++ "}"
+  })
+  "[" ++ List.join(",", objs) ++ "]"
+}
+
+let rec findField = (fields, name) =>
+  match (fields) {
+    [] => None,
+    [(k, v), ...rest] => if (k == name) Some(v) else findField(rest, name),
+  }
+
+let fieldInt = (fields, name) =>
+  match (findField(fields, name)) {
+    Some(Json.JsonNumber(n)) => n,
+    _ => 0,
+  }
+
+let fieldBool = (fields, name) =>
+  match (findField(fields, name)) {
+    Some(Json.JsonBoolean(b)) => b,
+    _ => false,
+  }
+
+// Sum the "value" fields (mod p, order-sensitive) and count the true "flag"s.
+let aggregate = (items) =>
+  List.reduce((acc, item) => {
+    let (sum, trues) = acc
+    match (item) {
+      Json.JsonObject(fields) => {
+        let nsum = (sum + fieldInt(fields, "value")) % 1000000007
+        let ntrues = if (fieldBool(fields, "flag")) trues + 1 else trues
+        (nsum, ntrues)
+      },
+      _ => acc,
+    }
+  }, (0, 0), items)
+
+let n = 20000
+let input = buildInput(n)
+match (Json.parse(input)) {
+  Ok(Json.JsonArray(items)) => {
+    let (sum, trues) = aggregate(items)
+    // Re-serialize, then parse the serializer's own output back.
+    match (Json.toString(Json.JsonArray(items))) {
+      Ok(round) =>
+        match (Json.parse(round)) {
+          Ok(Json.JsonArray(items2)) => {
+            let (sum2, _trues2) = aggregate(items2)
+            print(List.length(items))
+            print(sum)
+            print(trues)
+            print(sum2)
+          },
+          _ => print("reparse failed"),
+        },
+      Err(_) => print("serialize failed"),
+    }
+  },
+  _ => print("parse failed"),
+}

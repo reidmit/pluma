@@ -1,0 +1,11 @@
+// Sort a pseudo-random integer list with the stdlib stable merge sort, then fold
+// an order-sensitive checksum over the result.
+module Main
+
+from "list" include List
+
+let xs = List.init(100000, (i) => (i * 2654435761) % 100003)
+let sorted = List.sort(compare=(a, b) => a - b, xs)
+let checksum = List.reduce((acc, v) => (acc * 31 + v) % 1000000007, 0, sorted)
+print(List.length(sorted))
+print(checksum)
