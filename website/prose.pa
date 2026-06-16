@@ -13,117 +13,136 @@ use theme
 
 # --- prose styles -----------------------------------------------------------
 
-public def doc-title :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.property "font-size" "2.6rem",
-	css.line-height 1.1,
-	css.property "letter-spacing" "-0.025em",
-	css.font-weight "600",
-	css.property "margin-bottom" "0.6rem",
-]
+public def doc-title :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.serif,
+		.property "font-size" "2.6rem",
+		.line-height 1.1,
+		.property "letter-spacing" "-0.025em",
+		.font-weight "600",
+		.property "margin-bottom" "0.6rem",
+	]
+}
 
-public def doc-sub :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.font-size (css.rem 1.25),
-	css.property "font-style" "italic",
-	css.color (css.hex theme.muted),
-	css.property "margin-bottom" "1rem",
-]
+public def doc-sub :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.serif,
+		.font-size (.rem 1.25),
+		.property "font-style" "italic",
+		.color (.hex theme.muted),
+		.property "margin-bottom" "1rem",
+	]
+}
 
-def sect :: css.ruleset = css.rule [
-	css.property "scroll-margin-top" "1.5rem",
-	css.property "padding-top" "2.2rem",
-]
+def sect :: css.ruleset = using css {
+	.rule [.property "scroll-margin-top" "1.5rem", .property "padding-top" "2.2rem"]
+}
 
-def doc-h2 :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.font-size (css.rem 1.7),
-	css.property "letter-spacing" "-0.02em",
-	css.font-weight "600",
-	css.property "margin-bottom" "0.4rem",
-]
+def doc-h2 :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.serif,
+		.font-size (.rem 1.7),
+		.property "letter-spacing" "-0.02em",
+		.font-weight "600",
+		.property "margin-bottom" "0.4rem",
+	]
+}
 
-def doc-h3 :: css.ruleset = css.rule [
-	css.font-size (css.rem 1.12),
-	css.font-weight "600",
-	css.property "margin" "1.8rem 0 0.2rem",
-]
+def doc-h3 :: css.ruleset = using css {
+	.rule [.font-size (.rem 1.12), .font-weight "600", .property "margin" "1.8rem 0 0.2rem"]
+}
 
-def doc-p :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.font-size (css.rem 1.08),
-	css.line-height 1.75,
-	css.property "color" "#2b2823",
-	css.property "margin" "1rem 0",
-]
+def doc-p :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.serif,
+		.font-size (.rem 1.08),
+		.line-height 1.75,
+		.property "color" "#2b2823",
+		.property "margin" "1rem 0",
+	]
+}
 
-def inline-code :: css.ruleset = css.rule [
-	css.property "font-family" theme.mono,
-	css.property "font-size" "0.88em",
-	css.background (css.hex theme.code-soft),
-	css.color (css.hex theme.accent-deep),
-	css.property "padding" "0.1em 0.36em",
-	css.border-radius (css.px 5.0),
-]
+def inline-code :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.mono,
+		.property "font-size" "0.88em",
+		.background (.hex theme.code-soft),
+		.color (.hex theme.accent-deep),
+		.property "padding" "0.1em 0.36em",
+		.border-radius (.px 5.0),
+	]
+}
 
-def doc-pre :: css.ruleset = css.rule [
-	css.property "font-family" theme.mono,
-	css.font-size (css.rem 0.88),
-	css.line-height 1.6,
-	css.background (css.hex theme.code-soft),
-	css.property "border" "1px solid #e9e4dc",
-	css.property "color" "#2b2823",
-	css.border-radius (css.px 10.0),
-	css.property "padding" "1rem 1.2rem",
-	css.property "margin" "1.2rem 0",
-	css.property "white-space" "pre",
-	css.property "tab-size" "2",
-	css.property "overflow-x" "auto",
-]
+def doc-pre :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.mono,
+		.font-size (.rem 0.88),
+		.line-height 1.6,
+		.background (.hex theme.code-soft),
+		.property "border" "1px solid #e9e4dc",
+		.property "color" "#2b2823",
+		.border-radius (.px 10.0),
+		.property "padding" "1rem 1.2rem",
+		.property "margin" "1.2rem 0",
+		.property "white-space" "pre",
+		.property "tab-size" "2",
+		.property "overflow-x" "auto",
+	]
+}
 
-def callout :: css.ruleset = css.rule [
-	css.background (css.hex "#f3eefb"),
-	css.property "border-left" "3px solid #6d4aa3",
-	css.border-radius (css.px 8.0),
-	css.property "padding" "0.4rem 1.2rem",
-	css.property "margin" "1.4rem 0",
-]
+def callout :: css.ruleset = using css {
+	.rule [
+		.background (.hex "#f3eefb"),
+		.property "border-left" "3px solid #6d4aa3",
+		.border-radius (.px 8.0),
+		.property "padding" "0.4rem 1.2rem",
+		.property "margin" "1.4rem 0",
+	]
+}
 
-public def doc-cta :: css.ruleset = css.rule [
-	css.display "flex",
-	css.gap (css.rem 0.8),
-	css.property "flex-wrap" "wrap",
-	css.property "margin-top" "1.6rem",
-]
+public def doc-cta :: css.ruleset = using css {
+	.rule [
+		.display "flex",
+		.gap (.rem 0.8),
+		.property "flex-wrap" "wrap",
+		.property "margin-top" "1.6rem",
+	]
+}
 
 # --- table styles -----------------------------------------------------------
 
-def doc-table :: css.ruleset = css.rule [
-	css.property "width" "100%",
-	css.property "border-collapse" "collapse",
-	css.font-size (css.rem 0.98),
-	css.property "margin" "1.2rem 0",
-]
+def doc-table :: css.ruleset = using css {
+	.rule [
+		.property "width" "100%",
+		.property "border-collapse" "collapse",
+		.font-size (.rem 0.98),
+		.property "margin" "1.2rem 0",
+	]
+}
 
-def th :: css.ruleset = css.rule [
-	css.property "text-align" "left",
-	css.property "padding" "0.5rem 0.9rem 0.5rem 0",
-	css.property "border-bottom" "1px solid #d8d2c8",
-	css.font-size (css.rem 0.72),
-	css.property "text-transform" "uppercase",
-	css.property "letter-spacing" "0.08em",
-	css.font-weight "600",
-	css.color (css.hex theme.faint),
-]
+def th :: css.ruleset = using css {
+	.rule [
+		.property "text-align" "left",
+		.property "padding" "0.5rem 0.9rem 0.5rem 0",
+		.property "border-bottom" "1px solid #d8d2c8",
+		.font-size (.rem 0.72),
+		.property "text-transform" "uppercase",
+		.property "letter-spacing" "0.08em",
+		.font-weight "600",
+		.color (.hex theme.faint),
+	]
+}
 
-def td :: css.ruleset = css.rule [
-	css.property "padding" "0.5rem 0.9rem 0.5rem 0",
-	css.property "border-bottom" "1px solid #efeae2",
-	css.property "vertical-align" "top",
-	css.property "font-family" theme.serif,
-	css.line-height 1.55,
-	css.property "color" "#2b2823",
-]
+def td :: css.ruleset = using css {
+	.rule [
+		.property "padding" "0.5rem 0.9rem 0.5rem 0",
+		.property "border-bottom" "1px solid #efeae2",
+		.property "vertical-align" "top",
+		.property "font-family" theme.serif,
+		.line-height 1.55,
+		.property "color" "#2b2823",
+	]
+}
 
 # --- prose helpers ----------------------------------------------------------
 

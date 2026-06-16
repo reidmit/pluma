@@ -28,83 +28,83 @@ use theme
 # interpolating when this file compiles.
 
 def ex-list :: string = """
-use std/list
+	use std/list
 
-# Edit this, then press Run.
-def main = fun {
-	let xs = [1, 2, 3, 4, 5]
-	print "numbers:"
-	print xs
-	print "doubled:"
-	print (list.map xs fun n { n * 2 })
-	print "kept > 2:"
-	print (list.filter xs fun n { n > 2 })
-}
+	# Edit this, then press Run.
+	def main = fun {
+		let xs = [1, 2, 3, 4, 5]
+		print "numbers:"
+		print xs
+		print "doubled:"
+		print (list.map xs fun n { n * 2 })
+		print "kept > 2:"
+		print (list.filter xs fun n { n > 2 })
+	}
 
-"""
+	"""
 
 def ex-fact :: string = """
-# Plain recursion — the type is inferred, no annotations needed.
-def fact = fun n {
-	if n <= 1 { 1 } else { n * fact (n - 1) }
-}
+	# Plain recursion — the type is inferred, no annotations needed.
+	def fact = fun n {
+		if n <= 1 { 1 } else { n * fact (n - 1) }
+	}
 
-def main = fun {
-	print (fact 5)
-	print (fact 10)
-}
+	def main = fun {
+		print (fact 5)
+		print (fact 10)
+	}
 
-"""
+	"""
 
 def ex-enum :: string = """
-# An enum, matched with `when` (checked for exhaustiveness).
-enum shape {
-	circle float
-	rect float float
-}
-
-def area = fun s {
-	when s is shape.circle r {
-		3.14159 * r * r
-	} is shape.rect w h {
-		w * h
+	# An enum, matched with `when` (checked for exhaustiveness).
+	enum shape {
+		circle float
+		rect float float
 	}
-}
 
-def main = fun {
-	print (area (shape.circle 2.0))
-	print (area (shape.rect 3.0 4.0))
-}
+	def area = fun s {
+		when s is shape.circle r {
+			3.14159 * r * r
+		} is shape.rect w h {
+			w * h
+		}
+	}
 
-"""
+	def main = fun {
+		print (area (shape.circle 2.0))
+		print (area (shape.rect 3.0 4.0))
+	}
+
+	"""
 
 def ex-trait :: string = """
-# One name, many types — a trait with an instance.
-trait to-text a {
-	to-text :: a -> string
-}
-
-implement to-text bool {
-	def to-text = fun b {
-		if b { "yes" } else { "no" }
+	# One name, many types — a trait with an instance.
+	trait to-text a {
+		to-text :: a -> string
 	}
-}
 
-def main = fun {
-	print (to-text true)
-	print (to-text false)
-}
+	implement to-text bool {
+		def to-text = fun b {
+			if b { "yes" } else { "no" }
+		}
+	}
 
-"""
+	def main = fun {
+		print (to-text true)
+		print (to-text false)
+	}
+
+	"""
 
 def ex-record :: string = """
-# Records are structural; \$(...) interpolates into a string.
-def main = fun {
-	let user = { name: "Ada", age: 36 }
-	print "\$(user.name) is \$(to-string user.age)"
-}
+	# Records are structural; \$(...) interpolates into a string.
+	def main = fun {
+		let user = { name: "Ada", age: 36 }
+		print "\$(user.name) is \$(to-string user.age)"
+	}
 
-"""
+	"""
 
 # (label, source). The first is what loads on first paint.
 def examples :: list (string, string) = [
@@ -135,113 +135,128 @@ def placeholder :: string = "Press Run to compile this program on the server and
 
 def wrap :: css.ruleset = css.rule [css.property "padding" "3rem 0 4rem"]
 
-def head :: css.ruleset = css.rule [
-	css.property "max-width" "44rem",
-	css.property "margin-bottom" "2rem",
-]
+def head :: css.ruleset = using css {
+	.rule [.property "max-width" "44rem", .property "margin-bottom" "2rem"]
+}
 
-def title :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.font-size (css.rem 2.4),
-	css.line-height 1.1,
-	css.property "letter-spacing" "-0.025em",
-	css.font-weight "600",
-	css.property "margin-bottom" "0.8rem",
-]
+def title :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.serif,
+		.font-size (.rem 2.4),
+		.line-height 1.1,
+		.property "letter-spacing" "-0.025em",
+		.font-weight "600",
+		.property "margin-bottom" "0.8rem",
+	]
+}
 
-def sub :: css.ruleset = css.rule [css.font-size (css.rem 1.12), css.color (css.hex theme.muted)]
+def sub :: css.ruleset = using css { .rule [.font-size (.rem 1.12), .color (.hex theme.muted)] }
 
-def grid :: css.ruleset = css.rule [
-	css.display "grid",
-	css.property "grid-template-columns" "1fr 1fr",
-	css.gap (css.rem 1.2),
-	css.align-items "stretch",
-	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr"],
-]
+def grid :: css.ruleset = using css {
+	.rule [
+		.display "grid",
+		.property "grid-template-columns" "1fr 1fr",
+		.gap (.rem 1.2),
+		.align-items "stretch",
+		.media "(max-width: 860px)" [.property "grid-template-columns" "1fr"],
+	]
+}
 
 # `min-width: 0` here because grid items default to `min-width: auto`; without it
 # the wide code blows the column out past the viewport instead of scrolling inside.
-def col :: css.ruleset = css.rule [
-	css.display "flex",
-	css.property "flex-direction" "column",
-	css.property "min-width" "0",
-]
+def col :: css.ruleset = using css {
+	.rule [.display "flex", .property "flex-direction" "column", .property "min-width" "0"]
+}
 
 # Each column opens with a header row (the uppercase label, plus the example
 # picker on the source side) so the two columns line up.
-def col-head :: css.ruleset = css.rule [
-	css.display "flex",
-	css.align-items "center",
-	css.justify-content "space-between",
-	css.property "margin-bottom" "0.6rem",
-	css.property "min-height" "1.7rem",
-]
+def col-head :: css.ruleset = using css {
+	.rule [
+		.display "flex",
+		.align-items "center",
+		.justify-content "space-between",
+		.property "margin-bottom" "0.6rem",
+		.property "min-height" "1.7rem",
+	]
+}
 
-def lbl :: css.ruleset = css.rule [
-	css.property "text-transform" "uppercase",
-	css.property "letter-spacing" "0.1em",
-	css.font-size (css.rem 0.72),
-	css.font-weight "600",
-	css.color (css.hex theme.faint),
-]
+def lbl :: css.ruleset = using css {
+	.rule [
+		.property "text-transform" "uppercase",
+		.property "letter-spacing" "0.1em",
+		.font-size (.rem 0.72),
+		.font-weight "600",
+		.color (.hex theme.faint),
+	]
+}
 
-def picker :: css.ruleset = css.rule [
-	css.property "font-family" theme.sans,
-	css.font-size (css.rem 0.82),
-	css.color (css.hex theme.muted),
-	css.background (css.hex theme.card-bg),
-	css.property "border" "1px solid #e9e4dc",
-	css.border-radius (css.px 8.0),
-	css.property "padding" "0.3rem 0.5rem",
-	css.cursor "pointer",
-	css.on "hover" [css.border-color (css.hex theme.accent)],
-]
+def picker :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.sans,
+		.font-size (.rem 0.82),
+		.color (.hex theme.muted),
+		.background (.hex theme.card-bg),
+		.property "border" "1px solid #e9e4dc",
+		.border-radius (.px 8.0),
+		.property "padding" "0.3rem 0.5rem",
+		.cursor "pointer",
+		.on "hover" [.border-color (.hex theme.accent)],
+	]
+}
 
 # The editor and the output pane share a dark terminal-ish skin so the page reads as
 # "this is where code lives".
-def panel :: css.ruleset = css.rule [
-	css.background (css.hex theme.code-bg),
-	css.color (css.hex theme.code-fg),
-	css.border-radius (css.px 12.0),
-	css.property "padding" "1.2rem 1.3rem",
-	css.property "font-family" theme.mono,
-	css.font-size (css.rem 0.85),
-	css.line-height 1.6,
-	css.property "tab-size" "2",
-	css.property "min-height" "22rem",
-	css.property "box-shadow" "0 18px 44px -22px rgba(28, 26, 38, 0.4)",
-]
+def panel :: css.ruleset = using css {
+	.rule [
+		.background (.hex theme.code-bg),
+		.color (.hex theme.code-fg),
+		.border-radius (.px 12.0),
+		.property "padding" "1.2rem 1.3rem",
+		.property "font-family" theme.mono,
+		.font-size (.rem 0.85),
+		.line-height 1.6,
+		.property "tab-size" "2",
+		.property "min-height" "22rem",
+		.property "box-shadow" "0 18px 44px -22px rgba(28, 26, 38, 0.4)",
+	]
+}
 
-def editor :: css.ruleset = css.compose [
-	panel,
-	css.rule [
-		css.property "border" "none",
-		css.property "width" "100%",
-		css.property "resize" "vertical",
-		css.property "white-space" "pre",
-		css.property "outline" "none",
-	],
-]
+def editor :: css.ruleset = using css {
+	.compose [
+		panel,
+		.rule [
+			.property "border" "none",
+			.property "width" "100%",
+			.property "resize" "vertical",
+			.property "white-space" "pre",
+			.property "outline" "none",
+		],
+	]
+}
 
-def pane :: css.ruleset = css.compose [
-	panel,
-	css.rule [
-		css.property "margin" "0",
-		css.property "white-space" "pre-wrap",
-		css.property "overflow-x" "auto",
-		css.color (css.hex theme.code-fg),
-	],
-]
+def pane :: css.ruleset = using css {
+	.compose [
+		panel,
+		.rule [
+			.property "margin" "0",
+			.property "white-space" "pre-wrap",
+			.property "overflow-x" "auto",
+			.color (.hex theme.code-fg),
+		],
+	]
+}
 
-def run-row :: css.ruleset = css.rule [
-	css.display "flex",
-	css.align-items "center",
-	css.gap (css.rem 1.0),
-	css.property "margin" "1.4rem 0 0",
-	css.property "flex-wrap" "wrap",
-]
+def run-row :: css.ruleset = using css {
+	.rule [
+		.display "flex",
+		.align-items "center",
+		.gap (.rem 1.0),
+		.property "margin" "1.4rem 0 0",
+		.property "flex-wrap" "wrap",
+	]
+}
 
-def hint :: css.ruleset = css.rule [css.color (css.hex theme.faint), css.font-size (css.rem 0.9)]
+def hint :: css.ruleset = using css { .rule [.color (.hex theme.faint), .font-size (.rem 0.9)] }
 
 # --- behavior ---------------------------------------------------------------
 #
@@ -278,7 +293,7 @@ def execute :: fun (fun string -> result string string) (signal string) (signal 
 # browser-backed versions (see `client.pa`).
 public def page :: fun (fun string -> result string string) (fun nothing -> string) (fun string -> nothing) -> view = using view {
 	fun run initial share {
-		let _ = theme.install-globals ()
+		theme.install-globals ()
 		let start = initial ()
 		let src = signal.new if start == "" {
 			ex-list

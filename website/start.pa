@@ -23,11 +23,13 @@ def doc-section :: fun string string (list view) -> view = prose.doc-section
 
 # --- layout -----------------------------------------------------------------
 
-def wrap :: css.ruleset = css.rule [
-	css.property "max-width" "46rem",
-	css.property "margin" "0 auto",
-	css.property "padding" "1rem 0 2rem",
-]
+def wrap :: css.ruleset = using css {
+	.rule [
+		.property "max-width" "46rem",
+		.property "margin" "0 auto",
+		.property "padding" "1rem 0 2rem",
+	]
+}
 
 # --- sections ---------------------------------------------------------------
 
@@ -137,7 +139,7 @@ def sec-fullstack :: view = doc-section "fullstack" "Going fullstack" [
 
 public def page :: fun nothing -> view = using view {
 	fun {
-		let _ = theme.install-globals ()
+		theme.install-globals ()
 		.div [.id "app"] [
 			theme.top-nav (),
 			.div [.styled theme.shell] [

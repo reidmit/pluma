@@ -34,63 +34,70 @@ def doc-section :: fun string string (list view) -> view = prose.doc-section
 
 # --- doc layout -------------------------------------------------------------
 
-def doc-grid :: css.ruleset = css.rule [
-	css.display "grid",
-	css.property "grid-template-columns" "190px 1fr",
-	css.gap (css.rem 3.5),
-	css.property "align-items" "start",
-	css.property "padding" "1rem 0 2rem",
-	css.media "(max-width: 860px)" [css.property "grid-template-columns" "1fr"],
-]
+def doc-grid :: css.ruleset = using css {
+	.rule [
+		.display "grid",
+		.property "grid-template-columns" "190px 1fr",
+		.gap (.rem 3.5),
+		.property "align-items" "start",
+		.property "padding" "1rem 0 2rem",
+		.media "(max-width: 860px)" [.property "grid-template-columns" "1fr"],
+	]
+}
 
-def sidebar :: css.ruleset = css.rule [
-	css.property "position" "sticky",
-	css.property "top" "1.5rem",
-	css.property "align-self" "start",
-	css.font-size (css.rem 0.92),
-	css.media "(max-width: 860px)" [css.display "none"],
-]
+def sidebar :: css.ruleset = using css {
+	.rule [
+		.property "position" "sticky",
+		.property "top" "1.5rem",
+		.property "align-self" "start",
+		.font-size (.rem 0.92),
+		.media "(max-width: 860px)" [.display "none"],
+	]
+}
 
-def side-title :: css.ruleset = css.rule [
-	css.property "text-transform" "uppercase",
-	css.property "letter-spacing" "0.1em",
-	css.font-size (css.rem 0.72),
-	css.font-weight "600",
-	css.color (css.hex theme.faint),
-	css.property "margin" "1.4rem 0 0.9rem",
-]
+def side-title :: css.ruleset = using css {
+	.rule [
+		.property "text-transform" "uppercase",
+		.property "letter-spacing" "0.1em",
+		.font-size (.rem 0.72),
+		.font-weight "600",
+		.color (.hex theme.faint),
+		.property "margin" "1.4rem 0 0.9rem",
+	]
+}
 
-def side-list :: css.ruleset = css.rule [
-	css.display "flex",
-	css.flex-direction "column",
-	css.gap (css.rem 0.1),
-]
+def side-list :: css.ruleset = using css {
+	.rule [.display "flex", .flex-direction "column", .gap (.rem 0.1)]
+}
 
-def side-item :: css.ruleset = css.rule [
-	css.property "padding" "0.28rem 0",
-	css.color (css.hex theme.muted),
-	css.property "border-left" "2px solid transparent",
-	css.property "padding-left" "0.8rem",
-	css.property "margin-left" "-0.8rem",
-	css.property "transition" "color 0.12s ease, border-color 0.12s ease",
-	css.on "hover" [css.color (css.hex theme.accent), css.property "border-color" "#6d4aa3"],
-]
+def side-item :: css.ruleset = using css {
+	.rule [
+		.property "padding" "0.28rem 0",
+		.color (.hex theme.muted),
+		.property "border-left" "2px solid transparent",
+		.property "padding-left" "0.8rem",
+		.property "margin-left" "-0.8rem",
+		.property "transition" "color 0.12s ease, border-color 0.12s ease",
+		.on "hover" [.color (.hex theme.accent), .property "border-color" "#6d4aa3"],
+	]
+}
 
-def doc-main :: css.ruleset = css.rule [
-	css.property "min-width" "0",
-	css.property "max-width" "44rem",
-]
+def doc-main :: css.ruleset = using css {
+	.rule [.property "min-width" "0", .property "max-width" "44rem"]
+}
 
 # The lead-in that separates the narrative tour from the reference half.
-def divider :: css.ruleset = css.rule [
-	css.property "font-family" theme.serif,
-	css.font-size (css.rem 1.9),
-	css.font-weight "600",
-	css.property "letter-spacing" "-0.02em",
-	css.property "border-top" "1px solid #e9e4dc",
-	css.property "margin-top" "3.5rem",
-	css.property "padding-top" "2.5rem",
-]
+def divider :: css.ruleset = using css {
+	.rule [
+		.property "font-family" theme.serif,
+		.font-size (.rem 1.9),
+		.font-weight "600",
+		.property "letter-spacing" "-0.02em",
+		.property "border-top" "1px solid #e9e4dc",
+		.property "margin-top" "3.5rem",
+		.property "padding-top" "2.5rem",
+	]
+}
 
 # --- table of contents ------------------------------------------------------
 
@@ -132,10 +139,10 @@ def sec-intro :: view = doc-section "intro" "A first look" [
 	p "Pluma is a small functional language. This page walks through it from the ground up — each idea builds on the one before, so reading top to bottom is the intended path. You only need to know how to program; we'll define the rest as we go.",
 	p "A Pluma program is a list of definitions. One of them is named main, and running the program runs it.",
 	code """
-	def main = fun {
-		print "hello, world"
-	}
-	""",
+		def main = fun {
+			print "hello, world"
+		}
+		""",
 	pr [
 		t "Here ",
 		ic "def",
@@ -153,11 +160,11 @@ def sec-intro :: view = doc-section "intro" "A first look" [
 def sec-values :: view = doc-section "values" "Values and types" [
 	p "Pluma has the building blocks you'd expect: whole numbers, decimals, text, and true-or-false.",
 	code """
-	let count = 10        # int
-	let price = 1.99      # float
-	let name  = "Ada"     # string
-	let ready = true      # bool
-	""",
+		let count = 10        # int
+		let price = 1.99      # float
+		let name  = "Ada"     # string
+		let ready = true      # bool
+		""",
 	pr [
 		t "Every value has a type, and Pluma checks those types before your program runs — so a whole class of mistakes is caught early. But you rarely write the types out: Pluma works them out from how a value is used. The ",
 		ic "# int",
@@ -185,14 +192,14 @@ def sec-bindings :: view = doc-section "bindings" "Naming things: let and def" [
 		t " works inside a function.",
 	],
 	code """
-	def pi = 3.14159          # top level
+		def pi = 3.14159          # top level
 
-	def main = fun {
-		let radius = 2.0      # local to this function
-		let area = pi * radius * radius
-		print (to-string area)
-	}
-	""",
+		def main = fun {
+			let radius = 2.0      # local to this function
+			let area = pi * radius * radius
+			print (to-string area)
+		}
+		""",
 	pr [
 		t "Both use ",
 		ic "=",
@@ -220,16 +227,16 @@ def sec-functions :: view = doc-section "functions" "Functions" [
 		t " keyword.",
 	],
 	code """
-	let double = fun n { n * 2 }
-	let add = fun x y { x + y }
-	let greet = fun { print "hi" }   # no arguments
-	""",
+		let double = fun n { n * 2 }
+		let add = fun x y { x + y }
+		let greet = fun { print "hi" }   # no arguments
+		""",
 	p "You call a function by writing it next to its arguments, separated by spaces — no parentheses around the whole call. Parentheses are only for grouping sub-expressions.",
 	code """
-	double 21          # => 42
-	add 2 3            # => 5
-	print (double 21)  # parens group the inner call
-	""",
+		double 21          # => 42
+		add 2 3            # => 5
+		print (double 21)  # parens group the inner call
+		""",
 	note [
 		pr [
 			t "One thing to know up front: a function takes all of its arguments at once. ",
@@ -255,12 +262,12 @@ def sec-strings :: view = doc-section "strings" "Strings and text" [
 		t ".",
 	],
 	code """
-	let name = "Ada"
-	print "hello, \$(name)"               # hello, Ada
+		let name = "Ada"
+		print "hello, \$(name)"               # hello, Ada
 
-	let n = 42
-	print "the answer is \$(to-string n)"
-	""",
+		let n = 42
+		print "the answer is \$(to-string n)"
+		""",
 	pr [
 		t "Text is always text — a number isn't automatically a string, so you call ",
 		ic "to-string",
@@ -289,9 +296,9 @@ def sec-collections :: view = doc-section "collections" "Lists, tuples, and reco
 		t "A list holds any number of values, all of the same type. Write one with square brackets.",
 	],
 	code """
-	let primes = [2, 3, 5, 7, 11]
-	let names = ["Ada", "Alan", "Grace"]
-	""",
+		let primes = [2, 3, 5, 7, 11]
+		let names = ["Ada", "Alan", "Grace"]
+		""",
 	pr [
 		t "The ",
 		ic "std/list",
@@ -304,15 +311,15 @@ def sec-collections :: view = doc-section "collections" "Lists, tuples, and reco
 	h3 "Tuples",
 	p "A tuple holds a fixed number of values that may have different types. Write one with parentheses and commas.",
 	code """
-	let point = (1, 2)
-	let row = ("Ada", 36, true)
-	""",
+		let point = (1, 2)
+		let row = ("Ada", 36, true)
+		""",
 	h3 "Records",
 	pr [t "A record holds named fields. Write one with braces, and read a field with a dot."],
 	code """
-	let person = {name: "Ada", age: 36}
-	print person.name        # Ada
-	""",
+		let person = {name: "Ada", age: 36}
+		print person.name        # Ada
+		""",
 	pr [
 		t "Records are structural, which has a pleasant consequence: a function that reads a couple of fields works on ",
 		t "any",
@@ -321,11 +328,11 @@ def sec-collections :: view = doc-section "collections" "Lists, tuples, and reco
 		t ":",
 	],
 	code """
-	def label = fun thing { thing.name }
+		def label = fun thing { thing.name }
 
-	label {name: "Ada", age: 36}          # works
-	label {name: "Mars", radius: 3389.5}  # also works
-	""",
+		label {name: "Ada", age: 36}          # works
+		label {name: "Mars", radius: 3389.5}  # also works
+		""",
 ]
 
 def sec-control :: view = doc-section "control-flow" "Making decisions: if, when, and while" [
@@ -338,12 +345,12 @@ def sec-control :: view = doc-section "control-flow" "Making decisions: if, when
 		t " block otherwise.",
 	],
 	code """
-	if score > 100 {
-		print "high score!"
-	} else {
-		print "keep going"
-	}
-	""",
+		if score > 100 {
+			print "high score!"
+		} else {
+			print "keep going"
+		}
+		""",
 	pr [t "An ", ic "if", t " is also an expression — it can produce a value you then name:"],
 	code "let label = if ready { \"go\" } else { \"wait\" }",
 	pr [t "And it chains with ", ic "else if", t ", just as you'd expect."],
@@ -356,23 +363,23 @@ def sec-control :: view = doc-section "control-flow" "Making decisions: if, when
 		t " must cover every possibility, so you can't quietly forget a case — the compiler will point it out.",
 	],
 	code """
-	when http-status is 200 {
-		"ok"
-	} is 404 {
-		"not found"
-	} else {
-		"something else"
-	}
-	""",
+		when http-status is 200 {
+			"ok"
+		} is 404 {
+			"not found"
+		} else {
+			"something else"
+		}
+		""",
 	h3 "while",
 	pr [t "A ", ic "while", t " repeats its block for as long as the condition holds."],
 	code """
-	let i = ref.new 0
-	while ref.get i < 3 {
-		print (to-string (ref.get i))
-		ref.update i fun n { n + 1 }
-	}
-	""",
+		let i = ref.new 0
+		while ref.get i < 3 {
+			print (to-string (ref.get i))
+			ref.update i fun n { n + 1 }
+		}
+		""",
 ]
 
 def sec-patterns :: view = doc-section "patterns" "Patterns and destructuring" [
@@ -384,18 +391,18 @@ def sec-patterns :: view = doc-section "patterns" "Patterns and destructuring" [
 		t " to name its pieces:",
 	],
 	code """
-	let (x, y) = (10, 20)
-	let {name: n, age: a} = person
-	""",
+		let (x, y) = (10, 20)
+		let {name: n, age: a} = person
+		""",
 	p "Some patterns always match — naming a value, or splitting a tuple of known size. Others might not, like checking for a specific number. Patterns that can fail belong in if, when, or while, where there's a branch to take when they don't. The always-match kind can also be used in a let.",
 	p "Lists can be matched by shape, too — the empty list, or a first element and \"the rest\":",
 	code """
-	when items is [] {
-		"nothing here"
-	} is [first, ...rest] {
-		"starts with \$(to-string first)"
-	}
-	""",
+		when items is [] {
+			"nothing here"
+		} is [first, ...rest] {
+			"starts with \$(to-string first)"
+		}
+		""",
 ]
 
 def sec-enums :: view = doc-section "enums" "Your own types: enums" [
@@ -405,21 +412,21 @@ def sec-enums :: view = doc-section "enums" "Your own types: enums" [
 		t " defines a type by listing the shapes its values can take. Each shape is a variant. The simplest enums are just a set of named choices:",
 	],
 	code """
-	enum color {
-		red
-		green
-		blue
-	}
-	""",
+		enum color {
+			red
+			green
+			blue
+		}
+		""",
 	p "Variants can also carry data. A shape might be a circle with a radius, or a rectangle with a width and a height:",
 	code """
-	enum shape {
-		circle float
-		rect float float
-	}
+		enum shape {
+			circle float
+			rect float float
+		}
 
-	let s = shape.circle 2.0
-	""",
+		let s = shape.circle 2.0
+		""",
 	pr [
 		t "You reach a variant through its enum's name — ",
 		ic "color.red",
@@ -430,21 +437,21 @@ def sec-enums :: view = doc-section "enums" "Your own types: enums" [
 		t " is exhaustive, you're guaranteed to handle every variant:",
 	],
 	code """
-	def area = fun s {
-		when s is shape.circle r {
-			3.14159 * r * r
-		} is shape.rect w h {
-			w * h
+		def area = fun s {
+			when s is shape.circle r {
+				3.14159 * r * r
+			} is shape.rect w h {
+				w * h
+			}
 		}
-	}
-	""",
+		""",
 	p "Enums can take type parameters, so one definition works for any element type — here, a binary tree of anything:",
 	code """
-	enum tree a {
-		leaf
-		node (tree a) a (tree a)
-	}
-	""",
+		enum tree a {
+			leaf
+			node (tree a) a (tree a)
+		}
+		""",
 ]
 
 def sec-options :: view = doc-section "options" "Missing values and errors: option and result" [
@@ -458,14 +465,14 @@ def sec-options :: view = doc-section "options" "Missing values and errors: opti
 		t ":",
 	],
 	code """
-	def first = fun xs {
-		when xs is [head, ...] {
-			some head
-		} is [] {
-			none
+		def first = fun xs {
+			when xs is [head, ...] {
+				some head
+			} is [] {
+				none
+			}
 		}
-	}
-	""",
+		""",
 	pr [
 		t "The second is ",
 		ic "result",
@@ -476,14 +483,14 @@ def sec-options :: view = doc-section "options" "Missing values and errors: opti
 		t ":",
 	],
 	code """
-	def divide = fun a b {
-		if b == 0 {
-			err "can't divide by zero"
-		} else {
-			ok (a / b)
+		def divide = fun a b {
+			if b == 0 {
+				err "can't divide by zero"
+			} else {
+				ok (a / b)
+			}
 		}
-	}
-	""",
+		""",
 	pr [
 		t "These are ordinary enums, so you can handle them with ",
 		ic "when",
@@ -496,20 +503,20 @@ def sec-options :: view = doc-section "options" "Missing values and errors: opti
 		t ":",
 	],
 	code """
-	(first []) ?? 0          # => 0
-	(first [9, 8]) ?? 0      # => 9
-	""",
+		(first []) ?? 0          # => 0
+		(first [9, 8]) ?? 0      # => 9
+		""",
 	pr [
 		t "The second, ",
 		ic "try",
 		t ", unwraps a success — or stops the current function early and hands the failure outward. A chain of fallible steps then reads top to bottom, with the error path implied:",
 	],
 	code """
-	def run = fun a b {
-		try q = divide a b
-		ok (q + 1)
-	}
-	""",
+		def run = fun a b {
+			try q = divide a b
+			ok (q + 1)
+		}
+		""",
 ]
 
 def sec-mutation :: view = doc-section "mutation" "When you need to change something: ref" [
@@ -519,11 +526,11 @@ def sec-mutation :: view = doc-section "mutation" "When you need to change somet
 		t ": a small box you can read from and write to.",
 	],
 	code """
-	let count = ref.new 0     # a box holding 0
-	ref.update count fun n { n + 1 }
-	ref.set count 100
-	print (to-string (ref.get count))   # 100
-	""",
+		let count = ref.new 0     # a box holding 0
+		ref.update count fun n { n + 1 }
+		ref.set count 100
+		print (to-string (ref.get count))   # 100
+		""",
 	pr [
 		t "A ",
 		ic "ref",
@@ -540,18 +547,18 @@ def sec-traits :: view = doc-section "traits" "Shared behavior: traits" [
 		t " describes a capability — a set of operations — that different types can provide.",
 	],
 	code """
-	trait to-text a {
-		to-text :: a -> string
-	}
-	""",
+		trait to-text a {
+			to-text :: a -> string
+		}
+		""",
 	pr [t "Then you give a type that capability with ", ic "implement", t ":"],
 	code """
-	implement to-text bool {
-		def to-text = fun b {
-			if b { "yes" } else { "no" }
+		implement to-text bool {
+			def to-text = fun b {
+				if b { "yes" } else { "no" }
+			}
 		}
-	}
-	""",
+		""",
 	pr [
 		t "Now ",
 		ic "to-text true",
@@ -570,22 +577,22 @@ def sec-modules :: view = doc-section "modules" "Organizing code: modules" [
 		t ", then reach its contents through its name:",
 	],
 	code """
-	use std/list
+		use std/list
 
-	def main = fun {
-		let xs = list.map [1, 2, 3] fun n { n * 2 }
-		print (to-string (list.sum xs))
-	}
-	""",
+		def main = fun {
+			let xs = list.map [1, 2, 3] fun n { n * 2 }
+			print (to-string (list.sum xs))
+		}
+		""",
 	pr [
 		t "Within a file, definitions are private by default — visible only there. Mark one ",
 		ic "public",
 		t " to let other modules use it:",
 	],
 	code """
-	public def add = fun x y { x + y }   # other files can use this
-	def helper = fun n { n + n }         # private to this file
-	""",
+		public def add = fun x y { x + y }   # other files can use this
+		def helper = fun n { n + n }         # private to this file
+		""",
 ]
 
 def sec-fullstack :: view = doc-section "fullstack" "From here: the whole stack" [
@@ -595,9 +602,9 @@ def sec-fullstack :: view = doc-section "fullstack" "From here: the whole stack"
 		t " runs on the server, and the compiler generates the matching client call, so browser code can invoke it as if it were local:",
 	],
 	code """
-	remote def greet :: fun string -> task string =
-		fun name { task.return ("hi, " ++ name) }
-	""",
+		remote def greet :: fun string -> task string =
+			fun name { task.return ("hi, " ++ name) }
+		""",
 	p "Pair that with signals for reactive UI and server-side rendering, and one language carries you from the database to the DOM. The example apps in the repository are the best next step — they're complete, runnable programs.",
 	using view {
 		.div [.styled prose.doc-cta] [
@@ -725,11 +732,11 @@ def sec-operators :: view = doc-section "operators" "Operators" [
 		t ". It binds looser than everything else and is left-associative, so a chain reads top to bottom:",
 	],
 	code """
-	[1, 2, 3, 4, 5]
-		|> list.filter fun n { n > 2 }
-		|> list.map fun n { n * 10 }
-		|> print
-	""",
+		[1, 2, 3, 4, 5]
+			|> list.filter fun n { n > 2 }
+			|> list.map fun n { n * 10 }
+			|> print
+		""",
 ]
 
 def sec-aliases :: view = doc-section "aliases" "Type aliases and nominal types" [
@@ -743,13 +750,13 @@ def sec-aliases :: view = doc-section "aliases" "Type aliases and nominal types"
 		t "), and a bare type expression:",
 	],
 	code """
-	alias point {
-		x :: float
-		y :: float
-	}
+		alias point {
+			x :: float
+			y :: float
+		}
 
-	alias number-list list int
-	""",
+		alias number-list list int
+		""",
 	pr [
 		t "An alias is just a name for a type — it introduces no new identity. ",
 		ic "point",
@@ -773,9 +780,9 @@ def sec-aliases :: view = doc-section "aliases" "Type aliases and nominal types"
 		t ": there's no named record type. A function that reads a couple of fields stays generic over whatever else the record carries.",
 	],
 	code """
-	# name-of has type {name: a, ...} -> a
-	def name-of = fun r { r.name }
-	""",
+		# name-of has type {name: a, ...} -> a
+		def name-of = fun r { r.name }
+		""",
 	pr [
 		t "The two built-in enums ",
 		ic "option",
@@ -828,23 +835,23 @@ def sec-bytes :: view = doc-section "bytes" "Bytes" [
 		t "Bytes and strings are different types with no implicit conversion. The bridge is explicit — encoding is infallible, decoding can fail:",
 	],
 	code """
-	string.to-bytes :: fun string -> bytes
-	bytes.to-string :: fun bytes -> result string string
-	""",
+		string.to-bytes :: fun string -> bytes
+		bytes.to-string :: fun bytes -> result string string
+		""",
 	h3 "The std/bytes module",
 	p "A parallel surface to std/string, plus list conversions:",
 	code """
-	use std/bytes
+		use std/bytes
 
-	bytes.length b           # int — byte count
-	bytes.at b i             # option int — none if out of bounds
-	bytes.slice b start end  # clamp-to-bounds
-	bytes.concat a b
-	bytes.to-list b          # list int
-	bytes.from-list xs       # result bytes string
-	bytes.split b sep
-	bytes.join parts sep
-	""",
+		bytes.length b           # int — byte count
+		bytes.at b i             # option int — none if out of bounds
+		bytes.slice b start end  # clamp-to-bounds
+		bytes.concat a b
+		bytes.to-list b          # list int
+		bytes.from-list xs       # result bytes string
+		bytes.split b sep
+		bytes.join parts sep
+		""",
 	pr [
 		t "Bytes have prelude ",
 		ic "hash",
@@ -867,14 +874,14 @@ def sec-regex :: view = doc-section "regex" "Regular expressions" [
 		t " (string literals, named classes, anchors) with combinators for sequence, alternation, grouping, and repetition. Whitespace between atoms is meaningless, so a pattern can lay out across lines:",
 	],
 	code """
-	let phone = `
-		^
-		"(" digit{3} ")"
-		" "
-		digit{3} "-" digit{4}
-		$
-	`
-	""",
+		let phone = `
+			^
+			"(" digit{3} ")"
+			" "
+			digit{3} "-" digit{4}
+			$
+		`
+		""",
 	pr [
 		t "A literal is delimited by backticks and produces a value of the primitive type ",
 		ic "regex",
@@ -898,11 +905,11 @@ def sec-regex :: view = doc-section "regex" "Regular expressions" [
 		("any", "Any single character"),
 	],
 	code """
-	`"hello"`               # the exact characters
-	`"color: " "red"`       # two atoms, in sequence
-	`digit "-" digit`       # a class mixed with literals
-	`letter (digit | "-")*`  # alternation inside a group
-	""",
+		`"hello"`               # the exact characters
+		`"color: " "red"`       # two atoms, in sequence
+		`digit "-" digit`       # a class mixed with literals
+		`letter (digit | "-")*`  # alternation inside a group
+		""",
 	h3 "Alternation, grouping, captures",
 	pr [
 		ic "|",
@@ -911,10 +918,10 @@ def sec-regex :: view = doc-section "regex" "Regular expressions" [
 		t ":",
 	],
 	code """
-	`"yes" | "no"`
-	`"color: " ("red" | "green" | "blue")`
-	`<key: letter+> "=" <val: digit+>`
-	""",
+		`"yes" | "no"`
+		`"color: " ("red" | "green" | "blue")`
+		`<key: letter+> "=" <val: digit+>`
+		""",
 	h3 "Quantifiers",
 	p "A quantifier applies to the atom or group immediately to its left.",
 	prose.table2 ("Syntax", "Meaning") [
@@ -935,37 +942,37 @@ def sec-regex :: view = doc-section "regex" "Regular expressions" [
 	],
 	h3 "Using std/regex",
 	code """
-	use std/regex
+		use std/regex
 
-	regex.matches       :: fun regex string -> bool
-	regex.find          :: fun regex string -> option regex.match
-	regex.find-all      :: fun regex string -> list regex.match
-	regex.named-capture :: fun regex string string -> option string
-	regex.replace       :: fun regex string string -> string
-	regex.split         :: fun regex string -> list string
-	""",
+		regex.matches       :: fun regex string -> bool
+		regex.find          :: fun regex string -> option regex.match
+		regex.find-all      :: fun regex string -> list regex.match
+		regex.named-capture :: fun regex string string -> option string
+		regex.replace       :: fun regex string string -> string
+		regex.split         :: fun regex string -> list string
+		""",
 	p "Every match surfaces as a record — the text, its byte offsets, and the named captures that fired:",
 	code """
-	alias regex.match {
-		text   :: string,
-		start  :: int,
-		end    :: int,
-		groups :: dict string string,
-	}
-	""",
-	code """
-	use std/regex as re
-
-	def pair = `<key: letter+> "=" <val: digit+>`
-
-	def main = fun {
-		when re.find pair "size=42" is some m {
-			print m.text                     # size=42
-		} is none {
-			print "no match"
+		alias regex.match {
+			text   :: string,
+			start  :: int,
+			end    :: int,
+			groups :: dict string string,
 		}
-	}
-	""",
+		""",
+	code """
+		use std/regex as re
+
+		def pair = `<key: letter+> "=" <val: digit+>`
+
+		def main = fun {
+			when re.find pair "size=42" is some m {
+				print m.text                     # size=42
+			} is none {
+				print "no match"
+			}
+		}
+		""",
 	note [
 		pr [
 			t "Coming from PCRE: ",
@@ -998,14 +1005,14 @@ def sec-diagnostics :: view = doc-section "diagnostics" "Diagnostics and error c
 		t " — it never changes meaning across releases, so it's safe to link to, filter on, or cite.",
 	],
 	code """
-	error[E0100]: Name `lenght` is not defined.
-	  ╭─▸ src/main.pa:3:12
-	  │
-	3 │ def main = lenght
-	  │            ^^^^^^
-	  │
-	  ╰─ help: did you mean `length`?
-	""",
+		error[E0100]: Name `lenght` is not defined.
+		  ╭─▸ src/main.pa:3:12
+		  │
+		3 │ def main = lenght
+		  │            ^^^^^^
+		  │
+		  ╰─ help: did you mean `length`?
+		""",
 	pr [
 		t "The severity (",
 		ic "error",
@@ -1095,7 +1102,7 @@ def sec-diagnostics :: view = doc-section "diagnostics" "Diagnostics and error c
 
 public def page :: fun nothing -> view = using view {
 	fun {
-		let _ = theme.install-globals ()
+		theme.install-globals ()
 		.div [.id "app"] [
 			theme.top-nav (),
 			.div [.styled theme.shell] [
