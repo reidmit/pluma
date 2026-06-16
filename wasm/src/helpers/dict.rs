@@ -37,7 +37,7 @@ const FNV_PRIME: i64 = 0x0000_0100_0000_01b3;
 const VA: u32 = types::T_VALARRAY;
 
 /// Build a `none` `$variant` inline (arity 0, all payload slots null).
-fn build_none(w: &mut Wat, opt: OptionLits) {
+pub(crate) fn build_none(w: &mut Wat, opt: OptionLits) {
 	w.i32(types::TAG_VARIANT).i32(opt.none_tag as i32);
 	w.i32(opt.none_gid as i32); // ctor_id (field 2)
 	w.i32(0)
@@ -49,7 +49,7 @@ fn build_none(w: &mut Wat, opt: OptionLits) {
 
 /// Push a `some` `$variant`'s header (tag, vtag, ctor_id, arity 1); the caller then
 /// pushes the single payload value (`p0`) and calls `finish_some`.
-fn start_some(w: &mut Wat, opt: OptionLits) {
+pub(crate) fn start_some(w: &mut Wat, opt: OptionLits) {
 	w.i32(types::TAG_VARIANT).i32(opt.some_tag as i32);
 	w.i32(opt.some_gid as i32); // ctor_id (field 2)
 	w.i32(1);
@@ -57,7 +57,7 @@ fn start_some(w: &mut Wat, opt: OptionLits) {
 
 /// Close a `some` build started by `start_some`, with `p0` already on the stack:
 /// null `p1`/`rest`, then the struct.
-fn finish_some(w: &mut Wat) {
+pub(crate) fn finish_some(w: &mut Wat) {
 	w.ref_null(types::T_VALUE)
 		.ref_null(VA)
 		.struct_new(types::T_VARIANT);

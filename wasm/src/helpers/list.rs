@@ -1,7 +1,9 @@
 // List helpers: `...rest` tail, tabulating builders, and value-array concat
 // (`__list_tail`, `__list_build`, `__list_collect`, `__arrconcat`).
 
+use crate::helpers::dict::{build_none, finish_some, start_some};
 use crate::helpers::wat::{Local, Wat};
+use crate::runtime::OptionLits;
 use crate::types;
 use wasm_encoder::{Function, ValType};
 
@@ -130,6 +132,64 @@ pub(crate) fn build_list_push_fn() -> Function {
 		.struct_set(types::T_LIST, 2);
 	// return nothing.
 	w.ref_null(types::T_VALUE);
+	w.finish()
+}
+
+/// Build `__list_pop(list) -> option`: remove and return the last element in
+/// place, the O(1) dual of `__list_push`. Returns `some last` after decrementing
+/// the logical length (field 2) by one — leaving the backing array's capacity
+/// untouched but nulling the vacated slot so the popped value isn't kept alive —
+/// or `none` when the list is empty.
+pub(crate) fn build_list_pop_fn(opt: OptionLits) -> Function {
+	let va = types::T_VALARRAY;
+	let mut w = Wat::new(1);
+	let list = w.param(0);
+	let len = w.local(ValType::I32);
+	let elems = w.local(types::valarray_ref());
+	let x = w.local(types::value_ref());
+
+	// len = list.length (logical count).
+	list_len(&mut w, list);
+	w.local_set(len);
+	// if len == 0 -> none; else pop the last element.
+	w.local_get(len).i32_eqz();
+	w.if_result(
+		types::value_ref(),
+		|w| {
+			build_none(w, opt);
+		},
+		|w| {
+			// elems = list.elems; x = elems[len - 1].
+			w.local_get(list)
+				.ref_cast(types::T_LIST)
+				.struct_get(types::T_LIST, 1)
+				.local_set(elems);
+			w.local_get(elems)
+				.local_get(len)
+				.i32(1)
+				.i32_sub()
+				.array_get(va)
+				.local_set(x);
+			// elems[len - 1] = null (don't pin the popped value past its lifetime).
+			w.local_get(elems)
+				.local_get(len)
+				.i32(1)
+				.i32_sub()
+				.ref_null(types::T_VALUE)
+				.array_set(va);
+			// list.length = len - 1.
+			w.local_get(list)
+				.ref_cast(types::T_LIST)
+				.local_get(len)
+				.i32(1)
+				.i32_sub()
+				.struct_set(types::T_LIST, 2);
+			// return some x.
+			start_some(w, opt);
+			w.local_get(x);
+			finish_some(w);
+		},
+	);
 	w.finish()
 }
 

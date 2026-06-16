@@ -1,0 +1,41 @@
+use std/list
+
+# `list.pop` removes and returns the last element in place (the O(1) dual of
+# `push`): `some last` while non-empty, `none` once empty. Together push/pop
+# make a list a last-in-first-out stack.
+def show :: fun (option int) -> string = fun o {
+	when o is some x {
+		"some $(to-string x)"
+	} else {
+		"none"
+	}
+}
+
+def main = fun {
+	let s = [1, 2, 3]
+	# pops come back last-in-first-out, shrinking the list each time.
+	print (show (list.pop s))
+	print (show (list.pop s))
+	print (to-string (list.length s))
+	print (to-string s)
+	print (show (list.pop s))
+	# now empty: pop reports `none` and leaves the length at 0.
+	print (show (list.pop s))
+	print (to-string (list.length s))
+	print (to-string s)
+	# push after draining reuses the backing capacity, then pops again.
+	list.push s 9
+	list.push s 8
+	print (to-string s)
+	print (show (list.pop s))
+	print (to-string s)
+	# pop never fires on an empty literal.
+	let e :: list int = []
+	print (show (list.pop e))
+	# drain a stack with a loop, summing as we go.
+	let stack = [10, 20, 30, 40]
+	let total = ref.new 0
+	while list.pop stack is some v { ref.set total (ref.get total + v) }
+	print (to-string (ref.get total))
+	print (to-string (list.length stack))
+}

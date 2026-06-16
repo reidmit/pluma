@@ -68,6 +68,22 @@ public def set :: fun (list a) int a -> nothing = built-in "list-set"
 #     acc   # => [1, 2]
 public def push :: fun (list a) a -> nothing = built-in "list-push"
 
+# Removes the last element of `xs` in place and returns it as `some last`,
+# or `none` if the list is empty. The O(1) counterpart to `push`: together
+# they make a list a fast last-in-first-out stack (`push` to add, `pop` to
+# take the most recent back). Use `last` to look at the end without removing
+# it.
+#
+# Like `push`, this is a mutable escape hatch -- the removal is visible
+# through *every* binding pointing at the same list -- so use it on a list
+# you solely own.
+#
+#     let s = [1, 2, 3]
+#     list.pop s   # => some 3   (s is now [1, 2])
+#     list.pop s   # => some 2   (s is now [1])
+#     list.pop []  # => none
+public def pop :: fun (list a) -> option a = built-in "list-pop"
+
 # Builds `[f 0, f 1, ..., f (n-1)]` in a single O(n) pass: `f` is called
 # with each index in turn and its results collected in order. The
 # tabulating counterpart to `fold`, and the primitive the list builders

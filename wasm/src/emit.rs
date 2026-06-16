@@ -1675,6 +1675,7 @@ impl<'a> FnEmitter<'a> {
 			|| tag == "list-collect"
 			|| tag == "bytes-build"
 			|| tag == "list-push"
+			|| tag == "list-pop"
 			|| tag == "spawn-command"
 			|| tag == "spawn-sub"
 			|| tag == "cancel-sub"
@@ -1687,6 +1688,7 @@ impl<'a> FnEmitter<'a> {
 				"list-build" => self.runtime.idx(Helper::ListBuild),
 				"list-collect" => self.runtime.idx(Helper::ListCollect),
 				"list-push" => self.runtime.idx(Helper::ListPush),
+				"list-pop" => self.runtime.idx(Helper::ListPop),
 				"spawn-command" => self.runtime.idx(Helper::SpawnCommand),
 				"spawn-sub" => self.runtime.idx(Helper::SpawnSub),
 				"cancel-sub" => self.runtime.idx(Helper::CancelSub),

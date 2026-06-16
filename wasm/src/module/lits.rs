@@ -56,8 +56,12 @@ pub(super) fn resolve_literals(
 	}
 	// `__dict_lookup` builds `some v` / `none`; intern those variant display names
 	// and resolve their within-enum tags (the `option` enum). `io.env` (`emit_env`)
-	// builds the same `some`/`none` variants inline, so it needs them populated too.
-	if requested.contains(&Helper::DictLookup) || imports.contains("io-env") {
+	// builds the same `some`/`none` variants inline, and `__list_pop` returns
+	// `some last` / `none`, so they need them populated too.
+	if requested.contains(&Helper::DictLookup)
+		|| requested.contains(&Helper::ListPop)
+		|| imports.contains("io-env")
+	{
 		// Resolve `some`/`none` *within* the prelude `option` enum by its qualified name,
 		// not by scanning every enum for those variant names — a user enum that happens to
 		// declare a `some`/`none` variant must not steal (or, at a different tag position,
@@ -78,7 +82,7 @@ pub(super) fn resolve_literals(
 					none_gid: ir::global_ctor_id(&p.enums, en, none_tag).unwrap_or(0),
 				};
 			}
-			_ => diags.push("dict.lookup needs the `option` enum".to_string()),
+			_ => diags.push("building `some`/`none` needs the `option` enum".to_string()),
 		}
 	}
 	// The `*-compare` wrappers build an `ordering` variant; intern its `lt`/`eq`/`gt`
