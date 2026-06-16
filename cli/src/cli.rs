@@ -127,13 +127,14 @@ pub(crate) enum Command {
 	///
 	/// With `--fix`, applies the autofixable lints in place instead of reporting
 	/// them (a fixed file is reformatted). Pass `-` to read a single module from
-	/// stdin (with `--fix`, the rewritten module is written to stdout).
+	/// stdin (with `--fix`, the rewritten module is written to stdout). A
+	/// directory argument is expanded into every `.pa` file beneath it.
 	Lint {
 		/// Apply autofixes in place instead of reporting.
 		#[arg(long)]
 		fix: bool,
 
-		/// Files to lint; `-` reads stdin.
+		/// Files or directories to lint; `-` reads stdin.
 		#[arg(value_name = "PATH")]
 		paths: Vec<String>,
 	},
