@@ -116,6 +116,14 @@ test("negative numeric literals are still numbers", () => {
 	assert.ok(hasScope(scopesOf("def n = print -1", "1"), "constant.numeric.decimal.pluma"));
 });
 
+test("duration literals are numbers, not number-then-identifier", () => {
+	// `1ms`, `2m20s` are single duration tokens in the tokenizer; the grammar
+	// must scope the whole thing as a number so the unit doesn't paint as a
+	// stray identifier (and so it matches the LSP's NUMBER class).
+	assert.ok(hasScope(scopesOf("def d = task.sleep 1ms", "1ms"), "constant.numeric.duration.pluma"));
+	assert.ok(hasScope(scopesOf("def d = 2m20s", "2m20s"), "constant.numeric.duration.pluma"));
+});
+
 test("bytes literals and their escapes", () => {
 	const src = "def b = '\\x89PNG'";
 	const toks = tokenize(src);
@@ -132,6 +140,14 @@ test("keywords the old grammar was missing", () => {
 	assert.ok(hasScope(scopesOf("def f = try g", "try"), "keyword.control.pluma"));
 	assert.ok(hasScope(scopesOf('test "name" { e }', "test"), "keyword.declaration.pluma"));
 	assert.ok(hasScope(scopesOf('def f = built-in "x"', "built-in"), "keyword.other.builtin.pluma"));
+});
+
+test("true/false highlight as keywords (matching the LSP's semantic class)", () => {
+	// The shared classifier (compiler/src/highlight.rs) and the docs site render
+	// booleans as keywords; the grammar must agree so the first paint doesn't
+	// flash a different color when semantic tokens arrive.
+	assert.ok(hasScope(scopesOf("def t = true", "true"), "keyword.control.pluma"));
+	assert.ok(hasScope(scopesOf("def f = false", "false"), "keyword.control.pluma"));
 });
 
 test("string interpolation exposes the inner expression", () => {

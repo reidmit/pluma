@@ -42,6 +42,27 @@ const NAMESPACE: u32 = 13;
 const INTERFACE: u32 = 14;
 const TYPE_PARAMETER: u32 = 15;
 
+// The TextMate grammar shipped with the VS Code extension already classifies the
+// lexical layer — keywords, operators, strings, numbers, comments, regexes — and
+// the bare identifier role. It can split those more finely than our flat legend
+// (e.g. coloring declaration keywords differently from control keywords), so
+// emitting our own semantic tokens for them would override the grammar and
+// repaint on load — the color "flash" when a file opens. We stay additive:
+// emit only the roles the grammar can't infer from regex alone (which identifier
+// is a function, type, namespace, enum variant, …) and leave the rest to it.
+fn grammar_owned(class: Class) -> bool {
+	matches!(
+		class,
+		Class::Comment
+			| Class::String
+			| Class::Number
+			| Class::Regexp
+			| Class::Keyword
+			| Class::Operator
+			| Class::Variable
+	)
+}
+
 // The legend index for a highlight class.
 fn token_type(class: Class) -> u32 {
 	match class {
@@ -73,6 +94,10 @@ pub fn collect_semantic_tokens(source: &Vec<u8>) -> Vec<SemanticToken> {
 	let mut prev_line = 0u32;
 	let mut prev_col = 0u32;
 	for tok in tokens {
+		// Leave the grammar's lexical layer untouched; only enrich on top of it.
+		if grammar_owned(tok.class) {
+			continue;
+		}
 		let line = tok.line as u32;
 		let col = tok.col as u32;
 		let delta_line = line - prev_line;
@@ -112,7 +137,26 @@ mod tests {
 		out
 	}
 
+	// The full shared classification (lexical + enriched) — what the docs site
+	// renders and what the LSP enriches on top of. Most cases assert against this
+	// so they pin the classifier itself, independent of the additive filtering.
 	fn classify(src: &str) -> Vec<(u32, u32, u32, u32)> {
+		highlight::classify(src.as_bytes())
+			.into_iter()
+			.map(|t| {
+				(
+					t.line as u32,
+					t.col as u32,
+					t.len as u32,
+					token_type(t.class),
+				)
+			})
+			.collect()
+	}
+
+	// What the LSP actually puts on the wire: the additive subset, after the
+	// grammar-owned lexical classes are dropped and the stream delta-encoded.
+	fn lsp_tokens(src: &str) -> Vec<(u32, u32, u32, u32)> {
 		decode(&collect_semantic_tokens(&src.as_bytes().to_vec()))
 	}
 
@@ -231,5 +275,36 @@ mod tests {
 		// The code before the trailing comment still classifies normally.
 		assert!(toks.contains(&(1, 0, 3, KEYWORD)), "def kw");
 		assert!(toks.contains(&(1, 8, 1, NUMBER)), "1 literal");
+	}
+
+	#[test]
+	fn lsp_output_is_additive_and_omits_the_grammar_layer() {
+		// The wire output must NOT carry the lexical classes the TextMate grammar
+		// already paints — emitting them would override the grammar and flash the
+		// color on load. It must still carry the enrichments the grammar can't
+		// infer (function calls, parameters, enum variants, …).
+		let src =
+			"enum color {\n\tred\n}\ndef greet = fun name {\n\tprint name # hi\n}\ndef c = color.red\n";
+		let toks = lsp_tokens(src);
+
+		let lexical = [COMMENT, STRING, NUMBER, REGEXP, KEYWORD, OPERATOR, VARIABLE];
+		for (_, _, _, ty) in &toks {
+			assert!(
+				!lexical.contains(ty),
+				"grammar-owned class {ty} leaked into the LSP stream: {toks:?}"
+			);
+		}
+
+		// Enrichments the grammar cannot compute are still present.
+		assert!(toks.iter().any(|t| t.3 == FUNCTION), "function enrichment");
+		assert!(
+			toks.iter().any(|t| t.3 == PARAMETER),
+			"parameter enrichment"
+		);
+		assert!(toks.iter().any(|t| t.3 == ENUM), "enum enrichment");
+		assert!(
+			toks.iter().any(|t| t.3 == ENUM_MEMBER),
+			"enum-member enrichment"
+		);
 	}
 }

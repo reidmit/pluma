@@ -43,6 +43,22 @@
 				"scopeName": "source.pluma",
 				"path": "./syntaxes/pluma.tmLanguage.json"
 			}
+		],
+		"semanticTokenScopes": [
+			{
+				"language": "pluma",
+				"scopes": {
+					"function": ["entity.name.function.pluma"],
+					"parameter": ["variable.other.pluma"],
+					"property": ["variable.other.property.pluma"],
+					"type": ["entity.name.type.pluma"],
+					"enum": ["entity.name.type.enum.pluma"],
+					"enumMember": ["variable.other.property.pluma"],
+					"namespace": ["entity.name.namespace.pluma"],
+					"interface": ["entity.name.type.interface.pluma"],
+					"typeParameter": ["entity.name.type.pluma"]
+				}
+			}
 		]
 	},
 	"dependencies": {
