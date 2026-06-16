@@ -1,0 +1,15 @@
+---
+source: tests/lint_fix.rs
+expression: output
+---
+def main = fun {
+	io.print "top-level binds nothing"
+	if true {
+		io.print "so does this nested one"
+	} else {
+		io.print "no lint here"
+	}
+	let _ :: nothing = io.print "annotated — left alone"
+	let kept = io.print "named — left alone"
+	kept
+}

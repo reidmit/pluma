@@ -1,0 +1,13 @@
+---
+source: tests/lint_fix.rs
+expression: output
+---
+def forward = handle
+
+def with-namespace = math.combine
+
+def kept = fun n {
+	add 5 n
+}
+
+def main = forward

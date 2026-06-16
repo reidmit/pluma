@@ -36,7 +36,14 @@ fn walk_definition(
 	out: &mut Vec<Finding>,
 ) {
 	match &def.kind {
-		DefinitionKind::Expr(expr) => visit_expr(expr, rules, ctx, out),
+		DefinitionKind::Expr(expr) => {
+			// Offer the definition's value as a whole before descending, so a rule
+			// can reason about the def as one unit (not just node-by-node).
+			for rule in rules {
+				rule.check_definition(expr, ctx, out);
+			}
+			visit_expr(expr, rules, ctx, out);
+		}
 		// Trait method defaults and instance method bodies are ordinary
 		// expression bodies, so lints apply inside them too.
 		DefinitionKind::Trait(t) => {

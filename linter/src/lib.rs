@@ -138,6 +138,15 @@ pub trait Rule {
 	fn check_body(&self, body: &[ExprNode], ctx: &Context, out: &mut Vec<Finding>) {
 		let _ = (body, ctx, out);
 	}
+
+	/// Inspect a top-level definition's value expression as a single unit. Unlike
+	/// [`check_expr`](Rule::check_expr), which fires on every node, this fires once
+	/// per value definition (`def name = …`), so a rule can reason about the
+	/// definition as a whole — e.g. suggesting a `using` block around a non-function
+	/// value whose body repeatedly projects off one namespace.
+	fn check_definition(&self, value: &ExprNode, ctx: &Context, out: &mut Vec<Finding>) {
+		let _ = (value, ctx, out);
+	}
 }
 
 /// The active rule set. Adding a lint is a one-line edit here plus the rule impl.

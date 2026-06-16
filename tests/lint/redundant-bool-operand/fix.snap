@@ -1,0 +1,5 @@
+---
+source: tests/lint_fix.rs
+expression: output
+---
+(no autofixes)

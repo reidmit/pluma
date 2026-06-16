@@ -1,0 +1,10 @@
+---
+source: tests/lint_fix.rs
+expression: output
+---
+def main = fun {
+	try do-the-effect
+	try value = fetch-something
+	try already-bindingless
+	value
+}

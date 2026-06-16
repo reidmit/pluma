@@ -45,6 +45,14 @@ name = "lint"
 path = "lint.rs"
 harness = false
 
+# The lint autofix suite. Runs the same `tests/lint/<name>/main.pa` corpus
+# through `pluma lint --fix` (fix + reformat), snapshots the rewritten source to
+# `fix.snap`, and asserts the fix parses and is a fixpoint. See lint_fix.rs.
+[[test]]
+name = "lint_fix"
+path = "lint_fix.rs"
+harness = false
+
 [[test]]
 name = "run"
 path = "run.rs"

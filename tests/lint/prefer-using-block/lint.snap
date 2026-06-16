@@ -17,3 +17,11 @@ warning[L0009]: This function projects off `view` 3 times.
 16 │ def panel = fun title {
    │             ^^^^^^^^^^^
    ╰─𜱶 tests/lint/prefer-using-block/main.pa:16:13
+
+warning[L0009]: This definition projects off `css` 4 times.
+   │
+   ├─𜱶 help: wrap the value in `using css { … }` and write members as `.member`.
+   │
+25 │ def item :: css.ruleset = css.rule [
+   │                           ^^^^^^^^^^
+   ╰─𜱶 tests/lint/prefer-using-block/main.pa:25:27

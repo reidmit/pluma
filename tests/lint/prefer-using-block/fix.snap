@@ -1,32 +1,31 @@
+---
+source: tests/lint_fix.rs
+expression: output
+---
 use std/css
 use std/view
 
 # Fires: four `css.` projections — wrap in `using css`.
 def card-style = fun {
-	css.global [
-		css.at ".card" [
-			css.background (css.hex "fff"),
-			css.padding (css.px 8.0),
-			css.color (css.hex "111"),
-		],
-	]
+	using css {
+		.global [.at ".card" [.background (.hex "fff"), .padding (.px 8.0), .color (.hex "111")]]
+	}
 }
 
 # Fires: three `view.` projections — wrap in `using view`.
 def panel = fun title {
-	view.element "div" [
-		view.attr "class" "panel",
-		view.text title,
-	]
+	using view { .element "div" [.attr "class" "panel", .text title] }
 }
 
 # Fires: a non-function def whose value projects off `css` four times — wrap
 # the value in `using css`.
-def item :: css.ruleset = css.rule [
-	css.property "border-top" "1px solid #e9e4dc",
-	css.property "padding-top" "1.6rem",
-	css.property "margin-top" "1.8rem",
-]
+def item :: css.ruleset = using css {
+	.rule [
+		.property "border-top" "1px solid #e9e4dc",
+		.property "padding-top" "1.6rem",
+		.property "margin-top" "1.8rem",
+	]
+}
 
 # Does not fire: only two `css.` projections, below the threshold.
 def thin = fun {
@@ -38,9 +37,7 @@ def one-off :: css.ruleset = css.rule [css.property "color" "red"]
 
 # Does not fire: the projections are already inside a matching `using css`.
 def wrapped = fun {
-	using css {
-		css.at ".y" [css.background (css.hex "000"), css.padding (css.px 2.0)]
-	}
+	using css { css.at ".y" [css.background (css.hex "000"), css.padding (css.px 2.0)] }
 }
 
 # Does not fire: `view` here is a local value, not the imported namespace.
