@@ -1,6 +1,7 @@
 [package]
 name = "ir"
 version.workspace = true
+license.workspace = true
 edition = "2024"
 
 [lib]

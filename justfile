@@ -98,6 +98,7 @@ test-grammar:
 # must be able to see `pluma` on PATH — launch it from a shell (`code .`), or
 # `just install /usr/local/bin` if you start it from the Dock/Spotlight.
 vs-install: install
+  cp LICENSE vsix/LICENSE
   cd vsix && npm install --silent \
     && rm -rf dist \
     && node_modules/.bin/esbuild src/extension.ts --outdir=dist --platform=node --format=cjs \
