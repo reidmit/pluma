@@ -662,12 +662,28 @@ impl Resolver {
 					self.walk_expr(e, inner);
 				}
 			}
-			ExprKind::Using { body, .. } => {
+			ExprKind::Using { namespace, body } => {
+				// The ambient namespace is an imported module's local name.
+				self.reference(namespace, RefKind::Namespace);
 				for e in body {
 					self.walk_expr(e, scope);
 				}
 			}
-			ExprKind::ImplicitMember { .. } => {}
+			ExprKind::ImplicitMember { namespace, member } => {
+				// `.member` inside `using <namespace> { ... }` is sugar for
+				// `namespace.member`: the member resolves cross-module, exactly
+				// like the explicit `module.value` field access above. The
+				// namespace's range points back at the `using` header (the
+				// parser clones it in), so only the member gets a reference here.
+				if self.module_names.contains(&namespace.name) {
+					self.qualified.push(QualifiedRef {
+						range: member.range,
+						namespace: namespace.name.clone(),
+						name: member.name.clone(),
+						is_type: false,
+					});
+				}
+			}
 			ExprKind::Try(t) => {
 				let inner = Some(t.range);
 				self.bind_pattern(&t.pattern, inner);
@@ -963,6 +979,33 @@ mod tests {
 			other => panic!("expected OtherFile, got {}", target_kind(&other)),
 		}
 		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn using_block_implicit_member_jumps_into_other_file() {
+		// `.gap` inside `using css { ... }` is sugar for `css.gap`, so it must
+		// resolve cross-module exactly like an explicit `css.gap` access.
+		let dir = temp_project("using", &[("css.pa", "def gap = fun { 1 }\n")]);
+		let main = "use css\n\ndef d = using css {\n\t.gap\n}\n";
+		let main_path = dir.join("main.pa");
+		// `gap` in `.gap` is on line 3 (the `.` is at col 1, `gap` at col 2).
+		match goto_definition(main.as_bytes(), &main_path, 3, 3) {
+			Some(Target::OtherFile { path, range }) => {
+				assert!(path.ends_with("css.pa"), "path: {:?}", path);
+				// `def gap` is on line 0, col 4.
+				assert_eq!((range.start.line, range.start.col), (0, 4));
+			}
+			other => panic!("expected OtherFile, got {}", target_kind(&other)),
+		}
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn using_block_namespace_jumps_to_import() {
+		// The `css` in the `using css` header resolves to its import's local name.
+		let src = "use css\n\ndef d = using css {\n\t.gap\n}\n";
+		// `using css` — `css` starts at col 14 on line 2.
+		assert_eq!(goto(src, 2, 14), Some((0, 4)));
 	}
 
 	#[test]
