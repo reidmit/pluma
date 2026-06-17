@@ -49,7 +49,12 @@ def doc-h2 :: css.ruleset = using css {
 }
 
 def doc-h3 :: css.ruleset = using css {
-	.rule [.font-size (.rem 1.12), .font-weight "600", .property "margin" "1.8rem 0 0.2rem"]
+	.rule [
+		.font-size (.rem 1.12),
+		.font-weight "600",
+		.margin-top (.rem 1.8),
+		.margin-bottom (.rem 0.2),
+	]
 }
 
 def doc-p :: css.ruleset = using css {
@@ -58,7 +63,7 @@ def doc-p :: css.ruleset = using css {
 		.font-size (.rem 1.08),
 		.line-height 1.75,
 		.color (.hex "#2b2823"),
-		.property "margin" "1rem 0",
+		.margin-block (.rem 1.0),
 	]
 }
 
@@ -68,7 +73,8 @@ def inline-code :: css.ruleset = using css {
 		.font-size (.em 0.88),
 		.background (.hex theme.code-soft),
 		.color (.hex theme.accent-deep),
-		.property "padding" "0.1em 0.36em",
+		.padding-block (.em 0.1),
+		.padding-inline (.em 0.36),
 		.border-radius (.px 5.0),
 	]
 }
@@ -82,8 +88,9 @@ def doc-pre :: css.ruleset = using css {
 		.property "border" "1px solid #e9e4dc",
 		.color (.hex "#2b2823"),
 		.border-radius (.px 10.0),
-		.property "padding" "1rem 1.2rem",
-		.property "margin" "1.2rem 0",
+		.padding-block (.rem 1.0),
+		.padding-inline (.rem 1.2),
+		.margin-block (.rem 1.2),
 		.property "white-space" "pre",
 		.tab-size 2,
 		.property "overflow-x" "auto",
@@ -95,8 +102,9 @@ def callout :: css.ruleset = using css {
 		.background (.hex "#f3eefb"),
 		.property "border-left" "3px solid #6d4aa3",
 		.border-radius (.px 8.0),
-		.property "padding" "0.4rem 1.2rem",
-		.property "margin" "1.4rem 0",
+		.padding-block (.rem 0.4),
+		.padding-inline (.rem 1.2),
+		.margin-block (.rem 1.4),
 	]
 }
 
@@ -111,14 +119,15 @@ def doc-table :: css.ruleset = using css {
 		.width (.pct 100.0),
 		.property "border-collapse" "collapse",
 		.font-size (.rem 0.98),
-		.property "margin" "1.2rem 0",
+		.margin-block (.rem 1.2),
 	]
 }
 
 def th :: css.ruleset = using css {
 	.rule [
 		.text-align "left",
-		.property "padding" "0.5rem 0.9rem 0.5rem 0",
+		.padding-block (.rem 0.5),
+		.padding-right (.rem 0.9),
 		.property "border-bottom" "1px solid #d8d2c8",
 		.font-size (.rem 0.72),
 		.property "text-transform" "uppercase",
@@ -130,7 +139,8 @@ def th :: css.ruleset = using css {
 
 def td :: css.ruleset = using css {
 	.rule [
-		.property "padding" "0.5rem 0.9rem 0.5rem 0",
+		.padding-block (.rem 0.5),
+		.padding-right (.rem 0.9),
 		.property "border-bottom" "1px solid #efeae2",
 		.property "vertical-align" "top",
 		.font-family theme.serif,

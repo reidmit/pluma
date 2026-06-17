@@ -40,7 +40,8 @@ def doc-grid :: css.ruleset = using css {
 		.property "grid-template-columns" "190px 1fr",
 		.gap (.rem 3.5),
 		.align-items "start",
-		.property "padding" "1rem 0 2rem",
+		.padding-top (.rem 1.0),
+		.padding-bottom (.rem 2.0),
 		.media "(max-width: 860px)" [.property "grid-template-columns" "1fr"],
 	]
 }
@@ -62,7 +63,8 @@ def side-title :: css.ruleset = using css {
 		.font-size (.rem 0.72),
 		.font-weight "600",
 		.color (.hex theme.faint),
-		.property "margin" "1.4rem 0 0.9rem",
+		.margin-top (.rem 1.4),
+		.margin-bottom (.rem 0.9),
 	]
 }
 
@@ -72,7 +74,7 @@ def side-list :: css.ruleset = using css {
 
 def side-item :: css.ruleset = using css {
 	.rule [
-		.property "padding" "0.28rem 0",
+		.padding-block (.rem 0.28),
 		.color (.hex theme.muted),
 		.property "border-left" "2px solid transparent",
 		.padding-left (.rem 0.8),

@@ -16,7 +16,7 @@ use theme
 
 # --- hero -------------------------------------------------------------------
 
-def hero :: css.ruleset = css.rule [css.property "padding" "4rem 0 5rem"]
+def hero :: css.ruleset = css.rule [css.padding-top (css.rem 4.0), css.padding-bottom (css.rem 5.0)]
 
 def hero-grid :: css.ruleset = using css {
 	.rule [
@@ -82,7 +82,8 @@ def card-tabs :: css.ruleset = using css {
 	.rule [
 		.display "flex",
 		.gap (.rem 0.2),
-		.property "padding" "0.6rem 0.6rem 0",
+		.padding-top (.rem 0.6),
+		.padding-inline (.rem 0.6),
 		.property "border-bottom" "1px solid rgba(255, 255, 255, 0.07)",
 	]
 }
@@ -92,7 +93,8 @@ def tab :: css.ruleset = using css {
 		.background (.hex "#ffffff00"),
 		.property "border" "none",
 		.color (.hex theme.code-dim),
-		.property "padding" "0.5rem 0.85rem",
+		.padding-block (.rem 0.5),
+		.padding-inline (.rem 0.85),
 		.font-size (.rem 0.85),
 		.font-family theme.mono,
 		.cursor "pointer",
@@ -108,8 +110,9 @@ def tab-on :: css.ruleset = using css {
 
 def code-block :: css.ruleset = using css {
 	.rule [
-		.property "margin" "0",
-		.property "padding" "1.4rem 1.5rem",
+		.margin (.px 0.0),
+		.padding-block (.rem 1.4),
+		.padding-inline (.rem 1.5),
 		.font-family theme.mono,
 		.font-size (.rem 0.8),
 		.line-height 1.7,
@@ -122,7 +125,7 @@ def code-block :: css.ruleset = using css {
 
 # --- features ---------------------------------------------------------------
 
-def section :: css.ruleset = css.rule [css.property "padding" "4rem 0"]
+def section :: css.ruleset = css.rule [css.padding-block (css.rem 4.0)]
 
 def section-head :: css.ruleset = using css {
 	.rule [.max-width (.rem 40.0), .margin-bottom (.rem 2.5)]
@@ -186,9 +189,11 @@ def strip :: css.ruleset = using css {
 		.background (.hex theme.code-bg),
 		.color (.hex theme.code-fg),
 		.border-radius (.px 18.0),
-		.property "padding" "3.5rem 2rem",
+		.padding-block (.rem 3.5),
+		.padding-inline (.rem 2.0),
 		.text-align "center",
-		.property "margin" "2rem 0 4rem",
+		.margin-top (.rem 2.0),
+		.margin-bottom (.rem 4.0),
 	]
 }
 
@@ -208,7 +213,8 @@ def strip-text :: css.ruleset = using css {
 		.color (.hex "#c9c4dd"),
 		.font-size (.rem 1.08),
 		.max-width (.rem 38.0),
-		.property "margin" "0 auto 2rem",
+		.margin-inline css.auto,
+		.margin-bottom (.rem 2.0),
 	]
 }
 
@@ -217,7 +223,8 @@ def heart-btn :: css.ruleset = using css {
 		.background (.hex "#ffffff15"),
 		.color (.hex "#ffffff"),
 		.property "border" "1px solid rgba(255, 255, 255, 0.22)",
-		.property "padding" "0.7rem 1.4rem",
+		.padding-block (.rem 0.7),
+		.padding-inline (.rem 1.4),
 		.border-radius (.px 999.0),
 		.font-size (.rem 1.0),
 		.font-weight "600",

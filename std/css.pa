@@ -37,10 +37,11 @@ public enum color-value {
 	var string
 }
 
-# A CSS length/size value: a number paired with its unit (`16px`, `1.5rem`, `50%`).
-# Build with `px`/`rem`/`em`/`pct`/`vh`/`vw`.
+# A CSS length/size value: a number paired with its unit (`16px`, `1.5rem`, `50%`),
+# or the `auto` keyword. Build with `px`/`rem`/`em`/`pct`/`vh`/`vw`, or `auto`.
 public enum length {
 	len float string
+	auto
 }
 
 # An entry in a style block. Usually a single declaration -- a property name and its
@@ -113,6 +114,10 @@ public def vw :: fun float -> length = fun n {
 	length.len n "vw"
 }
 
+# The `auto` keyword as a length, for browser-chosen sizing (`width auto`) and the
+# centering idiom (`margin-inline auto`): renders `auto`.
+public def auto :: length = length.auto
+
 # --- declarations: color-valued properties ----------------------------------
 
 # Text color: `css.color (css.hex "#e11")` => `color: #e11`.
@@ -157,6 +162,20 @@ public def padding-left :: fun length -> declaration = fun l {
 	declaration.decl "padding-left" (length-to-string l)
 }
 
+# Padding on the block axis -- top and bottom together (in the default writing
+# mode): `css.padding-block (css.rem 1.0)` => `padding-block: 1rem`. For an
+# asymmetric top/bottom pair, use `padding-top`/`padding-bottom`.
+public def padding-block :: fun length -> declaration = fun l {
+	declaration.decl "padding-block" (length-to-string l)
+}
+
+# Padding on the inline axis -- left and right together (in the default writing
+# mode): `css.padding-inline (css.rem 1.5)` => `padding-inline: 1.5rem`. For an
+# asymmetric left/right pair, use `padding-left`/`padding-right`.
+public def padding-inline :: fun length -> declaration = fun l {
+	declaration.decl "padding-inline" (length-to-string l)
+}
+
 # Margin on all sides: `css.margin (css.rem 1.0)` => `margin: 1rem`.
 public def margin :: fun length -> declaration = fun l {
 	declaration.decl "margin" (length-to-string l)
@@ -180,6 +199,20 @@ public def margin-bottom :: fun length -> declaration = fun l {
 # Margin to the left of the element: `css.margin-left (css.rem 1.0)`.
 public def margin-left :: fun length -> declaration = fun l {
 	declaration.decl "margin-left" (length-to-string l)
+}
+
+# Margin on the block axis -- top and bottom together (in the default writing
+# mode): `css.margin-block (css.rem 1.0)` => `margin-block: 1rem`. For an asymmetric
+# top/bottom pair, use `margin-top`/`margin-bottom`.
+public def margin-block :: fun length -> declaration = fun l {
+	declaration.decl "margin-block" (length-to-string l)
+}
+
+# Margin on the inline axis -- left and right together (in the default writing mode):
+# `css.margin-inline css.auto` centers a fixed-width block (`margin-inline: auto`). For
+# an asymmetric left/right pair, use `css.margin-left`/`css.margin-right`.
+public def margin-inline :: fun length -> declaration = fun l {
+	declaration.decl "margin-inline" (length-to-string l)
 }
 
 # Width: `css.width (css.px 240.0)` => `width: 240px`.
@@ -382,6 +415,8 @@ def fmt-num :: fun float -> string = fun n {
 def length-to-string :: fun length -> string = fun l {
 	when l is length.len v unit {
 		"$(fmt-num v)$(unit)"
+	} is length.auto {
+		"auto"
 	}
 }
 

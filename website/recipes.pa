@@ -26,7 +26,12 @@ def doc-section :: fun string string (list view) -> view = prose.doc-section
 # --- layout -----------------------------------------------------------------
 
 def wrap :: css.ruleset = using css {
-	.rule [.max-width (.rem 46.0), .property "margin" "0 auto", .property "padding" "1rem 0 2rem"]
+	.rule [
+		.max-width (.rem 46.0),
+		.margin-inline css.auto,
+		.padding-top (.rem 1.0),
+		.padding-bottom (.rem 2.0),
+	]
 }
 
 # --- recipe sources ---------------------------------------------------------

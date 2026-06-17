@@ -73,14 +73,15 @@ public def install-globals :: fun nothing -> nothing = fun {
 # --- layout + chrome --------------------------------------------------------
 
 public def shell :: css.ruleset = using css {
-	.rule [.max-width (.px 1080.0), .property "margin" "0 auto", .property "padding" "0 1.5rem"]
+	.rule [.max-width (.px 1080.0), .margin-inline css.auto, .padding-inline (.rem 1.5)]
 }
 
 # The nav spans the full window width: brand pinned to the left gutter, links to
 # the right. Only the side padding (matching the page gutter) keeps it off the edge.
 def nav :: css.ruleset = using css {
 	.rule [
-		.property "padding" "1.4rem 1.5rem",
+		.padding-block (.rem 1.4),
+		.padding-inline (.rem 1.5),
 		.display "flex",
 		.align-items "center",
 		.justify-content "space-between",
@@ -120,7 +121,8 @@ def btn :: css.ruleset = using css {
 	.rule [
 		.display "inline-block",
 		.property "border" "1px solid transparent",
-		.property "padding" "0.7rem 1.3rem",
+		.padding-block (.rem 0.7),
+		.padding-inline (.rem 1.3),
 		.border-radius (.px 10.0),
 		.font-size (.rem 1.0),
 		.font-weight "600",
@@ -164,7 +166,7 @@ def footer :: css.ruleset = using css {
 		.property "flex-wrap" "wrap",
 		.gap (.rem 1.0),
 		.property "border-top" "1px solid #e9e4dc",
-		.property "padding" "2.5rem 0",
+		.padding-block (.rem 2.5),
 		.color (.hex faint),
 		.font-size (.rem 0.92),
 	]

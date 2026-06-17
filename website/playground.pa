@@ -133,7 +133,7 @@ def placeholder :: string = "Press Run to compile this program on the server and
 
 # --- styles -----------------------------------------------------------------
 
-def wrap :: css.ruleset = css.rule [css.property "padding" "3rem 0 4rem"]
+def wrap :: css.ruleset = css.rule [css.padding-top (css.rem 3.0), css.padding-bottom (css.rem 4.0)]
 
 def head :: css.ruleset = using css { .rule [.max-width (.rem 44.0), .margin-bottom (.rem 2.0)] }
 
@@ -196,7 +196,8 @@ def picker :: css.ruleset = using css {
 		.background (.hex theme.card-bg),
 		.property "border" "1px solid #e9e4dc",
 		.border-radius (.px 8.0),
-		.property "padding" "0.3rem 0.5rem",
+		.padding-block (.rem 0.3),
+		.padding-inline (.rem 0.5),
 		.cursor "pointer",
 		.on "hover" [.border-color (.hex theme.accent)],
 	]
@@ -209,7 +210,8 @@ def panel :: css.ruleset = using css {
 		.background (.hex theme.code-bg),
 		.color (.hex theme.code-fg),
 		.border-radius (.px 12.0),
-		.property "padding" "1.2rem 1.3rem",
+		.padding-block (.rem 1.2),
+		.padding-inline (.rem 1.3),
 		.font-family theme.mono,
 		.font-size (.rem 0.85),
 		.line-height 1.6,
@@ -236,7 +238,7 @@ def pane :: css.ruleset = using css {
 	.compose [
 		panel,
 		.rule [
-			.property "margin" "0",
+			.margin (.px 0.0),
 			.property "white-space" "pre-wrap",
 			.property "overflow-x" "auto",
 			.color (.hex theme.code-fg),
@@ -249,7 +251,7 @@ def run-row :: css.ruleset = using css {
 		.display "flex",
 		.align-items "center",
 		.gap (.rem 1.0),
-		.property "margin" "1.4rem 0 0",
+		.margin-top (.rem 1.4),
 		.property "flex-wrap" "wrap",
 	]
 }
