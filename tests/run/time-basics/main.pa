@@ -1,4 +1,5 @@
 use std/time
+use std/error
 use std/sys/io
 
 def show-instant = fun label t {
@@ -29,15 +30,15 @@ def main = fun {
 			when time.add-months jan31 1 is ok feb {
 				show-instant "jan31 +1mo" feb
 			} is err e {
-				io.print e
+				io.print (describe e)
 			}
 			when time.add-years jan31 1 is ok y {
 				show-instant "jan31 +1yr" y
 			} is err e {
-				io.print e
+				io.print (describe e)
 			}
 		} is err e {
-			io.print e
+			io.print (describe e)
 		}
 
 		# Comparisons.
@@ -59,30 +60,30 @@ def main = fun {
 		io.print "unix: $(to-string (time.to-unix t))"
 		show-instant "from-unix" (time.from-unix (time.to-unix t))
 	} is err e {
-		io.print e
+		io.print (describe e)
 	}
 
 	# Parsing: full timestamp, bare date, and a failure.
 	when time.parse-iso "2026-05-25T14:30:00Z" is ok t {
 		show-instant "parsed" t
 	} is err e {
-		io.print e
+		io.print (describe e)
 	}
 	when time.parse-iso "2026-05-25" is ok t {
 		show-instant "parsed-date" t
 	} is err e {
-		io.print e
+		io.print (describe e)
 	}
 	when time.parse-iso "not a time" is ok t {
 		show-instant "parsed" t
 	} is err e {
-		io.print e
+		io.print (describe e)
 	}
 
 	# Invalid components are rejected.
 	when time.make 2026 2 30 0 0 0 0 is ok t {
 		show-instant "bad" t
 	} is err e {
-		io.print e
+		io.print (describe e)
 	}
 }

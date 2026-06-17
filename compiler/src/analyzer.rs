@@ -285,6 +285,18 @@ fn match_types(
 // Only the cases actually used in dispatch (Var, primitives, Enum) — we
 // don't currently support parametric instances at the scheme level, so
 // other type shapes don't appear.
+
+// Coercion an erasing `try` applies to its source error before propagating
+// it into the `std/error` carrier.
+enum Coerce {
+	// Source is already `error` (or an as-yet-unbound error var): frame it.
+	Frame,
+	// Source is a precise type with a `describe` instance: render it through
+	// that statically-resolved dispatch, then frame. Carries the resolved
+	// dispatch and the concrete source type.
+	Erase(Resolved, Type),
+}
+
 fn type_keys_match(a: &Type, b: &Type) -> bool {
 	match (a, b) {
 		(Type::Var(x), Type::Var(y)) => x == y,
@@ -6190,7 +6202,19 @@ impl<'compiler> Analyzer<'compiler> {
 		if let Type::Enum(name, args) = &resolved_value_ty {
 			if name == "__prelude__.task" && args.len() == 2 {
 				let payload_ty = args[0].clone();
-				let error_ty = args[1].clone();
+				let src_error_ty = args[1].clone();
+
+				// Erase-late on the async side: same rule as the sync `try`, read
+				// off the enclosing tail (a `task _ error`). Decided before
+				// borrowing the Try node. When erasing, the awaited task is wrapped
+				// in `task.map-err` below, so its failure propagates as `error`.
+				let coerce = self.erase_coerce(&src_error_ty, enclosing_tail, subst, "__prelude__.task");
+				let effective_error_ty = if coerce.is_some() {
+					Type::Enum("std/error.error".to_string(), vec![])
+				} else {
+					src_error_ty.clone()
+				};
+
 				let t = match &mut expr.kind {
 					ExprKind::Try(t) => t,
 					_ => unreachable!("do_try_dispatch called on non-Try expr"),
@@ -6217,6 +6241,35 @@ impl<'compiler> Analyzer<'compiler> {
 				let body_last_ty = t.rest[last_idx].ty.clone();
 				t.task_carrier = true;
 
+				// Wrap the awaited task in `task.map-err` so a precise (or
+				// already-`error`) async failure becomes `error` with a frame for
+				// this site — the async sibling of the sync rewrite. Unlike the sync
+				// path, the `Try` node stays in place (its lowering to `Await` is the
+				// trampoline); only its awaited value changes. The payload is
+				// untouched, so the pattern still binds the same `a`.
+				if let Some(c) = coerce {
+					let placeholder = ExprNode {
+						range: try_range,
+						kind: ExprKind::EmptyTuple,
+						ty: Type::Unknown,
+						trait_dispatch: None,
+						dispatch_sink: None,
+					};
+					let raw = std::mem::replace(t.value.as_mut(), placeholder);
+					let wrapped = self.erase_map_err(
+						"task",
+						raw,
+						c,
+						src_error_ty.clone(),
+						payload_ty.clone(),
+						try_range,
+						new_constraints,
+					);
+					if let ExprKind::Try(t) = &mut expr.kind {
+						*t.value = wrapped;
+					}
+				}
+
 				// The pattern binds the awaited task's payload (`await` unwraps the
 				// `task a` to its `a`). The `try` is *type-transparent* to its
 				// continuation — its value is the continuation's value — so it can
@@ -6229,8 +6282,9 @@ impl<'compiler> Analyzer<'compiler> {
 
 				// Soundness: a function that awaits must itself return a task (so its
 				// callers see the right type and it lowers to an async closure). Tie
-				// the enclosing async context's tail to a `task β e` — the *same*
-				// failure type `e` as the awaited task, so awaiting a `task a e`
+				// the enclosing async context's tail to a `task β e` — `e` is the
+				// awaited task's failure type after any erasure (`error` when
+				// erasing, else the precise source), so awaiting a `task a e`
 				// propagates its typed failure to the caller (the async `?`). For a
 				// tail-position `try`-chain this is automatic (its tail is
 				// `task.return`); the live case is a `try` whose continuation tail is
@@ -6240,7 +6294,7 @@ impl<'compiler> Analyzer<'compiler> {
 				if let Some(tail) = enclosing_tail {
 					let task_ty = Type::Enum(
 						"__prelude__.task".to_string(),
-						vec![self.new_type_var(), error_ty.clone()],
+						vec![self.new_type_var(), effective_error_ty.clone()],
 					);
 					new_constraints.push(eq_constraint(tail.clone(), task_ty).at(try_range));
 				}
@@ -6307,6 +6361,17 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 		};
 
+		// Erase-late: when the enclosing function's declared error type is the
+		// `std/error` carrier, a propagating `try` compresses its precise source
+		// error into `error` and stamps a frame naming this site -- the automatic
+		// half of the cause chain. A function that keeps a precise error type
+		// erases nothing and type-checks its `try`s exactly as before. Only the
+		// result carrier participates here; `option` has no error channel.
+		let error_ty = Type::Enum("std/error.error".to_string(), vec![]);
+		let coerce: Option<Coerce> = err_ty
+			.as_ref()
+			.and_then(|e| self.erase_coerce(e, enclosing_tail, subst, "__prelude__.result"));
+
 		// Build constraints to link the existing tyvars with the
 		// carrier-specific shape.
 		//
@@ -6314,11 +6379,16 @@ impl<'compiler> Analyzer<'compiler> {
 		//    constrain) must equal the carrier's payload type.
 		new_constraints.push(eq_constraint(pattern_ty.clone(), payload_ty.clone()).at(try_range));
 
-		// 2. The continuation's tail expression must itself be
-		//    carrier-wrapped (with the same err type, for result).
+		// 2. The continuation's tail expression must itself be carrier-wrapped.
+		//    Erasing rewrites the error slot to `error`; otherwise it stays the
+		//    source error type.
+		let effective_err_ty: Option<Type> = match (&err_ty, &coerce) {
+			(Some(_), Some(_)) => Some(error_ty.clone()),
+			(e, _) => e.clone(),
+		};
 		let body_payload = self.new_type_var();
 		let carrier_qualified = format!("__prelude__.{}", carrier_module_name);
-		let expected_body_ty = match &err_ty {
+		let expected_body_ty = match &effective_err_ty {
 			None => Type::Enum(carrier_qualified.clone(), vec![body_payload.clone()]),
 			Some(e) => Type::Enum(
 				carrier_qualified.clone(),
@@ -6363,6 +6433,22 @@ impl<'compiler> Analyzer<'compiler> {
 			dispatch_sink: None,
 		};
 
+		// The value handed to `then`. Erasing wraps it in `result.map-err` with
+		// a coercion that frames (and, for a precise source, renders) the error
+		// into the `error` carrier; otherwise it's the source value untouched.
+		let value_node = match coerce {
+			None => *value,
+			Some(c) => self.erase_map_err(
+				"result",
+				*value,
+				c,
+				err_ty.clone().expect("result carrier has an error type"),
+				payload_ty.clone(),
+				try_range,
+				new_constraints,
+			),
+		};
+
 		// Build the callee — a NamespaceAccess(["<carrier>", "then"]).
 		let module_ident = IdentifierNode {
 			name: carrier_module_name.to_string(),
@@ -6386,12 +6472,199 @@ impl<'compiler> Analyzer<'compiler> {
 		expr.kind = ExprKind::Call(CallNode {
 			range: try_range,
 			callee: Box::new(callee),
-			args: vec![*value, fun_expr],
+			args: vec![value_node, fun_expr],
 			dict_args: Vec::new(),
 			mono_callee: None,
 		});
 
 		true
+	}
+
+	// Decide whether an erasing `try` should fire: it does exactly when the
+	// enclosing function's declared error type is the `std/error` carrier, read
+	// off the enclosing tail (which the annotation has already tied to the
+	// declared return). `carrier` is the tail's expected head — `__prelude__.result`
+	// for sync `try`, `__prelude__.task` for async. Returns how to coerce the
+	// source error `src_err`, or `None` to leave it precise (so a non-erasing
+	// `try` type-checks exactly as before, and a precise source without a
+	// `describe` instance falls through to the ordinary mismatch — erasability is
+	// opt-in).
+	fn erase_coerce(
+		&self,
+		src_err: &Type,
+		enclosing_tail: Option<&Type>,
+		subst: &Substitution,
+		carrier: &str,
+	) -> Option<Coerce> {
+		let target_is_error = enclosing_tail
+			.map(|t| subst.apply_to_type(t))
+			.map(|t| {
+				matches!(&t, Type::Enum(n, a)
+					if n == carrier
+						&& a.len() == 2
+						&& matches!(&a[1], Type::Enum(en, _) if en == "std/error.error"))
+			})
+			.unwrap_or(false);
+		if !target_is_error {
+			return None;
+		}
+		match subst.apply_to_type(src_err) {
+			// Already `error` (or an as-yet-unbound error var): just frame it.
+			Type::Enum(n, _) if n == "std/error.error" => Some(Coerce::Frame),
+			Type::Var(_) => Some(Coerce::Frame),
+			// A precise type with a `describe` instance: render it through that
+			// instance (resolved statically right here, since the source type is
+			// concrete), then frame.
+			concrete => self
+				.try_resolve_dispatch("describe", &concrete)
+				.map(|r| Coerce::Erase(r, concrete)),
+		}
+	}
+
+	// Wrap an erasing `try`'s tried/awaited value in `<carrier>.map-err` with a
+	// synthesized coercion `fun e { error.context "<site>" <e | error.from e> }`,
+	// turning a precise (or already-`error`) failure into the `std/error` carrier
+	// and stamping a frame for this site. Shared by the sync (`result`) and async
+	// (`task`) `try` rewrites — identical coercion, only the carrier module
+	// (`result` vs `task`) differs. Returns the wrapped value, typed
+	// `<carrier> payload error`.
+	fn erase_map_err(
+		&mut self,
+		carrier_module: &str,
+		value: ExprNode,
+		coerce: Coerce,
+		src_err_ty: Type,
+		payload_ty: Type,
+		try_range: Range,
+		new_constraints: &mut Vec<Constraint>,
+	) -> ExprNode {
+		let error_ty = Type::Enum("std/error.error".to_string(), vec![]);
+		// `error.*` are named fully-qualified so codegen resolves them by global
+		// name regardless of imports — `std/error` isn't auto-imported, and a
+		// `try` must erase even in modules that never wrote `use std/error`.
+		let mk_namespace = |module: &str, method: &str| -> ExprNode {
+			ExprNode {
+				range: try_range,
+				kind: ExprKind::NamespaceAccess(vec![
+					IdentifierNode {
+						name: module.to_string(),
+						range: try_range,
+					},
+					IdentifierNode {
+						name: method.to_string(),
+						range: try_range,
+					},
+				]),
+				ty: Type::Unknown,
+				trait_dispatch: None,
+				dispatch_sink: None,
+			}
+		};
+		let e_raw = src_err_ty;
+		let param = IdentifierNode {
+			name: "e".to_string(),
+			range: try_range,
+		};
+		let param_ref = || ExprNode {
+			range: try_range,
+			kind: ExprKind::Identifier(param.clone()),
+			ty: e_raw.clone(),
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+
+		// The cause threaded under the new frame: the raw error (already `error`),
+		// or `error.from e` for a precise source.
+		let cause = match coerce {
+			Coerce::Frame => {
+				// The source error must actually be `error` at runtime; pin it so
+				// an unbound error var resolves to the carrier.
+				new_constraints.push(eq_constraint(e_raw.clone(), error_ty.clone()).at(try_range));
+				param_ref()
+			}
+			Coerce::Erase(resolved, src_ty) => {
+				// Render through the statically-resolved `describe` instance — a
+				// call-forwarding dispatch (just a dict, no method index),
+				// pre-resolved here since the source type is concrete, so discharge
+				// never revisits it.
+				let cell = crate::ast::new_dispatch("describe".to_string(), None, src_ty);
+				cell.borrow_mut().resolved = Some(resolved);
+				ExprNode {
+					range: try_range,
+					kind: ExprKind::Call(CallNode {
+						range: try_range,
+						callee: Box::new(mk_namespace("std/error", "from")),
+						args: vec![param_ref()],
+						dict_args: vec![cell],
+						mono_callee: None,
+					}),
+					ty: error_ty.clone(),
+					trait_dispatch: None,
+					dispatch_sink: None,
+				}
+			}
+		};
+
+		// `error.context "<module>:<line>" <cause>` — the per-`try` frame. Inline
+		// (not a side table) because it's built only on the cold failure path.
+		let site = format!(
+			"{}:{}",
+			self.module_name.clone().unwrap_or_default(),
+			try_range.start.line
+		);
+		let site_lit = ExprNode {
+			range: try_range,
+			kind: ExprKind::Literal(LiteralNode {
+				kind: LiteralKind::String(site, false),
+				range: try_range,
+			}),
+			ty: Type::String,
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+		let context_call = ExprNode {
+			range: try_range,
+			kind: ExprKind::Call(CallNode {
+				range: try_range,
+				callee: Box::new(mk_namespace("std/error", "context")),
+				args: vec![site_lit, cause],
+				dict_args: Vec::new(),
+				mono_callee: None,
+			}),
+			ty: error_ty.clone(),
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+		let coerce_fun = ExprNode {
+			range: try_range,
+			kind: ExprKind::Fun(FunNode {
+				range: try_range,
+				params: vec![FunParamNode {
+					ident: param,
+					ty: e_raw.clone(),
+				}],
+				body: vec![context_call],
+			}),
+			ty: Type::Fun(vec![e_raw], Box::new(error_ty.clone())),
+			trait_dispatch: None,
+			dispatch_sink: None,
+		};
+		ExprNode {
+			range: try_range,
+			kind: ExprKind::Call(CallNode {
+				range: try_range,
+				callee: Box::new(mk_namespace(carrier_module, "map-err")),
+				args: vec![value, coerce_fun],
+				dict_args: Vec::new(),
+				mono_callee: None,
+			}),
+			ty: Type::Enum(
+				format!("__prelude__.{}", carrier_module),
+				vec![payload_ty, error_ty],
+			),
+			trait_dispatch: None,
+			dispatch_sink: None,
+		}
 	}
 
 	// Rewrite one `??` BinaryOperation. The dual of `do_try_dispatch`:

@@ -13,7 +13,27 @@
 # and reject any character outside the chosen alphabet.
 
 use std/bytes
+use std/error
 use std/string
+
+# Why a `decode` failed: the input's length can't spell a whole number of bytes,
+# or it holds a character outside the chosen alphabet. A precise enum (rather than
+# a string) so a caller can tell the two apart -- and, via its `describe`
+# instance, erase into `std/error` and read well in a message.
+public enum decode-error {
+	bad-length
+	bad-character
+}
+
+implement describe decode-error {
+	def describe = fun e {
+		when e is decode-error.bad-length {
+			"invalid base64 length"
+		} is decode-error.bad-character {
+			"invalid base64 character"
+		}
+	}
+}
 
 # Encodes bytes with the standard alphabet, including `=` padding.
 #
@@ -110,25 +130,25 @@ def enc-digit :: fun int int int -> int = fun v c62 c63 {
 # trailing padding is optional.
 #
 #     base64.decode "aGVsbG8="   # => ok 'hello'
-public def decode :: fun string -> result bytes string = fun s {
+public def decode :: fun string -> result bytes decode-error = fun s {
 	decode-with s 43 47
 }
 
 # Decodes a URL-safe base64 string back into bytes. Padding is optional.
 #
 #     base64.url-decode "aGVsbG8"   # => ok 'hello'
-public def url-decode :: fun string -> result bytes string = fun s {
+public def url-decode :: fun string -> result bytes decode-error = fun s {
 	decode-with s 45 95
 }
 
 # The shared decoder. Drops trailing `=`, rejects a length that can't be a
 # whole number of bytes (`% 4 == 1`) or any out-of-alphabet character, then
 # rebuilds the bytes in one `bytes.build` pass.
-def decode-with :: fun string int int -> result bytes string = fun s c62 c63 {
+def decode-with :: fun string int int -> result bytes decode-error = fun s c62 c63 {
 	let sb = string.to-bytes s
 	let m = trimmed-len sb (bytes.length sb)
 	if m % 4 == 1 {
-		err "invalid base64 length"
+		err decode-error.bad-length
 	} else if all-b64 sb m 0 c62 c63 {
 		let rem = m % 4
 		let extra = if rem == 2 {
@@ -143,7 +163,7 @@ def decode-with :: fun string int int -> result bytes string = fun s c62 c63 {
 			dec-byte sb k c62 c63
 		})
 	} else {
-		err "invalid base64 character"
+		err decode-error.bad-character
 	}
 }
 

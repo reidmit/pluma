@@ -3263,6 +3263,32 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::ArraySet(types::T_VALARRAY));
 				self.push_nothing();
 			}
+			// variant.gid v : the global constructor id (field 2 of `$variant`) of a
+			// variant value, or -1 for any non-variant. The `ref.test` guard makes it
+			// total — a non-variant (int, string, null, ...) yields -1 rather than
+			// trapping on the cast — so `error.is` can compare tags safely.
+			"variant-gid" => {
+				let tmp = self.fresh_local(types::value_ref());
+				self.atom(&args[0]);
+				self.ins(Instruction::LocalTee(tmp));
+				self.ins(Instruction::RefTestNonNull(HeapType::Concrete(
+					types::T_VARIANT,
+				)));
+				self.ins(Instruction::If(BlockType::Result(ValType::I64)));
+				self.ins(Instruction::LocalGet(tmp));
+				self.ins(Instruction::RefCastNonNull(HeapType::Concrete(
+					types::T_VARIANT,
+				)));
+				self.ins(Instruction::StructGet {
+					struct_type_index: types::T_VARIANT,
+					field_index: 2,
+				});
+				self.ins(Instruction::I64ExtendI32S);
+				self.ins(Instruction::Else);
+				self.ins(Instruction::I64Const(-1));
+				self.ins(Instruction::End);
+				self.box_int();
+			}
 			// ref.new v : a fresh `$ref` cell holding `v`.
 			"ref-new" => {
 				self.ins(Instruction::I32Const(types::TAG_REF));

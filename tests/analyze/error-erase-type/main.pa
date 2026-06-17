@@ -1,0 +1,45 @@
+# Pins the erase-late `try` rules. `loud` erases a precise `parse-error` into
+# `error` (it has a `describe` instance). `quiet` tries to erase `raw`, which
+# has NO `describe` instance, so erasure is declined and the precise-vs-`error`
+# mismatch is reported -- erasability stays opt-in.
+use std/error
+
+enum parse-error {
+	unexpected-eof
+}
+
+implement describe parse-error {
+	def describe = fun e {
+		when e is parse-error.unexpected-eof {
+			"unexpected end of input"
+		}
+	}
+}
+
+enum raw {
+	boom
+}
+
+def parse :: fun nothing -> result int parse-error = fun {
+	err parse-error.unexpected-eof
+}
+
+def raw-op :: fun nothing -> result int raw = fun {
+	err raw.boom
+}
+
+# Accepted: precise -> error, because `parse-error` is describable.
+def loud :: fun nothing -> result int error = fun {
+	try n = parse ()
+	ok n
+}
+
+# Rejected: `raw` has no `describe`, so this stays a type mismatch.
+def quiet :: fun nothing -> result int error = fun {
+	try n = raw-op ()
+	ok n
+}
+
+def main = fun {
+	print "x"
+}

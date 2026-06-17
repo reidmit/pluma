@@ -1,0 +1,52 @@
+# Phase 4 adoption: types erase into `error` exactly when they have a `describe`
+# instance. `string` has one (Phase 1), so every stdlib API that fails with a
+# string -- fs, db, http, sql -- erases for free; here a plain string-error
+# function stands in for one. `rpc-error` (the one precise error enum in the
+# stdlib) gets a `describe` instance too, so a failed `remote` call erases and
+# stays classifiable with `error.is-a`.
+use std/error
+use std/rpc
+
+# A library-style API that fails with a plain string (like fs/db/http).
+def read-setting :: fun nothing -> result string string = fun {
+	err "missing SETTING"
+}
+
+# A remote-style call that fails with the typed transport error.
+def call-remote :: fun nothing -> result int rpc.rpc-error = fun {
+	err rpc.rpc-error.unauthorized
+}
+
+# App layer: both erase into the one `error` carrier at the `try`.
+def from-string :: fun nothing -> result string error = fun {
+	try s = read-setting ()
+	ok s
+}
+
+def from-rpc :: fun nothing -> result int error = fun {
+	try n = call-remote ()
+	ok n
+}
+
+def show :: fun bool -> string = fun b {
+	when b is true {
+		"yes"
+	} else {
+		"no"
+	}
+}
+
+def main = fun {
+	when from-string () is ok _ {
+		print "unexpected ok"
+	} is err e {
+		print (error.message e)
+	}
+	when from-rpc () is ok _ {
+		print "unexpected ok"
+	} is err e {
+		print (error.message e)
+		print (show (error.is-a e rpc.rpc-error.unauthorized))
+		print (show (error.is-a e rpc.rpc-error.forbidden))
+	}
+}

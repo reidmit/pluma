@@ -1,0 +1,60 @@
+# Phase 2 classification: `error.is-a` recovers *which* leaf constructor a
+# failure was erased from -- through any amount of layered `context` -- by
+# comparing global constructor ids, without ever recovering the payload. It
+# distinguishes variants of the same enum and across enums, and never traps on
+# a non-variant argument.
+use std/error
+
+enum db-error {
+	timeout
+	refused
+}
+
+enum net-error {
+	unreachable
+}
+
+implement describe db-error {
+	def describe = fun e {
+		when e is db-error.timeout {
+			"timed out"
+		} is db-error.refused {
+			"refused"
+		}
+	}
+}
+
+def query :: fun nothing -> result int db-error = fun {
+	err db-error.timeout
+}
+
+# Erases the precise `db-error` into `error` at the `try`.
+def load :: fun nothing -> result int error = fun {
+	try n = query ()
+	ok n
+}
+
+def show :: fun bool -> string = fun b {
+	when b is true {
+		"yes"
+	} else {
+		"no"
+	}
+}
+
+def main = fun {
+	when load () is ok _ {
+		print "unexpected ok"
+	} is err e {
+		# the leaf survives erasure + an extra layer of context
+		let wrapped = error.context "serving request" e
+		print (error.message wrapped)
+		print (show (error.is-a wrapped db-error.timeout))
+		print (show (error.is-a wrapped db-error.refused))
+		print (show (error.is-a wrapped net-error.unreachable))
+		# a non-variant exemplar never matches and never traps
+		print (show (error.is-a wrapped 0))
+		# a bare error carries no leaf constructor
+		print (show (error.is-a (error.new "empty") db-error.timeout))
+	}
+}

@@ -18,6 +18,7 @@
 # aren't available yet.
 
 use std/bytes
+use std/error
 use std/list
 use std/string
 
@@ -64,33 +65,55 @@ public def sleep :: fun duration -> nothing = built-in "time-sleep"
 
 # --- building instants ---------------------------------------------------
 
+# Why building or parsing an instant failed. A precise enum (rather than a
+# string) so a caller can tell a malformed string from an out-of-range field, or
+# branch on which field; its `describe` instance erases it into `std/error` and
+# renders the same human message.
+public enum time-error {
+	# a string that doesn't parse against the expected format (carries the input)
+	unparseable string
+	# a calendar field outside its valid range: the field name, the value given,
+	# and the inclusive `lo..=hi` bounds
+	field-out-of-range string int int int
+}
+
+implement describe time-error {
+	def describe = fun e {
+		when e is time-error.unparseable s {
+			"time: could not parse `$(s)`"
+		} is time-error.field-out-of-range field value lo hi {
+			"time: invalid date/time: $(field) $(to-string value) is out of range $(to-string lo)..=$(to-string hi)"
+		}
+	}
+}
+
 # Builds an instant from full UTC calendar components: year, month, day,
 # hour, minute, second, and sub-second nanoseconds. `err` if the components
 # don't name a real moment (month 13, April 31, hour 24, ...).
 #
 #     time.make 2026 5 25 14 30 0 0   # => ok 2026-05-25T14:30:00Z
-#     time.make 2026 2 30 0 0 0 0     # => err "time: invalid date/time: ..."
-public def make :: fun int int int int int int int -> result instant string = fun y m d h mi s ns {
+#     time.make 2026 2 30 0 0 0 0     # => err (time-error.field-out-of-range "day" ...)
+public def make :: fun int int int int int int int -> result instant time-error = fun y m d h mi s ns {
 	when validate-components y m d h mi s ns is ok _u {
 		let days = days-from-civil y m d
 		let secs = days * 86400 + h * 3600 + mi * 60 + s
 		ok (from-unix-nanos (secs * 1000000000 + ns))
-	} is err msg {
-		err msg
+	} is err e {
+		err e
 	}
 }
 
 # A date at midnight UTC. `err` on an impossible date.
 #
 #     time.date 2026 5 25   # => ok 2026-05-25T00:00:00Z
-public def date :: fun int int int -> result instant string = fun y m d {
+public def date :: fun int int int -> result instant time-error = fun y m d {
 	make y m d 0 0 0 0
 }
 
 # A date and time of day (to the second) in UTC. `err` on impossible values.
 #
 #     time.date-time 2026 5 25 14 30 0   # => ok 2026-05-25T14:30:00Z
-public def date-time :: fun int int int int int int -> result instant string = fun y m d h mi s {
+public def date-time :: fun int int int int int int -> result instant time-error = fun y m d h mi s {
 	make y m d h mi s 0
 }
 
@@ -100,7 +123,7 @@ public def date-time :: fun int int int int int int -> result instant string = f
 #
 #     let p = time.to-parts t
 #     when time.from-parts p is ok t2 { ... } is err msg { ... }   # t2 == t
-public def from-parts :: fun parts -> result instant string = fun p {
+public def from-parts :: fun parts -> result instant time-error = fun p {
 	make p.year p.month p.day p.hour p.minute p.second p.nanosecond
 }
 
@@ -185,15 +208,15 @@ public def to-iso :: fun instant -> string = fun t {
 #
 #     time.parse-iso "2026-05-25T14:30:00Z"   # => ok ...
 #     time.parse-iso "2026-05-25"             # => ok 2026-05-25T00:00:00Z
-#     time.parse-iso "nope"                   # => err "time: could not parse ..."
-public def parse-iso :: fun string -> result instant string = fun s {
+#     time.parse-iso "nope"                   # => err (time-error.unparseable "nope")
+public def parse-iso :: fun string -> result instant time-error = fun s {
 	let bs = string.to-bytes s
 	let n = bytes.length bs
 	when parse-iso-fields bs n is some f {
 		let (y, mo, d, h, mi, sec, ns) = f
 		make y mo d h mi sec ns
 	} is none {
-		err "time: could not parse `$(s)` as ISO 8601"
+		err (time-error.unparseable s)
 	}
 }
 
@@ -202,7 +225,15 @@ public def parse-iso :: fun string -> result instant string = fun s {
 # date/time. `err` if the input doesn't match.
 #
 #     time.parse "%Y-%m-%d" "2026-05-25"   # => ok 2026-05-25T00:00:00Z
-public def parse :: fun string string -> result instant string = built-in "time-parse"
+def parse-raw :: fun string string -> result instant string = built-in "time-parse"
+
+public def parse :: fun string string -> result instant time-error = fun fmt s {
+	when parse-raw fmt s is ok t {
+		ok t
+	} is err _ {
+		err (time-error.unparseable s)
+	}
+}
 
 # --- durations -----------------------------------------------------------
 
@@ -342,7 +373,7 @@ public def add-seconds :: fun instant int -> instant = fun t n {
 #
 #     time.add-months t 3    # three months on
 #     time.add-months t -1   # one month back
-public def add-months :: fun instant int -> result instant string = fun t n {
+public def add-months :: fun instant int -> result instant time-error = fun t n {
 	let p = to-parts t
 	let total = p.year * 12 + (p.month - 1) + n
 	let ny = floor-div total 12
@@ -358,7 +389,7 @@ public def add-months :: fun instant int -> result instant string = fun t n {
 
 # `t` shifted by whole calendar years (Feb 29 clamps to Feb 28 in a non-leap
 # target year). `err` only on overflow.
-public def add-years :: fun instant int -> result instant string = fun t n {
+public def add-years :: fun instant int -> result instant time-error = fun t n {
 	let p = to-parts t
 	let ny = p.year + n
 	let dim = days-in-month ny p.month
@@ -548,19 +579,19 @@ def parts-of-nanos :: fun int -> parts = fun nanos {
 # Range-check the components of a would-be instant. The day bound depends on
 # the month (and leap years), so it's reported with the year/month it failed
 # for.
-def validate-components :: fun int int int int int int int -> result nothing string = fun y m d h mi s ns {
+def validate-components :: fun int int int int int int int -> result nothing time-error = fun y m d h mi s ns {
 	if in-range m 1 12 is false {
-		err "time: invalid date/time: month $(to-string m) is out of range 1..=12"
+		err (time-error.field-out-of-range "month" m 1 12)
 	} else if in-range d 1 (days-in-month y m) is false {
-		err "time: invalid date/time: day $(to-string d) is out of range 1..=$(to-string (days-in-month y m)) for $(to-string y)-$(pad-left m 2)"
+		err (time-error.field-out-of-range "day" d 1 (days-in-month y m))
 	} else if in-range h 0 23 is false {
-		err "time: invalid date/time: hour $(to-string h) is out of range 0..=23"
+		err (time-error.field-out-of-range "hour" h 0 23)
 	} else if in-range mi 0 59 is false {
-		err "time: invalid date/time: minute $(to-string mi) is out of range 0..=59"
+		err (time-error.field-out-of-range "minute" mi 0 59)
 	} else if in-range s 0 59 is false {
-		err "time: invalid date/time: second $(to-string s) is out of range 0..=59"
+		err (time-error.field-out-of-range "second" s 0 59)
 	} else if in-range ns 0 999999999 is false {
-		err "time: invalid date/time: nanosecond $(to-string ns) is out of range 0..=999999999"
+		err (time-error.field-out-of-range "nanosecond" ns 0 999999999)
 	} else {
 		ok ()
 	}

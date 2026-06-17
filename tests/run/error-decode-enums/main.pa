@@ -1,0 +1,45 @@
+# The payoff of precise stdlib error enums: a caller can branch on *which*
+# failure occurred (not scrape a string), and the same value erases into
+# `std/error` -- with `error.is-a` still recovering the leaf through the framing.
+use std/error
+use std/hex
+use std/time
+
+# Branch on the precise decode failure.
+def classify-hex :: fun string -> string = fun s {
+	when hex.decode s is ok _ {
+		"ok"
+	} is err e {
+		when e is hex.decode-error.odd-length {
+			"odd length"
+		} is hex.decode-error.bad-digit {
+			"bad digit"
+		}
+	}
+}
+
+# A time field error erases into `error`, and `is-a` recovers which field kind.
+def build :: fun nothing -> result instant error = fun {
+	try t = time.make 2026 13 1 0 0 0 0
+	ok t
+}
+
+def show :: fun bool -> string = fun b {
+	when b is true {
+		"yes"
+	} else {
+		"no"
+	}
+}
+
+def main = fun {
+	print (classify-hex "abc")
+	print (classify-hex "zz")
+	print (classify-hex "4142")
+	when build () is ok _ {
+		print "unexpected ok"
+	} is err e {
+		print (error.message e)
+		print (show (error.is-a e (time.time-error.field-out-of-range "" 0 0 0)))
+	}
+}

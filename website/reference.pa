@@ -517,6 +517,35 @@ def sec-options :: view = doc-section "options" "Missing values and errors: opti
 			ok (q + 1)
 		}
 		""",
+	pr [
+		t "As a program grows, a fallible chain crosses layers, and at some point the exact failure type stops mattering — you only want to propagate and report it. ",
+		ic "std/error",
+		t " is the carrier for that. Declare a function's error type as ",
+		ic "error",
+		t ", and ",
+		ic "try",
+		t " erases each precise failure into it, stamping a frame that names the step — a cause chain that reads like a stack trace, and survives async (",
+		ic "task",
+		t ") boundaries because it's plain data:",
+	],
+	code """
+		use std/error
+
+		def render :: fun int -> result string error = fun id {
+			try user = load-user id     # a result _ db-error, erased here
+			ok "<page>\$(user)</page>"
+		}
+		# on failure, error.message reads like "app:4: timed out"
+		""",
+	pr [
+		t "A type erases only if it has a ",
+		ic "describe",
+		t " instance, so erasability stays opt-in — but ",
+		ic "string",
+		t " has one, so every standard API that fails with a string erases for free. And ",
+		ic "error.is-a e timeout",
+		t " recovers which leaf failure it was without unpacking it, so an app can still branch (retry a timeout, 404 a missing row) on an erased error. Libraries stay precise; apps erase at the layer they stop caring.",
+	],
 ]
 
 def sec-mutation :: view = doc-section "mutation" "When you need to change something: ref" [

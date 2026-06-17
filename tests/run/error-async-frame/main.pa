@@ -1,0 +1,58 @@
+# Phase 3: erase-late on the async side. A `try` awaiting a `task` inside a
+# function declared `task _ error` auto-erases the precise async failure into
+# `error` and stamps a per-hop frame -- exactly like the sync `try`, with no
+# manual `task.map-err`. The leaf constructor survives for `error.is-a`.
+use std/task
+use std/error
+
+enum db-error {
+	timeout
+	refused
+}
+
+implement describe db-error {
+	def describe = fun e {
+		when e is db-error.timeout {
+			"timed out"
+		} is db-error.refused {
+			"refused"
+		}
+	}
+}
+
+# Precise async failure at the leaf.
+def query :: fun nothing -> task int db-error = fun {
+	task.fail db-error.timeout
+}
+
+# Erase mode: precise db-error -> error at the await, with a frame.
+def load :: fun nothing -> task int error = fun {
+	try n = query ()
+	task.return (n + 1)
+}
+
+# Frame mode: source is already `error`, so this hop just adds another frame.
+def serve :: fun nothing -> task int error = fun {
+	try c = load ()
+	task.return (c * 10)
+}
+
+def show :: fun bool -> string = fun b {
+	when b is true {
+		"yes"
+	} else {
+		"no"
+	}
+}
+
+def main = fun {
+	try r = task.attempt (serve ())
+	when r is ok v {
+		print "unexpected ok $(to-string v)"
+	} is err e {
+		print (error.message e)
+		print (show (error.is-a e db-error.timeout))
+		print (show (error.is-a e db-error.refused))
+	}
+	task.return 0
+}

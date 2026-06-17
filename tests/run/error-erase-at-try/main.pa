@@ -1,0 +1,46 @@
+# Erase-late: a function declared `result _ error` propagates a precise leaf
+# error through `try`, which auto-erases it into the `error` carrier (rendered
+# via its `describe` instance) and stamps a frame naming the propagation site.
+# Two `try` hops compose into a cause chain without any manual `error.context`.
+use std/error
+
+enum db-error {
+	timeout
+	refused
+}
+
+implement describe db-error {
+	def describe = fun e {
+		when e is db-error.timeout {
+			"db timed out"
+		} is db-error.refused {
+			"db refused the connection"
+		}
+	}
+}
+
+# Precise at the leaf -- callers can still match `db-error` exhaustively.
+def query :: fun nothing -> result int db-error = fun {
+	err db-error.timeout
+}
+
+# Erases late: `try` turns the precise `db-error` into `error` here.
+def load-count :: fun nothing -> result int error = fun {
+	try n = query ()
+	ok (n + 1)
+}
+
+# A second erasing hop. The source is already `error`, so this frame just
+# records another step in the chain.
+def serve :: fun nothing -> result int error = fun {
+	try c = load-count ()
+	ok (c * 10)
+}
+
+def main = fun {
+	when serve () is ok v {
+		print "ok $(to-string v)"
+	} is err e {
+		print (error.message e)
+	}
+}

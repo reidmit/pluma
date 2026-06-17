@@ -4,7 +4,27 @@
 # Output is lowercase; the decoder accepts either case.
 
 use std/bytes
+use std/error
 use std/string
+
+# Why a `decode` failed: an odd number of digits (each byte needs two), or a
+# character that isn't a hex digit. A precise enum (rather than a string) lets a
+# caller tell the two apart, and its `describe` instance erases it into
+# `std/error` and renders it for a message.
+public enum decode-error {
+	odd-length
+	bad-digit
+}
+
+implement describe decode-error {
+	def describe = fun e {
+		when e is decode-error.odd-length {
+			"hex string has odd length"
+		} is decode-error.bad-digit {
+			"invalid hex digit"
+		}
+	}
+}
 
 # Encodes bytes as a lowercase hex string -- two digits per byte.
 #
@@ -36,11 +56,11 @@ def hex-digit :: fun int -> int = fun v {
 # else -- a stray space, a "0x" prefix, an odd length -- gives `err`.
 #
 #     hex.decode "68656c6c6f"   # => ok 'hello'
-public def decode :: fun string -> result bytes string = fun s {
+public def decode :: fun string -> result bytes decode-error = fun s {
 	let sb = string.to-bytes s
 	let n = bytes.length sb
 	if n % 2 != 0 {
-		err "hex string has odd length"
+		err decode-error.odd-length
 	} else if all-hex sb n 0 {
 		ok (bytes.build (n / 2) fun i {
 			let hi = hex-value (bytes.get sb (i * 2))
@@ -48,7 +68,7 @@ public def decode :: fun string -> result bytes string = fun s {
 			hi * 16 + lo
 		})
 	} else {
-		err "invalid hex digit"
+		err decode-error.bad-digit
 	}
 }
 

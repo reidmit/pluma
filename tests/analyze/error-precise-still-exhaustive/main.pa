@@ -1,0 +1,47 @@
+# Erase-late is opt-in: a function that keeps a precise error type erases
+# nothing. `try` here propagates `db-error` unchanged (declared error is
+# `db-error`, not `error`), so callers still match it exhaustively -- no
+# catch-all forced, no `error` leaking in.
+use std/error
+
+enum db-error {
+	timeout
+	refused
+}
+
+implement describe db-error {
+	def describe = fun e {
+		when e is db-error.timeout {
+			"timed out"
+		} is db-error.refused {
+			"refused"
+		}
+	}
+}
+
+def query :: fun nothing -> result int db-error = fun {
+	err db-error.timeout
+}
+
+# Precise in, precise out: the `try` does NOT erase, because the declared
+# error type is `db-error`.
+def doubled :: fun nothing -> result int db-error = fun {
+	try n = query ()
+	ok (n * 2)
+}
+
+def classify :: fun nothing -> string = fun {
+	when doubled () is ok v {
+		"got $(to-string v)"
+	} is err inner {
+		when inner is db-error.timeout {
+			"slow"
+		} is db-error.refused {
+			"down"
+		}
+	}
+}
+
+def main = fun {
+	print (classify ())
+}

@@ -1,0 +1,9 @@
+# An `opaque` enum exports its type but hides its constructors, so callers go
+# through the module's functions. The formatter keeps the `opaque` modifier.
+opaque enum error {
+	frame string (option error)
+}
+
+public def new :: fun string -> error = fun m {
+	error.frame m none
+}

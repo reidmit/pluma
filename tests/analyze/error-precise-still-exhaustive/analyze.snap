@@ -1,0 +1,302 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/error-precise-still-exhaustive/main.pa) {
+    comments: {
+        0: " Erase-late is opt-in: a function that keeps a precise error type erases",
+        1: " nothing. `try` here propagates `db-error` unchanged (declared error is",
+        2: " `db-error`, not `error`), so callers still match it exhaustively -- no",
+        3: " catch-all forced, no `error` leaking in.",
+        25: " Precise in, precise out: the `try` does NOT erase, because the declared",
+        26: " error type is `db-error`.",
+    },
+    ast: Some(
+        module(4:0-46:1) [
+            use(4:0-4:13) `std/error`,
+        ] [
+            def(6:0-9:1) :: nothing {
+                name: ident(6:5-6:13) `db-error`,
+                kind: enum(6:14-9:1) [
+                    variant(7:1-7:8) {
+                        name: ident(7:1-7:8) `timeout`,
+                        params: None,
+                    },
+                    variant(8:1-8:8) {
+                        name: ident(8:1-8:8) `refused`,
+                        params: None,
+                    },
+                ],
+            },
+            def(11:0-19:1) :: nothing {
+                name: ident(11:10-11:18) `describe@instance@11:19`,
+                kind: instance(11:0-19:1) {
+                    trait: ident(11:10-11:18) `describe`,
+                    head: type(11:19-11:27) type-ident(11:19-11:27) `db-error`,
+                    methods: [
+                        def(12:1-18:2) :: nothing {
+                            name: ident(12:5-12:13) `describe`,
+                            kind: expr(12:16-18:2) :: db-error -> string {
+                                kind: fun(12:16-18:2) {
+                                    params: [
+                                        ident(12:20-12:21) `e` :: db-error,
+                                    ],
+                                    body: [
+                                        expr(13:2-17:3) :: string {
+                                            kind: when(13:2-17:3) [
+                                                case(13:9-15:3) is pattern(13:12-13:28) Constructor(
+                                                    ConstructorHead {
+                                                        range: 13:12-13:28,
+                                                        module: None,
+                                                        enum_name: Some(
+                                                            ident(13:12-13:20) `db-error`,
+                                                        ),
+                                                        variant: ident(13:21-13:28) `timeout`,
+                                                    },
+                                                    [],
+                                                ) [
+                                                    expr(14:4-14:14) :: string {
+                                                        kind: literal(14:4-14:14) string "timed out",
+                                                    },
+                                                ],
+                                                case(15:4-17:3) is pattern(15:7-15:23) Constructor(
+                                                    ConstructorHead {
+                                                        range: 15:7-15:23,
+                                                        module: None,
+                                                        enum_name: Some(
+                                                            ident(15:7-15:15) `db-error`,
+                                                        ),
+                                                        variant: ident(15:16-15:23) `refused`,
+                                                    },
+                                                    [],
+                                                ) [
+                                                    expr(16:4-16:12) :: string {
+                                                        kind: literal(16:4-16:12) string "refused",
+                                                    },
+                                                ],
+                                            ],
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    ],
+                },
+            },
+            def(21:0-23:1) :: nothing {
+                name: ident(21:4-21:9) `query`,
+                kind: expr(21:50-23:1) :: nothing -> result int db-error {
+                    kind: fun(21:50-23:1) {
+                        params: [],
+                        body: [
+                            expr(22:1-22:21) :: result int db-error {
+                                kind: call(22:1-22:21) {
+                                    callee: expr(22:1-22:4) :: a -> result b a {
+                                        kind: ident(22:1-22:4) `err`,
+                                    },
+                                    args: [
+                                        expr(22:5-22:21) :: db-error {
+                                            kind: namespace-access `db-error.timeout`,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(27:0-30:1) :: nothing {
+                name: ident(27:4-27:11) `doubled`,
+                kind: expr(27:52-30:1) :: nothing -> result int db-error {
+                    kind: fun(27:52-30:1) {
+                        params: [],
+                        body: [
+                            expr(28:1-29:11) :: result int db-error {
+                                kind: call(28:1-29:11) {
+                                    callee: expr(28:1-29:11) :: a {
+                                        kind: namespace-access `result.then`,
+                                    },
+                                    args: [
+                                        expr(28:9-28:17) :: result int db-error {
+                                            kind: call(28:9-28:17) {
+                                                callee: expr(28:9-28:14) :: nothing -> result int db-error {
+                                                    kind: ident(28:9-28:14) `query`,
+                                                },
+                                                args: [
+                                                    expr(28:15-28:17) :: nothing {
+                                                        kind: (),
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                        expr(28:5-29:11) :: int -> result int db-error {
+                                            kind: fun(28:5-29:11) {
+                                                params: [
+                                                    ident(28:5-28:6) `n` :: int,
+                                                ],
+                                                body: [
+                                                    expr(29:1-29:11) :: result int db-error {
+                                                        kind: call(29:1-29:11) {
+                                                            callee: expr(29:1-29:3) :: a -> result a b {
+                                                                kind: ident(29:1-29:3) `ok`,
+                                                            },
+                                                            args: [
+                                                                expr(29:4-29:11) :: int {
+                                                                    kind: expr(29:5-29:10) :: int {
+                                                                        kind: binary op(29:7-29:8) `*` {
+                                                                            left: expr(29:5-29:6) :: int {
+                                                                                kind: ident(29:5-29:6) `n`,
+                                                                            },
+                                                                            right: expr(29:9-29:10) :: int {
+                                                                                kind: literal(29:9-29:10) int 2,
+                                                                            },
+                                                                        },
+                                                                    },
+                                                                },
+                                                            ],
+                                                        },
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(32:0-42:1) :: nothing {
+                name: ident(32:4-32:12) `classify`,
+                kind: expr(32:40-42:1) :: nothing -> string {
+                    kind: fun(32:40-42:1) {
+                        params: [],
+                        body: [
+                            expr(33:1-41:2) :: string {
+                                kind: when(33:1-41:2) [
+                                    case(33:17-35:2) is pattern(33:20-33:24) Constructor(
+                                        ConstructorHead {
+                                            range: 33:20-33:22,
+                                            module: None,
+                                            enum_name: None,
+                                            variant: ident(33:20-33:22) `ok`,
+                                        },
+                                        [
+                                            pattern(33:23-33:24) Identifier(
+                                                ident(33:23-33:24) `v`,
+                                            ),
+                                        ],
+                                    ) [
+                                        expr(34:3-34:21) :: string {
+                                            kind: interpolation [
+                                                expr(34:3-34:7) :: string {
+                                                    kind: literal(34:3-34:7) string "got ",
+                                                },
+                                                expr(34:9-34:20) :: string {
+                                                    kind: call(34:9-34:20) {
+                                                        callee: expr(34:9-34:18) :: int -> string {
+                                                            kind: ident(34:9-34:18) `to-string`,
+                                                        },
+                                                        args: [
+                                                            expr(34:19-34:20) :: int {
+                                                                kind: ident(34:19-34:20) `v`,
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                                expr(34:21-34:21) :: string {
+                                                    kind: literal(34:21-34:21) string "",
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                    case(35:3-41:2) is pattern(35:6-35:15) Constructor(
+                                        ConstructorHead {
+                                            range: 35:6-35:9,
+                                            module: None,
+                                            enum_name: None,
+                                            variant: ident(35:6-35:9) `err`,
+                                        },
+                                        [
+                                            pattern(35:10-35:15) Identifier(
+                                                ident(35:10-35:15) `inner`,
+                                            ),
+                                        ],
+                                    ) [
+                                        expr(36:2-40:3) :: string {
+                                            kind: when(36:2-40:3) [
+                                                case(36:13-38:3) is pattern(36:16-36:32) Constructor(
+                                                    ConstructorHead {
+                                                        range: 36:16-36:32,
+                                                        module: None,
+                                                        enum_name: Some(
+                                                            ident(36:16-36:24) `db-error`,
+                                                        ),
+                                                        variant: ident(36:25-36:32) `timeout`,
+                                                    },
+                                                    [],
+                                                ) [
+                                                    expr(37:4-37:9) :: string {
+                                                        kind: literal(37:4-37:9) string "slow",
+                                                    },
+                                                ],
+                                                case(38:4-40:3) is pattern(38:7-38:23) Constructor(
+                                                    ConstructorHead {
+                                                        range: 38:7-38:23,
+                                                        module: None,
+                                                        enum_name: Some(
+                                                            ident(38:7-38:15) `db-error`,
+                                                        ),
+                                                        variant: ident(38:16-38:23) `refused`,
+                                                    },
+                                                    [],
+                                                ) [
+                                                    expr(39:4-39:9) :: string {
+                                                        kind: literal(39:4-39:9) string "down",
+                                                    },
+                                                ],
+                                            ],
+                                        },
+                                    ],
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            def(44:0-46:1) :: nothing {
+                name: ident(44:4-44:8) `main`,
+                kind: expr(44:11-46:1) :: nothing -> nothing {
+                    kind: fun(44:11-46:1) {
+                        params: [],
+                        body: [
+                            expr(45:1-45:20) :: nothing {
+                                kind: call(45:1-45:20) {
+                                    callee: expr(45:1-45:6) :: string -> nothing {
+                                        kind: ident(45:1-45:6) `print`,
+                                    },
+                                    args: [
+                                        expr(45:7-45:20) :: string {
+                                            kind: expr(45:8-45:19) :: string {
+                                                kind: call(45:8-45:19) {
+                                                    callee: expr(45:8-45:16) :: nothing -> string {
+                                                        kind: ident(45:8-45:16) `classify`,
+                                                    },
+                                                    args: [
+                                                        expr(45:17-45:19) :: nothing {
+                                                            kind: (),
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

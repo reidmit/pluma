@@ -14,6 +14,7 @@
 # `std/sys/rpc` (dispatch, the CSRF gate, request `context`); the concrete
 # transports live in `std/sys/rpc` / `std/web/rpc` -- one per deploy target.
 use std/dict
+use std/error
 use std/list
 use std/local
 use std/stream
@@ -34,6 +35,31 @@ public enum rpc-error {
 	forbidden # 403 -- authenticated but not allowed
 	server-fault int # the handler failed uncaught (status)
 	not-found # no such route
+}
+
+# Renders an `rpc-error` for a human, which also lets a failed `remote` call
+# erase into the `std/error` carrier (`try` in an `error`-returning function) and
+# read well in a log. The transport detail and drifted route ride along.
+implement describe rpc-error {
+	def describe = fun e {
+		when e is rpc-error.transport detail {
+			"transport error: $(detail)"
+		} is rpc-error.timeout {
+			"request timed out"
+		} is rpc-error.schema-skew route {
+			"schema skew on route $(route)"
+		} is rpc-error.bad-request {
+			"server couldn't decode the arguments"
+		} is rpc-error.unauthorized {
+			"unauthorized"
+		} is rpc-error.forbidden {
+			"forbidden"
+		} is rpc-error.server-fault status {
+			"server fault (status $(to-string status))"
+		} is rpc-error.not-found {
+			"no such route"
+		}
+	}
 }
 
 # Maps a non-200 status from a dispatcher into the typed `rpc-error` a caller

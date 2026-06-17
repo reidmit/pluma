@@ -1670,6 +1670,9 @@ pub(crate) fn is_inline_builtin(tag: &str) -> bool {
 			| "bit-shift-left"
 			| "bit-shift-right"
 			| "bit-shift-right-unsigned"
+			// a variant's global constructor id (field 2 of `$variant`), or -1 for
+			// any non-variant value — the safe tag read `error.is` classifies on.
+			| "variant-gid"
 			// duration's nanosecond count: a retag of the `$int`-shaped box.
 			| "time-duration-as-nanos"
 			// duration / instant box+unbox. Both reuse the `$int` shape

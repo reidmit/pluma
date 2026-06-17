@@ -1,0 +1,145 @@
+# Errors that erase late and carry their own trace.
+#
+# Pluma gives you two ways to model failure, and this module is the bridge
+# between them. At the leaf, keep a precise, closed enum -- the kind `when`
+# can match exhaustively, so callers can react to a specific failure. At a
+# boundary, where you only want to propagate or report, erase that precise
+# type into the single `error` carrier here. You "erase late": your
+# signature stays `result a db-error` until the point you stop caring which
+# failure it was, and `try` does the one-way compression at that seam.
+#
+# An `error` is a chain of frames -- a message plus an optional cause
+# beneath it. Each `try` that propagates into an `error` context pushes a
+# frame recording where it went, so the chain reads like a stack trace that
+# (unlike a native one) survives the async boundaries Pluma's scheduler
+# crosses, because it is plain data. Build depth by hand with `context`:
+#
+#     try user = (load-user id) | error.context "handling request $(to-string id)"
+#
+# Erasing works for `result` and `task` alike, so the same `try` reads the same
+# whether a step is sync or async. A type erases into `error` exactly when it has
+# a `describe` instance -- and `string` has one, so every stdlib API that fails
+# with a `string` (`fs`, `db`, `http`, `sql`, ...) erases for free; a `remote`
+# call's `rpc-error` does too. Convention: a *library* exposes a precise enum (or
+# a string) so its own callers can react; an *app* declares `result _ error` /
+# `task _ error` at the layer it stops caring which failure it was, and lets `try`
+# compress. `error` is the app-layer carrier, not a return type to reach for
+# everywhere -- keep a signature precise as long as someone matches it.
+
+# A value that can describe itself for a human. It is consumed only at the
+# point a precise error is erased into `error` (ordinary static dispatch,
+# like `to-string` or `compare`) -- never stored or recovered -- so erasing
+# a type into `error` is a deliberate opt-in: give it a `describe` instance.
+public trait describe a {
+	describe :: fun a -> string
+}
+
+# A string already describes itself.
+implement describe string {
+	def describe = fun s {
+		s
+	}
+}
+
+# One hop in a failure's history: a message for this level, the cause it wrapped
+# (if any), and the global constructor id of the precise value it was erased from
+# (or -1 when there was none -- a bare `new`, or a `context` wrapper). The id
+# rides only the leaf frame; `is-a` reads it back to classify the failure.
+# Opaque -- build one with `new`/`from`, add levels with `context`, and read it
+# back with `message`/`trace`/`is-a`.
+opaque enum error {
+	frame string (option error) int
+}
+
+# The global constructor id of a variant value (unique across every enum), or -1
+# for any non-variant. The safe tag read `from`/`is` classify on -- it never
+# traps, even on an int or a string.
+def variant-gid :: fun a -> int = built-in "variant-gid"
+
+# A fresh error from a plain message, with no cause beneath it.
+#
+#     error.new "config file is empty"
+public def new :: fun string -> error = fun m {
+	error.frame m none (0 - 1)
+}
+
+# Erases a precise error value into the carrier, rendering it through its
+# `describe` instance and remembering its constructor id so `is` can classify it
+# later. This is what `try` calls for you when it propagates a precise failure
+# into an `error`-typed function; reach for it directly only when erasing by
+# hand.
+#
+#     error.from db-error.timeout   # => an error reading "timed out"
+public def from :: fun a -> error where (describe a) = fun x {
+	error.frame (describe.describe x) none (variant-gid x)
+}
+
+# Wraps an error in another layer of context, putting `m` on top and the
+# original underneath. This is how a chain grows: the outermost frame is the
+# most recent, the leaf the root cause. The wrapper carries no constructor id of
+# its own -- `is` still sees the leaf's.
+#
+#     error.context "loading user 7" (error.new "connection refused")
+#       # message => "loading user 7: connection refused"
+public def context :: fun string error -> error = fun m e {
+	error.frame m (some e) (0 - 1)
+}
+
+# Renders the whole chain as one line, outermost frame first and joined with
+# `": "` -- the readable one-liner for a log or a message to the user.
+#
+#     error.message err   # => "loading user 7: querying db: timed out"
+public def message :: fun error -> string = fun e {
+	when e is error.frame m cause _gid {
+		when cause is some inner {
+			"$(m): $(message inner)"
+		} is none {
+			m
+		}
+	}
+}
+
+# The frames as a list, outermost first -- the structured form of `message`,
+# for logging each level on its own or inspecting the chain.
+#
+#     error.trace err   # => ["loading user 7", "querying db", "timed out"]
+public def trace :: fun error -> list string = fun e {
+	when e is error.frame m cause _gid {
+		when cause is some inner {
+			[m, ...trace inner]
+		} is none {
+			[m]
+		}
+	}
+}
+
+# The constructor id remembered at the leaf of the chain (the precise value the
+# error was originally erased from), or -1 if there was none.
+def leaf-gid :: fun error -> int = fun e {
+	when e is error.frame _m cause gid {
+		when cause is some inner {
+			leaf-gid inner
+		} is none {
+			gid
+		}
+	}
+}
+
+# True when the failure ultimately came from `variant` -- the specific leaf
+# constructor it was erased from -- no matter how much `context` was layered on
+# top. Pass the constructor you're testing against:
+#
+#     if error.is-a e db-error.timeout { retry () } else { give-up () }
+#
+# It compares constructor identity only, never the payload, so a variant
+# carrying data still matches any value built from the same constructor. A
+# non-variant `variant` (or an error that never carried one) matches nothing.
+# (Named `is-a`, not `is`, because `is` is a reserved keyword.)
+public def is-a :: fun error a -> bool = fun e variant {
+	let target = variant-gid variant
+	if target < 0 {
+		false
+	} else {
+		leaf-gid e == target
+	}
+}

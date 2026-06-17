@@ -19,6 +19,7 @@
 # on both targets.
 
 use std/dict
+use std/error
 use std/hex
 use std/list
 use std/stream
@@ -101,7 +102,7 @@ def parse-response :: fun string -> result response string = fun s {
 	when hex.decode hex-body is ok body {
 		ok {status, headers: dict.empty (), body}
 	} is err e {
-		err e
+		err (describe e)
 	}
 }
 

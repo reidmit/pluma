@@ -26,6 +26,6 @@ unix: 1779719400
 from-unix: 2026-05-25T14:30:00Z
 parsed: 2026-05-25T14:30:00Z
 parsed-date: 2026-05-25T00:00:00Z
-time: could not parse `not a time` as ISO 8601
-time: invalid date/time: day 30 is out of range 1..=28 for 2026-02
+time: could not parse `not a time`
+time: invalid date/time: day 30 is out of range 1..=28
 == stderr ==

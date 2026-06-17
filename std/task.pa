@@ -74,6 +74,22 @@ public def attempt :: fun (task a e) -> task (result a e) f = built-in "task-att
 #     http.get url |> task.map parse-body
 public def map :: fun (task a e) (fun a -> b) -> task b e = built-in "task-map"
 
+# Transforms a task's typed failure with a plain function, leaving a success
+# untouched -- the error-channel dual of `map`, and the async sibling of
+# `result.map-err`. Use it to translate one failure type into another; the `try`
+# auto-erasure of a precise async failure into `std/error` is built on it.
+#
+#     fetch url |> task.map-err (fun e { error.context "loading $(url)" e })
+public def map-err :: fun (task a e) (fun e -> f) -> task a f = fun t g {
+	then (attempt t) fun r {
+		when r is ok v {
+			return v
+		} is err e {
+			fail (g e)
+		}
+	}
+}
+
 # Runs `t` in an uninterruptible region: a concurrent cancellation (a sibling
 # failing, a deadline, an `s.cancel`) can't interrupt `t` — it runs to
 # completion and the cancellation is only observed afterward. Use it to protect

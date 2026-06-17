@@ -1,10 +1,11 @@
 use std/hex
+use std/error
 
 def show = fun r {
 	when r is ok b {
 		print b
 	} is err m {
-		print "err: $(m)"
+		print "err: $(describe m)"
 	}
 }
 
