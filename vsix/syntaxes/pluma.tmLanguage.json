@@ -5,6 +5,7 @@
 	"fileTypes": ["pa"],
 	"patterns": [
 		{ "include": "#comments" },
+		{ "include": "#triple-strings" },
 		{ "include": "#strings" },
 		{ "include": "#bytes" },
 		{ "include": "#regex" },
@@ -36,6 +37,24 @@
 				}
 			]
 		},
+		"triple-strings": {
+			"name": "string.quoted.triple.pluma",
+			"begin": "\"\"\"",
+			"end": "\"\"\"",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.string.begin.pluma" }
+			},
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.string.end.pluma" }
+			},
+			"patterns": [
+				{
+					"name": "constant.character.escape.pluma",
+					"match": "\\\\\\$\\("
+				},
+				{ "include": "#interpolation" }
+			]
+		},
 		"strings": {
 			"name": "string.quoted.double.pluma",
 			"begin": "\"",
@@ -51,19 +70,20 @@
 					"name": "constant.character.escape.pluma",
 					"match": "\\\\."
 				},
-				{
-					"name": "meta.embedded.line.interpolation.pluma",
-					"begin": "\\$\\(",
-					"end": "\\)",
-					"beginCaptures": {
-						"0": { "name": "punctuation.section.interpolation.begin.pluma" }
-					},
-					"endCaptures": {
-						"0": { "name": "punctuation.section.interpolation.end.pluma" }
-					},
-					"patterns": [{ "include": "$self" }]
-				}
+				{ "include": "#interpolation" }
 			]
+		},
+		"interpolation": {
+			"name": "meta.embedded.line.interpolation.pluma",
+			"begin": "\\$\\(",
+			"end": "\\)",
+			"beginCaptures": {
+				"0": { "name": "punctuation.section.interpolation.begin.pluma" }
+			},
+			"endCaptures": {
+				"0": { "name": "punctuation.section.interpolation.end.pluma" }
+			},
+			"patterns": [{ "include": "$self" }]
 		},
 		"bytes": {
 			"name": "string.quoted.single.pluma",
