@@ -4,8 +4,8 @@
 # thread the dictionary through — so it binds monomorphically and the dispatch
 # resolves from the use site. Regression test: each of these previously stranded
 # its dispatch and trapped at runtime.
-use std/list
 use std/hex
+use std/list
 
 def main = fun {
 	# bare trait method bound to a local, used as a comparator

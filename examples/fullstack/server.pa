@@ -14,9 +14,9 @@
 # fingerprint (rejecting a stale client with a 409), calls the matching handler in
 # `api.pa`, and encodes the reply.
 
-use std/sys/rpc
 use std/task
 use std/sys/http
+use std/sys/rpc
 use ui
 
 def handler :: fun http.request -> task http.response = fun req {

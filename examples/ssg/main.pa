@@ -49,11 +49,11 @@ public def build-index = fun out-dir md-files {
 		"<li><a href=\"$(stem).html\">$(stem)</a></li>"
 	}) "\n"
 	let body = """
-	<h1>Index</h1>
-	<ul>
-	$(items)
-	</ul>
-	"""
+		<h1>Index</h1>
+		<ul>
+		$(items)
+		</ul>
+		"""
 	when fs.write-text-sync (out-dir ++ "/index.html") (page.page "Index" body) is ok _ {
 		print "  index.html"
 	} is err msg {

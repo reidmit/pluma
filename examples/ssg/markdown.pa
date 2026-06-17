@@ -8,9 +8,9 @@
 # The public entry point is `render :: fun string -> string`, taking a
 # Markdown body and returning an HTML fragment.
 
-use std/string
 use std/bytes
 use std/list
+use std/string
 
 # ---------------------------------------------------------------------
 # AST
@@ -70,7 +70,7 @@ public def break1 = fun bs d {
 	when bs is [] {
 		none
 	} is [c, ...rest] {
-		if c == d is true {
+		if c == d {
 			some ([], rest)
 		} else {
 			when break1 rest d is some (before, after) {
@@ -85,7 +85,7 @@ public def break1 = fun bs d {
 # Like `break1`, but for a two-byte delimiter `d1 d2` (e.g. `**`).
 public def break2 = fun bs d1 d2 {
 	when bs is [c, e, ...rest] {
-		if c == d1 && e == d2 is true {
+		if c == d1 && e == d2 {
 			some ([], rest)
 		} else {
 			when break2 [e, ...rest] d1 d2 is some (before, after) {
@@ -126,15 +126,21 @@ public def inline-loop = fun bs acc {
 		} is 42 {
 			# `*emph*` or `**strong**`.
 			when rest is [n, ...rest2] {
-				if n == 42 is true {
+				if n == 42 {
 					when break2 rest2 42 42 is some (inside, after) {
-						flush-text acc [inline.strong (inline-loop inside []), ...inline-loop after []]
+						flush-text acc [
+							inline.strong (inline-loop inside []),
+							...inline-loop after [],
+						]
 					} is none {
 						inline-loop rest [c, ...acc]
 					}
 				} else {
 					when break1 rest 42 is some (inside, after) {
-						flush-text acc [inline.emph (inline-loop inside []), ...inline-loop after []]
+						flush-text acc [
+							inline.emph (inline-loop inside []),
+							...inline-loop after [],
+						]
 					} is none {
 						inline-loop rest [c, ...acc]
 					}
@@ -146,11 +152,11 @@ public def inline-loop = fun bs acc {
 			# `[text](url)`.
 			when break1 rest 93 is some (txt, after-rb) {
 				when after-rb is [lp, ...after-lp] {
-					if lp == 40 is true {
+					if lp == 40 {
 						when break1 after-lp 41 is some (url, after-rp) {
 							flush-text acc [
 								inline.link (decode txt) (decode url),
-								...inline-loop after-rp []
+								...inline-loop after-rp [],
 							]
 						} is none {
 							inline-loop rest [c, ...acc]
@@ -181,17 +187,17 @@ public def parse-inline = fun s {
 
 # Heading level 1..6, or 0 if `line` is not an ATX heading.
 public def heading-level = fun line {
-	if string.starts-with line "###### " is true {
+	if string.starts-with line "###### " {
 		6
-	} else if string.starts-with line "##### " is true {
+	} else if string.starts-with line "##### " {
 		5
-	} else if string.starts-with line "#### " is true {
+	} else if string.starts-with line "#### " {
 		4
-	} else if string.starts-with line "### " is true {
+	} else if string.starts-with line "### " {
 		3
-	} else if string.starts-with line "## " is true {
+	} else if string.starts-with line "## " {
 		2
-	} else if string.starts-with line "# " is true {
+	} else if string.starts-with line "# " {
 		1
 	} else {
 		0
@@ -205,7 +211,7 @@ public def bullet-item = fun l {
 # Count leading ASCII-digit bytes starting at index `i`.
 public def count-digits = fun b i {
 	when bytes.at b i is some c {
-		if c >= 48 && c <= 57 is true {
+		if c >= 48 && c <= 57 {
 			count-digits b (i + 1)
 		} else {
 			i
@@ -250,7 +256,7 @@ public def take-fence = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if string.trim l == "```" is true {
+		if string.trim l == "```" {
 			([], rest)
 		} else {
 			let (more, after) = take-fence rest
@@ -260,9 +266,9 @@ public def take-fence = fun lines {
 }
 
 public def strip-quote = fun l {
-	if string.starts-with l "> " is true {
+	if string.starts-with l "> " {
 		string.drop l 2
-	} else if string.starts-with l ">" is true {
+	} else if string.starts-with l ">" {
 		string.drop l 1
 	} else {
 		l
@@ -273,7 +279,7 @@ public def take-quote = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if string.starts-with l ">" is true {
+		if string.starts-with l ">" {
 			let (more, after) = take-quote rest
 			([strip-quote l, ...more], after)
 		} else {
@@ -286,7 +292,7 @@ public def take-bullets = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if bullet-item l is true {
+		if bullet-item l {
 			let (more, after) = take-bullets rest
 			([parse-inline (string.drop l 2), ...more], after)
 		} else {
@@ -299,7 +305,7 @@ public def take-ordered = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if ordered-item l is true {
+		if ordered-item l {
 			let d = count-digits (string.to-bytes l) 0
 			let (more, after) = take-ordered rest
 			([parse-inline (string.drop l (d + 2)), ...more], after)
@@ -313,7 +319,7 @@ public def take-para = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if string.trim l == "" || special-starter l is true {
+		if string.trim l == "" || special-starter l {
 			([], lines)
 		} else {
 			let (more, after) = take-para rest
@@ -330,24 +336,24 @@ public def parse-blocks = fun lines {
 	when lines is [] {
 		[]
 	} is [line, ...rest] {
-		if string.trim line == "" is true {
+		if string.trim line == "" {
 			parse-blocks rest
-		} else if heading-level line > 0 is true {
+		} else if heading-level line > 0 {
 			let lvl = heading-level line
 			[block.heading lvl (parse-inline (string.drop line (lvl + 1))), ...parse-blocks rest]
-		} else if string.starts-with line "```" is true {
+		} else if string.starts-with line "```" {
 			let lang = string.trim (string.drop line 3)
 			let (code-lines, after) = take-fence rest
 			[block.code-block lang (string.join code-lines "\n"), ...parse-blocks after]
-		} else if is-hr line is true {
+		} else if is-hr line {
 			[block.thematic-break, ...parse-blocks rest]
-		} else if string.starts-with line ">" is true {
+		} else if string.starts-with line ">" {
 			let (q-lines, after) = take-quote lines
 			[block.block-quote (parse-inline (string.join q-lines " ")), ...parse-blocks after]
-		} else if bullet-item line is true {
+		} else if bullet-item line {
 			let (items, after) = take-bullets lines
 			[block.bullet-list items, ...parse-blocks after]
-		} else if ordered-item line is true {
+		} else if ordered-item line {
 			let (items, after) = take-ordered lines
 			[block.ordered-list items, ...parse-blocks after]
 		} else {

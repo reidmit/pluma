@@ -9,10 +9,10 @@
 # The fingerprint is the route fingerprint for `fun int int -> task int` (shared
 # with rpc-skew); if the fingerprint algorithm changes, update it and re-accept.
 use std/dict
-use std/sys/rpc
 use std/task
 use std/sys/http
 use std/sys/net
+use std/sys/rpc
 use api
 
 def route-fp :: string = "3046392278730166848"

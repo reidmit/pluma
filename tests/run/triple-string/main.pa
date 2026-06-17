@@ -1,32 +1,32 @@
 def name = "Ada"
 
 def html = """
-<ul>
-	<li>$(name)</li>
-</ul>
-"""
+	<ul>
+		<li>$(name)</li>
+	</ul>
+	"""
 
 def oneline = """
-no need to escape "quotes" here
-"""
+	no need to escape "quotes" here
+	"""
 
 def with_escapes = """
-tab	and newline
-stay literal? no
-backslash \\ kept
-"""
+	tab	and newline
+	stay literal? no
+	backslash \\ kept
+	"""
 
 def with_blank_line = """
-first
+	first
 
-third
-"""
+	third
+	"""
 
 def main = fun {
 	let indented = """
-	margin
-	  is stripped
-	"""
+		margin
+		  is stripped
+		"""
 	print html
 	print "==="
 	print oneline

@@ -1,5 +1,5 @@
-use std/time
 use std/error
+use std/time
 use std/sys/io
 
 def show-instant = fun label t {

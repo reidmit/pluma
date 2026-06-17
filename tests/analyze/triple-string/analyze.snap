@@ -12,26 +12,26 @@ module `main` (tests/analyze/triple-string/main.pa) {
                     kind: literal(0:12-0:16) string "Ada",
                 },
             },
-            def(2:0-6:3) :: nothing {
+            def(2:0-6:4) :: nothing {
                 name: ident(2:4-2:9) `block`,
-                kind: expr(2:15-6:3) :: string {
-                    kind: literal(2:15-6:3) string "hello
+                kind: expr(2:15-6:4) :: string {
+                    kind: literal(2:15-6:4) string "hello
                       indented two more
                     back",
                 },
             },
-            def(8:0-10:0) :: nothing {
+            def(8:0-10:1) :: nothing {
                 name: ident(8:4-8:10) `interp`,
-                kind: expr(8:16-10:0) :: string {
+                kind: expr(8:16-10:1) :: string {
                     kind: interpolation [
-                        expr(8:16-8:23) :: string {
-                            kind: literal(8:16-8:23) string "name: ",
+                        expr(8:16-8:24) :: string {
+                            kind: literal(8:16-8:24) string "name: ",
                         },
-                        expr(9:8-9:12) :: string {
-                            kind: ident(9:8-9:12) `name`,
+                        expr(9:9-9:13) :: string {
+                            kind: ident(9:9-9:13) `name`,
                         },
-                        expr(9:13-9:14) :: string {
-                            kind: literal(9:13-9:14) string "",
+                        expr(9:14-9:16) :: string {
+                            kind: literal(9:14-9:16) string "",
                         },
                     ],
                 },

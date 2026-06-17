@@ -9,11 +9,11 @@
 # `$PORT` when set (so `pluma dev` and a real host can hand it a port) and the
 # address below otherwise.
 
-use std/sys/rpc
 use std/string
 use std/task
 use std/sys/fs
 use std/sys/http
+use std/sys/rpc
 use docdata
 use playground
 use recipes

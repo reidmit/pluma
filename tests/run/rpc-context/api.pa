@@ -4,8 +4,8 @@
 # dispatcher) and authorizes the call in-handler with `rpc.reject`: an anonymous
 # caller gets 401, a non-admin 403, an admin the sum. Its wire shape is exactly a
 # plain `fun int int -> task int`, so it reuses that route fingerprint.
-use std/sys/rpc
 use std/task
+use std/sys/rpc
 use std/sys/rpc/context
 
 public remote def guarded-add :: fun int int -> task int = fun a b {

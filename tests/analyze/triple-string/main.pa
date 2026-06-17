@@ -1,14 +1,14 @@
 def name = "Ada"
 
 def block = """
-hello
-  indented two more
-back
-"""
+	hello
+	  indented two more
+	back
+	"""
 
 def interp = """
-name: $(name)
-"""
+	name: $(name)
+	"""
 
 def main = fun {
 	print block

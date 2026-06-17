@@ -2,8 +2,8 @@
 # function declared `task _ error` auto-erases the precise async failure into
 # `error` and stamps a per-hop frame -- exactly like the sync `try`, with no
 # manual `task.map-err`. The leaf constructor survives for `error.is-a`.
-use std/task
 use std/error
+use std/task
 
 enum db-error {
 	timeout

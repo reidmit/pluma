@@ -1,5 +1,5 @@
-use std/time
 use std/error
+use std/time
 use std/sys/io
 
 # The `std/time` clock builtins (Clock capability): wall clock, monotonic clock,

@@ -10,14 +10,14 @@
 #     compiler synthesizes `dispatch`'s body from the discovered `remote def`s.
 #   - the outbound transport: POST each encoded call to `<origin>/rpc/<route>`.
 #     The mirror of `std/web/rpc`, installed as the ambient sender at startup.
-use std/rpc
 use std/dict
 use std/list
 use std/local
-use std/string
-use std/stream
-use std/task
 use std/router
+use std/rpc
+use std/stream
+use std/string
+use std/task
 use std/sys/http
 use std/sys/rpc/context
 

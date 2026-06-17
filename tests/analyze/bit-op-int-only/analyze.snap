@@ -7,9 +7,9 @@ error: Type mismatch: expected `int`, but found `float`.
                     ^^^
 
 error: Type mismatch: expected `int`, but found `float`.
-> 3 | def bad-shift = 8 >> 1.0
+> 4 | def bad-shift = 8 >> 1.0
                            ^^^
 
 error: Type mismatch: expected `int`, but found `float`.
-> 4 | def bad-not = ~3.5
+> 6 | def bad-not = ~3.5
                      ^^^

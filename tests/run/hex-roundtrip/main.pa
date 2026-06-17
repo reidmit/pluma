@@ -1,5 +1,5 @@
-use std/hex
 use std/error
+use std/hex
 
 def show = fun r {
 	when r is ok b {
