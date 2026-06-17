@@ -77,6 +77,12 @@ pub struct Context {
 	/// walk; lets a rule recognize that a `css.rule` projection lands on an
 	/// imported module rather than an unrelated local of the same name.
 	imports: HashMap<String, String>,
+	/// Local names of the enclosing `using` blocks (innermost last), pushed as
+	/// the walk descends into a `using` body and popped on the way out. Lets a
+	/// rule see that a projection — or a nested `fun` it's about to flag — already
+	/// sits inside a `using` block, even across the function boundary the walker
+	/// crosses to visit that closure as its own unit.
+	using: Vec<String>,
 }
 
 impl Context {
@@ -84,6 +90,7 @@ impl Context {
 		Context {
 			frames: Vec::new(),
 			imports: HashMap::new(),
+			using: Vec::new(),
 		}
 	}
 
@@ -120,6 +127,21 @@ impl Context {
 	/// Whether `name` is bound as a local value anywhere in the enclosing scopes.
 	pub fn is_local(&self, name: &str) -> bool {
 		self.frames.iter().flatten().any(|n| n == name)
+	}
+
+	/// Enter a `using <name>` block; `name` is the namespace's local import name.
+	fn enter_using(&mut self, name: String) {
+		self.using.push(name);
+	}
+
+	/// Leave the innermost `using` block.
+	fn leave_using(&mut self) {
+		self.using.pop();
+	}
+
+	/// The local names of the `using` blocks currently in scope (innermost last).
+	pub fn enclosing_using(&self) -> &[String] {
+		&self.using
 	}
 }
 

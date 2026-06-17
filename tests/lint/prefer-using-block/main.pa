@@ -43,6 +43,33 @@ def wrapped = fun {
 	}
 }
 
+# Does not fire: both `css` and `view` reach the threshold, so a suggestion would
+# stack two `using` blocks — left to the author.
+def mixed = fun {
+	view.element "div" [
+		view.attr "class" "card",
+		view.text "hi",
+		view.styled (css.rule [
+			css.color (css.hex "fff"),
+			css.padding (css.px 4.0),
+		]),
+	]
+}
+
+# Does not fire: this closure is nested inside an enclosing `using css`. Its css
+# projections are already wrapped, and the view projections would only stack a
+# second `using` block on top.
+def nested = fun {
+	using css {
+		run (fun {
+			css.reset ()
+			view.button
+				[view.styled (css.rule [css.color (css.hex "fff")])]
+				[view.text "Save"]
+		})
+	}
+}
+
 # Does not fire: `view` here is a local value, not the imported namespace.
 def shadowed = fun view {
 	view.element [view.attr, view.text]

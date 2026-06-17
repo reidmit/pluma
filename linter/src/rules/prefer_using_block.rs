@@ -23,7 +23,13 @@ const THRESHOLD: usize = 3;
 /// not to the enclosing one. A `def` whose value is not a function (e.g.
 /// `def item = css.rule [ … ]`) is counted as its own unit and reported on the
 /// definition. Occurrences already inside a matching `using` block don't count —
-/// they're nothing left to wrap.
+/// they're nothing left to wrap — whether that block is in the same function or
+/// an enclosing one the closure is nested inside.
+///
+/// Fires only when a single namespace is in play. If a function would want two
+/// `using` blocks — two qualifying namespaces, or one qualifying namespace on top
+/// of one an enclosing `using` already supplies — it stays quiet: stacking blocks
+/// reads worse than the repeated prefix, so that trade-off is left to the author.
 ///
 /// Only fires when the name actually resolves to one of those imports (via the
 /// module's `use` list) and isn't shadowed by a local value, so a runtime value
@@ -49,7 +55,7 @@ impl Rule for PreferUsingBlock {
 		// The wrapped region is the function body (inside its braces): from the
 		// first statement to the last.
 		let region = body_range(&fun.body);
-		report(hits, Unit::Function, fun.range, region, out);
+		report(hits, ctx, Unit::Function, fun.range, region, out);
 	}
 
 	fn check_definition(&self, value: &ExprNode, ctx: &Context, out: &mut Vec<Finding>) {
@@ -62,16 +68,37 @@ impl Rule for PreferUsingBlock {
 		// The whole value is one counting unit; a top-level def has no parameters
 		// to shadow imports. The wrapped region is the value expression itself.
 		let hits = qualifying_namespaces(std::slice::from_ref(value), ctx, &[]);
-		report(hits, Unit::Definition, value.range, Some(value.range), out);
+		report(
+			hits,
+			ctx,
+			Unit::Definition,
+			value.range,
+			Some(value.range),
+			out,
+		);
 	}
 }
 
-/// Emit a finding per qualifying namespace, attaching the `using`-wrap autofix
-/// when exactly one namespace qualifies. With two qualifying namespaces, both
-/// would want to wrap the same `region`; their edits overlap, so applying both
-/// can't be done cleanly — those stay report-only.
-fn report(hits: Vec<Hit>, unit: Unit, span: Range, region: Option<Range>, out: &mut Vec<Finding>) {
-	let single = hits.len() == 1;
+/// Emit the `using`-wrap suggestion, but only when exactly one namespace is in
+/// play. "In play" is the qualifying namespaces plus any css/view namespace an
+/// enclosing `using` block already supplies: more than one means the author would
+/// be stacking `using` blocks, which reads worse than the repeated prefix — so we
+/// stay quiet and leave that call to them. (Two qualifying namespaces would also
+/// want to wrap the same overlapping `region`, which can't be autofixed cleanly.)
+fn report(
+	hits: Vec<Hit>,
+	ctx: &Context,
+	unit: Unit,
+	span: Range,
+	region: Option<Range>,
+	out: &mut Vec<Finding>,
+) {
+	// Enclosing css/view `using` blocks are disjoint from `hits` (their namespaces
+	// are suppressed from the count), so the in-play total is just the two added.
+	let enclosing = enclosing_namespaces(ctx);
+	if hits.len() + enclosing.len() != 1 {
+		return;
+	}
 	for hit in hits {
 		let mut finding = Finding::new(
 			Diagnostic::report_warning(Lint {
@@ -81,11 +108,30 @@ fn report(hits: Vec<Hit>, unit: Unit, span: Range, region: Option<Range>, out: &
 			})
 			.with_span(span),
 		);
-		if let Some(region) = region.filter(|_| single) {
+		if let Some(region) = region {
 			finding = wrap_fix(finding, &hit.name, region, &hit.prefixes);
 		}
 		out.push(finding);
 	}
+}
+
+/// The local names of enclosing `using` blocks that name a css/view namespace,
+/// deduplicated. Unrelated blocks (`using math { … }`) don't count — they neither
+/// suppress a css/view projection nor stack with a css/view suggestion.
+fn enclosing_namespaces(ctx: &Context) -> Vec<&str> {
+	let mut names: Vec<&str> = ctx
+		.enclosing_using()
+		.iter()
+		.filter(|name| {
+			ctx
+				.imported_module(name)
+				.is_some_and(|m| NAMESPACES.contains(&m))
+		})
+		.map(String::as_str)
+		.collect();
+	names.sort_unstable();
+	names.dedup();
+	names
 }
 
 /// Build the autofix: wrap `region` in `using <name> { … }` and strip each
@@ -129,10 +175,14 @@ struct Hit {
 /// reach [`THRESHOLD`]. Reported in a stable (alphabetical) order so the
 /// suggestion — and its snapshot — doesn't depend on hash iteration order when
 /// both namespaces qualify. `params` are names that shadow same-named imports.
-fn qualifying_namespaces(body: &[ExprNode], ctx: &Context, params: &[&str]) -> Vec<Hit> {
+fn qualifying_namespaces<'a>(body: &'a [ExprNode], ctx: &'a Context, params: &[&str]) -> Vec<Hit> {
+	// A namespace already supplied by an enclosing `using` block is nothing left to
+	// wrap, so seed the suppression set with those — including ones from an outer
+	// function the walker has since descended out of.
+	let suppressed = enclosing_namespaces(ctx);
 	let mut counts: HashMap<&str, Vec<Range>> = HashMap::new();
 	for stmt in body {
-		count_projections(stmt, ctx, params, &[], &mut counts);
+		count_projections(stmt, ctx, params, &suppressed, &mut counts);
 	}
 
 	let mut hits: Vec<Hit> = counts

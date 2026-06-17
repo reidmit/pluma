@@ -195,7 +195,13 @@ fn visit_expr(expr: &ExprNode, rules: &[Box<dyn Rule>], ctx: &mut Context, out: 
 			visit_body(&scope_node.body, rules, ctx, out);
 			ctx.pop();
 		}
-		ExprKind::Using { body, .. } => visit_body(body, rules, ctx, out),
+		ExprKind::Using { namespace, body } => {
+			// Track the namespace so rules can see this `using` context even after the
+			// walk crosses into a nested `fun` (visited as its own unit).
+			ctx.enter_using(namespace.name.clone());
+			visit_body(body, rules, ctx, out);
+			ctx.leave_using();
+		}
 		// Leaves: no sub-expressions to descend into.
 		ExprKind::NamespaceAccess(_)
 		| ExprKind::EmptyTuple
