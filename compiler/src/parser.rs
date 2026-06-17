@@ -1937,11 +1937,33 @@ impl<'a> Parser<'a> {
 	fn parse_pattern_atom(&mut self) -> Option<PatternNode> {
 		match self.current_token {
 			Some(Token::Identifier(..)) => {
-				let id_node = self.parse_identifier().unwrap();
-				Some(PatternNode {
-					range: id_node.range,
-					kind: PatternKind::Identifier(id_node),
-				})
+				let first = self.parse_identifier().unwrap();
+
+				// A dotted head qualifies a nullary variant by its enum (and, for an
+				// imported enum, its module): `enum.variant` / `module.enum.variant`.
+				// Mirrors `parse_pattern`'s top-level handling so a qualified variant
+				// also works as a constructor argument (`err color.red`), not only
+				// when parenthesized. A variant that itself takes arguments still
+				// needs parens here — this atom collects no args of its own.
+				let mut segments = vec![first];
+				while segments.len() < 3 && matches!(self.current_token, Some(Token::Dot(..))) {
+					self.advance();
+					segments.push(self.expect_identifier()?);
+				}
+
+				if segments.len() == 1 {
+					let id_node = segments.pop().unwrap();
+					Some(PatternNode {
+						range: id_node.range,
+						kind: PatternKind::Identifier(id_node),
+					})
+				} else {
+					let head = constructor_head_from_segments(segments);
+					Some(PatternNode {
+						range: head.range,
+						kind: PatternKind::Constructor(head, Vec::new()),
+					})
+				}
 			}
 
 			// Parens let nested constructor patterns appear as constructor args:
