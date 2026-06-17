@@ -31,11 +31,11 @@ def hero-grid :: css.ruleset = using css {
 def eyebrow :: css.ruleset = using css {
 	.rule [
 		.property "text-transform" "uppercase",
-		.property "letter-spacing" "0.12em",
+		.letter-spacing (.em 0.12),
 		.font-size (.rem 0.78),
 		.font-weight "600",
 		.color (.hex theme.accent),
-		.property "margin-bottom" "1rem",
+		.margin-bottom (.rem 1.0),
 	]
 }
 
@@ -44,9 +44,9 @@ def headline :: css.ruleset = using css {
 		.font-family theme.serif,
 		.property "font-size" "clamp(2.4rem, 5vw, 3.5rem)",
 		.line-height 1.06,
-		.property "letter-spacing" "-0.025em",
+		.letter-spacing (.em (-0.025)),
 		.font-weight "600",
-		.property "margin-bottom" "1.2rem",
+		.margin-bottom (.rem 1.2),
 	]
 }
 
@@ -55,7 +55,7 @@ def lead :: css.ruleset = using css {
 		.font-size (.rem 1.18),
 		.color (.hex theme.muted),
 		.max-width (.rem 34.0),
-		.property "margin-bottom" "2rem",
+		.margin-bottom (.rem 2.0),
 	]
 }
 
@@ -115,7 +115,7 @@ def code-block :: css.ruleset = using css {
 		.line-height 1.7,
 		.color (.hex theme.code-fg),
 		.property "white-space" "pre",
-		.property "tab-size" "2",
+		.tab-size 2,
 		.property "overflow-x" "auto",
 	]
 }
@@ -125,7 +125,7 @@ def code-block :: css.ruleset = using css {
 def section :: css.ruleset = css.rule [css.property "padding" "4rem 0"]
 
 def section-head :: css.ruleset = using css {
-	.rule [.max-width (.rem 40.0), .property "margin-bottom" "2.5rem"]
+	.rule [.max-width (.rem 40.0), .margin-bottom (.rem 2.5)]
 }
 
 def section-title :: css.ruleset = using css {
@@ -133,9 +133,9 @@ def section-title :: css.ruleset = using css {
 		.font-family theme.serif,
 		.font-size (.rem 2.0),
 		.line-height 1.15,
-		.property "letter-spacing" "-0.02em",
+		.letter-spacing (.em (-0.02)),
 		.font-weight "600",
-		.property "margin-bottom" "0.7rem",
+		.margin-bottom (.rem 0.7),
 	]
 }
 
@@ -168,11 +168,11 @@ def feature-card :: css.ruleset = using css {
 }
 
 def feature-icon :: css.ruleset = using css {
-	.rule [.font-size (.rem 1.7), .property "margin-bottom" "0.8rem"]
+	.rule [.font-size (.rem 1.7), .margin-bottom (.rem 0.8)]
 }
 
 def feature-title :: css.ruleset = using css {
-	.rule [.font-size (.rem 1.08), .font-weight "600", .property "margin-bottom" "0.4rem"]
+	.rule [.font-size (.rem 1.08), .font-weight "600", .margin-bottom (.rem 0.4)]
 }
 
 def feature-text :: css.ruleset = using css {
@@ -199,7 +199,7 @@ def strip-title :: css.ruleset = using css {
 		.font-family theme.serif,
 		.font-size (.rem 2.1),
 		.font-weight "600",
-		.property "margin-bottom" "0.8rem",
+		.margin-bottom (.rem 0.8),
 	]
 }
 

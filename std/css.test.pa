@@ -46,6 +46,26 @@ def tests :: test.suite = [
 	test.case "z-index renders an int" fun {
 		assert.equals (css.inline [css.z-index 10]) "z-index: 10"
 	},
+	test.case "tab-size renders an int" fun {
+		assert.equals (css.inline [css.tab-size 2]) "tab-size: 2"
+	},
+	test.case "directional padding and margin name their edge" fun {
+		assert.equals (css.inline [
+			css.padding-top (css.rem 1.0),
+			css.padding-left (css.px 8.0),
+			css.margin-bottom (css.rem 0.5),
+		]) "padding-top: 1rem; padding-left: 8px; margin-bottom: 0.5rem"
+	},
+	test.case "min/max-height and scroll-margin-top take a length" fun {
+		assert.equals (css.inline [
+			css.min-height (css.rem 22.0),
+			css.max-height (css.vh 100.0),
+			css.scroll-margin-top (css.rem 1.5),
+		]) "min-height: 22rem; max-height: 100vh; scroll-margin-top: 1.5rem"
+	},
+	test.case "letter-spacing renders a negative em" fun {
+		assert.equals (css.inline [css.letter-spacing (css.em -0.02)]) "letter-spacing: -0.02em"
+	},
 	test.case "keyword properties take a string value" fun {
 		assert.equals (css.inline [
 			css.display "flex",

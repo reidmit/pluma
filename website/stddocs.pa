@@ -55,11 +55,11 @@ def rail-left :: css.ruleset = using css {
 def side-title :: css.ruleset = using css {
 	.rule [
 		.property "text-transform" "uppercase",
-		.property "letter-spacing" "0.1em",
+		.letter-spacing (.em 0.1),
 		.font-size (.rem 0.7),
 		.font-weight "600",
 		.color (.hex theme.faint),
-		.property "margin-bottom" "0.7rem",
+		.margin-bottom (.rem 0.7),
 	]
 }
 
@@ -70,7 +70,7 @@ def side-list :: css.ruleset = using css {
 def side-item :: css.ruleset = using css {
 	.rule [
 		.property "padding" "0.22rem 0 0.22rem 0.7rem",
-		.property "margin-left" "-0.7rem",
+		.margin-left (.rem (-0.7)),
 		.color (.hex theme.muted),
 		.property "border-left" "2px solid transparent",
 		.property "transition" "color 0.12s ease, border-color 0.12s ease",
@@ -101,16 +101,16 @@ def mod-head :: css.ruleset = using css {
 		.font-family theme.mono,
 		.font-size (.rem 0.84),
 		.color (.hex theme.faint),
-		.property "margin-bottom" "1rem",
+		.margin-bottom (.rem 1.0),
 	]
 }
 
 def item :: css.ruleset = using css {
 	.rule [
 		.property "border-top" "1px solid #e9e4dc",
-		.property "padding-top" "1.6rem",
-		.property "margin-top" "1.8rem",
-		.property "scroll-margin-top" "1.5rem",
+		.padding-top (.rem 1.6),
+		.margin-top (.rem 1.8),
+		.scroll-margin-top (.rem 1.5),
 	]
 }
 
@@ -121,7 +121,7 @@ def sig :: css.ruleset = using css {
 		.font-weight "600",
 		.color (.hex theme.accent-deep),
 		.property "white-space" "pre-wrap",
-		.property "margin-bottom" "0.2rem",
+		.margin-bottom (.rem 0.2),
 	]
 }
 

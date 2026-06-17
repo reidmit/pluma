@@ -58,7 +58,7 @@ def sidebar :: css.ruleset = using css {
 def side-title :: css.ruleset = using css {
 	.rule [
 		.property "text-transform" "uppercase",
-		.property "letter-spacing" "0.1em",
+		.letter-spacing (.em 0.1),
 		.font-size (.rem 0.72),
 		.font-weight "600",
 		.color (.hex theme.faint),
@@ -75,8 +75,8 @@ def side-item :: css.ruleset = using css {
 		.property "padding" "0.28rem 0",
 		.color (.hex theme.muted),
 		.property "border-left" "2px solid transparent",
-		.property "padding-left" "0.8rem",
-		.property "margin-left" "-0.8rem",
+		.padding-left (.rem 0.8),
+		.margin-left (.rem (-0.8)),
 		.property "transition" "color 0.12s ease, border-color 0.12s ease",
 		.on "hover" [.color (.hex theme.accent), .border-color (.hex "#6d4aa3")],
 	]
@@ -92,10 +92,10 @@ def divider :: css.ruleset = using css {
 		.font-family theme.serif,
 		.font-size (.rem 1.9),
 		.font-weight "600",
-		.property "letter-spacing" "-0.02em",
+		.letter-spacing (.em (-0.02)),
 		.property "border-top" "1px solid #e9e4dc",
-		.property "margin-top" "3.5rem",
-		.property "padding-top" "2.5rem",
+		.margin-top (.rem 3.5),
+		.padding-top (.rem 2.5),
 	]
 }
 

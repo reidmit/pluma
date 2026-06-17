@@ -137,9 +137,49 @@ public def padding :: fun length -> declaration = fun l {
 	declaration.decl "padding" (length-to-string l)
 }
 
+# Padding above the content: `css.padding-top (css.rem 1.0)` => `padding-top: 1rem`.
+public def padding-top :: fun length -> declaration = fun l {
+	declaration.decl "padding-top" (length-to-string l)
+}
+
+# Padding to the right of the content: `css.padding-right (css.rem 1.0)`.
+public def padding-right :: fun length -> declaration = fun l {
+	declaration.decl "padding-right" (length-to-string l)
+}
+
+# Padding below the content: `css.padding-bottom (css.rem 1.0)`.
+public def padding-bottom :: fun length -> declaration = fun l {
+	declaration.decl "padding-bottom" (length-to-string l)
+}
+
+# Padding to the left of the content: `css.padding-left (css.rem 1.0)`.
+public def padding-left :: fun length -> declaration = fun l {
+	declaration.decl "padding-left" (length-to-string l)
+}
+
 # Margin on all sides: `css.margin (css.rem 1.0)` => `margin: 1rem`.
 public def margin :: fun length -> declaration = fun l {
 	declaration.decl "margin" (length-to-string l)
+}
+
+# Margin above the element: `css.margin-top (css.rem 1.0)` => `margin-top: 1rem`.
+public def margin-top :: fun length -> declaration = fun l {
+	declaration.decl "margin-top" (length-to-string l)
+}
+
+# Margin to the right of the element: `css.margin-right (css.rem 1.0)`.
+public def margin-right :: fun length -> declaration = fun l {
+	declaration.decl "margin-right" (length-to-string l)
+}
+
+# Margin below the element: `css.margin-bottom (css.rem 1.0)`.
+public def margin-bottom :: fun length -> declaration = fun l {
+	declaration.decl "margin-bottom" (length-to-string l)
+}
+
+# Margin to the left of the element: `css.margin-left (css.rem 1.0)`.
+public def margin-left :: fun length -> declaration = fun l {
+	declaration.decl "margin-left" (length-to-string l)
 }
 
 # Width: `css.width (css.px 240.0)` => `width: 240px`.
@@ -150,6 +190,16 @@ public def width :: fun length -> declaration = fun l {
 # Height: `css.height (css.px 240.0)` => `height: 240px`.
 public def height :: fun length -> declaration = fun l {
 	declaration.decl "height" (length-to-string l)
+}
+
+# Minimum height: `css.min-height (css.rem 22.0)` => `min-height: 22rem`.
+public def min-height :: fun length -> declaration = fun l {
+	declaration.decl "min-height" (length-to-string l)
+}
+
+# Maximum height: `css.max-height (css.vh 100.0)` => `max-height: 100vh`.
+public def max-height :: fun length -> declaration = fun l {
+	declaration.decl "max-height" (length-to-string l)
 }
 
 # Minimum width: `css.min-width (css.rem 12.0)` => `min-width: 12rem`.
@@ -170,6 +220,12 @@ public def gap :: fun length -> declaration = fun l {
 # Font size: `css.font-size (css.rem 1.25)` => `font-size: 1.25rem`.
 public def font-size :: fun length -> declaration = fun l {
 	declaration.decl "font-size" (length-to-string l)
+}
+
+# Spacing between letters, often a small `em` (and frequently negative to tighten
+# headings): `css.letter-spacing (css.em -0.02)` => `letter-spacing: -0.02em`.
+public def letter-spacing :: fun length -> declaration = fun l {
+	declaration.decl "letter-spacing" (length-to-string l)
 }
 
 # Corner rounding: `css.border-radius (css.px 6.0)` => `border-radius: 6px`.
@@ -197,6 +253,12 @@ public def left :: fun length -> declaration = fun l {
 	declaration.decl "left" (length-to-string l)
 }
 
+# Extra space kept above an element when it is scrolled into view by an anchor jump
+# (so a sticky header doesn't cover it): `css.scroll-margin-top (css.rem 1.5)`.
+public def scroll-margin-top :: fun length -> declaration = fun l {
+	declaration.decl "scroll-margin-top" (length-to-string l)
+}
+
 # --- declarations: number-valued properties ---------------------------------
 
 # Opacity (0.0-1.0): `opacity 0.5` => `opacity: 0.5`.
@@ -212,6 +274,11 @@ public def z-index :: fun int -> declaration = fun n {
 # Line height as a unitless multiple: `line-height 1.5` => `line-height: 1.5`.
 public def line-height :: fun float -> declaration = fun n {
 	declaration.decl "line-height" (fmt-num n)
+}
+
+# Width a tab character renders as, in spaces: `tab-size 2` => `tab-size: 2`.
+public def tab-size :: fun int -> declaration = fun n {
+	declaration.decl "tab-size" (to-string n)
 }
 
 # --- declarations: keyword-valued properties --------------------------------

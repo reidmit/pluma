@@ -18,9 +18,9 @@ public def doc-title :: css.ruleset = using css {
 		.font-family theme.serif,
 		.font-size (.rem 2.6),
 		.line-height 1.1,
-		.property "letter-spacing" "-0.025em",
+		.letter-spacing (.em (-0.025)),
 		.font-weight "600",
-		.property "margin-bottom" "0.6rem",
+		.margin-bottom (.rem 0.6),
 	]
 }
 
@@ -30,21 +30,21 @@ public def doc-sub :: css.ruleset = using css {
 		.font-size (.rem 1.25),
 		.property "font-style" "italic",
 		.color (.hex theme.muted),
-		.property "margin-bottom" "1rem",
+		.margin-bottom (.rem 1.0),
 	]
 }
 
 def sect :: css.ruleset = using css {
-	.rule [.property "scroll-margin-top" "1.5rem", .property "padding-top" "2.2rem"]
+	.rule [.scroll-margin-top (.rem 1.5), .padding-top (.rem 2.2)]
 }
 
 def doc-h2 :: css.ruleset = using css {
 	.rule [
 		.font-family theme.serif,
 		.font-size (.rem 1.7),
-		.property "letter-spacing" "-0.02em",
+		.letter-spacing (.em (-0.02)),
 		.font-weight "600",
-		.property "margin-bottom" "0.4rem",
+		.margin-bottom (.rem 0.4),
 	]
 }
 
@@ -85,7 +85,7 @@ def doc-pre :: css.ruleset = using css {
 		.property "padding" "1rem 1.2rem",
 		.property "margin" "1.2rem 0",
 		.property "white-space" "pre",
-		.property "tab-size" "2",
+		.tab-size 2,
 		.property "overflow-x" "auto",
 	]
 }
@@ -101,12 +101,7 @@ def callout :: css.ruleset = using css {
 }
 
 public def doc-cta :: css.ruleset = using css {
-	.rule [
-		.display "flex",
-		.gap (.rem 0.8),
-		.property "flex-wrap" "wrap",
-		.property "margin-top" "1.6rem",
-	]
+	.rule [.display "flex", .gap (.rem 0.8), .property "flex-wrap" "wrap", .margin-top (.rem 1.6)]
 }
 
 # --- table styles -----------------------------------------------------------
@@ -127,7 +122,7 @@ def th :: css.ruleset = using css {
 		.property "border-bottom" "1px solid #d8d2c8",
 		.font-size (.rem 0.72),
 		.property "text-transform" "uppercase",
-		.property "letter-spacing" "0.08em",
+		.letter-spacing (.em 0.08),
 		.font-weight "600",
 		.color (.hex theme.faint),
 	]

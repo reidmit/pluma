@@ -135,18 +135,16 @@ def placeholder :: string = "Press Run to compile this program on the server and
 
 def wrap :: css.ruleset = css.rule [css.property "padding" "3rem 0 4rem"]
 
-def head :: css.ruleset = using css {
-	.rule [.max-width (.rem 44.0), .property "margin-bottom" "2rem"]
-}
+def head :: css.ruleset = using css { .rule [.max-width (.rem 44.0), .margin-bottom (.rem 2.0)] }
 
 def title :: css.ruleset = using css {
 	.rule [
 		.font-family theme.serif,
 		.font-size (.rem 2.4),
 		.line-height 1.1,
-		.property "letter-spacing" "-0.025em",
+		.letter-spacing (.em (-0.025)),
 		.font-weight "600",
-		.property "margin-bottom" "0.8rem",
+		.margin-bottom (.rem 0.8),
 	]
 }
 
@@ -175,15 +173,15 @@ def col-head :: css.ruleset = using css {
 		.display "flex",
 		.align-items "center",
 		.justify-content "space-between",
-		.property "margin-bottom" "0.6rem",
-		.property "min-height" "1.7rem",
+		.margin-bottom (.rem 0.6),
+		.min-height (.rem 1.7),
 	]
 }
 
 def lbl :: css.ruleset = using css {
 	.rule [
 		.property "text-transform" "uppercase",
-		.property "letter-spacing" "0.1em",
+		.letter-spacing (.em 0.1),
 		.font-size (.rem 0.72),
 		.font-weight "600",
 		.color (.hex theme.faint),
@@ -215,8 +213,8 @@ def panel :: css.ruleset = using css {
 		.font-family theme.mono,
 		.font-size (.rem 0.85),
 		.line-height 1.6,
-		.property "tab-size" "2",
-		.property "min-height" "22rem",
+		.tab-size 2,
+		.min-height (.rem 22.0),
 		.property "box-shadow" "0 18px 44px -22px rgba(28, 26, 38, 0.4)",
 	]
 }

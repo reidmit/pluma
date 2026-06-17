@@ -94,7 +94,7 @@ def brand :: css.ruleset = using css {
 		.gap (.rem 0.5),
 		.font-size (.rem 1.3),
 		.font-weight "600",
-		.property "letter-spacing" "-0.01em",
+		.letter-spacing (.em (-0.01)),
 	]
 }
 
