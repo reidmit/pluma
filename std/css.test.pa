@@ -138,6 +138,32 @@ def tests :: test.suite = using css {
 			# r registered twice but collapses to one entry; s is the second.
 			assert.equals (list.length (string.split (.collect ()) "\n")) 2
 		},
+		test.case "revision bumps for a new rule but not a re-register" fun {
+			.reset ()
+			let start = .revision ()
+			let r = .rule [.color (.hex "#fff")]
+			let s = .rule [.color (.hex "#000")]
+			let _a = .class-of r
+			let after-first = .revision ()
+			let _b = .class-of r
+			let after-dup = .revision ()
+			let _c = .class-of s
+			let after-second = .revision ()
+			assert.all [
+				# a brand-new rule advances the revision...
+				assert.equals after-first (start + 1),
+				# ...re-registering the same rule leaves it untouched...
+				assert.equals after-dup after-first,
+				# ...and a distinct rule advances it again.
+				assert.equals after-second (after-first + 1),
+			]
+		},
+		test.case "reset advances the revision" fun {
+			let _r = .class-of (.rule [.color (.hex "#fff")])
+			let before = .revision ()
+			.reset ()
+			assert.equals (.revision ()) (before + 1)
+		},
 		test.case "compose concatenates declarations into one new class" fun {
 			.reset ()
 			let bg = .rule [.background (.hex "#2563eb")]

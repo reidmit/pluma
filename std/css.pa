@@ -568,6 +568,7 @@ public def style-tag :: fun nothing -> string = fun {
 # Clear the collector -- for tests and for resetting between independent renders.
 public def reset :: fun nothing -> nothing = fun {
 	ref.set registry (dict.empty ())
+	ref.set registry-rev (ref.get registry-rev + 1)
 }
 
 # --- @keyframes + animation -------------------------------------------------
@@ -653,8 +654,28 @@ public def global :: fun (list global-rule) -> nothing = fun rules {
 # fixed set for an app's finite, statically-evaluable rules.
 def registry :: ref (dict string string) = ref.new (dict.empty ())
 
+# Bumped whenever the collected set actually changes -- a new class is registered
+# or the collector is `reset`. A consumer keeping a live `<style>` in sync (the
+# browser runtime stylesheet) polls this to tell, in O(1), whether `collect ()` is
+# worth re-rendering; an idempotent re-register of an already-present class leaves
+# it untouched (same class => same CSS => nothing to re-emit).
+def registry-rev :: ref int = ref.new 0
+
+# The collector's revision -- it increments each time a new rule is registered or the
+# collector is `reset`, and is otherwise stable. Re-registering an already-collected
+# rule does not change it. Built for a `<style>`-syncing consumer to skip re-rendering
+# the stylesheet on the common flush that added no new rule.
+public def revision :: fun nothing -> int = fun {
+	ref.get registry-rev
+}
+
 def register :: fun string string -> nothing = fun cls css {
-	ref.set registry (dict.insert (ref.get registry) cls css)
+	if dict.contains-key (ref.get registry) cls {
+		()
+	} else {
+		ref.set registry (dict.insert (ref.get registry) cls css)
+		ref.set registry-rev (ref.get registry-rev + 1)
+	}
 }
 
 # A deterministic serialization of a ruleset's *content* (no class name), the input

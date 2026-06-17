@@ -12,6 +12,10 @@
 #         render.mount (dom.body ()) (counter 0)
 #     }
 #
+# A pure client-only app (no SSR) is exactly this: `mount` builds the DOM and, since
+# no server emitted a `<style>`, also installs the runtime stylesheet (see
+# `sync-styles`), so collector-backed `view.styled` classes get their CSS.
+#
 # `mount` returns `task nothing` -- the browser entry seeds and pumps it, then
 # the instance stays alive to service DOM events.
 #
@@ -326,21 +330,23 @@ def reconcile :: fun dom.node (ref (dict string (dom.node, (fun nothing -> nothi
 # with no matching CSS). So the browser keeps its own `<style>` node synced to
 # `css.collect ()`: seeded after the initial build and refreshed at the end of every
 # effect flush, when newly-mounted dynamic content may have registered new rules. A
-# `last-css` guard skips the DOM write on the common flush that added no rule.
+# `css.revision` guard skips the work on the common flush that added no rule -- it
+# compares one int rather than re-rendering and diffing the whole stylesheet.
 
 def runtime-style :: ref (option dom.node) = ref.new none
 
-def last-css :: ref string = ref.new ""
+def last-rev :: ref int = ref.new 0
 
 # Sync the runtime `<style>` to the collector, creating it (appended to `<body>`,
-# which is valid and needs no `<head>` handle) on first use. A no-op when the
-# collected CSS is unchanged since the last sync.
+# which is valid and needs no `<head>` handle) on first use. The collector's
+# `revision` bumps only when a new rule registers, so a flush that added none is an
+# O(1) int compare -- no stylesheet re-render and no DOM write.
 def sync-styles :: fun nothing -> nothing = fun {
-	let css-text = css.collect ()
-	if css-text == ref.get last-css {
+	let rev = css.revision ()
+	if rev == ref.get last-rev {
 		()
 	} else {
-		ref.set last-css css-text
+		ref.set last-rev rev
 		let node = when ref.get runtime-style is some n {
 			n
 		} is none {
@@ -350,7 +356,7 @@ def sync-styles :: fun nothing -> nothing = fun {
 			ref.set runtime-style (some n)
 			n
 		}
-		dom.set-text node css-text
+		dom.set-text node (css.collect ())
 	}
 }
 
