@@ -1,0 +1,109 @@
+use std/assert
+use std/markdown as md
+use std/test
+
+def tests :: test.suite = [
+	test.case "parse heading carries level and inline text" fun {
+		# --- AST shape -----------------------------------------------------------
+
+		assert.equals (md.parse "# Hi") [md.block.heading 1 [md.inline.text "Hi"]]
+	},
+	test.case "parse paragraph keeps inline structure" fun {
+		assert.equals (md.parse "a **b** c") [
+			md.block.paragraph [
+				md.inline.text "a ",
+				md.inline.strong [md.inline.text "b"],
+				md.inline.text " c",
+			],
+		]
+	},
+	test.case "parse fenced code keeps language and body verbatim" fun {
+		assert.equals (md.parse "```js\nlet x = 1\n```") [md.block.code-block "js" "let x = 1"]
+	},
+	test.case "parse bullet list yields one item per marker" fun {
+		assert.equals (md.parse "- a\n- b") [
+			md.block.bullet-list [
+				[md.block.paragraph [md.inline.text "a"]],
+				[md.block.paragraph [md.inline.text "b"]],
+			],
+		]
+	},
+	test.case "headings render at their level" fun {
+		# --- HTML rendering ------------------------------------------------------
+
+		assert.all [
+			assert.equals (md.render-html "# A") "<h1>A</h1>",
+			assert.equals (md.render-html "### C") "<h3>C</h3>",
+		]
+	},
+	test.case "inline emphasis, code, links, and images render" fun {
+		assert.all [
+			assert.equals (md.render-html "a *b* c") "<p>a <em>b</em> c</p>",
+			assert.equals (md.render-html "a `b` c") "<p>a <code>b</code> c</p>",
+			assert.equals (md.render-html "[x](/y)") "<p><a href=\"/y\">x</a></p>",
+			assert.equals (md.render-html "![alt](/img.png)") "<p><img src=\"/img.png\" alt=\"alt\"></p>",
+		]
+	},
+	test.case "text and code are HTML-escaped" fun {
+		assert.all [
+			assert.equals (md.render-html "a < b & c") "<p>a &lt; b &amp; c</p>",
+			assert.equals (md.render-html "```\nx < y\n```") "<pre><code>x &lt; y</code></pre>",
+		]
+	},
+	test.case "fenced code carries a language class" fun {
+		assert.equals (md.render-html "```rust\nok\n```") "<pre><code class=\"language-rust\">ok</code></pre>"
+	},
+	test.case "a simple bullet list is tight" fun {
+		assert.equals (md.render-html "- a\n- b") "<ul><li>a</li><li>b</li></ul>"
+	},
+	test.case "ordered list emits its start number" fun {
+		assert.equals (md.render-html "3. a\n4. b") "<ol start=\"3\"><li>a</li><li>b</li></ol>"
+	},
+	test.case "an ordered list after a bullet list is its own list" fun {
+		assert.equals (md.render-html "- a\n\n1. b") "<ul><li>a</li></ul><ol><li>b</li></ol>"
+	},
+	test.case "blockquote joins its lines and wraps a paragraph" fun {
+		assert.equals (md.render-html "> one\n> two") "<blockquote><p>one two</p></blockquote>"
+	},
+	test.case "thematic break renders an hr" fun { assert.equals (md.render-html "---") "<hr>" },
+	test.case "two trailing spaces force a hard line break" fun {
+		assert.equals (md.render-html "a  \nb") "<p>a<br>b</p>"
+	},
+	test.case "nested bullet list renders inside its parent item" fun {
+		assert.equals (md.render-html "- a\n  - b") "<ul><li><p>a</p><ul><li>b</li></ul></li></ul>"
+	},
+	test.case "a bare word names the container's semantic tag" fun {
+		assert.equals (md.render-html "::: aside\nhi\n:::") "<aside><p>hi</p></aside>"
+	},
+	test.case "dotted tokens and class= merge into one class, tag defaults to div" fun {
+		assert.all [
+			assert.equals (md.render-html "::: .note .lead\nhi\n:::") "<div class=\"note lead\"><p>hi</p></div>",
+			assert.equals (md.render-html "::: section .a class=\"b c\"\nx\n:::") "<section class=\"a b c\"><p>x</p></section>",
+		]
+	},
+	test.case "container attributes pass through, body is Markdown" fun {
+		assert.equals (md.render-html "::: aside .warning role=\"alert\"\n**hi**\n:::") "<aside class=\"warning\" role=\"alert\"><p><strong>hi</strong></p></aside>"
+	},
+	test.case "containers nest, matched by depth" fun {
+		assert.equals (md.render-html "::: section\n::: aside\nx\n:::\n:::") "<section><aside><p>x</p></aside></section>"
+	},
+	test.case "parse container carries tag, classes, attrs, and child blocks" fun {
+		assert.equals (md.parse "::: aside .tip id=\"t1\"\nhey\n:::") [
+			md.block.container "aside" ["tip"] [("id", "t1")] [
+				md.block.paragraph [md.inline.text "hey"],
+			],
+		]
+	},
+	test.case "empty input renders nothing" fun {
+		# --- degenerate input never crashes -------------------------------------
+
+		assert.equals (md.render-html "") ""
+	},
+	test.case "unmatched markers fall back to literal text" fun {
+		assert.all [
+			assert.equals (md.render-html "*oops") "<p>*oops</p>",
+			assert.equals (md.render-html "[a](") "<p>[a](</p>",
+			assert.equals (md.render-html "use `cmd") "<p>use `cmd</p>",
+		]
+	},
+]

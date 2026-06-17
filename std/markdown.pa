@@ -1,0 +1,976 @@
+# std/markdown -- parse a useful subset of Markdown into an AST, then render
+# that AST to either a static HTML string or a `std/view` tree.
+#
+# The point is content-heavy pages written in Markdown rather than hand-built
+# views: author docs as text, `markdown.parse` them into blocks, and render the
+# result wherever you need it. `to-html` gives a plain HTML string (server-side
+# rendering, headless output); `to-view` gives a `view` that drops into a page
+# and hydrates like anything else. Both walk the same AST, so the two renderings
+# never drift.
+#
+#     let doc = markdown.parse "# Title\n\nSome **bold** and `code`."
+#     markdown.to-html doc        # => "<h1>Title</h1><p>Some <strong>bold</strong> ...</p>"
+#     view.div [] [markdown.to-view doc]
+#
+# The supported subset covers what documentation needs: ATX headings, paragraphs,
+# fenced code blocks, blockquotes, bulleted and numbered lists (one level of
+# nesting), thematic breaks, and the inline run of bold/italic/code/links/images
+# plus hard line breaks. It is deliberately forgiving rather than exhaustive --
+# anything it doesn't recognize as a marker is passed through as literal text, so
+# parsing never fails.
+#
+# It also supports fenced-div containers for styled callouts. A line opening with
+# `:::` starts one and a bare `:::` line closes it; in between is ordinary Markdown,
+# and containers nest. The opener's spec chooses the element: a bare word is the tag
+# (so `::: aside` is a real `<aside>`; the tag defaults to `div`), each `.name` adds
+# a CSS class, and `key="value"` adds an attribute. Several classes -- whether from
+# `.name` shorthands or a `class="..."` attribute -- merge into one space-separated
+# `class`.
+#
+#     ::: aside .callout .warning role="alert"
+#     **Heads up** -- this is a styled callout.
+#     :::
+#
+# renders `<aside class="callout warning" role="alert"> ... </aside>`.
+
+use std/list
+use std/string
+use std/view
+
+# An inline-level node: the contents of a paragraph, heading, or list item. A run
+# of Markdown text parses into a `list inline`. Public (not opaque) so consumers
+# can pattern-match the AST and render it however they like.
+public enum inline {
+	text string
+	emph (list inline)
+	strong (list inline)
+	code-span string
+	link string (list inline)
+	image string string
+	hard-break
+}
+
+# A block-level node. A whole document is a `list block`. `heading` carries its
+# level (1-6); `code-block` its info/language string and verbatim body; the list
+# variants carry one `list block` per item (so an item can hold several
+# paragraphs or a nested list); `ordered-list` also carries its start number.
+# `container` is the AST for a `::: tag .class key="value"` fenced div: a chosen
+# HTML tag (so `::: aside` is an `<aside>`, not a `<div class="aside">`), a list of
+# CSS classes, a list of passthrough attributes, and the nested blocks -- the home
+# for callouts, asides, and warnings.
+public enum block {
+	heading int (list inline)
+	paragraph (list inline)
+	code-block string string
+	block-quote (list block)
+	bullet-list (list (list block))
+	ordered-list int (list (list block))
+	container string (list string) (list (string, string)) (list block)
+	thematic-break
+}
+
+# --- public API -------------------------------------------------------------
+
+# Parses Markdown text into a list of block nodes. Never fails: unrecognized
+# markup degrades to plain text.
+public def parse :: fun string -> list block = fun input {
+	parse-lines (split-lines input)
+}
+
+# Renders an AST to a static HTML string -- server-side rendering and headless
+# output. Reuses `std/view`'s renderer (and its HTML escaping), so the markup
+# matches what `to-view` mounts in the browser.
+public def to-html :: fun (list block) -> string = fun blocks {
+	string.join (list.map blocks fun b { view.to-string (block-view b) }) ""
+}
+
+# Renders an AST to a `std/view` tree, wrapped in a single `<div>` so it composes
+# as one node. The same content the browser mounts as live DOM.
+public def to-view :: fun (list block) -> view = using view {
+	fun blocks {
+		.div [] (list.map blocks block-view)
+	}
+}
+
+# Parse-then-render in one step: Markdown text straight to an HTML string.
+public def render-html :: fun string -> string = fun input {
+	to-html (parse input)
+}
+
+# Parse-then-render in one step: Markdown text straight to a `view`.
+public def render-view :: fun string -> view = fun input {
+	to-view (parse input)
+}
+
+# --- block parsing ----------------------------------------------------------
+#
+# Block structure is line-based. `parse-lines` walks the lines with a cursor,
+# dispatching on each line's prefix to a handler that consumes the block's lines
+# and returns the index of the first line after it. Container blocks (quotes,
+# list items) recurse through `parse-lines` on their stripped inner text.
+
+def split-lines :: fun string -> list string = fun input {
+	string.split (normalize input) "\n"
+}
+
+def normalize :: fun string -> string = fun s {
+	string.replace (string.replace s "\r\n" "\n") "\r" "\n"
+}
+
+def parse-lines :: fun (list string) -> list block = fun lines {
+	let out :: list block = []
+	parse-blocks lines (list.length lines) 0 out
+	out
+}
+
+def parse-blocks :: fun (list string) int int (list block) -> nothing = fun lines n i out {
+	if i >= n {
+		()
+	} else {
+		let line = list.get lines i
+		let next = if is-blank line {
+			i + 1
+		} else if is-thematic line {
+			list.push out block.thematic-break
+			i + 1
+		} else if is-fence line {
+			parse-fence lines n i out
+		} else if is-container-open line {
+			parse-container lines n i out
+		} else if heading-level line > 0 {
+			list.push out (block.heading (heading-level line) (parse-inline (heading-text line)))
+			i + 1
+		} else if is-quote line {
+			parse-quote lines n i out
+		} else if is-bullet line {
+			parse-bullet lines n i out
+		} else if is-ordered line {
+			parse-ordered lines n i out
+		} else {
+			parse-paragraph lines n i out
+		}
+		parse-blocks lines n next out
+	}
+}
+
+# A fenced code block: collect lines verbatim until the closing fence (or EOF).
+# The text after the opening fence is the info/language string.
+def parse-fence :: fun (list string) int int (list block) -> int = fun lines n i out {
+	let info = fence-info (list.get lines i)
+	let body :: list string = []
+	let close = collect-fence lines n (i + 1) body
+	list.push out (block.code-block info (string.join body "\n"))
+	close
+}
+
+def collect-fence :: fun (list string) int int (list string) -> int = fun lines n j body {
+	if j >= n {
+		j
+	} else if is-fence (list.get lines j) {
+		j + 1
+	} else {
+		list.push body (list.get lines j)
+		collect-fence lines n (j + 1) body
+	}
+}
+
+# A fenced-div container: read its tag, classes, and attributes off the opening
+# line, collect lines up to the matching bare `:::` (a `:::` opener line nests, so
+# the close is depth-matched), and parse the body as its own document.
+def parse-container :: fun (list string) int int (list block) -> int = fun lines n i out {
+	let (tag, classes, attrs) = parse-spec (container-spec (list.get lines i))
+	let body :: list string = []
+	let close = collect-container lines n (i + 1) 0 body
+	list.push out (block.container tag classes attrs (parse-lines body))
+	close
+}
+
+def collect-container :: fun (list string) int int int (list string) -> int = fun lines n j depth body {
+	if j >= n {
+		j
+	} else {
+		let line = list.get lines j
+		if is-container-open line {
+			list.push body line
+			collect-container lines n (j + 1) (depth + 1) body
+		} else if is-container-close line {
+			if depth == 0 {
+				j + 1
+			} else {
+				list.push body line
+				collect-container lines n (j + 1) (depth - 1) body
+			}
+		} else {
+			list.push body line
+			collect-container lines n (j + 1) depth body
+		}
+	}
+}
+
+# A blockquote: gather the run of `>`-prefixed lines, strip one marker (and a
+# following space) from each, and parse the inner text as its own document.
+def parse-quote :: fun (list string) int int (list block) -> int = fun lines n i out {
+	let inner :: list string = []
+	let end = collect-quote lines n i inner
+	list.push out (block.block-quote (parse-lines inner))
+	end
+}
+
+def collect-quote :: fun (list string) int int (list string) -> int = fun lines n j inner {
+	if j >= n {
+		j
+	} else if is-quote (list.get lines j) {
+		list.push inner (strip-quote (list.get lines j))
+		collect-quote lines n (j + 1) inner
+	} else {
+		j
+	}
+}
+
+# A bulleted list. `gather-items` splits the run into items at each top-level
+# marker; each item's lines are parsed recursively, so an indented marker inside
+# an item becomes a nested list.
+def parse-bullet :: fun (list string) int int (list block) -> int = fun lines n i out {
+	let base = indent-of (list.get lines i)
+	let end = list-end lines n i base is-bullet
+	let items :: list (list block) = []
+	gather-items lines i end base items false [] is-bullet bullet-strip
+	list.push out (block.bullet-list items)
+	end
+}
+
+# A numbered list. Same shape as `parse-bullet`, but it also reads the start
+# number off the first item.
+def parse-ordered :: fun (list string) int int (list block) -> int = fun lines n i out {
+	let base = indent-of (list.get lines i)
+	let start = ordered-start (list.get lines i)
+	let end = list-end lines n i base is-ordered
+	let items :: list (list block) = []
+	gather-items lines i end base items false [] is-ordered ordered-strip
+	list.push out (block.ordered-list start items)
+	end
+}
+
+# The index of the first line past a list. A line continues the list while it is
+# indented past `base` (a wrapped line or nested block) or is another item of the
+# *same kind* (`same` is the list's own marker test, so switching bullets to
+# numbers starts a fresh list). Blank lines stay in while the next line still
+# continues it.
+def list-end :: fun (list string) int int int (fun string -> bool) -> int = fun lines n i base same {
+	if i >= n {
+		i
+	} else {
+		let line = list.get lines i
+		if is-blank line {
+			if i + 1 < n {
+				if continues-list (list.get lines (i + 1)) base same {
+					list-end lines n (i + 1) base same
+				} else {
+					i
+				}
+			} else {
+				i
+			}
+		} else if continues-list line base same {
+			list-end lines n (i + 1) base same
+		} else {
+			i
+		}
+	}
+}
+
+def continues-list :: fun string int (fun string -> bool) -> bool = fun line base same {
+	indent-of line > base || same line && indent-of line <= base
+}
+
+# Split `lines[pos, end)` into items, flushing the current item's lines into
+# `items` (parsed as blocks) at each top-level marker. A marker indented past
+# `base` is left in the current item, where the recursive parse turns it into a
+# nested list. `is-start` recognizes the marker, `strip` removes it.
+def gather-items :: fun (list string) int int int (list (list block)) bool (list string) (fun string -> bool) (fun string -> string) -> nothing = fun lines pos end base items started cur is-start strip {
+	if pos >= end {
+		if started {
+			list.push items (parse-lines cur)
+		} else {
+			()
+		}
+	} else {
+		let line = list.get lines pos
+		if is-start line && indent-of line <= base {
+			if started {
+				list.push items (parse-lines cur)
+			} else {
+				()
+			}
+			let fresh :: list string = [strip line]
+			gather-items lines (pos + 1) end base items true fresh is-start strip
+		} else {
+			list.push cur (dedent line base)
+			gather-items lines (pos + 1) end base items started cur is-start strip
+		}
+	}
+}
+
+# A paragraph: consecutive plain lines, stopping at a blank line or the start of
+# any other block.
+def parse-paragraph :: fun (list string) int int (list block) -> int = fun lines n i out {
+	let para :: list string = []
+	let end = collect-para lines n i para
+	list.push out (block.paragraph (paragraph-inline para))
+	end
+}
+
+def collect-para :: fun (list string) int int (list string) -> int = fun lines n j para {
+	if j >= n {
+		j
+	} else {
+		let line = list.get lines j
+		if is-blank line {
+			j
+		} else if is-thematic line {
+			j
+		} else if is-fence line {
+			j
+		} else if is-container-open line {
+			j
+		} else if heading-level line > 0 {
+			j
+		} else if is-quote line {
+			j
+		} else if is-bullet line {
+			j
+		} else if is-ordered line {
+			j
+		} else {
+			list.push para line
+			collect-para lines n (j + 1) para
+		}
+	}
+}
+
+# Build a paragraph's inline run from its source lines: each line is inline-parsed
+# and the lines are joined by a soft break (a space) or, when a line ends in two
+# spaces or a backslash, a hard line break.
+def paragraph-inline :: fun (list string) -> list inline = fun para {
+	let out :: list inline = []
+	build-para out (list.length para) para 0
+	out
+}
+
+def build-para :: fun (list inline) int (list string) int -> nothing = fun out total para k {
+	if k >= total {
+		()
+	} else {
+		let line = list.get para k
+		list.each (parse-inline (string.trim line)) fun node {
+			list.push out node
+		}
+		if k + 1 < total {
+			if hard-break-line line {
+				list.push out inline.hard-break
+			} else {
+				list.push out (inline.text " ")
+			}
+		} else {
+			()
+		}
+		build-para out total para (k + 1)
+	}
+}
+
+# --- inline parsing ---------------------------------------------------------
+#
+# A left-to-right scan over the run's characters. Plain characters accumulate in
+# a buffer that is flushed to a `text` node whenever a marker is recognized;
+# `code` / `links` / `images` / `*emphasis*` each consume up to their closing
+# delimiter. An unmatched marker is emitted as literal text, so the scan never
+# fails.
+
+def parse-inline :: fun string -> list inline = fun s {
+	let cs = string.chars s
+	let out :: list inline = []
+	scan-inline cs (list.length cs) 0 [] out
+	out
+}
+
+def scan-inline :: fun (list string) int int (list string) (list inline) -> nothing = fun cs n i buf out {
+	if i >= n {
+		flush-text buf out
+	} else {
+		let c = list.get cs i
+		if c == "\\" && i + 1 < n {
+			scan-inline cs n (i + 2) (push-char buf (list.get cs (i + 1))) out
+		} else if c == "`" {
+			when find-from cs n (i + 1) "`" is some j {
+				flush-text buf out
+				list.push out (inline.code-span (chars-slice cs (i + 1) j))
+				scan-inline cs n (j + 1) [] out
+			} is none {
+				scan-inline cs n (i + 1) (push-char buf c) out
+			}
+		} else if c == "!" && at-eq cs n (i + 1) "[" {
+			when parse-image cs n i is some res {
+				let (node, next) = res
+				flush-text buf out
+				list.push out node
+				scan-inline cs n next [] out
+			} is none {
+				scan-inline cs n (i + 1) (push-char buf c) out
+			}
+		} else if c == "[" {
+			when parse-link cs n i is some res {
+				let (node, next) = res
+				flush-text buf out
+				list.push out node
+				scan-inline cs n next [] out
+			} is none {
+				scan-inline cs n (i + 1) (push-char buf c) out
+			}
+		} else if c == "*" || c == "_" {
+			when parse-emphasis cs n i c is some res {
+				let (node, next) = res
+				flush-text buf out
+				list.push out node
+				scan-inline cs n next [] out
+			} is none {
+				scan-inline cs n (i + 1) (push-char buf c) out
+			}
+		} else {
+			scan-inline cs n (i + 1) (push-char buf c) out
+		}
+	}
+}
+
+def push-char :: fun (list string) string -> list string = fun buf c {
+	list.push buf c
+	buf
+}
+
+def flush-text :: fun (list string) (list inline) -> nothing = fun buf out {
+	if list.is-empty buf {
+		()
+	} else {
+		list.push out (inline.text (string.join buf ""))
+	}
+}
+
+# `**strong**` / `__strong__` when the delimiter is doubled, else `*emph*` /
+# `_emph_`. The delimited text is parsed recursively. Returns the node and the
+# index just past the closing delimiter, or `none` when there is no close.
+def parse-emphasis :: fun (list string) int int string -> option (inline, int) = fun cs n i d {
+	if at-eq cs n (i + 1) d {
+		when find-double cs n (i + 2) d is some j {
+			some (inline.strong (parse-inline (chars-slice cs (i + 2) j)), j + 2)
+		} is none {
+			none
+		}
+	} else {
+		when find-from cs n (i + 1) d is some j {
+			some (inline.emph (parse-inline (chars-slice cs (i + 1) j)), j + 1)
+		} is none {
+			none
+		}
+	}
+}
+
+# `[text](url)` starting at `cs[i] == "["`. The link text is parsed recursively.
+def parse-link :: fun (list string) int int -> option (inline, int) = fun cs n i {
+	when find-from cs n (i + 1) "]" is some close {
+		if at-eq cs n (close + 1) "(" {
+			when find-from cs n (close + 2) ")" is some rp {
+				some (
+					inline.link (chars-slice cs (close + 2) rp) (parse-inline (chars-slice cs (i + 1) close)),
+					rp + 1,
+				)
+			} is none {
+				none
+			}
+		} else {
+			none
+		}
+	} is none {
+		none
+	}
+}
+
+# `![alt](url)` starting at `cs[i] == "!"`. The alt text is taken literally.
+def parse-image :: fun (list string) int int -> option (inline, int) = fun cs n i {
+	when find-from cs n (i + 2) "]" is some close {
+		if at-eq cs n (close + 1) "(" {
+			when find-from cs n (close + 2) ")" is some rp {
+				some (
+					inline.image (chars-slice cs (close + 2) rp) (chars-slice cs (i + 2) close),
+					rp + 1,
+				)
+			} is none {
+				none
+			}
+		} else {
+			none
+		}
+	} is none {
+		none
+	}
+}
+
+# True when `cs[i]` exists and equals `ch`. A bounds-safe character compare for
+# use in conditions: `&&`/`||` evaluate both operands, so a bare `i < n &&
+# list.get cs i == ch` would still index out of range -- this guards the access.
+def at-eq :: fun (list string) int int string -> bool = fun cs n i ch {
+	if i >= 0 && i < n {
+		list.get cs i == ch
+	} else {
+		false
+	}
+}
+
+def find-from :: fun (list string) int int string -> option int = fun cs n i target {
+	if i >= n {
+		none
+	} else if list.get cs i == target {
+		some i
+	} else {
+		find-from cs n (i + 1) target
+	}
+}
+
+def find-double :: fun (list string) int int string -> option int = fun cs n i d {
+	if i + 1 >= n {
+		none
+	} else if list.get cs i == d && list.get cs (i + 1) == d {
+		some i
+	} else {
+		find-double cs n (i + 1) d
+	}
+}
+
+def chars-slice :: fun (list string) int int -> string = fun cs a b {
+	string.join (list.take (list.drop cs a) (b - a)) ""
+}
+
+# --- line classification ----------------------------------------------------
+
+def is-blank :: fun string -> bool = fun line {
+	string.is-empty (string.trim line)
+}
+
+# A line that forces a hard `<br>` break: it ends in two spaces or a backslash.
+def hard-break-line :: fun string -> bool = fun line {
+	string.ends-with line "  " || string.ends-with line "\\"
+}
+
+def indent-of :: fun string -> int = fun line {
+	let cs = string.chars line
+	scan-run cs (list.length cs) 0 " "
+}
+
+def trim-left :: fun string -> string = fun line {
+	string.drop line (indent-of line)
+}
+
+def dedent :: fun string int -> string = fun line base {
+	let ind = indent-of line
+	let k = if ind < base {
+		ind
+	} else {
+		base
+	}
+	string.drop line k
+}
+
+def is-quote :: fun string -> bool = fun line {
+	string.starts-with (trim-left line) ">"
+}
+
+def strip-quote :: fun string -> string = fun line {
+	let r = string.drop (trim-left line) 1
+	if string.starts-with r " " {
+		string.drop r 1
+	} else {
+		r
+	}
+}
+
+def is-fence :: fun string -> bool = fun line {
+	let t = string.trim line
+	string.starts-with t "```" || string.starts-with t "~~~"
+}
+
+def fence-info :: fun string -> string = fun line {
+	let t = string.trim line
+	let cs = string.chars t
+	let fc = string.slice t 0 1
+	string.trim (string.drop t (scan-run cs (list.length cs) 0 fc))
+}
+
+# A container fence is `:::` (three or more colons). A line that names something
+# after the colons opens a container; a line that is only colons closes one.
+def is-container-open :: fun string -> bool = fun line {
+	let t = string.trim line
+	string.starts-with t ":::" && string.length (container-spec t) > 0
+}
+
+def is-container-close :: fun string -> bool = fun line {
+	let t = string.trim line
+	string.starts-with t ":::" && string.length (container-spec t) == 0
+}
+
+# The text after the leading colons of a fence line: `name key="value" ...`.
+def container-spec :: fun string -> string = fun line {
+	let t = string.trim line
+	let cs = string.chars t
+	string.trim (string.drop t (scan-run cs (list.length cs) 0 ":"))
+}
+
+# Parse a container spec (`tag .class key="value" ...`) into its tag, classes, and
+# attributes. The tag defaults to `div`; classes come from `.name` shorthands and
+# from any `class="..."` attribute (all merged); every other `key="value"` is a
+# passthrough attribute. Forgiving of spacing and missing quotes -- never fails.
+def parse-spec :: fun string -> (string, list string, list (string, string)) = fun spec {
+	let cs = string.chars spec
+	let classes :: list string = []
+	let attrs :: list (string, string) = []
+	let tag = scan-spec cs (list.length cs) 0 "" classes attrs
+	(
+		if string.is-empty tag {
+			"div"
+		} else {
+			tag
+		},
+		classes,
+		attrs,
+	)
+}
+
+# Walk the spec's tokens, pushing classes and attributes as side effects and
+# returning the tag (the first bare word). `.name` is a class; `key="value"` is an
+# attribute, except `class="..."` whose words fold into the class list; any other
+# bare word is the tag.
+def scan-spec :: fun (list string) int int string (list string) (list (string, string)) -> string = fun cs n i tag classes attrs {
+	let start = scan-run cs n i " "
+	if start >= n {
+		tag
+	} else if at-eq cs n start "." {
+		let e = read-until cs n (start + 1) " "
+		list.push classes (chars-slice cs (start + 1) e)
+		scan-spec cs n e tag classes attrs
+	} else {
+		let ke = read-until-any cs n start "= "
+		if at-eq cs n ke "=" {
+			let (value, next) = read-value cs n (ke + 1)
+			let key = chars-slice cs start ke
+			if key == "class" {
+				list.each (split-ws value) fun cl {
+					list.push classes cl
+				}
+				scan-spec cs n next tag classes attrs
+			} else {
+				list.push attrs (key, value)
+				scan-spec cs n next tag classes attrs
+			}
+		} else {
+			let word = chars-slice cs start ke
+			scan-spec cs n ke if string.is-empty tag {
+				word
+			} else {
+				tag
+			} classes attrs
+		}
+	}
+}
+
+# Read an attribute value starting at `i`: a `"`/`'`-quoted run (up to the closing
+# quote), or otherwise a bare run up to the next space. Returns the value and the
+# index just past it.
+def read-value :: fun (list string) int int -> (string, int) = fun cs n i {
+	let q = cat cs n i
+	if q == "\"" || q == "'" {
+		let close = next-or-end cs n (i + 1) q
+		(chars-slice cs (i + 1) close, close + 1)
+	} else {
+		let e = read-until cs n i " "
+		(chars-slice cs i e, e)
+	}
+}
+
+# Split on spaces, dropping the empty pieces that runs of spaces produce.
+def split-ws :: fun string -> list string = fun s {
+	list.filter (string.split s " ") fun w {
+		string.length w > 0
+	}
+}
+
+# The character at `cs[i]`, or `""` when out of range.
+def cat :: fun (list string) int int -> string = fun cs n i {
+	if i >= 0 && i < n {
+		list.get cs i
+	} else {
+		""
+	}
+}
+
+# The index of the first `target` character at or after `i`, defaulting to `n`.
+def next-or-end :: fun (list string) int int string -> int = fun cs n i target {
+	when find-from cs n i target is some j {
+		j
+	} is none {
+		n
+	}
+}
+
+# The index where a run of characters that are NOT `stop` ends.
+def read-until :: fun (list string) int int string -> int = fun cs n i stop {
+	if i >= n {
+		i
+	} else if list.get cs i == stop {
+		i
+	} else {
+		read-until cs n (i + 1) stop
+	}
+}
+
+# Like `read-until`, but stops at any character in `stops`.
+def read-until-any :: fun (list string) int int string -> int = fun cs n i stops {
+	if i >= n {
+		i
+	} else if string.contains stops (list.get cs i) {
+		i
+	} else {
+		read-until-any cs n (i + 1) stops
+	}
+}
+
+def is-thematic :: fun string -> bool = fun line {
+	let compact = string.replace (string.trim line) " " ""
+	if string.length compact < 3 {
+		false
+	} else {
+		let c = string.slice compact 0 1
+		(c == "-" || c == "*" || c == "_") && all-char compact c
+	}
+}
+
+def all-char :: fun string string -> bool = fun s c {
+	list.all (string.chars s) fun ch {
+		ch == c
+	}
+}
+
+def is-bullet :: fun string -> bool = fun line {
+	let t = trim-left line
+	let c = string.slice t 0 1
+	(c == "-" || c == "*" || c == "+") && string.slice t 1 2 == " "
+}
+
+def bullet-strip :: fun string -> string = fun line {
+	string.trim (string.drop (trim-left line) 2)
+}
+
+def is-ordered :: fun string -> bool = fun line {
+	let t = trim-left line
+	let digits = take-digits t
+	if string.is-empty digits {
+		false
+	} else {
+		let after = string.drop t (string.length digits)
+		let d = string.slice after 0 1
+		(d == "." || d == ")") && string.slice after 1 2 == " "
+	}
+}
+
+def ordered-strip :: fun string -> string = fun line {
+	let t = trim-left line
+	string.trim (string.drop t (string.length (take-digits t) + 2))
+}
+
+def ordered-start :: fun string -> int = fun line {
+	when string.to-int (take-digits (trim-left line)) is ok n {
+		n
+	} is err _e {
+		1
+	}
+}
+
+# The ATX heading level (1-6) of a line, or 0 if it isn't a heading: a run of 1-6
+# `#`, then a space or end of line.
+def heading-level :: fun string -> int = fun line {
+	let t = trim-left line
+	let cs = string.chars t
+	let n = list.length cs
+	let h = scan-run cs n 0 "#"
+	if h >= 1 && h <= 6 && (h >= n || at-eq cs n h " ") {
+		h
+	} else {
+		0
+	}
+}
+
+def heading-text :: fun string -> string = fun line {
+	let t = trim-left line
+	strip-trailing-hashes (string.trim (string.drop t (heading-level line)))
+}
+
+def strip-trailing-hashes :: fun string -> string = fun s {
+	if string.ends-with s "#" {
+		strip-trailing-hashes (string.trim (string.slice s 0 (string.length s - 1)))
+	} else {
+		s
+	}
+}
+
+def take-digits :: fun string -> string = fun t {
+	let cs = string.chars t
+	string.slice t 0 (count-digits cs (list.length cs) 0)
+}
+
+def count-digits :: fun (list string) int int -> int = fun cs n i {
+	if i >= n {
+		i
+	} else if is-digit-char (list.get cs i) {
+		count-digits cs n (i + 1)
+	} else {
+		i
+	}
+}
+
+def is-digit-char :: fun string -> bool = fun ch {
+	string.contains "0123456789" ch && string.length ch == 1
+}
+
+# Counts the run of `ch` characters from index `i`, returning the index where it
+# ends (so at `i == 0` this is the run's length).
+def scan-run :: fun (list string) int int string -> int = fun cs n i ch {
+	if i >= n {
+		i
+	} else if list.get cs i == ch {
+		scan-run cs n (i + 1) ch
+	} else {
+		i
+	}
+}
+
+# --- rendering --------------------------------------------------------------
+#
+# One walk of the AST building `view` nodes; `to-html` runs the same builders
+# through `view.to-string`. Text and attribute values are escaped by the view
+# renderer, so nothing here re-escapes.
+
+def block-view :: fun block -> view = using view {
+	fun b {
+		when b is block.heading lvl content {
+			heading-el lvl (inlines-view content)
+		} is block.paragraph content {
+			.p [] (inlines-view content)
+		} is block.code-block lang code {
+			.pre [] [.code (code-attrs lang) [.text code]]
+		} is block.block-quote blocks {
+			.blockquote [] (list.map blocks block-view)
+		} is block.bullet-list items {
+			.ul [] (list.map items item-view)
+		} is block.ordered-list start items {
+			.ol (start-attr start) (list.map items item-view)
+		} is block.container tag classes attrs blocks {
+			.element tag (container-views classes attrs) (list.map blocks block-view)
+		} is block.thematic-break {
+			.hr [] []
+		}
+	}
+}
+
+# A container's attributes: the merged classes as one space-separated `class` (when
+# any), then each passthrough `key="value"` pair. The view renderer escapes values.
+def container-views :: fun (list string) (list (string, string)) -> list view.attribute = using view {
+	fun classes attrs {
+		let base = if list.is-empty classes {
+			[]
+		} else {
+			[.class (string.join classes " ")]
+		}
+		list.concat base (list.map attrs fun pair {
+			let (k, v) = pair
+			.attr k v
+		})
+	}
+}
+
+# Render a list item. A single-paragraph item renders its inlines straight into
+# the `<li>` (a tight list); anything richer renders its blocks.
+def item-view :: fun (list block) -> view = using view {
+	fun blocks {
+		if list.length blocks == 1 {
+			when list.head blocks is some b {
+				when b is block.paragraph content {
+					.li [] (inlines-view content)
+				} else {
+					.li [] [block-view b]
+				}
+			} is none {
+				.li [] []
+			}
+		} else {
+			.li [] (list.map blocks block-view)
+		}
+	}
+}
+
+def heading-el :: fun int (list view) -> view = using view {
+	fun lvl kids {
+		if lvl <= 1 {
+			.h1 [] kids
+		} else if lvl == 2 {
+			.h2 [] kids
+		} else if lvl == 3 {
+			.h3 [] kids
+		} else if lvl == 4 {
+			.h4 [] kids
+		} else if lvl == 5 {
+			.h5 [] kids
+		} else {
+			.h6 [] kids
+		}
+	}
+}
+
+def code-attrs :: fun string -> list view.attribute = using view {
+	fun lang {
+		if string.is-empty lang {
+			[]
+		} else {
+			[.class "language-$(lang)"]
+		}
+	}
+}
+
+def start-attr :: fun int -> list view.attribute = using view {
+	fun start {
+		if start == 1 {
+			[]
+		} else {
+			[.attr "start" (to-string start)]
+		}
+	}
+}
+
+def inlines-view :: fun (list inline) -> list view = fun xs {
+	list.map xs inline-view
+}
+
+def inline-view :: fun inline -> view = using view {
+	fun x {
+		when x is inline.text s {
+			.text s
+		} is inline.emph kids {
+			.em [] (list.map kids inline-view)
+		} is inline.strong kids {
+			.strong [] (list.map kids inline-view)
+		} is inline.code-span s {
+			.code [] [.text s]
+		} is inline.link url kids {
+			.a [.href url] (list.map kids inline-view)
+		} is inline.image url alt {
+			.img [.src url, .alt alt] []
+		} is inline.hard-break {
+			.br [] []
+		}
+	}
+}
