@@ -4360,13 +4360,110 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 		}
 
-		let missing: Vec<String> = required
+		let mut missing: Vec<String> = required
 			.into_iter()
 			.filter(|v| !covered.contains(v))
 			.collect();
 
+		// Rescue: a variant the pass above left uncovered may still be fully
+		// handled by a *set* of nested patterns — `err (color.red)` and
+		// `err (color.green)` together cover `err`, even though neither arm is a
+		// catch-all. Recheck each remaining variant by recursively asking whether
+		// its arms' arguments exhaust the variant's payload.
+		if !missing.is_empty() {
+			if let Type::Enum(enum_name, targs) = subject_ty {
+				let case_pats: Vec<&PatternNode> = cases.iter().map(|c| &c.pattern).collect();
+				missing.retain(|vname| !self.variant_args_covered(enum_name, targs, vname, &case_pats));
+			}
+		}
+
 		if !missing.is_empty() {
 			self.error(range, WhenNotExhaustive { missing });
+		}
+	}
+
+	// Recursively decide whether `pats` exhaustively cover every value of `ty`.
+	// Sound but deliberately incomplete: for a type it can't analyze (an open
+	// universe like int/string, or a list/record/tuple payload) it returns false
+	// unless a catch-all is present, so it never claims coverage it can't prove.
+	// Handles the common nested case — single-payload variants (`ok`/`err`/`some`
+	// and user enums) nested to any depth.
+	fn patterns_cover(&self, ty: &Type, pats: &[&PatternNode]) -> bool {
+		if pats.iter().any(|p| self.pattern_is_catch_all(p)) {
+			return true;
+		}
+		match ty {
+			Type::Bool => {
+				let has = |want: bool| {
+					pats.iter().any(|p| match &p.kind {
+						PatternKind::Literal(lit) => matches!(&lit.kind, LiteralKind::Bool(b) if *b == want),
+						_ => false,
+					})
+				};
+				has(true) && has(false)
+			}
+			Type::Enum(name, targs) => match self.enum_defs.get(name) {
+				Some(def) => def
+					.variants
+					.iter()
+					.all(|(vname, _)| self.variant_args_covered(name, targs, vname, pats)),
+				None => false,
+			},
+			_ => false,
+		}
+	}
+
+	// Is the single enum variant `vname` fully covered by `pats`? Gathers the arms
+	// headed by it and checks their arguments cover the variant's
+	// type-instantiated payload: a nullary variant needs only one matching arm; a
+	// single-payload variant recurses into `patterns_cover` over the payload; a
+	// multi-payload variant counts only when some arm binds all its fields (the
+	// product case isn't decomposed — a catch-all is still required there).
+	fn variant_args_covered(
+		&self,
+		enum_name: &str,
+		targs: &[Type],
+		vname: &str,
+		pats: &[&PatternNode],
+	) -> bool {
+		let Some(params) = self.find_variant_in_enum(enum_name, vname) else {
+			return false;
+		};
+		let arity = params.len();
+		let arms: Vec<&[PatternNode]> = pats
+			.iter()
+			.filter_map(|p| match &p.kind {
+				PatternKind::Constructor(head, args) if head.variant.name == vname => Some(args.as_slice()),
+				PatternKind::Identifier(id)
+					if arity == 0 && id.name == vname && is_bare_prelude_variant(enum_name, &id.name) =>
+				{
+					Some(&[] as &[PatternNode])
+				}
+				_ => None,
+			})
+			.collect();
+		match arity {
+			0 => !arms.is_empty(),
+			1 => {
+				let sub: Vec<&PatternNode> = arms.iter().filter_map(|a| a.first()).collect();
+				if sub.is_empty() {
+					return false;
+				}
+				let mut subst = Substitution::empty();
+				let param_vars = self
+					.enum_defs
+					.get(enum_name)
+					.map(|d| d.param_vars.clone())
+					.unwrap_or_default();
+				for (pv, ta) in param_vars.iter().zip(targs) {
+					subst.solutions.insert(*pv, ta.clone());
+				}
+				let payload = subst.apply_to_type(&params[0]);
+				self.patterns_cover(&payload, &sub)
+			}
+			_ => arms
+				.iter()
+				.any(|a| a.iter().all(|x| self.pattern_is_catch_all(x))),
 		}
 	}
 

@@ -5,16 +5,16 @@ use std/error
 use std/hex
 use std/time
 
-# Branch on the precise decode failure.
+# Branch on the precise decode failure. The two nested `err` arms combine to
+# cover `err` (no wildcard) -- the exhaustiveness check recurses into the
+# variant's argument rather than demanding a catch-all.
 def classify-hex :: fun string -> string = fun s {
 	when hex.decode s is ok _ {
 		"ok"
-	} is err e {
-		when e is hex.decode-error.odd-length {
-			"odd length"
-		} is hex.decode-error.bad-digit {
-			"bad digit"
-		}
+	} is err hex.decode-error.odd-length {
+		"odd length"
+	} is err hex.decode-error.bad-digit {
+		"bad digit"
 	}
 }
 

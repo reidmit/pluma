@@ -1367,10 +1367,11 @@ fn expr_prec(e: &ExprNode) -> u8 {
 // flatten into the outer constructor's arg list. Everything else — lists,
 // tuples, literals, identifiers, `_`, interpolations — is already an atom.
 fn pattern_needs_parens_as_arg(p: &PatternNode) -> bool {
-	matches!(
-		&p.kind,
-		PatternKind::Record { .. } | PatternKind::Constructor(..)
-	)
+	match &p.kind {
+		PatternKind::Record { .. } => true,
+		PatternKind::Constructor(_, args) => !args.is_empty(),
+		_ => false,
+	}
 }
 
 // `if cond { }`/`while cond { }` is the canonical surface form of an `is true`
