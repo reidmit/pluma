@@ -481,6 +481,13 @@ impl<'a> Parser<'a> {
 		line_start_offset + point.col
 	}
 
+	// Whether the byte at `offset` is immediately preceded by whitespace. Used to
+	// tell a spaced ` .member` (a fresh implicit-member argument) apart from a
+	// tight `.member` (a field projection) inside a `using` block.
+	fn preceded_by_whitespace(&self, offset: usize) -> bool {
+		offset > 0 && self.source[offset - 1].is_ascii_whitespace()
+	}
+
 	fn span_to_single_line_range(&self, start: usize, end: usize) -> Range {
 		let current_line_start = self.line_start_offsets.get(&self.current_line).unwrap();
 		Range::within_line(
@@ -1188,6 +1195,17 @@ impl<'a> Parser<'a> {
 			}
 
 			let operator = match self.current_token {
+				// Inside a `using` block, a dot with whitespace before it (` .member`)
+				// begins a new implicit-member argument rather than projecting a field
+				// off the preceding expression: `.margin-inline .auto` is the call
+				// `css.margin-inline css.auto`, while the tight `.margin-inline.auto`
+				// stays a field access. Mirrors the tokenizer's whitespace rule that
+				// makes `f -x` a negated argument rather than infix subtraction.
+				Some(Token::Dot(start, _))
+					if !self.using_ambient.is_empty() && self.preceded_by_whitespace(start) =>
+				{
+					Operator::FunctionCall
+				}
 				Some(token) => match Operator::from_token(token) {
 					Some(op) => {
 						self.skip_line_breaks();

@@ -73,9 +73,9 @@ def tests :: test.suite = using css {
 			]) "padding-block: 1.4rem; padding-inline: 1.5rem; margin-block: 0px"
 		},
 		test.case "auto renders as the auto keyword" fun {
-			assert.equals (css.inline [
-				css.margin-inline css.auto,
-				css.width css.auto,
+			assert.equals (.inline [
+				.margin-inline .auto,
+				.width .auto,
 			]) "margin-inline: auto; width: auto"
 		},
 		test.case "keyword properties take a string value" fun {
@@ -130,31 +130,31 @@ def tests :: test.suite = using css {
 		},
 		test.case "the collector dedups identical rules and keeps distinct ones" fun {
 			.reset ()
-			let r = css.rule [css.color (css.hex "#fff")]
-			let s = css.rule [css.color (css.hex "#000")]
-			let _a = css.class-of r
-			let _b = css.class-of r
-			let _c = css.class-of s
+			let r = .rule [.color (.hex "#fff")]
+			let s = .rule [.color (.hex "#000")]
+			let _a = .class-of r
+			let _b = .class-of r
+			let _c = .class-of s
 			# r registered twice but collapses to one entry; s is the second.
-			assert.equals (list.length (string.split (css.collect ()) "\n")) 2
+			assert.equals (list.length (string.split (.collect ()) "\n")) 2
 		},
 		test.case "compose concatenates declarations into one new class" fun {
-			css.reset ()
-			let bg = css.rule [css.background (css.hex "#2563eb")]
-			let fg = css.rule [css.color (css.hex "#fff")]
-			let merged = css.compose [bg, fg]
-			let cls = css.class-of merged
+			.reset ()
+			let bg = .rule [.background (.hex "#2563eb")]
+			let fg = .rule [.color (.hex "#fff")]
+			let merged = .compose [bg, fg]
+			let cls = .class-of merged
 			# both rules' declarations gather into the one composed class's block, in source order
-			assert.equals (css.collect ()) ".$(cls){background: #2563eb; color: #fff}"
+			assert.equals (.collect ()) ".$(cls){background: #2563eb; color: #fff}"
 		},
 		test.case "view.styled registers the rule and yields its class" fun {
-			css.reset ()
-			let primary = css.rule [css.color (css.hex "#fff")]
+			.reset ()
+			let primary = .rule [.color (.hex "#fff")]
 			let v = view.button [view.styled primary] [view.text "Save"]
-			let cls = css.class-of primary
+			let cls = .class-of primary
 			assert.all [
 				assert.equals (view.to-string v) "<button class=\"$(cls)\">Save</button>",
-				assert.equals (css.collect ()) ".$(cls){color: #fff}",
+				assert.equals (.collect ()) ".$(cls){color: #fff}",
 			]
 		},
 		test.case "style-tag wraps the collected CSS" fun {
@@ -173,7 +173,7 @@ def tests :: test.suite = using css {
 		},
 		test.case "an inline style and custom properties merge, not collide" fun {
 			let v = view.div [
-				view.style-of [css.color (css.hex "#fff")],
+				view.style-of [.color (.hex "#fff")],
 				view.css-var "accent" fun { "#e11" },
 			] []
 			assert.equals (view.to-string v) "<div style=\"color: #fff; --accent: #e11\"></div>"
@@ -228,9 +228,7 @@ def tests :: test.suite = using css {
 		},
 		test.case "a rule using an animation registers both the class and its keyframes" fun {
 			# different timing => different decls...
-
 			# ...but the same keyframes => one registered @keyframes block
-
 			.reset ()
 			let spin = .keyframes [
 				.frame "from" [.property "transform" "rotate(0deg)"],
