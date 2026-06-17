@@ -15,8 +15,8 @@ use theme
 
 public def doc-title :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
-		.property "font-size" "2.6rem",
+		.font-family theme.serif,
+		.font-size (.rem 2.6),
 		.line-height 1.1,
 		.property "letter-spacing" "-0.025em",
 		.font-weight "600",
@@ -26,7 +26,7 @@ public def doc-title :: css.ruleset = using css {
 
 public def doc-sub :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.font-size (.rem 1.25),
 		.property "font-style" "italic",
 		.color (.hex theme.muted),
@@ -40,7 +40,7 @@ def sect :: css.ruleset = using css {
 
 def doc-h2 :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.font-size (.rem 1.7),
 		.property "letter-spacing" "-0.02em",
 		.font-weight "600",
@@ -54,18 +54,18 @@ def doc-h3 :: css.ruleset = using css {
 
 def doc-p :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.font-size (.rem 1.08),
 		.line-height 1.75,
-		.property "color" "#2b2823",
+		.color (.hex "#2b2823"),
 		.property "margin" "1rem 0",
 	]
 }
 
 def inline-code :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.mono,
-		.property "font-size" "0.88em",
+		.font-family theme.mono,
+		.font-size (.em 0.88),
 		.background (.hex theme.code-soft),
 		.color (.hex theme.accent-deep),
 		.property "padding" "0.1em 0.36em",
@@ -75,12 +75,12 @@ def inline-code :: css.ruleset = using css {
 
 def doc-pre :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.mono,
+		.font-family theme.mono,
 		.font-size (.rem 0.88),
 		.line-height 1.6,
 		.background (.hex theme.code-soft),
 		.property "border" "1px solid #e9e4dc",
-		.property "color" "#2b2823",
+		.color (.hex "#2b2823"),
 		.border-radius (.px 10.0),
 		.property "padding" "1rem 1.2rem",
 		.property "margin" "1.2rem 0",
@@ -113,7 +113,7 @@ public def doc-cta :: css.ruleset = using css {
 
 def doc-table :: css.ruleset = using css {
 	.rule [
-		.property "width" "100%",
+		.width (.pct 100.0),
 		.property "border-collapse" "collapse",
 		.font-size (.rem 0.98),
 		.property "margin" "1.2rem 0",
@@ -122,7 +122,7 @@ def doc-table :: css.ruleset = using css {
 
 def th :: css.ruleset = using css {
 	.rule [
-		.property "text-align" "left",
+		.text-align "left",
 		.property "padding" "0.5rem 0.9rem 0.5rem 0",
 		.property "border-bottom" "1px solid #d8d2c8",
 		.font-size (.rem 0.72),
@@ -138,9 +138,9 @@ def td :: css.ruleset = using css {
 		.property "padding" "0.5rem 0.9rem 0.5rem 0",
 		.property "border-bottom" "1px solid #efeae2",
 		.property "vertical-align" "top",
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.line-height 1.55,
-		.property "color" "#2b2823",
+		.color (.hex "#2b2823"),
 	]
 }
 

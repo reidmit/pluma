@@ -136,12 +136,12 @@ def placeholder :: string = "Press Run to compile this program on the server and
 def wrap :: css.ruleset = css.rule [css.property "padding" "3rem 0 4rem"]
 
 def head :: css.ruleset = using css {
-	.rule [.property "max-width" "44rem", .property "margin-bottom" "2rem"]
+	.rule [.max-width (.rem 44.0), .property "margin-bottom" "2rem"]
 }
 
 def title :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.font-size (.rem 2.4),
 		.line-height 1.1,
 		.property "letter-spacing" "-0.025em",
@@ -165,7 +165,7 @@ def grid :: css.ruleset = using css {
 # `min-width: 0` here because grid items default to `min-width: auto`; without it
 # the wide code blows the column out past the viewport instead of scrolling inside.
 def col :: css.ruleset = using css {
-	.rule [.display "flex", .property "flex-direction" "column", .property "min-width" "0"]
+	.rule [.display "flex", .flex-direction "column", .property "min-width" "0"]
 }
 
 # Each column opens with a header row (the uppercase label, plus the example
@@ -192,7 +192,7 @@ def lbl :: css.ruleset = using css {
 
 def picker :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.sans,
+		.font-family theme.sans,
 		.font-size (.rem 0.82),
 		.color (.hex theme.muted),
 		.background (.hex theme.card-bg),
@@ -212,7 +212,7 @@ def panel :: css.ruleset = using css {
 		.color (.hex theme.code-fg),
 		.border-radius (.px 12.0),
 		.property "padding" "1.2rem 1.3rem",
-		.property "font-family" theme.mono,
+		.font-family theme.mono,
 		.font-size (.rem 0.85),
 		.line-height 1.6,
 		.property "tab-size" "2",
@@ -226,7 +226,7 @@ def editor :: css.ruleset = using css {
 		panel,
 		.rule [
 			.property "border" "none",
-			.property "width" "100%",
+			.width (.pct 100.0),
 			.property "resize" "vertical",
 			.property "white-space" "pre",
 			.property "outline" "none",

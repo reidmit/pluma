@@ -39,7 +39,7 @@ def doc-grid :: css.ruleset = using css {
 		.display "grid",
 		.property "grid-template-columns" "190px 1fr",
 		.gap (.rem 3.5),
-		.property "align-items" "start",
+		.align-items "start",
 		.property "padding" "1rem 0 2rem",
 		.media "(max-width: 860px)" [.property "grid-template-columns" "1fr"],
 	]
@@ -47,8 +47,8 @@ def doc-grid :: css.ruleset = using css {
 
 def sidebar :: css.ruleset = using css {
 	.rule [
-		.property "position" "sticky",
-		.property "top" "1.5rem",
+		.position "sticky",
+		.top (.rem 1.5),
 		.property "align-self" "start",
 		.font-size (.rem 0.92),
 		.media "(max-width: 860px)" [.display "none"],
@@ -78,18 +78,18 @@ def side-item :: css.ruleset = using css {
 		.property "padding-left" "0.8rem",
 		.property "margin-left" "-0.8rem",
 		.property "transition" "color 0.12s ease, border-color 0.12s ease",
-		.on "hover" [.color (.hex theme.accent), .property "border-color" "#6d4aa3"],
+		.on "hover" [.color (.hex theme.accent), .border-color (.hex "#6d4aa3")],
 	]
 }
 
 def doc-main :: css.ruleset = using css {
-	.rule [.property "min-width" "0", .property "max-width" "44rem"]
+	.rule [.property "min-width" "0", .max-width (.rem 44.0)]
 }
 
 # The lead-in that separates the narrative tour from the reference half.
 def divider :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.font-size (.rem 1.9),
 		.font-weight "600",
 		.property "letter-spacing" "-0.02em",

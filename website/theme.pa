@@ -54,7 +54,7 @@ public def install-globals :: fun nothing -> nothing = fun {
 			.at "body" [
 				.background (.hex paper),
 				.color (.hex ink),
-				.property "font-family" sans,
+				.font-family sans,
 				.line-height 1.6,
 				.property "-webkit-font-smoothing" "antialiased",
 			],
@@ -63,9 +63,9 @@ public def install-globals :: fun nothing -> nothing = fun {
 			# overrides the family inherited from a styled `<pre>`. Pin both to our
 			# mono so every monospace surface — inline code, code blocks, the
 			# highlighted token spans inside them — uses the same typeface.
-			.at "code, pre" [.property "font-family" mono],
+			.at "code, pre" [.font-family mono],
 			.at "h1, h2, h3, p" [.margin (.px 0.0)],
-			.at "::selection" [.property "background" "rgba(109, 74, 163, 0.18)"],
+			.at "::selection" [.background (.rgba 109 74 163 0.18)],
 		]
 	}
 }
@@ -73,11 +73,7 @@ public def install-globals :: fun nothing -> nothing = fun {
 # --- layout + chrome --------------------------------------------------------
 
 public def shell :: css.ruleset = using css {
-	.rule [
-		.property "max-width" "1080px",
-		.property "margin" "0 auto",
-		.property "padding" "0 1.5rem",
-	]
+	.rule [.max-width (.px 1080.0), .property "margin" "0 auto", .property "padding" "0 1.5rem"]
 }
 
 # The nav spans the full window width: brand pinned to the left gutter, links to
@@ -129,7 +125,7 @@ def btn :: css.ruleset = using css {
 		.font-size (.rem 1.0),
 		.font-weight "600",
 		.cursor "pointer",
-		.property "font-family" sans,
+		.font-family sans,
 		.property "transition" "all 0.15s ease",
 	]
 }

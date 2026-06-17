@@ -41,7 +41,7 @@ def eyebrow :: css.ruleset = using css {
 
 def headline :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.property "font-size" "clamp(2.4rem, 5vw, 3.5rem)",
 		.line-height 1.06,
 		.property "letter-spacing" "-0.025em",
@@ -54,7 +54,7 @@ def lead :: css.ruleset = using css {
 	.rule [
 		.font-size (.rem 1.18),
 		.color (.hex theme.muted),
-		.property "max-width" "34rem",
+		.max-width (.rem 34.0),
 		.property "margin-bottom" "2rem",
 	]
 }
@@ -94,7 +94,7 @@ def tab :: css.ruleset = using css {
 		.color (.hex theme.code-dim),
 		.property "padding" "0.5rem 0.85rem",
 		.font-size (.rem 0.85),
-		.property "font-family" theme.mono,
+		.font-family theme.mono,
 		.cursor "pointer",
 		.border-radius (.px 8.0),
 		.property "transition" "color 0.15s ease",
@@ -110,7 +110,7 @@ def code-block :: css.ruleset = using css {
 	.rule [
 		.property "margin" "0",
 		.property "padding" "1.4rem 1.5rem",
-		.property "font-family" theme.mono,
+		.font-family theme.mono,
 		.font-size (.rem 0.8),
 		.line-height 1.7,
 		.color (.hex theme.code-fg),
@@ -125,12 +125,12 @@ def code-block :: css.ruleset = using css {
 def section :: css.ruleset = css.rule [css.property "padding" "4rem 0"]
 
 def section-head :: css.ruleset = using css {
-	.rule [.property "max-width" "40rem", .property "margin-bottom" "2.5rem"]
+	.rule [.max-width (.rem 40.0), .property "margin-bottom" "2.5rem"]
 }
 
 def section-title :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.font-size (.rem 2.0),
 		.line-height 1.15,
 		.property "letter-spacing" "-0.02em",
@@ -157,7 +157,7 @@ def feature-card :: css.ruleset = using css {
 		.background (.hex theme.card-bg),
 		.property "border" "1px solid #e9e4dc",
 		.border-radius (.px 14.0),
-		.property "padding" "1.6rem",
+		.padding (.rem 1.6),
 		.property "transition" "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
 		.on "hover" [
 			.property "transform" "translateY(-3px)",
@@ -196,7 +196,7 @@ def strip-eyebrow :: css.ruleset = using css { .compose [eyebrow, .rule [.color 
 
 def strip-title :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.serif,
+		.font-family theme.serif,
 		.font-size (.rem 2.1),
 		.font-weight "600",
 		.property "margin-bottom" "0.8rem",
@@ -207,7 +207,7 @@ def strip-text :: css.ruleset = using css {
 	.rule [
 		.color (.hex "#c9c4dd"),
 		.font-size (.rem 1.08),
-		.property "max-width" "38rem",
+		.max-width (.rem 38.0),
 		.property "margin" "0 auto 2rem",
 	]
 }
@@ -222,7 +222,7 @@ def heart-btn :: css.ruleset = using css {
 		.font-size (.rem 1.0),
 		.font-weight "600",
 		.cursor "pointer",
-		.property "font-family" theme.sans,
+		.font-family theme.sans,
 		.property "transition" "background 0.15s ease",
 		.on "hover" [.background (.hex "#ffffff28")],
 	]

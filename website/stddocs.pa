@@ -25,7 +25,7 @@ def layout :: css.ruleset = using css {
 		.display "grid",
 		.property "grid-template-columns" "190px minmax(0, 1fr) 170px",
 		.gap (.rem 2.5),
-		.property "align-items" "start",
+		.align-items "start",
 		.property "padding" "1rem 0 2rem",
 		.media "(max-width: 980px)" [.property "grid-template-columns" "180px minmax(0, 1fr)"],
 		.media "(max-width: 720px)" [.property "grid-template-columns" "1fr"],
@@ -34,8 +34,8 @@ def layout :: css.ruleset = using css {
 
 def rail :: css.ruleset = using css {
 	.rule [
-		.property "position" "sticky",
-		.property "top" "1.5rem",
+		.position "sticky",
+		.top (.rem 1.5),
 		.property "align-self" "start",
 		.property "max-height" "calc(100vh - 3rem)",
 		.property "overflow-y" "auto",
@@ -74,7 +74,7 @@ def side-item :: css.ruleset = using css {
 		.color (.hex theme.muted),
 		.property "border-left" "2px solid transparent",
 		.property "transition" "color 0.12s ease, border-color 0.12s ease",
-		.on "hover" [.color (.hex theme.accent), .property "border-color" "#6d4aa3"],
+		.on "hover" [.color (.hex theme.accent), .border-color (.hex "#6d4aa3")],
 	]
 }
 
@@ -87,18 +87,18 @@ def side-item-active :: css.ruleset = using css {
 }
 
 def toc-item :: css.ruleset = using css {
-	.compose [side-item, .rule [.property "font-family" theme.mono, .font-size (.rem 0.82)]]
+	.compose [side-item, .rule [.font-family theme.mono, .font-size (.rem 0.82)]]
 }
 
 # --- content styles ---------------------------------------------------------
 
 def main-col :: css.ruleset = using css {
-	.rule [.property "min-width" "0", .property "max-width" "44rem"]
+	.rule [.property "min-width" "0", .max-width (.rem 44.0)]
 }
 
 def mod-head :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.mono,
+		.font-family theme.mono,
 		.font-size (.rem 0.84),
 		.color (.hex theme.faint),
 		.property "margin-bottom" "1rem",
@@ -116,7 +116,7 @@ def item :: css.ruleset = using css {
 
 def sig :: css.ruleset = using css {
 	.rule [
-		.property "font-family" theme.mono,
+		.font-family theme.mono,
 		.font-size (.rem 1.0),
 		.font-weight "600",
 		.color (.hex theme.accent-deep),
