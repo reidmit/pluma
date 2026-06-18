@@ -399,33 +399,42 @@ def collect-para :: fun (list string) int int (list string) -> int = fun lines n
 	}
 }
 
-# Build a paragraph's inline run from its source lines: each line is inline-parsed
-# and the lines are joined by a soft break (a space) or, when a line ends in two
-# spaces or a backslash, a hard line break.
+# Build a paragraph's inline run from its source lines. The lines are grouped into
+# segments split at hard line breaks; each segment's soft-wrapped lines are joined
+# with a space and inline-parsed as one run, so an inline construct -- a link,
+# emphasis, a code span -- may straddle a soft line break in the source. A line
+# ending in two spaces or a backslash closes its segment with a hard-break node.
 def paragraph-inline :: fun (list string) -> list inline = fun para {
 	let out :: list inline = []
-	build-para out (list.length para) para 0
+	build-para out (list.length para) para 0 []
 	out
 }
 
-def build-para :: fun (list inline) int (list string) int -> nothing = fun out total para k {
+def build-para :: fun (list inline) int (list string) int (list string) -> nothing = fun out total para k seg {
 	if k >= total {
-		()
+		flush-segment out seg
 	} else {
 		let line = list.get para k
-		list.each (parse-inline (string.trim line)) fun node {
+		list.push seg (string.trim line)
+		if k + 1 < total and hard-break-line line {
+			flush-segment out seg
+			list.push out inline.hard-break
+			build-para out total para (k + 1) []
+		} else {
+			build-para out total para (k + 1) seg
+		}
+	}
+}
+
+# Inline-parse one paragraph segment -- its soft-wrapped lines joined with a single
+# space -- appending the nodes to the paragraph's run. An empty segment adds nothing.
+def flush-segment :: fun (list inline) (list string) -> nothing = fun out seg {
+	if list.is-empty seg {
+		()
+	} else {
+		list.each (parse-inline (string.join seg " ")) fun node {
 			list.push out node
 		}
-		if k + 1 < total {
-			if hard-break-line line {
-				list.push out inline.hard-break
-			} else {
-				list.push out (inline.text " ")
-			}
-		} else {
-			()
-		}
-		build-para out total para (k + 1)
 	}
 }
 

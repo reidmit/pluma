@@ -84,6 +84,27 @@ def tests :: test.suite = [
 	test.case "two trailing spaces force a hard line break" fun {
 		assert.equals (md.render-html "a  \nb") "<p>a<br>b</p>"
 	},
+	test.case "a soft-wrapped line joins with a space" fun {
+		assert.equals (md.render-html "one\ntwo") "<p>one two</p>"
+	},
+	test.case "a link straddling a soft line break still parses" fun {
+		# The link text wraps across a source newline -- it must not degrade to
+		# literal `[text](url)`.
+		assert.all [
+			assert.equals (md.render-html "see [the\nplayground](/play) now") "<p>see <a href=\"/play\">the playground</a> now</p>",
+			assert.equals (md.render-html "open [the\ndocs](/docs)") "<p>open <a href=\"/docs\">the docs</a></p>",
+		]
+	},
+	test.case "emphasis and code spans may straddle a soft line break" fun {
+		assert.all [
+			assert.equals (md.render-html "a **bold\ntext** b") "<p>a <strong>bold text</strong> b</p>",
+			assert.equals (md.render-html "run `some\ncode` now") "<p>run <code>some code</code> now</p>",
+		]
+	},
+	test.case "a hard break still splits inline parsing into segments" fun {
+		# The hard break ends the run, so the dangling `[` before it is literal.
+		assert.equals (md.render-html "a [b  \nc](/u)") "<p>a [b<br>c](/u)</p>"
+	},
 	test.case "nested bullet list renders inside its parent item" fun {
 		assert.equals (md.render-html "- a\n  - b") "<ul><li><p>a</p><ul><li>b</li></ul></li></ul>"
 	},
