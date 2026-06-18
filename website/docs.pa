@@ -43,6 +43,14 @@ def groups :: list doc-group = [
 		],
 	},
 	{
+		title: "Guides",
+		pages: [
+			{slug: "guides/cli", title: "Command-line script", file: "guides/cli"},
+			{slug: "guides/server", title: "Web server", file: "guides/server"},
+			{slug: "guides/fullstack", title: "Fullstack app", file: "guides/fullstack"},
+		],
+	},
+	{
 		title: "Language reference",
 		pages: [
 			{slug: "reference/operators", title: "Operators", file: "reference/operators"},

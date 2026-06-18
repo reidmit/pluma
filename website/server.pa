@@ -19,7 +19,6 @@ use std/sys/static
 use docdata
 use docs
 use playground
-use recipes
 use start
 use stddocs
 use theme
@@ -55,7 +54,9 @@ def handler :: fun http.request -> task http.response = fun req {
 	} else if req.path == "/start" {
 		task.return (http.html 200 (theme.document-html "Get started — Pluma" (start.page ())))
 	} else if req.path == "/recipes" {
-		task.return (http.html 200 (theme.document-html "Recipes — Pluma" (recipes.page ())))
+		# The recipes became the `/docs/guides` section; keep the old URL working
+		# with a permanent redirect to the first guide.
+		task.return (http.redirect 301 "/docs/guides/cli")
 	} else if string.starts-with req.path "/docs" {
 		# The docs pages are Markdown files under `docs/`, parsed and rendered at
 		# request time. `docs.page` reads the file the path selects.

@@ -188,7 +188,7 @@ public def top-nav :: fun nothing -> view = using view {
 			.div [.styled nav-links] [
 				.a [.styled nav-link, .href "/start"] [.text "get started"],
 				.a [.styled nav-link, .href "/docs"] [.text "docs"],
-				.a [.styled nav-link, .href "/recipes"] [.text "recipes"],
+				.a [.styled nav-link, .href "/docs/guides/cli"] [.text "guides"],
 				.a [.styled nav-link, .href "/std/list"] [.text "stdlib"],
 				.a [.styled nav-link, .href "/playground"] [.text "playground"],
 			],
