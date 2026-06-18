@@ -33,115 +33,113 @@ def accent-color :: fun int -> string = fun i {
 }
 
 # The page shell: a dark card whose border tracks the live `--accent`.
-def card :: css.ruleset = css.rule [
-	css.max-width (css.px 520.0),
-	css.margin (css.rem 2.0),
-	css.padding (css.rem 1.5),
-	css.border-radius (css.px 12.0),
-	css.background (css.hex "#0b1020"),
-	css.color (css.hex "#e2e8f0"),
-	css.property "border" "2px solid var(--accent)",
-	css.property "font-family" "system-ui, sans-serif",
-]
+def card :: css.ruleset = using css {
+	.rule [
+		.max-width (.px 520.0),
+		.margin (.rem 2.0),
+		.padding (.rem 1.5),
+		.border-radius (.px 12.0),
+		.background (.hex "#0b1020"),
+		.color (.hex "#e2e8f0"),
+		.property "border" "2px solid var(--accent)",
+		.property "font-family" "system-ui, sans-serif",
+	]
+}
 
 # Buttons: background reads the inherited `--accent`; `:hover` is real extracted CSS
 # an inline style could never express.
-def button :: css.ruleset = css.rule [
-	css.background (css.var "accent"),
-	css.color (css.hex "#ffffff"),
-	css.property "border" "none",
-	css.padding (css.rem 0.6),
-	css.margin (css.px 4.0),
-	css.border-radius (css.px 8.0),
-	css.cursor "pointer",
-	css.on "hover" [css.opacity 0.85],
-]
+def button :: css.ruleset = using css {
+	.rule [
+		.background (.var "accent"),
+		.color (.hex "#ffffff"),
+		.property "border" "none",
+		.padding (.rem 0.6),
+		.margin (.px 4.0),
+		.border-radius (.px 8.0),
+		.cursor "pointer",
+		.on "hover" [.opacity 0.85],
+	]
+}
 
-public def page :: fun nothing -> view = fun {
-	# sum/pending track the unary calls; tick is the latest streamed value; the
-	# subscription's cancel thunk is none while stopped.
-	let sum = signal.new 0
-	let pending = signal.new 0
-	let tick = signal.new 0
-	let accent = signal.new 0
-	let cancel :: ref (option (fun nothing -> nothing)) = ref.new none
+public def page :: fun nothing -> view = using view {
+	fun {
+		# sum/pending track the unary calls; tick is the latest streamed value; the
+		# subscription's cancel thunk is none while stopped.
+		let sum = signal.new 0
+		let pending = signal.new 0
+		let tick = signal.new 0
+		let accent = signal.new 0
+		let cancel :: ref (option (fun nothing -> nothing)) = ref.new none
 
-	# `styled card` gives the hashed class; `css-var "accent"` supplies the live
-	# value that the card's border and the buttons' background read as `var(--accent)`
-	# (custom properties inherit, so one var styles the whole subtree).
-	view.div [
-		view.id "app",
-		view.styled card,
-		view.css-var "accent" fun { accent-color (signal.get accent) },
-	] [
-		view.h1 [] [view.text "Pluma SSR + signals + CSS"],
-		view.p [] [
-			view.text "This shell was server-rendered; the buttons came alive after hydration.",
-		],
-		view.button [
-			view.styled button,
-			view.on-click fun {
-				signal.update accent fun i {
-					i + 1
-				}
-			},
-		] [view.text "cycle accent"],
-		view.div [] [
-			view.span [view.id "sum"] [
-				view.text-of fun {
-					if signal.get pending > 0 {
-						"computing on the server… ($(to-string (signal.get pending)) in flight)"
-					} else {
-						"last server sum = $(to-string (signal.get sum))"
+		# `styled card` gives the hashed class; `css-var "accent"` supplies the live
+		# value that the card's border and the buttons' background read as `var(--accent)`
+		# (custom properties inherit, so one var styles the whole subtree).
+		.div [.id "app", .styled card, .css-var "accent" fun { accent-color (signal.get accent) }] [
+			.h1 [] [.text "Pluma SSR + signals + CSS"],
+			.p [] [.text "This shell was server-rendered; the buttons came alive after hydration."],
+			.button [
+				.styled button,
+				.on-click fun {
+					signal.update accent fun i {
+						i + 1
 					}
 				},
+			] [.text "cycle accent"],
+			.div [] [
+				.span [.id "sum"] [
+					.text-of fun {
+						if signal.get pending > 0 {
+							"computing on the server… ($(to-string (signal.get pending)) in flight)"
+						} else {
+							"last server sum = $(to-string (signal.get sum))"
+						}
+					},
+				],
 			],
-		],
-		view.button [
-			view.id "add",
-			view.styled button,
-			view.on-click fun {
-				# Fire two remote calls at once — both in flight together over the async
-				# transport, no main-thread freeze.
-				signal.set pending 2
-				task.spawn (task.map (api.add 2 3) fun n {
-					signal.set sum n
-					signal.update pending fun p {
-						p - 1
-					}
-				})
-				task.spawn (task.map (api.add 20 30) fun n {
-					signal.set sum n
-					signal.update pending fun p {
-						p - 1
-					}
-				})
-			},
-		] [view.text "add on server (×2)"],
-		view.div [] [
-			view.span [view.id "tick"] [
-				view.text-of fun { "server tick: $(to-string (signal.get tick))" },
-			],
-		],
-		view.button [
-			view.id "toggle",
-			view.styled button,
-			view.on-click fun {
-				# Toggle the tick subscription: cancel if running, else start one whose
-				# values drive the `tick` signal.
-				when ref.get cancel is some stop {
-					stop ()
-					ref.set cancel none
-				} is none {
-					let stop = task.spawn-cancelable (stream.for-each (api.ticks 1) fun n {
-						signal.set tick n
-						task.return ()
+			.button [
+				.id "add",
+				.styled button,
+				.on-click fun {
+					# Fire two remote calls at once — both in flight together over the async
+					# transport, no main-thread freeze.
+					signal.set pending 2
+					task.spawn (task.map (api.add 2 3) fun n {
+						signal.set sum n
+						signal.update pending fun p {
+							p - 1
+						}
 					})
-					ref.set cancel (some stop)
-				}
-			},
-		] [view.text "toggle ticks"],
-	]
+					task.spawn (task.map (api.add 20 30) fun n {
+						signal.set sum n
+						signal.update pending fun p {
+							p - 1
+						}
+					})
+				},
+			] [.text "add on server (×2)"],
+			.div [] [
+				.span [.id "tick"] [.text-of fun { "server tick: $(to-string (signal.get tick))" }],
+			],
+			.button [
+				.id "toggle",
+				.styled button,
+				.on-click fun {
+					# Toggle the tick subscription: cancel if running, else start one whose
+					# values drive the `tick` signal.
+					when ref.get cancel is some stop {
+						stop ()
+						ref.set cancel none
+					} is none {
+						let stop = task.spawn-cancelable (stream.for-each (api.ticks 1) fun n {
+							signal.set tick n
+							task.return ()
+						})
+						ref.set cancel (some stop)
+					}
+				},
+			] [.text "toggle ticks"],
+		]
+	}
 }
 
 # The full HTML document for a server-rendered first paint: the page's HTML in the

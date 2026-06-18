@@ -404,7 +404,7 @@ def style-fragment :: fun attribute -> option string = fun a {
 # Collect, in order, the `some` values an attribute-to-fragment function yields.
 def fragments :: fun (list attribute) (fun attribute -> option string) -> list string = fun attrs frag {
 	let out :: list string = []
-	let _ = list.each attrs fun a {
+	list.each attrs fun a {
 		when frag a is some s {
 			list.push out s
 		} else {
