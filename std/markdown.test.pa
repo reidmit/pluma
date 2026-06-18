@@ -28,12 +28,18 @@ def tests :: test.suite = [
 			],
 		]
 	},
-	test.case "headings render at their level" fun {
+	test.case "headings render at their level with an id anchor" fun {
 		# --- HTML rendering ------------------------------------------------------
 
 		assert.all [
-			assert.equals (md.render-html "# A") "<h1>A</h1>",
-			assert.equals (md.render-html "### C") "<h3>C</h3>",
+			assert.equals (md.render-html "# A") "<h1 id=\"a\">A</h1>",
+			assert.equals (md.render-html "### C") "<h3 id=\"c\">C</h3>",
+		]
+	},
+	test.case "slug lowercases and hyphenates" fun {
+		assert.all [
+			assert.equals (md.slug "On this page!") "on-this-page",
+			assert.equals (md.slug "  Trailing & leading  ") "trailing-leading",
 		]
 	},
 	test.case "inline emphasis, code, links, and images render" fun {
@@ -66,6 +72,15 @@ def tests :: test.suite = [
 		assert.equals (md.render-html "> one\n> two") "<blockquote><p>one two</p></blockquote>"
 	},
 	test.case "thematic break renders an hr" fun { assert.equals (md.render-html "---") "<hr>" },
+	test.case "a pipe table renders thead and tbody" fun {
+		let html = md.render-html "| A | B |\n| --- | --- |\n| 1 | `x` |"
+		assert.equals html "<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td><code>x</code></td></tr></tbody></table>"
+	},
+	test.case "an escaped pipe stays inside a table cell" fun {
+		assert.equals (md.parse "| op |\n| --- |\n| a \\| b |") [
+			md.block.table [[md.inline.text "op"]] [[[md.inline.text "a | b"]]],
+		]
+	},
 	test.case "two trailing spaces force a hard line break" fun {
 		assert.equals (md.render-html "a  \nb") "<p>a<br>b</p>"
 	},

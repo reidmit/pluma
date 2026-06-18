@@ -125,7 +125,7 @@ def code-block :: css.ruleset = using css {
 
 # --- features ---------------------------------------------------------------
 
-def section :: css.ruleset = css.rule [css.padding-block (css.rem 4.0)]
+def section :: css.ruleset = using css { .rule [.padding-block (.rem 4.0)] }
 
 def section-head :: css.ruleset = using css {
 	.rule [.max-width (.rem 40.0), .margin-bottom (.rem 2.5)]
@@ -343,7 +343,7 @@ def hero-section :: fun nothing -> view = using view {
 					],
 					.div [.styled cta-row] [
 						.a [.styled theme.btn-primary, .href "/start"] [.text "Get started"],
-						.a [.styled theme.btn-ghost, .href "/reference"] [
+						.a [.styled theme.btn-ghost, .href "/docs/reference"] [
 							.text "Read the reference",
 						],
 					],

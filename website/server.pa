@@ -1,6 +1,6 @@
 # The server half of pluma.fun. One `std/sys/http` server, four responsibilities:
 #   - GET `/`          → the server-side-rendered landing page
-#   - GET `/reference` → the server-side-rendered language reference
+#   - GET `/docs/*`    → the Markdown documentation, rendered by `docs`
 #   - `/rpc/*`         → `rpc.dispatch`, the route table the compiler synthesizes
 #                        from `api.pa`'s `remote def`s
 #   - everything else  → a static file from `public/` (the logo, favicon, ...)
@@ -17,9 +17,9 @@ use std/sys/http
 use std/sys/rpc
 use std/sys/static
 use docdata
+use docs
 use playground
 use recipes
-use reference
 use start
 use stddocs
 use theme
@@ -49,11 +49,17 @@ def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		task.return (http.html 200 (theme.document-html "Pluma — a fullstack functional language" (ui.page ())))
 	} else if req.path == "/reference" {
-		task.return (http.html 200 (theme.document-html "Language reference — Pluma" (reference.page ())))
+		# The old single-page reference moved into the `/docs/reference` section;
+		# keep the old URL working with a permanent redirect.
+		task.return (http.redirect 301 "/docs/reference")
 	} else if req.path == "/start" {
 		task.return (http.html 200 (theme.document-html "Get started — Pluma" (start.page ())))
 	} else if req.path == "/recipes" {
 		task.return (http.html 200 (theme.document-html "Recipes — Pluma" (recipes.page ())))
+	} else if string.starts-with req.path "/docs" {
+		# The docs pages are Markdown files under `docs/`, parsed and rendered at
+		# request time. `docs.page` reads the file the path selects.
+		task.return (http.html 200 (theme.document-html "Documentation — Pluma" (docs.page req.path)))
 	} else if string.starts-with req.path "/std" {
 		# The path is the module name: `/std/list` → `std/list`. Bare `/std` (and
 		# any unknown name) falls back to the first module.

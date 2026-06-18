@@ -12,12 +12,13 @@
 #     markdown.to-html doc        # => "<h1>Title</h1><p>Some <strong>bold</strong> ...</p>"
 #     view.div [] [markdown.to-view doc]
 #
-# The supported subset covers what documentation needs: ATX headings, paragraphs,
-# fenced code blocks, blockquotes, bulleted and numbered lists (one level of
-# nesting), thematic breaks, and the inline run of bold/italic/code/links/images
-# plus hard line breaks. It is deliberately forgiving rather than exhaustive --
-# anything it doesn't recognize as a marker is passed through as literal text, so
-# parsing never fails.
+# The supported subset covers what documentation needs: ATX headings (each
+# rendered with an `id` anchor derived from its text, so links can jump to it),
+# paragraphs, fenced code blocks, blockquotes, bulleted and numbered lists (one
+# level of nesting), GFM pipe tables, thematic breaks, and the inline run of
+# bold/italic/code/links/images plus hard line breaks. It is deliberately
+# forgiving rather than exhaustive -- anything it doesn't recognize as a marker is
+# passed through as literal text, so parsing never fails.
 #
 # It also supports fenced-div containers for styled callouts. A line opening with
 # `:::` starts one and a bare `:::` line closes it; in between is ordinary Markdown,
@@ -57,7 +58,8 @@ public enum inline {
 # `container` is the AST for a `::: tag .class key="value"` fenced div: a chosen
 # HTML tag (so `::: aside` is an `<aside>`, not a `<div class="aside">`), a list of
 # CSS classes, a list of passthrough attributes, and the nested blocks -- the home
-# for callouts, asides, and warnings.
+# for callouts, asides, and warnings. `table` is a GFM pipe table: a header row
+# (one `list inline` per cell) and the body rows (one cell list per row).
 public enum block {
 	heading int (list inline)
 	paragraph (list inline)
@@ -66,6 +68,7 @@ public enum block {
 	bullet-list (list (list block))
 	ordered-list int (list (list block))
 	container string (list string) (list (string, string)) (list block)
+	table (list (list inline)) (list (list (list inline)))
 	thematic-break
 }
 
@@ -100,6 +103,49 @@ public def render-html :: fun string -> string = fun input {
 # Parse-then-render in one step: Markdown text straight to a `view`.
 public def render-view :: fun string -> view = fun input {
 	to-view (parse input)
+}
+
+# The plain text of an inline run, with all markup stripped -- the source for a
+# heading's anchor or a table-of-contents entry.
+public def inline-text :: fun (list inline) -> string = fun xs {
+	string.join (list.map xs inline-text-of) ""
+}
+
+def inline-text-of :: fun inline -> string = fun x {
+	when x is inline.text s {
+		s
+	} is inline.emph kids {
+		inline-text kids
+	} is inline.strong kids {
+		inline-text kids
+	} is inline.code-span s {
+		s
+	} is inline.link _url kids {
+		inline-text kids
+	} is inline.image _url alt {
+		alt
+	} is inline.hard-break {
+		" "
+	}
+}
+
+# A URL anchor for some text: lowercased, with every run of characters that aren't
+# letters or digits collapsed to a single hyphen and the ends trimmed. So
+# `"On this page!"` becomes `"on-this-page"`. Headings render with this as their
+# `id`, so a table of contents links to `"#" ++ slug heading-text`.
+public def slug :: fun string -> string = fun s {
+	let cleaned = string.join (list.map (string.chars (string.to-lower s)) fun c {
+		if is-alnum c {
+			c
+		} else {
+			" "
+		}
+	}) ""
+	string.join (split-ws cleaned) "-"
+}
+
+def is-alnum :: fun string -> bool = fun c {
+	is-digit-char c or string.length c == 1 and string.contains "abcdefghijklmnopqrstuvwxyz" c
 }
 
 # --- block parsing ----------------------------------------------------------
@@ -146,6 +192,8 @@ def parse-blocks :: fun (list string) int int (list block) -> nothing = fun line
 			parse-bullet lines n i out
 		} else if is-ordered line {
 			parse-ordered lines n i out
+		} else if is-table lines n i {
+			parse-table lines n i out
 		} else {
 			parse-paragraph lines n i out
 		}
@@ -341,6 +389,8 @@ def collect-para :: fun (list string) int int (list string) -> int = fun lines n
 			j
 		} else if is-ordered line {
 			j
+		} else if is-table lines n j {
+			j
 		} else {
 			list.push para line
 			collect-para lines n (j + 1) para
@@ -375,6 +425,104 @@ def build-para :: fun (list inline) int (list string) int -> nothing = fun out t
 			()
 		}
 		build-para out total para (k + 1)
+	}
+}
+
+# A GFM pipe table: a header row, the `| --- | --- |` delimiter row beneath it,
+# then body rows until a blank line or a line that isn't a row. Each cell's text
+# is inline-parsed, so a cell can hold `code`, **bold**, and links.
+def parse-table :: fun (list string) int int (list block) -> int = fun lines n i out {
+	let headers = list.map (split-table-row (list.get lines i)) parse-inline
+	let rows :: list (list (list inline)) = []
+	let close = collect-rows lines n (i + 2) rows
+	list.push out (block.table headers rows)
+	close
+}
+
+def collect-rows :: fun (list string) int int (list (list (list inline))) -> int = fun lines n j rows {
+	if j >= n {
+		j
+	} else if is-blank (list.get lines j) {
+		j
+	} else if looks-like-row (list.get lines j) {
+		list.push rows (list.map (split-table-row (list.get lines j)) parse-inline)
+		collect-rows lines n (j + 1) rows
+	} else {
+		j
+	}
+}
+
+# A table starts where a row line is immediately followed by a delimiter row.
+def is-table :: fun (list string) int int -> bool = fun lines n i {
+	i + 1 < n and looks-like-row (list.get lines i) and is-delimiter-row (list.get lines (i + 1))
+}
+
+def looks-like-row :: fun string -> bool = fun line {
+	string.contains line "|"
+}
+
+# A delimiter row's cells are all dashes/colons with at least one dash, e.g.
+# `| --- | :--: |` -- the line that separates a table's header from its body.
+def is-delimiter-row :: fun string -> bool = fun line {
+	let cells = split-table-row line
+	list.length cells > 0 and list.all cells is-delim-cell
+}
+
+def is-delim-cell :: fun string -> bool = fun cell {
+	let t = string.trim cell
+	string.length t > 0 and string.contains t "-" and list.all (string.chars t) fun c {
+		c == "-" or c == ":"
+	}
+}
+
+# Split a table row into its cell strings: drop the optional leading/trailing pipe,
+# then break on each unescaped `|`. A `\|` is a literal pipe in the cell -- it's
+# de-escaped here (GFM does this even inside a code span, which the inline parser
+# would otherwise leave verbatim); other backslash escapes pass through untouched.
+def split-table-row :: fun string -> list string = fun line {
+	let t = strip-edge-pipes (string.trim line)
+	let cs = string.chars t
+	let cells :: list string = []
+	split-cells cs (list.length cs) 0 [] cells
+	list.map cells string.trim
+}
+
+def split-cells :: fun (list string) int int (list string) (list string) -> nothing = fun cs n i buf cells {
+	if i >= n {
+		list.push cells (string.join buf "")
+	} else {
+		let c = list.get cs i
+		if c == "\\" and i + 1 < n {
+			let nx = list.get cs (i + 1)
+			if nx == "|" {
+				# `\|` is a literal pipe in a cell, de-escaped even inside a code span.
+				list.push buf "|"
+			} else {
+				# Any other escape stays verbatim for the inline parser to handle.
+				list.push buf c
+				list.push buf nx
+			}
+			split-cells cs n (i + 2) buf cells
+		} else if c == "|" {
+			list.push cells (string.join buf "")
+			split-cells cs n (i + 1) [] cells
+		} else {
+			list.push buf c
+			split-cells cs n (i + 1) buf cells
+		}
+	}
+}
+
+def strip-edge-pipes :: fun string -> string = fun line {
+	let a = if string.starts-with line "|" {
+		string.drop line 1
+	} else {
+		line
+	}
+	if string.ends-with a "|" {
+		string.slice a 0 (string.length a - 1)
+	} else {
+		a
 	}
 }
 
@@ -854,7 +1002,7 @@ def scan-run :: fun (list string) int int string -> int = fun cs n i ch {
 def block-view :: fun block -> view = using view {
 	fun b {
 		when b is block.heading lvl content {
-			heading-el lvl (inlines-view content)
+			heading-el lvl [.id (slug (inline-text content))] (inlines-view content)
 		} is block.paragraph content {
 			.p [] (inlines-view content)
 		} is block.code-block lang code {
@@ -867,6 +1015,15 @@ def block-view :: fun block -> view = using view {
 			.ol (start-attr start) (list.map items item-view)
 		} is block.container tag classes attrs blocks {
 			.element tag (container-views classes attrs) (list.map blocks block-view)
+		} is block.table headers rows {
+			.table [] [
+				.thead [] [.tr [] (list.map headers fun c { .th [] (inlines-view c) })],
+				.tbody [] (list.map rows fun r {
+					.tr [] (list.map r fun c {
+						.td [] (inlines-view c)
+					})
+				}),
+			]
 		} is block.thematic-break {
 			.hr [] []
 		}
@@ -909,20 +1066,20 @@ def item-view :: fun (list block) -> view = using view {
 	}
 }
 
-def heading-el :: fun int (list view) -> view = using view {
-	fun lvl kids {
+def heading-el :: fun int (list view.attribute) (list view) -> view = using view {
+	fun lvl attrs kids {
 		if lvl <= 1 {
-			.h1 [] kids
+			.h1 attrs kids
 		} else if lvl == 2 {
-			.h2 [] kids
+			.h2 attrs kids
 		} else if lvl == 3 {
-			.h3 [] kids
+			.h3 attrs kids
 		} else if lvl == 4 {
-			.h4 [] kids
+			.h4 attrs kids
 		} else if lvl == 5 {
-			.h5 [] kids
+			.h5 attrs kids
 		} else {
-			.h6 [] kids
+			.h6 attrs kids
 		}
 	}
 }

@@ -1,0 +1,396 @@
+# The `/docs` section of pluma.fun — long-form documentation written as Markdown
+# files under `docs/` and rendered by Pluma itself.
+#
+# The workflow is the point: a doc page is a `.md` file, nothing more. Add an
+# entry to `pages` (slug, sidebar title, file basename), drop a `<basename>.md`
+# next to the others, and it shows up in the nav and renders at `/docs/<slug>`.
+# At request time the server reads the file, `std/markdown` parses it to an AST,
+# and `std/view` renders that AST — the same renderer the rest of the site uses,
+# so the docs inherit the site's look and never ship a separate stylesheet. The
+# markup is styled by global rules scoped under `.doc-prose` (see `doc-styles`),
+# since the elements Markdown emits are plain `<h2>`/`<p>`/`<pre>`, not `.styled`
+# views.
+#
+# Reading the file per request (rather than baking it into the bundle) means
+# editing a `.md` and refreshing shows the change — no recompile. These pages are
+# server-rendered only, so `client.pa` never imports this module and the Markdown
+# never reaches the browser bundle.
+
+use std/css
+use std/list
+use std/markdown
+use std/string
+use std/view
+use std/sys/fs
+use prose
+use theme
+
+# One documentation page. `slug` is the path after `/docs` ("" for the index),
+# `title` is shown in the sidebar, and `file` is the basename of its Markdown
+# source under `docs/`.
+alias doc-page {slug :: string, title :: string, file :: string}
+
+# The sidebar is a list of titled groups, each holding its pages in order. Adding a
+# page is one line here plus its `.md` file; a new group is a new record.
+alias doc-group {title :: string, pages :: list doc-page}
+
+def groups :: list doc-group = [
+	{
+		title: "Documentation",
+		pages: [
+			{slug: "", title: "Overview", file: "overview"},
+			{slug: "reference", title: "Reference", file: "reference"},
+		],
+	},
+	{
+		title: "Language reference",
+		pages: [
+			{slug: "reference/operators", title: "Operators", file: "reference/operators"},
+			{slug: "reference/aliases", title: "Type aliases", file: "reference/aliases"},
+			{slug: "reference/bytes", title: "Bytes", file: "reference/bytes"},
+			{slug: "reference/regex", title: "Regular expressions", file: "reference/regex"},
+			{slug: "reference/diagnostics", title: "Diagnostics", file: "reference/diagnostics"},
+			{slug: "reference/build", title: "Fullstack build", file: "reference/build"},
+		],
+	},
+]
+
+# Every page across all groups, for slug lookup.
+def all-pages :: list doc-page = list.flat-map groups fun g { g.pages }
+
+# --- file loading -----------------------------------------------------------
+
+# The Markdown source for a page. Tried under `website/docs/` first (running from
+# the repo root) and then `docs/` (the app directory the server runs from), so it
+# resolves whether the server was started from the workspace or the bundle. A
+# missing file degrades to a rendered "not found" rather than failing the page.
+def read-doc :: fun string -> string = fun file {
+	when fs.read-text-sync "website/docs/$(file).md" is ok s {
+		s
+	} else {
+		when fs.read-text-sync "docs/$(file).md" is ok s2 {
+			s2
+		} else {
+			"# Not available\n\nThis page's source (`$(file).md`) could not be read."
+		}
+	}
+}
+
+# The slug a request path selects: `/docs` and `/docs/` both give "", and
+# `/docs/reference` gives "reference".
+def slug-of :: fun string -> string = fun path {
+	let rest = string.drop path 5
+	if string.starts-with rest "/" {
+		string.drop rest 1
+	} else {
+		rest
+	}
+}
+
+# --- layout -----------------------------------------------------------------
+
+def layout :: css.ruleset = using css {
+	.rule [
+		.display "grid",
+		.property "grid-template-columns" "200px minmax(0, 1fr) 180px",
+		.gap (.rem 2.5),
+		.align-items "start",
+		.padding-top (.rem 1.0),
+		.padding-bottom (.rem 2.0),
+		.media "(max-width: 980px)" [.property "grid-template-columns" "200px minmax(0, 1fr)"],
+		.media "(max-width: 720px)" [.property "grid-template-columns" "1fr"],
+	]
+}
+
+def rail :: css.ruleset = using css {
+	.rule [
+		.position "sticky",
+		.top (.rem 1.5),
+		.property "align-self" "start",
+		.property "max-height" "calc(100vh - 3rem)",
+		.property "overflow-y" "auto",
+		.font-size (.rem 0.9),
+	]
+}
+
+# The right rail (the "On this page" TOC) folds away before the left one on
+# narrow screens.
+def rail-right :: css.ruleset = using css {
+	.compose [rail, .rule [.media "(max-width: 980px)" [.display "none"]]]
+}
+
+def rail-left :: css.ruleset = using css {
+	.compose [rail, .rule [.media "(max-width: 720px)" [.display "none"]]]
+}
+
+# A TOC link; a level-3 heading is indented under its level-2 section.
+def toc-sub :: css.ruleset = using css { .compose [side-item, .rule [.padding-left (.rem 1.5)]] }
+
+def side-title :: css.ruleset = using css {
+	.rule [
+		.property "text-transform" "uppercase",
+		.letter-spacing (.em 0.1),
+		.font-size (.rem 0.7),
+		.font-weight "600",
+		.color (.hex theme.faint),
+		.margin-bottom (.rem 0.7),
+	]
+}
+
+# Each sidebar group after the first is spaced from the one above; the groups are
+# direct siblings, so `:first-child` correctly zeroes only the top one.
+def group-box :: css.ruleset = using css {
+	.rule [.margin-top (.rem 1.6), .on "first-child" [.margin-top (.rem 0.0)]]
+}
+
+def side-list :: css.ruleset = using css {
+	.rule [.display "flex", .flex-direction "column", .gap (.rem 0.05)]
+}
+
+def side-item :: css.ruleset = using css {
+	.rule [
+		.padding-block (.rem 0.22),
+		.padding-left (.rem 0.7),
+		.margin-left (.rem (-0.7)),
+		.color (.hex theme.muted),
+		.property "border-left" "2px solid transparent",
+		.property "transition" "color 0.12s ease, border-color 0.12s ease",
+		.on "hover" [.color (.hex theme.accent), .border-color (.hex "#6d4aa3")],
+	]
+}
+
+def side-item-active :: css.ruleset = using css {
+	.compose [
+		side-item,
+		.rule [.color (.hex theme.accent-deep), .property "border-left" "2px solid #6d4aa3"],
+	]
+}
+
+def main-col :: css.ruleset = using css {
+	.rule [.property "min-width" "0", .max-width (.rem 46.0)]
+}
+
+# --- markdown styling -------------------------------------------------------
+#
+# The elements `std/markdown` emits are plain (`<h2>`, `<p>`, `<pre>`, ...), so
+# they can't carry a `.styled` class. Instead the rendered tree is wrapped in a
+# `.doc-prose` container and these global rules style its descendants to match
+# the rest of the site's prose.
+
+def doc-styles :: fun nothing -> nothing = using css {
+	fun {
+		.global [
+			.at ".doc-prose" [.color (.hex "#2b2823")],
+			.at ".doc-prose h1" [
+				.property "font-family" theme.serif,
+				.property "font-size" "2.4rem",
+				.property "line-height" "1.1",
+				.property "letter-spacing" "-0.025em",
+				.property "font-weight" "600",
+				.property "margin" "0 0 0.6rem",
+			],
+			.at ".doc-prose h2" [
+				.property "font-family" theme.serif,
+				.property "font-size" "1.6rem",
+				.property "letter-spacing" "-0.02em",
+				.property "font-weight" "600",
+				.property "margin" "2.4rem 0 0.4rem",
+				.property "scroll-margin-top" "1.5rem",
+			],
+			.at ".doc-prose h3" [
+				.property "font-size" "1.12rem",
+				.property "font-weight" "600",
+				.property "margin" "1.8rem 0 0.2rem",
+				.property "scroll-margin-top" "1.5rem",
+			],
+			.at ".doc-prose p" [
+				.property "font-family" theme.serif,
+				.property "font-size" "1.08rem",
+				.property "line-height" "1.75",
+				.property "margin" "1.0rem 0",
+			],
+			.at ".doc-prose a" [
+				.property "color" theme.accent,
+				.property "text-decoration" "underline",
+				.property "text-underline-offset" "2px",
+			],
+			.at ".doc-prose a:hover" [.property "color" theme.accent-deep],
+			.at ".doc-prose strong" [.property "font-weight" "600", .property "color" "#1f1d1a"],
+			.at ".doc-prose ul, .doc-prose ol" [
+				.property "font-family" theme.serif,
+				.property "font-size" "1.08rem",
+				.property "line-height" "1.75",
+				.property "padding-left" "1.4rem",
+				.property "margin" "1.0rem 0",
+			],
+			.at ".doc-prose li" [.property "margin" "0.3rem 0"],
+			.at ".doc-prose code" [
+				.property "font-family" theme.mono,
+				.property "font-size" "0.88em",
+				.property "background" theme.code-soft,
+				.property "color" theme.accent-deep,
+				.property "padding" "0.1em 0.36em",
+				.property "border-radius" "5px",
+			],
+			.at ".doc-prose pre" [
+				.property "font-family" theme.mono,
+				.property "font-size" "0.88rem",
+				.property "line-height" "1.6",
+				.property "background" theme.code-soft,
+				.property "border" "1px solid #e9e4dc",
+				.property "border-radius" "10px",
+				.property "padding" "1.0rem 1.2rem",
+				.property "margin" "1.2rem 0",
+				.property "tab-size" "2",
+				.property "white-space" "pre",
+				.property "overflow-x" "auto",
+			],
+			# Inline-code styling shouldn't double up inside a code block.
+			.at ".doc-prose pre code" [
+				.property "background" "transparent",
+				.property "color" "#2b2823",
+				.property "padding" "0",
+				.property "font-size" "1em",
+			],
+			.at ".doc-prose blockquote" [
+				.property "margin" "1.4rem 0",
+				.property "padding" "0.2rem 1.2rem",
+				.property "border-left" "3px solid #6d4aa3",
+				.property "color" theme.muted,
+			],
+			.at ".doc-prose hr" [
+				.property "border" "none",
+				.property "border-top" "1px solid #e9e4dc",
+				.property "margin" "2.4rem 0",
+			],
+			# Fenced-div callouts (`::: .callout`) from the Markdown source.
+			.at ".doc-prose .callout" [
+				.property "background" "#f3eefb",
+				.property "border-left" "3px solid #6d4aa3",
+				.property "border-radius" "8px",
+				.property "padding" "0.4rem 1.2rem",
+				.property "margin" "1.4rem 0",
+			],
+			.at ".doc-prose table" [
+				.property "width" "100%",
+				.property "border-collapse" "collapse",
+				.property "font-size" "0.95rem",
+				.property "margin" "1.2rem 0",
+			],
+			.at ".doc-prose th" [
+				.property "text-align" "left",
+				.property "padding" "0.5rem 0.9rem 0.5rem 0",
+				.property "border-bottom" "1px solid #d8d2c8",
+				.property "font-size" "0.72rem",
+				.property "text-transform" "uppercase",
+				.property "letter-spacing" "0.08em",
+				.property "font-weight" "600",
+				.property "color" theme.faint,
+			],
+			.at ".doc-prose td" [
+				.property "padding" "0.5rem 0.9rem 0.5rem 0",
+				.property "border-bottom" "1px solid #efeae2",
+				.property "vertical-align" "top",
+			],
+		]
+	}
+}
+
+# --- rendering --------------------------------------------------------------
+
+def nav-link :: fun string doc-page -> view = using view {
+	fun current pg {
+		.a [
+			.styled if pg.slug == current {
+				side-item-active
+			} else {
+				side-item
+			},
+			.href if string.is-empty pg.slug {
+				"/docs"
+			} else {
+				"/docs/$(pg.slug)"
+			},
+		] [.text pg.title]
+	}
+}
+
+# A titled sidebar group: its heading, then a link per page, the current one
+# highlighted.
+def nav-group :: fun string doc-group -> view = using view {
+	fun current g {
+		.div [.styled group-box] [
+			.div [.styled side-title] [.text g.title],
+			.div [.styled side-list] (list.map g.pages fun pg { nav-link current pg }),
+		]
+	}
+}
+
+# One entry in the "On this page" table of contents: a heading's level, its plain
+# text, and the anchor `std/markdown` rendered it with (`markdown.slug` of the same
+# text), so the link's `#id` matches.
+alias toc-entry {level :: int, text :: string, id :: string}
+
+# The section headings of a parsed document — levels 2 and 3, the granularity
+# worth listing. Walks the top-level blocks (where doc headings live).
+def toc-entries :: fun (list markdown.block) -> list toc-entry = fun blocks {
+	list.flat-map blocks fun b {
+		if b is markdown.block.heading lvl content {
+			if lvl >= 2 and lvl <= 3 {
+				let text = markdown.inline-text content
+				[{level: lvl, text, id: markdown.slug text}]
+			} else {
+				[]
+			}
+		} else {
+			[]
+		}
+	}
+}
+
+def toc-link :: fun toc-entry -> view = using view {
+	fun e {
+		.a [
+			.styled if e.level == 2 {
+				side-item
+			} else {
+				toc-sub
+			},
+			.href "#$(e.id)",
+		] [.text e.text]
+	}
+}
+
+# The page for a request path. Resolves the slug, reads the matching Markdown
+# (or a "not found" stub), and renders it inside the site chrome with the doc
+# sidebar.
+public def page :: fun string -> view = using view {
+	fun path {
+		theme.install-globals ()
+		doc-styles ()
+
+		let current = slug-of path
+		let source = when list.find all-pages fun pg { pg.slug == current } is some pg {
+			read-doc pg.file
+		} else {
+			"# Page not found\n\nNo documentation page matches this address."
+		}
+		# Parse once: the same AST feeds the rendered body and the "On this page" TOC,
+		# whose anchors match the `id`s the renderer puts on the headings.
+		let blocks = markdown.parse source
+		.div [.id "app"] [
+			theme.top-nav (),
+			.div [.styled theme.shell] [
+				.div [.styled layout] [
+					.aside [.styled rail-left] (list.map groups fun g { nav-group current g }),
+					.main [.styled main-col] [.div [.class "doc-prose"] [markdown.to-view blocks]],
+					.aside [.styled rail-right] [
+						.div [.styled side-title] [.text "On this page"],
+						.div [.styled side-list] (list.map (toc-entries blocks) toc-link),
+					],
+				],
+				theme.site-footer (),
+			],
+		]
+	}
+}

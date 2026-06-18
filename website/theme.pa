@@ -1,6 +1,6 @@
 # Shared chrome for pluma.fun — the palette, fonts, global styles, nav, footer,
 # and the HTML-document wrapper that every page reuses. Page modules (`ui`,
-# `reference`) import this so the look stays consistent and each page only has to
+# `docs`) import this so the look stays consistent and each page only has to
 # describe its own content.
 
 use std/css
@@ -186,11 +186,11 @@ public def top-nav :: fun nothing -> view = using view {
 				.span [] [.text "pluma"],
 			],
 			.div [.styled nav-links] [
-				.a [.styled nav-link, .href "/start"] [.text "Get started"],
-				.a [.styled nav-link, .href "/recipes"] [.text "Recipes"],
-				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
-				.a [.styled nav-link, .href "/std/list"] [.text "Stdlib"],
-				.a [.styled nav-link, .href "/playground"] [.text "Playground"],
+				.a [.styled nav-link, .href "/start"] [.text "get started"],
+				.a [.styled nav-link, .href "/docs"] [.text "docs"],
+				.a [.styled nav-link, .href "/recipes"] [.text "recipes"],
+				.a [.styled nav-link, .href "/std/list"] [.text "stdlib"],
+				.a [.styled nav-link, .href "/playground"] [.text "playground"],
 			],
 		]
 	}
@@ -199,9 +199,14 @@ public def top-nav :: fun nothing -> view = using view {
 public def site-footer :: fun nothing -> view = using view {
 	fun {
 		.footer [.styled footer] [
-			.div [] [.text "© 2026 Pluma · written in Pluma"],
+			.div [] [
+				.text "© 2026 ",
+				.a [.href "https://reidmit.com", .attr "target" "_blank", .styled nav-link] [
+					.text "reid",
+				],
+			],
 			.div [.styled footer-links] [
-				.a [.styled nav-link, .href "/reference"] [.text "Reference"],
+				.a [.styled nav-link, .href "/docs/reference"] [.text "Reference"],
 				.a [.styled nav-link, .href repo] [.text "GitHub"],
 			],
 		]

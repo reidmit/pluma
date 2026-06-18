@@ -107,6 +107,19 @@ public def not-found :: fun nothing -> response = fun {
 	text 404 "Not Found"
 }
 
+# A redirect to `location`. Use 301 for a permanently moved URL, 302 for a
+# temporary one.
+#
+#     http.redirect 301 "/docs/reference"
+public def redirect :: fun int string -> response = fun status location {
+	{
+		status,
+		headers: dict.from-entries [("location", location)],
+		body: string.to-bytes "",
+		stream-body: none,
+	}
+}
+
 # A streaming response: the server writes each element of `events` as it is
 # pulled, then closes the connection. `events` is a `stream bytes` -- each
 # element is one message's payload bytes, framed as an SSE `next` event on the

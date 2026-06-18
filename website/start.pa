@@ -127,7 +127,7 @@ def sec-fullstack :: view = doc-section "fullstack" "Going fullstack" [
 	p "This very website is exactly that: a fullstack Pluma app, server-rendered for an instant first paint, then hydrated in the browser.",
 	using view {
 		.div [.styled prose.doc-cta] [
-			.a [.styled theme.btn-primary, .href "/reference"] [.text "Read the reference"],
+			.a [.styled theme.btn-primary, .href "/docs/reference"] [.text "Read the reference"],
 			.a [.styled theme.btn-ghost, .href "/playground"] [.text "Open the playground"],
 			.a [.styled theme.btn-ghost, .href (theme.repo ++ "/tree/main/examples")] [
 				.text "Browse the examples",
