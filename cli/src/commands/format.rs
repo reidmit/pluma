@@ -6,6 +6,8 @@ pub(crate) fn format_command(check: bool, paths: Vec<String>) {
 		std::process::exit(1);
 	}
 
+	let paths = crate::commands::expand_paths(paths);
+
 	let mut any_changed = false;
 
 	for path in &paths {

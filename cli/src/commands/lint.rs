@@ -12,7 +12,7 @@ pub(crate) fn lint_command(fix: bool, paths: Vec<String>) {
 		std::process::exit(1);
 	}
 
-	let paths = expand_paths(paths);
+	let paths = crate::commands::expand_paths(paths);
 
 	if fix {
 		fix_command(paths);
@@ -148,52 +148,6 @@ fn summary(issues: usize, files: usize, fixed: Option<usize>) -> String {
 		Some(fixed) => format!("found {} in {} (fixed {})", issues, files, fixed),
 		None => format!("found {} in {}", issues, files),
 	}
-}
-
-/// Expand directory arguments into the `.pa` files beneath them, recursively.
-/// File paths (and `-` for stdin) pass through unchanged; a directory becomes
-/// every `*.pa` file under it, sorted for stable output. Hidden directories
-/// (anything starting with `.`) are skipped — `.git`, `.cargo`, etc. shouldn't
-/// be scanned.
-fn expand_paths(paths: Vec<String>) -> Vec<String> {
-	fn walk(dir: &std::path::Path, out: &mut Vec<String>) {
-		let entries = match std::fs::read_dir(dir) {
-			Ok(e) => e,
-			Err(_) => return,
-		};
-		for entry in entries.flatten() {
-			let path = entry.path();
-			let name = match path.file_name().and_then(|n| n.to_str()) {
-				Some(n) => n,
-				None => continue,
-			};
-			if name.starts_with('.') {
-				continue;
-			}
-			let file_type = match entry.file_type() {
-				Ok(t) => t,
-				Err(_) => continue,
-			};
-			if file_type.is_dir() {
-				walk(&path, out);
-			} else if file_type.is_file() && name.ends_with(".pa") {
-				out.push(path.to_string_lossy().into_owned());
-			}
-		}
-	}
-
-	let mut out = Vec::new();
-	for path in paths {
-		if path != "-" && std::path::Path::new(&path).is_dir() {
-			let mut found = Vec::new();
-			walk(std::path::Path::new(&path), &mut found);
-			found.sort();
-			out.extend(found);
-		} else {
-			out.push(path);
-		}
-	}
-	out
 }
 
 /// Reformat fixed source, falling back to the unformatted text if the rewrite

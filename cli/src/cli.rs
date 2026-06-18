@@ -108,13 +108,14 @@ pub(crate) enum Command {
 
 	/// Canonicalize formatting in place.
 	///
-	/// Pass `-` to read a single module from stdin (writes to stdout).
+	/// Pass `-` to read a single module from stdin (writes to stdout). A
+	/// directory argument is expanded into every `.pa` file beneath it.
 	Format {
 		/// Report files that would change and exit non-zero; don't rewrite them.
 		#[arg(long)]
 		check: bool,
 
-		/// Files to format; `-` reads stdin.
+		/// Files or directories to format; `-` reads stdin.
 		#[arg(value_name = "PATH")]
 		paths: Vec<String>,
 	},
