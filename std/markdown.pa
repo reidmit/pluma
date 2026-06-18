@@ -36,6 +36,7 @@
 
 use std/list
 use std/string
+use std/syntax
 use std/view
 
 # An inline-level node: the contents of a paragraph, heading, or list item. A run
@@ -1006,7 +1007,7 @@ def block-view :: fun block -> view = using view {
 		} is block.paragraph content {
 			.p [] (inlines-view content)
 		} is block.code-block lang code {
-			.pre [] [.code (code-attrs lang) [.text code]]
+			.pre [] [.code (code-attrs lang) (code-kids lang code)]
 		} is block.block-quote blocks {
 			.blockquote [] (list.map blocks block-view)
 		} is block.bullet-list items {
@@ -1090,6 +1091,29 @@ def code-attrs :: fun string -> list view.attribute = using view {
 			[]
 		} else {
 			[.class "language-$(lang)"]
+		}
+	}
+}
+
+# A code block's children. Pluma fences are tokenized into class-tagged spans
+# (styled by the docs site's `tok-*` rules); any other language renders verbatim.
+def code-kids :: fun string string -> list view = using view {
+	fun lang code {
+		if lang == "pluma" or lang == "pa" {
+			list.map (syntax.highlight code) span-view
+		} else {
+			[.text code]
+		}
+	}
+}
+
+# One highlighted token: a `tok-*` span, or bare text for an unclassified run.
+def span-view :: fun syntax.span -> view = using view {
+	fun s {
+		if string.is-empty s.class {
+			.text s.text
+		} else {
+			.span [.class "tok-$(s.class)"] [.text s.text]
 		}
 	}
 }

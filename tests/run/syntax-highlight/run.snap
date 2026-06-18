@@ -1,0 +1,150 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+--- def fact = fun n { if n <= 1 { 1 } else { n * fact (n - 1) } }
+keyword	| def
+	|  
+	| fact
+	|  
+operator	| =
+	|  
+keyword	| fun
+	|  
+	| n
+	|  
+	| {
+	|  
+keyword	| if
+	|  
+	| n
+	|  
+operator	| <=
+	|  
+number	| 1
+	|  
+	| {
+	|  
+number	| 1
+	|  
+	| }
+	|  
+keyword	| else
+	|  
+	| {
+	|  
+	| n
+	|  
+operator	| *
+	|  
+	| fact
+	|  
+	| (
+	| n
+	|  
+operator	| -
+	|  
+number	| 1
+	| )
+	|  
+	| }
+	|  
+	| }
+roundtrip: true
+
+--- let xs :: list int = [1, 0xff, 2m20s]
+keyword	| let
+	|  
+	| xs
+	|  
+operator	| ::
+	|  
+	| list
+	|  
+	| int
+	|  
+operator	| =
+	|  
+	| [
+number	| 1
+	| ,
+	|  
+number	| 0xff
+	| ,
+	|  
+number	| 2m20s
+	| ]
+roundtrip: true
+
+--- # a comment
+print "hi $(name)"
+comment	| # a comment
+	| 
+
+	| print
+	|  
+string	| "hi $(name)"
+roundtrip: true
+
+--- list.map xs fun x { x + 1 }
+namespace	| list
+	| .
+	| map
+	|  
+	| xs
+	|  
+keyword	| fun
+	|  
+	| x
+	|  
+	| {
+	|  
+	| x
+	|  
+operator	| +
+	|  
+number	| 1
+	|  
+	| }
+roundtrip: true
+
+--- def pi :: float = 3.14 and done == false
+keyword	| def
+	|  
+	| pi
+	|  
+operator	| ::
+	|  
+	| float
+	|  
+operator	| =
+	|  
+number	| 3.14
+	|  
+keyword	| and
+	|  
+	| done
+	|  
+operator	| ==
+	|  
+boolean	| false
+roundtrip: true
+
+--- let s = """
+hi "there"
+"""
+keyword	| let
+	|  
+	| s
+	|  
+operator	| =
+	|  
+string	| """
+hi "there"
+"""
+roundtrip: true
+
+== stderr ==

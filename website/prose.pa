@@ -8,6 +8,7 @@
 use std/css
 use std/list
 use std/string
+use std/syntax
 use std/view
 use theme
 
@@ -195,6 +196,31 @@ public def code-of :: fun (list view) -> view = using view {
 	fun kids {
 		.pre [.styled doc-pre] [.code [] kids]
 	}
+}
+
+# One highlighted token: a `tok-*` span, or bare text for an unclassified run.
+# The `tok-*` palette is installed once in `theme.install-globals`.
+public def token :: fun syntax.span -> view = using view {
+	fun s {
+		if string.is-empty s.class {
+			.text s.text
+		} else {
+			.span [.class ("tok-" ++ s.class)] [.text s.text]
+		}
+	}
+}
+
+# Pluma source highlighted into `tok-*` token spans via `std/syntax` — the one
+# highlighter every rendered code block on the site shares. Returns the bare
+# spans so a caller can drop them into its own `<pre>`/`<code>` frame (e.g. a
+# reactive `view.dyn`); `pluma` wraps them in the standard `code` frame.
+public def tokens :: fun string -> list view = fun s {
+	list.map (syntax.highlight s) token
+}
+
+# A fenced code block of Pluma source, syntax-highlighted.
+public def pluma :: fun string -> view = fun s {
+	code-of (tokens s)
 }
 
 # A highlighted aside.

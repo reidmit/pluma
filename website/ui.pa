@@ -12,6 +12,7 @@ use std/signal
 use std/task
 use std/view
 use api
+use prose
 use theme
 
 # --- hero -------------------------------------------------------------------
@@ -356,7 +357,11 @@ def hero-section :: fun nothing -> view = using view {
 						tab-btn active 3,
 					],
 					.pre [.styled code-block] [
-						.code [] [.text-of fun { snippet-code (signal.get active) }],
+						.code [] [
+							view.dyn fun {
+								.span [] (prose.tokens (snippet-code (signal.get active)))
+							},
+						],
 					],
 				],
 			],

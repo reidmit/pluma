@@ -19,6 +19,8 @@ def ic :: fun string -> view = prose.ic
 
 def code :: fun string -> view = prose.code
 
+def code-pa :: fun string -> view = prose.pluma
+
 def doc-section :: fun string string (list view) -> view = prose.doc-section
 
 # --- layout -----------------------------------------------------------------
@@ -76,7 +78,7 @@ def sec-first :: view = doc-section "first-program" "Your first program" [
 		ic "main.pa",
 		t ":",
 	],
-	code "def main = fun {\n\tprint \"hello, world\"\n}",
+	code-pa "def main = fun {\n\tprint \"hello, world\"\n}",
 	pr [t "Then run it — the source compiles to WebAssembly and executes on the spot:"],
 	code "pluma run main.pa\n# hello, world",
 	pr [

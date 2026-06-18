@@ -66,6 +66,24 @@ public def install-globals :: fun nothing -> nothing = fun {
 			.at "code, pre" [.font-family mono],
 			.at "h1, h2, h3, p" [.margin (.px 0.0)],
 			.at "::selection" [.background (.rgba 109 74 163 0.18)],
+			# The one syntax-highlight palette for the whole site — warm, tuned for
+			# the light code background. Every `tok-*` span (from `std/syntax` in
+			# rendered code blocks, or the compiler's classifier in the stdlib docs)
+			# colors against these rules. The semantic classes past `operator` are
+			# only produced by the compiler's richer classifier.
+			.at ".tok-keyword" [.color (.hex "#553a82"), .font-weight "600"],
+			.at ".tok-string" [.color (.hex "#3d7d54")],
+			.at ".tok-number" [.color (.hex "#9c5a2e")],
+			.at ".tok-boolean" [.color (.hex "#9c5a2e")],
+			.at ".tok-comment" [.color (.hex "#a39a8c"), .property "font-style" "italic"],
+			.at ".tok-operator" [.color (.hex "#86806f")],
+			.at ".tok-namespace" [.color (.hex "#6d4aa3")],
+			.at ".tok-function" [.color (.hex "#2b5a9c")],
+			.at ".tok-type" [.color (.hex "#1f7a6d")],
+			.at ".tok-interface" [.color (.hex "#1f7a6d")],
+			.at ".tok-enum" [.color (.hex "#1f7a6d")],
+			.at ".tok-enum-member" [.color (.hex "#9c5a2e")],
+			.at ".tok-regexp" [.color (.hex "#b05a3c")],
 		]
 	}
 }
