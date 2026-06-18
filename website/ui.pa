@@ -16,7 +16,7 @@ use theme
 
 # --- hero -------------------------------------------------------------------
 
-def hero :: css.ruleset = css.rule [css.padding-top (css.rem 4.0), css.padding-bottom (css.rem 5.0)]
+def hero :: css.ruleset = using css { .rule [.padding-top (.rem 4.0), .padding-bottom (.rem 5.0)] }
 
 def hero-grid :: css.ruleset = using css {
 	.rule [
