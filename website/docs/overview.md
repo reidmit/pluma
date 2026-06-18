@@ -12,7 +12,7 @@ AST to the HTML you're reading. The docs are part of the app.
 
 - **[Reference](/docs/reference)** — the language reference: syntax, types, and
   the standard library, one idea at a time.
-- **[Get started](/start)** — install the compiler and run your first program.
+- **[Get started](/docs/start)** — install the compiler and run your first program.
 - **[Recipes](/recipes)** — small, complete programs in each flavor Pluma is
   built for.
 - **[Playground](/playground)** — write and run Pluma in the browser.
@@ -36,6 +36,6 @@ and the compiler checks them. Failures come back as values you handle, not
 surprises that escape.
 
 ::: aside .callout
-**New to Pluma?** Start with [Get started](/start) to get the compiler on your
+**New to Pluma?** Start with [Get started](/docs/start) to get the compiler on your
 machine, then come back here for the details.
 :::

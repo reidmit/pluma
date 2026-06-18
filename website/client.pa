@@ -15,7 +15,6 @@ use std/web/dom
 use std/web/render
 use std/web/sandbox
 use playground
-use start
 use ui
 
 # A shared snippet rides in the URL fragment as URL-safe base64 of its UTF-8 bytes.
@@ -52,9 +51,7 @@ def share-source :: fun string -> nothing = fun src {
 }
 
 def main = fun {
-	if dom.path () == "/start" {
-		render.hydrate (dom.body ()) start.page
-	} else if string.starts-with (dom.path ()) "/docs" {
+	if string.starts-with (dom.path ()) "/docs" {
 		# The docs are Markdown, server-rendered only — no interactivity to hydrate,
 		# so the Markdown (and its renderer) stays out of the client bundle.
 		task.return ()

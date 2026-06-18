@@ -39,6 +39,7 @@ def groups :: list doc-group = [
 		title: "Documentation",
 		pages: [
 			{slug: "", title: "Overview", file: "overview"},
+			{slug: "start", title: "Get started", file: "start"},
 			{slug: "reference", title: "Reference", file: "reference"},
 		],
 	},

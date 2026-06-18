@@ -19,7 +19,6 @@ use std/sys/static
 use docdata
 use docs
 use playground
-use start
 use stddocs
 use theme
 use ui
@@ -52,7 +51,9 @@ def handler :: fun http.request -> task http.response = fun req {
 		# keep the old URL working with a permanent redirect.
 		task.return (http.redirect 301 "/docs/reference")
 	} else if req.path == "/start" {
-		task.return (http.html 200 (theme.document-html "Get started — Pluma" (start.page ())))
+		# The "Get started" page moved into the `/docs` section; keep the old URL
+		# working with a permanent redirect.
+		task.return (http.redirect 301 "/docs/start")
 	} else if req.path == "/recipes" {
 		# The recipes became the `/docs/guides` section; keep the old URL working
 		# with a permanent redirect to the first guide.

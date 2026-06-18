@@ -77,7 +77,7 @@ pluma build app/    # server .wasm + browser bundle
 ```
 
 ::: aside .callout
-Ready to build one? [Get started](/start) gets the compiler on your machine, or
+Ready to build one? [Get started](/docs/start) gets the compiler on your machine, or
 [browse the examples](https://github.com/reidmit/pluma/tree/main/examples) for
 complete apps.
 :::

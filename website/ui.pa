@@ -343,7 +343,7 @@ def hero-section :: fun nothing -> view = using view {
 						.text "Build a fullstack app, a server, a script, or a browser frontend — end to end in one small language, with one toolchain and no glue between the pieces. Pluma is functional and statically typed, but you rarely write a type out: it catches mistakes before your program runs and infers the types for you.",
 					],
 					.div [.styled cta-row] [
-						.a [.styled theme.btn-primary, .href "/start"] [.text "Get started"],
+						.a [.styled theme.btn-primary, .href "/docs/start"] [.text "Get started"],
 						.a [.styled theme.btn-ghost, .href "/docs/reference"] [
 							.text "Read the reference",
 						],
