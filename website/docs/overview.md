@@ -13,10 +13,10 @@ AST to the HTML you're reading. The docs are part of the app.
 - **[Language tour](/docs/tour/basics)** — learn the language from the ground up,
   one idea at a time. The best front-to-back introduction.
 - **[Reference](/docs/reference)** — look things up: operators, types, error
-  codes, and the standard library.
+  codes, and the [standard library](/docs/stdlib).
 - **[Get started](/docs/start)** — install the compiler and run your first program.
-- **[Recipes](/recipes)** — small, complete programs in each flavor Pluma is
-  built for.
+- **[Guides](/docs/guides/cli)** — small, complete programs in each flavor Pluma is
+  built for: a command-line script, a web server, a fullstack app.
 - **[Playground](/playground)** — write and run Pluma in the browser.
 
 ## A taste

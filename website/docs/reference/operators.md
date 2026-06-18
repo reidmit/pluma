@@ -23,7 +23,8 @@ by its operands.
 
 The ordering operators are shorthand for `compare` (the `ord` trait) plus a check
 on the result, so they work on any ordered type. `==` and `!=` compare any two
-values of the same type structurally.
+values of the same type by value — looking inside records, lists, and enums field
+by field, not by identity.
 
 | Operator | Signature | Meaning |
 | --- | --- | --- |
@@ -31,8 +32,8 @@ values of the same type structurally.
 | `>` | `ord a => a a -> bool` | Greater than |
 | `<=` | `ord a => a a -> bool` | Less than or equal |
 | `>=` | `ord a => a a -> bool` | Greater than or equal |
-| `==` | `a a -> bool` | Structural equality |
-| `!=` | `a a -> bool` | Structural inequality |
+| `==` | `a a -> bool` | Equal by value |
+| `!=` | `a a -> bool` | Not equal by value |
 
 ## Logical, string, and coalesce
 
