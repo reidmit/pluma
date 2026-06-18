@@ -1,0 +1,22 @@
+use std/sys/io
+use std/sys/static
+use std/sys/http
+use std/task
+
+# `static.content-type` maps a path's extension to a MIME type (case-insensitive),
+# and `static.serve-file` answers 404 both when the path escapes the root and when
+# the named file is missing -- the traversal guard never reads outside the root.
+def main = fun {
+	io.print ("/logo.svg -> " ++ static.content-type "/logo.svg")
+	io.print ("/a/b/style.css -> " ++ static.content-type "/a/b/style.css")
+	io.print ("/app.wasm -> " ++ static.content-type "/app.wasm")
+	io.print ("/photo.JPG -> " ++ static.content-type "/photo.JPG")
+	io.print ("/data.json -> " ++ static.content-type "/data.json")
+	io.print ("/noext -> " ++ static.content-type "/noext")
+	io.print ("/weird.xyz -> " ++ static.content-type "/weird.xyz")
+	try escaped = static.serve-file "public" "/../secret.txt"
+	io.print ("escape status = " ++ to-string escaped.status)
+	try missing = static.serve-file "public" "/does-not-exist.svg"
+	io.print ("missing status = " ++ to-string missing.status)
+	task.return ()
+}

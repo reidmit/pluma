@@ -34,7 +34,7 @@ public def code-dim :: string = "#928bb4"
 
 public def code-soft :: string = "#f4f1ea"
 
-public def sans :: string = "'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif"
+public def sans :: string = "'Lexend', system-ui, -apple-system, 'Segoe UI', sans-serif"
 
 public def serif :: string = "'Source Serif 4', Georgia, 'Times New Roman', serif"
 
@@ -99,7 +99,9 @@ def brand :: css.ruleset = using css {
 	]
 }
 
-def brand-mark :: css.ruleset = using css { .rule [.font-size (.rem 1.5)] }
+def brand-mark :: css.ruleset = using css {
+	.rule [.display "block", .width (.rem 1.6), .height (.rem 1.6)]
+}
 
 def nav-links :: css.ruleset = using css {
 	.rule [
@@ -180,7 +182,7 @@ public def top-nav :: fun nothing -> view = using view {
 	fun {
 		.nav [.styled nav] [
 			.a [.styled brand, .href "/"] [
-				.span [.styled brand-mark] [.text "🪶"],
+				.img [.styled brand-mark, .src "/logo.svg", .alt "", .width "26", .height "26"] [],
 				.span [] [.text "pluma"],
 			],
 			.div [.styled nav-links] [
@@ -212,5 +214,5 @@ public def site-footer :: fun nothing -> view = using view {
 # into `<head>`, so the page arrives fully styled with no extra asset request.
 public def document-html :: fun string view -> string = fun title body {
 	let rendered = view.to-string body
-	"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>$(title)</title><meta name=\"description\" content=\"Pluma is a small, statically-typed functional language with full type inference and a fullstack framework that compiles to WebAssembly.\"><link rel=\"icon\" href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>🪶</text></svg>\"><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&family=Source+Sans+3:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap\" rel=\"stylesheet\">$(css.style-tag ())</head><body>$(rendered)<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+	"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>$(title)</title><meta name=\"description\" content=\"Pluma is a small, statically-typed functional language with full type inference and a fullstack framework that compiles to WebAssembly.\"><link rel=\"icon\" href=\"/logo.svg\" type=\"image/svg+xml\"><link rel=\"preload\" href=\"/fonts/lexend.woff2\" as=\"font\" type=\"font/woff2\" crossorigin><style>@font-face{font-family:'Lexend';font-style:normal;font-weight:100 900;font-display:swap;src:url('/fonts/lexend.woff2') format('woff2')}</style><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap\" rel=\"stylesheet\">$(css.style-tag ())</head><body>$(rendered)<script type=\"module\" src=\"/loader.js\"></script></body></html>"
 }

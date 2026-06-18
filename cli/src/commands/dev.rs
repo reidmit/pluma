@@ -508,7 +508,12 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 		print_error(format!("writing {}: {e}", server_path.display()));
 		std::process::exit(1);
 	}
-	let mut child = spawn_server(&exe, &server_path.to_string_lossy(), server_port);
+	let mut child = spawn_server(
+		&exe,
+		&server_path.to_string_lossy(),
+		server_port,
+		&entry_path,
+	);
 
 	let served: Served = Arc::new(Mutex::new(client_bytes));
 	let clients: Clients = Arc::new(Mutex::new(Vec::new()));
@@ -569,7 +574,12 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 				if let Err(e) = std::fs::write(&server_path, &server_bytes) {
 					print_error(format!("writing {}: {e}", server_path.display()));
 				}
-				child = spawn_server(&exe, &server_path.to_string_lossy(), server_port);
+				child = spawn_server(
+					&exe,
+					&server_path.to_string_lossy(),
+					server_port,
+					&entry_path,
+				);
 				*served.lock().unwrap() = client_bytes;
 				// Wait for the new server to start listening before telling the browser
 				// to reload — otherwise the reloaded page's SSR/RPC fetches race the
@@ -691,34 +701,54 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients, server_po
 		proxy_rpc(&mut stream, &request_line, &headers, &body, server_port);
 		return;
 	}
-	// Document requests are server-side rendered: fetch the page HTML from the
-	// server subprocess at the SAME path the browser asked for (so a multi-page app
-	// renders `/species`, `/sightings/42`, … each on the server) and inject the
-	// live-reload client; the browser hydrates that markup. The client bundle's own
-	// files are served locally, so they're never treated as page routes. If the
-	// server has no SSR route for the path (it answers non-200/non-HTML) or is down,
-	// fall back to the plain static handler (the CSR dev shell for `/`, else 404).
+	// Everything that isn't an RPC call or a client-bundle file is answered by the
+	// server subprocess at the SAME path the browser asked for, and relayed back:
+	//   - an HTML page (the SSR document for `/`, `/reference`, …) gets the live-reload
+	//     client injected before the browser hydrates it;
+	//   - anything else the server returns 2xx for — a static asset like `/logo.svg`,
+	//     a JSON endpoint — is forwarded verbatim, content-type and all, so binary
+	//     assets reach the browser intact instead of being mislabelled as HTML.
+	// The client bundle's own files are served locally (never treated as page routes).
+	// If the server is down or answers non-2xx, fall back to the plain static handler
+	// (the CSR dev shell for `/`, else 404).
 	let is_asset = matches!(path.as_str(), "/loader.js" | "/app.wasm" | "/__livereload");
 	if !is_asset {
-		if let Some(doc) = fetch_ssr_document(server_port, &path) {
-			let injected = doc.replacen("</body>", &format!("{LIVERELOAD_SNIPPET}</body>"), 1);
-			respond(
-				&mut stream,
-				"200 OK",
-				"text/html; charset=utf-8",
-				injected.as_bytes(),
-			);
-			return;
+		if let Some(resp) = fetch_server_response(server_port, &path) {
+			if resp.is_html {
+				let body = String::from_utf8_lossy(&resp.body);
+				let injected = body.replacen("</body>", &format!("{LIVERELOAD_SNIPPET}</body>"), 1);
+				respond(
+					&mut stream,
+					&resp.status,
+					"text/html; charset=utf-8",
+					injected.as_bytes(),
+				);
+				return;
+			} else if resp.is_2xx {
+				respond(&mut stream, &resp.status, &resp.content_type, &resp.body);
+				return;
+			}
 		}
 	}
 	serve_static(&path, stream, &served, &clients);
 }
 
-/// Fetch the server subprocess's server-rendered document for `path` (`GET {path}`).
-/// Returns the full HTML on a 200, or `None` if the server is down or the path isn't
-/// a 200 HTML page (e.g. a route the server doesn't render, or a bare RPC server that
-/// answers `/` with a 404) — the caller then falls back to the static handler.
-fn fetch_ssr_document(server_port: u16, path: &str) -> Option<String> {
+/// One response relayed from the server subprocess, kept as raw bytes so binary
+/// assets survive the hop. `status` is the reason phrase (`"200 OK"`), `is_html`
+/// flags an HTML body (the live-reload inject + UTF-8 path), and `is_2xx` gates
+/// whether a non-HTML body is forwarded or the caller falls back to the dev shell.
+struct ServerResponse {
+	status: String,
+	content_type: String,
+	body: Vec<u8>,
+	is_html: bool,
+	is_2xx: bool,
+}
+
+/// `GET {path}` against the server subprocess and capture its full response. `None`
+/// only when the server can't be reached or its head is unparseable — a reached
+/// server's answer (any status) comes back as `Some`, for the caller to relay.
+fn fetch_server_response(server_port: u16, path: &str) -> Option<ServerResponse> {
 	let mut up = connect_server(server_port)?;
 	let req =
 		format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{server_port}\r\nConnection: close\r\n\r\n");
@@ -726,19 +756,28 @@ fn fetch_ssr_document(server_port: u16, path: &str) -> Option<String> {
 	up.flush().ok()?;
 	let mut raw = Vec::new();
 	up.read_to_end(&mut raw).ok()?;
-	let text = String::from_utf8_lossy(&raw);
-	// Require a 200 and an HTML body (a bare RPC server answers `/` with a 404).
-	let status_ok = text
-		.lines()
-		.next()
-		.map(|l| l.contains(" 200 "))
-		.unwrap_or(false);
-	if !status_ok {
-		return None;
-	}
-	text
-		.split_once("\r\n\r\n")
-		.map(|(_, body)| body.to_string())
+	// Split head from body on the blank line; the body stays raw (it may be binary).
+	let split = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
+	let body = raw[split + 4..].to_vec();
+	let head = String::from_utf8_lossy(&raw[..split]);
+	let mut lines = head.lines();
+	// "HTTP/1.1 200 OK" → status = "200 OK", code = 200.
+	let status = lines.next()?.splitn(2, ' ').nth(1)?.trim().to_string();
+	let code: u16 = status.split_whitespace().next()?.parse().ok()?;
+	let content_type = lines
+		.find_map(|l| {
+			l.split_once(':')
+				.filter(|(k, _)| k.trim().eq_ignore_ascii_case("content-type"))
+				.map(|(_, v)| v.trim().to_string())
+		})
+		.unwrap_or_else(|| "application/octet-stream".to_string());
+	Some(ServerResponse {
+		is_html: content_type.contains("text/html"),
+		is_2xx: (200..300).contains(&code),
+		status,
+		content_type,
+		body,
+	})
 }
 
 /// Forward one RPC request verbatim to the server subprocess and relay its response
@@ -891,10 +930,14 @@ fn wait_for_server(port: u16) -> bool {
 	connect_server(port).is_some()
 }
 
-fn spawn_server(exe: &Path, server_wasm: &str, port: u16) -> Child {
+fn spawn_server(exe: &Path, server_wasm: &str, port: u16, cwd: &str) -> Child {
 	match Command::new(exe)
 		.arg("run")
 		.arg(server_wasm)
+		// Run the server from its own app directory, so relative paths it reads
+		// (a `public/` of static assets, a data file) resolve the same way under
+		// `pluma dev` as they will in a deployment that runs from the build output.
+		.current_dir(cwd)
 		.env("PORT", port.to_string())
 		.spawn()
 	{

@@ -229,9 +229,53 @@ fn build_fullstack(
 		dir.display()
 	);
 
+	// Carry the app's static assets into the build: `<entry>/public` → `out/public`,
+	// so `pluma run out/server.wasm` (started from `out/`) serves `/logo.svg` and
+	// friends from the same `public/` the server reads under `pluma dev`.
+	copy_public_assets(&entry_path, &dir);
+
 	// Build-time CSS extraction: lift the
 	// SSR stylesheet into a cacheable `app.css` linked from the static client shell.
 	extract_css_to_bundle(&dir, &server_path);
+}
+
+/// Copy `<entry>/public` into the output directory as `public/`, if it exists. The
+/// served files live next to the server artifact so a deployment that runs from the
+/// output directory finds them at the same relative path the dev server does. A
+/// missing `public/` is fine — the app just serves no assets.
+fn copy_public_assets(entry_path: &str, out_dir: &std::path::Path) {
+	let src = std::path::Path::new(entry_path).join("public");
+	if !src.is_dir() {
+		return;
+	}
+	let dst = out_dir.join("public");
+	match copy_dir_all(&src, &dst) {
+		Ok(n) => println!("  + {}/public ({n} asset(s))", out_dir.display()),
+		Err(e) => print_error(format!(
+			"copying {} to {}: {e}",
+			src.display(),
+			dst.display()
+		)),
+	}
+}
+
+/// Recursively copy `src` into `dst`, creating directories as needed. Returns the
+/// number of files copied.
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<usize> {
+	std::fs::create_dir_all(dst)?;
+	let mut count = 0;
+	for entry in std::fs::read_dir(src)? {
+		let entry = entry?;
+		let from = entry.path();
+		let to = dst.join(entry.file_name());
+		if entry.file_type()?.is_dir() {
+			count += copy_dir_all(&from, &to)?;
+		} else {
+			std::fs::copy(&from, &to)?;
+			count += 1;
+		}
+	}
+	Ok(count)
 }
 
 /// Best-effort: run the freshly-built server, `GET /`, and lift the inline `<style>`

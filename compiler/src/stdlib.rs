@@ -53,6 +53,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std/sys/net", include_str!("../../std/sys/net.pa")),
 		("std/sys/process", include_str!("../../std/sys/process.pa")),
 		("std/sys/rpc", include_str!("../../std/sys/rpc.pa")),
+		("std/sys/static", include_str!("../../std/sys/static.pa")),
 		(
 			"std/sys/rpc/context",
 			include_str!("../../std/sys/rpc/context.pa"),

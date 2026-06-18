@@ -1,8 +1,9 @@
-# The server half of pluma.fun. One `std/sys/http` server, three responsibilities:
+# The server half of pluma.fun. One `std/sys/http` server, four responsibilities:
 #   - GET `/`          → the server-side-rendered landing page
 #   - GET `/reference` → the server-side-rendered language reference
-#   - everything else  → `rpc.dispatch`, the route table the compiler synthesizes
-#                        from `api.pa`'s `remote def`s (it handles the `/rpc/*` calls)
+#   - `/rpc/*`         → `rpc.dispatch`, the route table the compiler synthesizes
+#                        from `api.pa`'s `remote def`s
+#   - everything else  → a static file from `public/` (the logo, favicon, ...)
 #
 # Each page is rendered to HTML by `theme.document-html` for a real first paint; the
 # client then hydrates whichever page matches the path. `http.serve` binds to
@@ -14,6 +15,7 @@ use std/task
 use std/sys/fs
 use std/sys/http
 use std/sys/rpc
+use std/sys/static
 use docdata
 use playground
 use recipes
@@ -25,9 +27,10 @@ use ui
 
 # The stdlib docs, decoded once at startup from the JSON artifact `pluma doc`
 # emits (`stdlib.json`) rather than compiled into the bundle as a giant
-# literal. Tried relative to the dev cwd (the repo root) first, then the bundle
-# directory; a missing artifact decodes to an empty list, so the `/std` pages
-# render empty instead of failing to start.
+# literal. Tried as `website/stdlib.json` first (the repo root), then bare
+# `stdlib.json` (the app/bundle directory the server runs from); a missing
+# artifact decodes to an empty list, so the `/std` pages render empty instead of
+# failing to start.
 def stdlib-docs :: list docdata.doc-module = docdata.decode (read-docs-json ())
 
 def read-docs-json :: fun nothing -> string = fun {
@@ -64,8 +67,12 @@ def handler :: fun http.request -> task http.response = fun req {
 		} fun { "" } fun _src {
 			()
 		})))
-	} else {
+	} else if string.starts-with req.path "/rpc/" {
 		rpc.dispatch req
+	} else {
+		# Anything left is a static asset (the logo, favicon, ...) served from
+		# `public/` next to the app — `public/logo.svg` answers `GET /logo.svg`.
+		static.serve "public" req
 	}
 }
 
