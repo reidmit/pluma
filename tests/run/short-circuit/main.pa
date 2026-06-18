@@ -9,22 +9,22 @@ def loud = fun name result {
 
 def main = fun {
 	# `and` skips the right operand when the left is false — the trap never runs.
-	if false and (10 / 0 == 0) {
+	if false and 10 / 0 == 0 {
 		print "and-then"
 	} else {
 		print "and short-circuited"
 	}
 
 	# `or` skips the right operand when the left is true.
-	if true or (10 / 0 == 0) {
+	if true or 10 / 0 == 0 {
 		print "or short-circuited"
 	} else {
 		print "or-else"
 	}
 
 	# Evaluation stops at the operand that decides the result.
-	print (to-string ((loud "a1" true) and (loud "a2" false) and (loud "a3" true)))
-	print (to-string ((loud "b1" false) or (loud "b2" true) or (loud "b3" true)))
+	print (to-string (loud "a1" true and loud "a2" false and loud "a3" true))
+	print (to-string (loud "b1" false or loud "b2" true or loud "b3" true))
 
 	# Truth tables still hold when both operands run.
 	print (to-string (true and true))
