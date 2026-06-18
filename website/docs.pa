@@ -55,8 +55,31 @@ def groups :: list doc-group = [
 	},
 ]
 
-# Every page across all groups, for slug lookup.
+# Every page across all groups, in reading order — for slug lookup and for the
+# previous/next footer links, which are just a page's neighbors in this list.
 def all-pages :: list doc-page = list.flat-map groups fun g { g.pages }
+
+# The previous and next page around the one being viewed, `none` at either end.
+alias page-nav {prev :: option doc-page, next :: option doc-page}
+
+# The page at index `i` in `all-pages`, or `none` if `i` is out of range.
+def page-at :: fun int -> option doc-page = fun i {
+	if i >= 0 and i < list.length all-pages {
+		some (list.get all-pages i)
+	} else {
+		none
+	}
+}
+
+# The reading-order neighbors of the page with slug `current`. If the slug isn't
+# found (a "not found" address), there are no neighbors.
+def neighbors :: fun string -> page-nav = fun current {
+	when list.find-index all-pages fun pg { pg.slug == current } is some i {
+		{prev: page-at (i - 1), next: page-at (i + 1)}
+	} else {
+		{prev: none, next: none}
+	}
+}
 
 # --- file loading -----------------------------------------------------------
 
@@ -168,6 +191,53 @@ def side-item-active :: css.ruleset = using css {
 
 def main-col :: css.ruleset = using css {
 	.rule [.property "min-width" "0", .max-width (.rem 46.0)]
+}
+
+# The previous/next footer: a row under the prose, prev on the left and next on
+# the right. `space-between` keeps a lone link pinned to its own side.
+def page-nav-row :: css.ruleset = using css {
+	.rule [
+		.display "flex",
+		.property "justify-content" "space-between",
+		.gap (.rem 1.0),
+		.margin-top (.rem 3.0),
+		.padding-top (.rem 1.5),
+		.property "border-top" "1px solid #e9e4dc",
+	]
+}
+
+def page-nav-link :: css.ruleset = using css {
+	.rule [
+		.display "flex",
+		.flex-direction "column",
+		.gap (.rem 0.2),
+		.padding-block (.rem 0.7),
+		.padding-inline (.rem 1.0),
+		.property "border" "1px solid #e9e4dc",
+		.property "border-radius" "10px",
+		.property "max-width" "48%",
+		.property "transition" "border-color 0.12s ease",
+		.on "hover" [.border-color (.hex "#6d4aa3")],
+	]
+}
+
+# The "next" link mirrors "previous": right-aligned text and flush to the right edge.
+def page-nav-link-next :: css.ruleset = using css {
+	.compose [page-nav-link, .rule [.text-align "right", .align-items "flex-end"]]
+}
+
+def page-nav-label :: css.ruleset = using css {
+	.rule [
+		.property "text-transform" "uppercase",
+		.letter-spacing (.em 0.08),
+		.font-size (.rem 0.68),
+		.font-weight "600",
+		.color (.hex theme.faint),
+	]
+}
+
+def page-nav-title :: css.ruleset = using css {
+	.rule [.color (.hex theme.accent), .font-weight "600"]
 }
 
 # --- markdown styling -------------------------------------------------------
@@ -298,6 +368,16 @@ def doc-styles :: fun nothing -> nothing = using css {
 
 # --- rendering --------------------------------------------------------------
 
+# The request path a page is reached at: the index page lives at `/docs`, every
+# other page at `/docs/<slug>`.
+def doc-href :: fun doc-page -> string = fun pg {
+	if string.is-empty pg.slug {
+		"/docs"
+	} else {
+		"/docs/$(pg.slug)"
+	}
+}
+
 def nav-link :: fun string doc-page -> view = using view {
 	fun current pg {
 		.a [
@@ -306,11 +386,7 @@ def nav-link :: fun string doc-page -> view = using view {
 			} else {
 				side-item
 			},
-			.href if string.is-empty pg.slug {
-				"/docs"
-			} else {
-				"/docs/$(pg.slug)"
-			},
+			.href (doc-href pg),
 		] [.text pg.title]
 	}
 }
@@ -361,6 +437,34 @@ def toc-link :: fun toc-entry -> view = using view {
 	}
 }
 
+# The previous/next footer for the page at `current`. Each side is a link to its
+# neighbor, labelled with the direction and the neighbor's title; a missing
+# neighbor (first or last page) leaves an empty cell so the other stays pinned to
+# its edge.
+def page-nav-view :: fun string -> view = using view {
+	fun current {
+		let nav = neighbors current
+		.nav [.styled page-nav-row] [
+			when nav.prev is some pg {
+				.a [.styled page-nav-link, .href (doc-href pg)] [
+					.span [.styled page-nav-label] [.text "← Previous"],
+					.span [.styled page-nav-title] [.text pg.title],
+				]
+			} else {
+				.div [] []
+			},
+			when nav.next is some pg {
+				.a [.styled page-nav-link-next, .href (doc-href pg)] [
+					.span [.styled page-nav-label] [.text "Next →"],
+					.span [.styled page-nav-title] [.text pg.title],
+				]
+			} else {
+				.div [] []
+			},
+		]
+	}
+}
+
 # The page for a request path. Resolves the slug, reads the matching Markdown
 # (or a "not found" stub), and renders it inside the site chrome with the doc
 # sidebar.
@@ -383,7 +487,10 @@ public def page :: fun string -> view = using view {
 			.div [.styled theme.shell] [
 				.div [.styled layout] [
 					.aside [.styled rail-left] (list.map groups fun g { nav-group current g }),
-					.main [.styled main-col] [.div [.class "doc-prose"] [markdown.to-view blocks]],
+					.main [.styled main-col] [
+						.div [.class "doc-prose"] [markdown.to-view blocks],
+						page-nav-view current,
+					],
 					.aside [.styled rail-right] [
 						.div [.styled side-title] [.text "On this page"],
 						.div [.styled side-list] (list.map (toc-entries blocks) toc-link),
