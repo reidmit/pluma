@@ -180,6 +180,7 @@ def install-highlight :: fun nothing -> nothing = using css {
 			.at ".tok-keyword" [.color (.hex "#553a82"), .font-weight "600"],
 			.at ".tok-string" [.color (.hex "#3d7d54")],
 			.at ".tok-number" [.color (.hex "#9c5a2e")],
+			.at ".tok-boolean" [.color (.hex "#9c5a2e")],
 			.at ".tok-comment" [.color (.hex "#a39a8c"), .property "font-style" "italic"],
 			.at ".tok-operator" [.color (.hex "#86806f")],
 			.at ".tok-function" [.color (.hex "#2b5a9c")],

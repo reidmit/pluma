@@ -59,6 +59,7 @@ fn grammar_owned(class: Class) -> bool {
 			| Class::Regexp
 			| Class::Keyword
 			| Class::Operator
+			| Class::Boolean
 			| Class::Variable
 	)
 }
@@ -82,6 +83,9 @@ fn token_type(class: Class) -> u32 {
 		Class::Namespace => NAMESPACE,
 		Class::Interface => INTERFACE,
 		Class::TypeParameter => TYPE_PARAMETER,
+		// Grammar-owned (never emitted on the wire); no legend slot of its own, so
+		// fall back to NUMBER — the nearest "literal value" type — if ever reached.
+		Class::Boolean => NUMBER,
 	}
 }
 

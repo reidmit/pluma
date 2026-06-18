@@ -261,7 +261,7 @@
 		"constants": {
 			"patterns": [
 				{
-					"name": "keyword.control.pluma",
+					"name": "constant.language.boolean.pluma",
 					"match": "(?<![A-Za-z0-9_-])(true|false)(?![A-Za-z0-9_-])"
 				}
 			]
@@ -290,7 +290,11 @@
 				},
 				{
 					"name": "keyword.operator.logical.pluma",
-					"match": "&&|\\|\\||!"
+					"match": "(?<![A-Za-z0-9_-])(and|or)(?![A-Za-z0-9_-])"
+				},
+				{
+					"name": "keyword.operator.logical.pluma",
+					"match": "!"
 				},
 				{
 					"name": "keyword.operator.coalesce.pluma",

@@ -266,15 +266,33 @@ test("definition modifiers and scope/using keywords are highlighted", () => {
 	);
 });
 
-test("true/false highlight as keywords (matching the LSP's semantic class)", () => {
+test("true/false highlight as boolean constants, not keywords", () => {
 	// The shared classifier (compiler/src/highlight.rs) and the docs site render
-	// booleans as keywords; the grammar must agree so the first paint doesn't
-	// flash a different color when semantic tokens arrive.
+	// booleans as literal values; the grammar must agree so the first paint
+	// doesn't flash a different color when semantic tokens arrive. Booleans are
+	// grammar-owned (the LSP stays silent), so this scope is what actually shows.
 	assert.ok(
-		hasScope(scopesOf("def t = true", "true"), "keyword.control.pluma"),
+		hasScope(
+			scopesOf("def t = true", "true"),
+			"constant.language.boolean.pluma",
+		),
 	);
 	assert.ok(
-		hasScope(scopesOf("def f = false", "false"), "keyword.control.pluma"),
+		hasScope(
+			scopesOf("def f = false", "false"),
+			"constant.language.boolean.pluma",
+		),
+	);
+});
+
+test("and/or highlight as logical operators", () => {
+	// `&&`/`||` were renamed to the word operators `and`/`or`; they classify as
+	// operators (mirroring compiler/src/highlight.rs), not control keywords.
+	assert.ok(
+		hasScope(scopesOf("def x = a and b", "and"), "keyword.operator.logical.pluma"),
+	);
+	assert.ok(
+		hasScope(scopesOf("def x = a or b", "or"), "keyword.operator.logical.pluma"),
 	);
 });
 

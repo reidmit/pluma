@@ -35,6 +35,10 @@ pub enum Class {
 	Namespace,
 	Interface,
 	TypeParameter,
+	// Lexical-only: emitted by the docs renderer and the TextMate grammar (as
+	// `constant.language.boolean`), never put on the LSP wire — so it lives past
+	// the legend indices above rather than claiming one.
+	Boolean,
 }
 
 impl Class {
@@ -57,6 +61,7 @@ impl Class {
 			Class::Namespace => "namespace",
 			Class::Interface => "interface",
 			Class::TypeParameter => "type-parameter",
+			Class::Boolean => "boolean",
 		}
 	}
 }
@@ -195,14 +200,17 @@ fn lexer_class(t: &Token) -> Option<Class> {
 		InterpolationStart(..) | InterpolationEnd(..) => Class::Operator,
 		DecimalDigits(..) | HexDigits(..) | OctalDigits(..) | BinaryDigits(..) => Class::Number,
 		DurationLiteral(..) => Class::Number,
-		// `true`/`false` are bool-constructor tokens, but render best as keywords.
-		BoolTrue(..) | BoolFalse(..) => Class::Keyword,
-		KeywordAlias(..) | KeywordAnd(..) | KeywordAs(..) | KeywordBuiltin(..) | KeywordDef(..)
-		| KeywordDefer(..) | KeywordElse(..) | KeywordEnum(..) | KeywordFun(..) | KeywordIf(..)
-		| KeywordImplement(..) | KeywordIn(..) | KeywordIs(..) | KeywordLet(..) | KeywordManual(..)
-		| KeywordOpaque(..) | KeywordOr(..) | KeywordPublic(..) | KeywordRemote(..)
-		| KeywordScope(..) | KeywordTrait(..) | KeywordTry(..) | KeywordUse(..) | KeywordUsing(..)
-		| KeywordWhen(..) | KeywordWhere(..) | KeywordWhile(..) => Class::Keyword,
+		// `true`/`false` are literal values, not keywords — color them as constants.
+		BoolTrue(..) | BoolFalse(..) => Class::Boolean,
+		// `and`/`or` are the short-circuiting logical operators (spelled as words),
+		// so they classify as operators rather than control keywords.
+		KeywordAnd(..) | KeywordOr(..) => Class::Operator,
+		KeywordAlias(..) | KeywordAs(..) | KeywordBuiltin(..) | KeywordDef(..) | KeywordDefer(..)
+		| KeywordElse(..) | KeywordEnum(..) | KeywordFun(..) | KeywordIf(..) | KeywordImplement(..)
+		| KeywordIn(..) | KeywordIs(..) | KeywordLet(..) | KeywordManual(..) | KeywordOpaque(..)
+		| KeywordPublic(..) | KeywordRemote(..) | KeywordScope(..) | KeywordTrait(..)
+		| KeywordTry(..) | KeywordUse(..) | KeywordUsing(..) | KeywordWhen(..) | KeywordWhere(..)
+		| KeywordWhile(..) => Class::Keyword,
 		Arrow(..)
 		| Bang(..)
 		| BangEqual(..)
