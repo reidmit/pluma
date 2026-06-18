@@ -83,6 +83,7 @@ def groups :: list doc-group = [
 			{slug: "stdlib/lists", title: "Working with lists", file: "stdlib/lists"},
 			{slug: "stdlib/strings", title: "Working with strings", file: "stdlib/strings"},
 			{slug: "stdlib/dict-set", title: "Dictionaries & sets", file: "stdlib/dict-set"},
+			{slug: "stdlib/queue", title: "Queues", file: "stdlib/queue"},
 			{slug: "stdlib/math", title: "Numbers & math", file: "stdlib/math"},
 			{slug: "stdlib/time", title: "Time & durations", file: "stdlib/time"},
 			{slug: "stdlib/random", title: "Randomness & IDs", file: "stdlib/random"},

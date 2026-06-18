@@ -31,7 +31,7 @@ for the details.
   sets.
 - [`std/string`](/docs/stdlib/strings) — text: slicing, searching, splitting.
 - [`std/bytes`](/docs/reference/bytes) — raw binary data.
-- `std/queue` — a first-in, first-out queue.
+- [`std/queue`](/docs/stdlib/queue) — a first-in, first-out queue.
 - `std/option` and `std/result` — see [Errors and missing
   values](/docs/reference/errors).
 
