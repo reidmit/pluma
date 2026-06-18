@@ -90,6 +90,7 @@ def groups :: list doc-group = [
 			{slug: "stdlib/database", title: "Database access", file: "stdlib/database"},
 			{slug: "stdlib/files", title: "Files & the filesystem", file: "stdlib/files"},
 			{slug: "stdlib/http", title: "HTTP requests", file: "stdlib/http"},
+			{slug: "stdlib/streams", title: "Streams", file: "stdlib/streams"},
 			{slug: "stdlib/view", title: "Views & HTML", file: "stdlib/view"},
 			{slug: "stdlib/css", title: "Styling with CSS", file: "stdlib/css"},
 		],
@@ -98,6 +99,7 @@ def groups :: list doc-group = [
 		title: "Guides",
 		pages: [
 			{slug: "guides/cli", title: "Command-line script", file: "guides/cli"},
+			{slug: "guides/testing", title: "Testing", file: "guides/testing"},
 			{slug: "guides/server", title: "Web server", file: "guides/server"},
 			{slug: "guides/fullstack", title: "Fullstack app", file: "guides/fullstack"},
 		],

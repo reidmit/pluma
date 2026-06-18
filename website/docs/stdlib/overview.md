@@ -83,7 +83,8 @@ These are server capabilities — a browser build can't reach them.
 
 - [`remote def` and RPC](/docs/deep-dives/rpc) — typed server calls; built on
   `std/rpc`, `std/router`, and `std/middleware`.
-- `std/stream` — pull-based async streams, for server-to-client events.
+- [`std/stream`](/docs/stdlib/streams) — pull-based async streams, for
+  server-to-client events.
 
 **Testing**
 
