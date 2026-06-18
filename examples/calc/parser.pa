@@ -103,7 +103,7 @@ public def parse-expr = fun toks {
 
 public def expr-rest = fun left toks {
 	when toks is [lexer.token.t-op op, ...rest] {
-		if op == "+" || op == "-" {
+		if op == "+" or op == "-" {
 			when parse-term rest is parsed.ok-at right rest2 {
 				expr-rest (expr.bin op left right) rest2
 			} is parsed.perr m {
@@ -127,7 +127,7 @@ public def parse-term = fun toks {
 
 public def term-rest = fun left toks {
 	when toks is [lexer.token.t-op op, ...rest] {
-		if op == "*" || op == "/" || op == "%" {
+		if op == "*" or op == "/" or op == "%" {
 			when parse-power rest is parsed.ok-at right rest2 {
 				term-rest (expr.bin op left right) rest2
 			} is parsed.perr m {

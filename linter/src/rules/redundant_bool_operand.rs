@@ -2,10 +2,10 @@ use crate::{Context, Finding, Rule};
 use compiler::ast::{ExprKind, ExprNode, LiteralKind, Operator};
 use compiler::{Diagnostic, Reportable};
 
-/// Flags a boolean literal as an operand of `&&` / `||`. Two shapes:
-///   - identity: `x && true`, `x || false` — the literal has no effect, so the
+/// Flags a boolean literal as an operand of `and` / `or`. Two shapes:
+///   - identity: `x and true`, `x or false` — the literal has no effect, so the
 ///     expression is just `x`.
-///   - constant: `x && false`, `x || true` — the expression is a constant
+///   - constant: `x and false`, `x or true` — the expression is a constant
 ///     (`false` / `true`) regardless of the other operand.
 pub struct RedundantBoolOperand;
 
@@ -24,15 +24,15 @@ impl Rule for RedundantBoolOperand {
 			_ => return,
 		};
 
-		// Exactly one operand a boolean literal (`true && false` is just a
+		// Exactly one operand a boolean literal (`true and false` is just a
 		// constant — not interesting here).
 		let lit = match (bool_lit(left), bool_lit(right)) {
 			(Some(_), Some(_)) | (None, None) => return,
 			(Some(b), None) | (None, Some(b)) => b,
 		};
 
-		// `&& true` and `|| false` are identities; the other two pin the whole
-		// expression to a constant.
+		// `and true` and `or false` are identities; the other two pin the
+		// whole expression to a constant.
 		let identity = is_and == lit;
 		let help = if identity {
 			"the literal has no effect — drop it and keep the other operand.".to_string()
@@ -62,7 +62,10 @@ struct Lint(String);
 
 impl std::fmt::Display for Lint {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "Boolean literal operand makes this `&&`/`||` redundant.")
+		write!(
+			f,
+			"Boolean literal operand makes this `and`/`or` redundant."
+		)
 	}
 }
 

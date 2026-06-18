@@ -126,6 +126,7 @@ def toc-ref :: list (string, string) = [
 	("bytes", "Bytes"),
 	("regex", "Regular expressions"),
 	("diagnostics", "Diagnostics"),
+	("build", "Fullstack build"),
 ]
 
 def side-link :: fun (string, string) -> view = using view {
@@ -702,8 +703,8 @@ def sec-operators :: view = doc-section "operators" "Operators" [
 	],
 	h3 "Logical, string, and coalesce",
 	prose.table3 ("Operator", "Signature", "Meaning") [
-		("&&", "bool bool -> bool", "Logical and (short-circuiting)"),
-		("||", "bool bool -> bool", "Logical or (short-circuiting)"),
+		("and", "bool bool -> bool", "Logical and (short-circuiting)"),
+		("or", "bool bool -> bool", "Logical or (short-circuiting)"),
 		("++", "string string -> string", "String concatenation"),
 		("??", "(option a) a -> a", "The contained value if some/ok, else the right-hand default"),
 	],
@@ -1122,10 +1123,130 @@ def sec-diagnostics :: view = doc-section "diagnostics" "Diagnostics and error c
 		("L0002", "`try _ = expr` binds nothing — write just `try expr`"),
 		("L0003", "Comparing to a boolean literal (`x == true`) is redundant"),
 		("L0004", "`if c { true } else { false }` is just the condition"),
-		("L0005", "Boolean-literal operand of `&&` / `||` is redundant"),
+		("L0005", "Boolean-literal operand of `and` / `or` is redundant"),
 		("L0006", "Function only forwards its arguments (`fun x { f x }` is `f`)"),
 		("L0007", "Both branches of an `if` are identical"),
 		("L0008", "A binding returned immediately doesn't need the `let`"),
+	],
+]
+
+def sec-build :: view = doc-section "build" "How the fullstack build works" [
+	pr [
+		t "One command — ",
+		ic "pluma build",
+		t " — turns a project into the files a browser and a server actually run. This page explains, in plain terms, what those files are and how a page gets onto the screen, whether it's drawn on the server, in the browser, or both. (This very site is built this way.)",
+	],
+	h3 "What a build produces",
+	p "A fullstack project builds into two halves from one set of source files — a server and a browser bundle:",
+	code """
+		server.wasm   the server: HTTP routes, your remote defs, page rendering
+		app.wasm      the browser bundle (the client half of the same code)
+		loader.js     a tiny script that boots app.wasm in the page
+		index.html    the first file the browser loads
+		app.css       the stylesheet, lifted out at build time (see below)
+		""",
+	pr [
+		t "Only the code the browser can actually reach is compiled into ",
+		ic "app.wasm",
+		t " — server-only work like database access stays in ",
+		ic "server.wasm",
+		t ". You write one program; the build splits it.",
+	],
+	h3 "Two ways a page reaches the screen",
+	pr [
+		t "A page is a plain function that returns a ",
+		ic "view",
+		t " (a description of the UI as data). That one description is consumed two ways, which gives the two paths below.",
+	],
+	h3 "Server-rendered (SSR) — the default for this site",
+	pr [
+		t "On each request the server runs your page function and turns the ",
+		ic "view",
+		t " into finished HTML with ",
+		ic "view.to-string",
+		t ". The browser receives a fully-formed page and paints it immediately — no waiting for code to download and run first. Then the browser bundle ",
+		t "hydrates",
+		t " it: ",
+		ic "render.hydrate",
+		t " walks the same view alongside the HTML the server already produced and re-attaches the interactive parts (event handlers, anything reactive) to the existing elements, instead of rebuilding them.",
+	],
+	code """
+		# server: render the view to HTML for this route
+		task.return (http.html 200 (theme.document-html "Title" (page ())))
+
+		# browser: adopt that server HTML rather than rebuild it
+		render.hydrate (dom.body ()) page
+		""",
+	p "The payoff is a fast, styled first paint that works even before (or without) JavaScript, plus full interactivity once the bundle loads.",
+	h3 "Client-rendered (CSR) — a pure browser app",
+	pr [
+		t "With ",
+		ic "pluma build --web",
+		t " there is no server rendering the page. The browser loads a near-empty ",
+		ic "index.html",
+		t " shell, and your code builds the whole DOM itself at startup with ",
+		ic "render.mount",
+		t ":",
+	],
+	code """
+		# browser: build the DOM from scratch under <body>
+		render.mount (dom.body ()) page
+		""",
+	p "Nothing renders until the bundle downloads and runs, but the output is just static files — host it anywhere, no server required.",
+	h3 "Where the HTML comes from",
+	pr [
+		t "Both paths start from the same ",
+		ic "view",
+		t ". The difference is only which consumer runs it: ",
+		ic "view.to-string",
+		t " on the server produces an HTML string sent over the wire (SSR), while ",
+		ic "render.mount",
+		t " in the browser builds real DOM nodes (CSR). Because it's one description either way, the server and the browser can't disagree about what the page should be — which is exactly what makes hydration safe.",
+	],
+	h3 "Where the CSS comes from",
+	pr [
+		t "You style elements with ",
+		ic "view.styled <rule>",
+		t ", where a rule is an ordinary value. Each rule is turned into a class whose name is a hash of its contents, and registered in a collector as it's used. Identical rules collapse to one class automatically, and the stylesheet only ever contains rules a page actually used.",
+	],
+	pr [t "Delivering that collected CSS mirrors the two paths:"],
+	pr [
+		t "On the ",
+		t "server (SSR)",
+		t ", the page body is rendered first — which registers every rule it uses — and then ",
+		ic "css.style-tag ()",
+		t " drops exactly those rules into an inline ",
+		ic "<style>",
+		t " in the page's ",
+		ic "<head>",
+		t ". The page arrives already styled, with no extra request.",
+	],
+	pr [
+		t "For ",
+		t "production",
+		t ", ",
+		ic "pluma build",
+		t " runs that same render once and lifts the stylesheet out into a cacheable ",
+		ic "app.css",
+		t " file, linked from ",
+		ic "index.html",
+		t " — so the browser can cache it across visits.",
+	],
+	pr [
+		t "In a pure ",
+		t "browser app (CSR)",
+		t ", there's no server to emit the ",
+		ic "<style>",
+		t ", so the runtime injects one from the collector when the app mounts, and refreshes it whenever newly-shown content brings in a rule that wasn't on the page yet.",
+	],
+	note [
+		pr [
+			t "The through-line: there is one ",
+			ic "view",
+			t " and one set of style rules. SSR, CSR, and the build-time ",
+			ic "app.css",
+			t " are just different times and places that same description is turned into HTML and CSS — never a second, separate copy to keep in sync.",
+		],
 	],
 ]
 
@@ -1169,6 +1290,7 @@ public def page :: fun nothing -> view = using view {
 						sec-bytes,
 						sec-regex,
 						sec-diagnostics,
+						sec-build,
 					],
 				],
 				theme.site-footer (),

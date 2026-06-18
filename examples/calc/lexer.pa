@@ -27,7 +27,7 @@ public def is-name-start = fun c {
 }
 
 public def is-name-char = fun c {
-	is-name-start c || is-digit c
+	is-name-start c or is-digit c
 }
 
 public def is-op = fun c {
@@ -85,7 +85,7 @@ public def scan = fun s i acc {
 # as `3` then `.` (which is then a lex error, since `.` is no operator).
 public def lex-number = fun s i acc {
 	let j = span s i is-digit
-	if char-is s j fun c { c == "." } && char-is s (j + 1) is-digit {
+	if char-is s j fun c { c == "." } and char-is s (j + 1) is-digit {
 		let k = span s (j + 1) is-digit
 		let text = string.slice s i k
 		when string.to-float text is ok f {

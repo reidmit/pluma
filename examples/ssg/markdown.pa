@@ -85,7 +85,7 @@ public def break1 = fun bs d {
 # Like `break1`, but for a two-byte delimiter `d1 d2` (e.g. `**`).
 public def break2 = fun bs d1 d2 {
 	when bs is [c, e, ...rest] {
-		if c == d1 && e == d2 {
+		if c == d1 and e == d2 {
 			some ([], rest)
 		} else {
 			when break2 [e, ...rest] d1 d2 is some (before, after) {
@@ -205,13 +205,13 @@ public def heading-level = fun line {
 }
 
 public def bullet-item = fun l {
-	string.starts-with l "- " || string.starts-with l "* " || string.starts-with l "+ "
+	string.starts-with l "- " or string.starts-with l "* " or string.starts-with l "+ "
 }
 
 # Count leading ASCII-digit bytes starting at index `i`.
 public def count-digits = fun b i {
 	when bytes.at b i is some c {
-		if c >= 48 && c <= 57 {
+		if c >= 48 and c <= 57 {
 			count-digits b (i + 1)
 		} else {
 			i
@@ -233,18 +233,18 @@ public def byte-eq = fun b i v {
 public def ordered-item = fun l {
 	let b = string.to-bytes l
 	let d = count-digits b 0
-	d >= 1 && byte-eq b d 46 && byte-eq b (d + 1) 32
+	d >= 1 and byte-eq b d 46 and byte-eq b (d + 1) 32
 }
 
 public def is-hr = fun line {
 	let t = string.trim line
-	t == "---" || t == "***" || t == "___" || t == "- - -" || t == "* * *"
+	t == "---" or t == "***" or t == "___" or t == "- - -" or t == "* * *"
 }
 
 # True if `l` begins a non-paragraph block (used to terminate a
 # paragraph run).
 public def special-starter = fun l {
-	heading-level l > 0 || string.starts-with l "```" || string.starts-with l ">" || bullet-item l || ordered-item l || is-hr l
+	heading-level l > 0 or string.starts-with l "```" or string.starts-with l ">" or bullet-item l or ordered-item l or is-hr l
 }
 
 # ---------------------------------------------------------------------
@@ -319,7 +319,7 @@ public def take-para = fun lines {
 	when lines is [] {
 		([], [])
 	} is [l, ...rest] {
-		if string.trim l == "" || special-starter l {
+		if string.trim l == "" or special-starter l {
 			([], lines)
 		} else {
 			let (more, after) = take-para rest

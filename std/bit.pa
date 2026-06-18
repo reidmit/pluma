@@ -5,23 +5,23 @@
 #
 # Each function also has operator syntax: `&` (and), `|` (or), `^` (xor),
 # `<<` (shift-left), `>>` (shift-right), `>>>` (shift-right-unsigned), and the
-# prefix `~` (not). So `x & mask | flag` is `bit.or (bit.and x mask) flag`. The
-# operators bind tighter than comparison (so `x & mask == 0` means
-# `(x & mask) == 0`); the functions stay useful for `|>` chains and passing a
-# bit op as a value.
+# prefix `~` (not). So `x & mask | flag` is
+# `bit.bitwise-or (bit.bitwise-and x mask) flag`. The operators bind tighter
+# than comparison (so `x & mask == 0` means `(x & mask) == 0`); the functions
+# stay useful for `|>` chains and passing a bit op as a value.
 
 # Bitwise AND: a 1 in the result wherever *both* inputs have a 1. The
 # usual tool for masking -- keeping only the bits a mask selects.
 #
-#     bit.and 12 10   # => 8     (1100 & 1010 = 1000)
-#     bit.and 0xFF 5  # => 5
-public def and :: fun int int -> int = built-in "bit-and"
+#     bit.bitwise-and 12 10   # => 8     (1100 & 1010 = 1000)
+#     bit.bitwise-and 0xFF 5  # => 5
+public def bitwise-and :: fun int int -> int = built-in "bit-and"
 
 # Bitwise OR: a 1 in the result wherever *either* input has a 1. The
 # usual tool for setting flags.
 #
-#     bit.or 12 10   # => 14    (1100 | 1010 = 1110)
-public def or :: fun int int -> int = built-in "bit-or"
+#     bit.bitwise-or 12 10   # => 14    (1100 | 1010 = 1110)
+public def bitwise-or :: fun int int -> int = built-in "bit-or"
 
 # Bitwise XOR ("exclusive or"): a 1 wherever the inputs *differ*. Toggles
 # the bits that the second operand has set.

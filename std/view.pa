@@ -286,7 +286,7 @@ def escape-attr :: fun string -> string = built-in "html-escape-attr"
 # either doesn't emit duplicate attributes.
 def render-attr :: fun attribute -> string = fun a {
 	when a is attribute.static k v {
-		if k == "style" || k == "class" {
+		if k == "style" or k == "class" {
 			""
 		} else {
 			" $(k)=\"$(escape-attr v)\""
@@ -300,7 +300,7 @@ def render-attr :: fun attribute -> string = fun a {
 			""
 		}
 	} is attribute.dynamic k f {
-		if k == "style" || k == "class" {
+		if k == "style" or k == "class" {
 			""
 		} else {
 			" $(k)=\"$(escape-attr (f ()))\""
@@ -430,7 +430,7 @@ def render-attrs-nonempty :: fun (list attribute) -> string = fun attrs {
 	# order with its sole `class`/`style` inlined, skipping the `first-contributor`
 	# scans and the `enumerate` the merge path below needs. Output is identical:
 	# joining a single fragment is that fragment.
-	if list.length class-frags < 2 && list.length style-frags < 2 {
+	if list.length class-frags < 2 and list.length style-frags < 2 {
 		string.join (list.map attrs render-attr-solo) ""
 	} else {
 		let first-class = first-contributor attrs class-fragment

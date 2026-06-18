@@ -32,7 +32,7 @@ public def is-empty :: fun bytes -> bool = fun b {
 #     bytes.at 'ABC' 0    # => some 65
 #     bytes.at 'ABC' 9    # => none
 public def at :: fun bytes int -> option int = fun b i {
-	if i < 0 || i >= length b {
+	if i < 0 or i >= length b {
 		none
 	} else {
 		some (get b i)
@@ -191,7 +191,7 @@ def check-range :: fun (list int) int int -> result nothing string = fun xs n i 
 		ok ()
 	} else {
 		let x = list.get xs i
-		if x < 0 || x > 255 {
+		if x < 0 or x > 255 {
 			err ("byte out of range (0..256): " ++ dec x)
 		} else {
 			check-range xs n (i + 1)
@@ -350,7 +350,7 @@ def cont :: fun bytes int int -> bool = fun b j n {
 		false
 	} else {
 		let x = get b j
-		x >= 128 && x < 192
+		x >= 128 and x < 192
 	}
 }
 
@@ -371,7 +371,7 @@ def valid3 :: fun bytes int int int -> bool = fun b i n b0 {
 		} else {
 			191
 		}
-		if b1 >= lo && b1 <= hi {
+		if b1 >= lo and b1 <= hi {
 			cont b (i + 2) n
 		} else {
 			false
@@ -396,8 +396,8 @@ def valid4 :: fun bytes int int int -> bool = fun b i n b0 {
 		} else {
 			191
 		}
-		if b1 >= lo && b1 <= hi {
-			cont b (i + 2) n && cont b (i + 3) n
+		if b1 >= lo and b1 <= hi {
+			cont b (i + 2) n and cont b (i + 3) n
 		} else {
 			false
 		}

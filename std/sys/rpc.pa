@@ -192,7 +192,7 @@ def origin-host :: fun string -> string = fun o {
 # admitted here.
 def same-origin :: fun http.request -> bool = fun req {
 	when dict.lookup req.headers "sec-fetch-site" is some site {
-		site == "same-origin" || site == "none"
+		site == "same-origin" or site == "none"
 	} is none {
 		when dict.lookup req.headers "origin" is some o {
 			when dict.lookup req.headers "host" is some h {

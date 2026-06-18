@@ -663,6 +663,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"false" => BoolFalse,
 
 						b"alias" => KeywordAlias,
+						b"and" => KeywordAnd,
 						b"as" => KeywordAs,
 						b"built-in" => KeywordBuiltin,
 						b"def" => KeywordDef,
@@ -677,6 +678,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 						b"let" => KeywordLet,
 						b"manual" => KeywordManual,
 						b"opaque" => KeywordOpaque,
+						b"or" => KeywordOr,
 						b"public" => KeywordPublic,
 						b"remote" => KeywordRemote,
 						b"scope" => KeywordScope,

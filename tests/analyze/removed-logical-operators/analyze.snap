@@ -1,0 +1,11 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: The `&&` operator was removed. Use the `and` keyword instead.
+> 4 | 	let a = true && false
+                    ^^
+
+error: The `||` operator was removed. Use the `or` keyword instead.
+> 5 | 	let b = true || false
+                    ^^

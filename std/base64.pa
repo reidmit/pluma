@@ -197,11 +197,11 @@ def dec-value :: fun int int int -> int = fun c c62 c63 {
 		62
 	} else if c == c63 {
 		63
-	} else if c >= 65 && c <= 90 {
+	} else if c >= 65 and c <= 90 {
 		c - 65
-	} else if c >= 97 && c <= 122 {
+	} else if c >= 97 and c <= 122 {
 		c - 71
-	} else if c >= 48 && c <= 57 {
+	} else if c >= 48 and c <= 57 {
 		c + 4
 	} else {
 		-1

@@ -280,7 +280,7 @@ def list-end :: fun (list string) int int int (fun string -> bool) -> int = fun 
 }
 
 def continues-list :: fun string int (fun string -> bool) -> bool = fun line base same {
-	indent-of line > base || same line && indent-of line <= base
+	indent-of line > base or same line and indent-of line <= base
 }
 
 # Split `lines[pos, end)` into items, flushing the current item's lines into
@@ -296,7 +296,7 @@ def gather-items :: fun (list string) int int int (list (list block)) bool (list
 		}
 	} else {
 		let line = list.get lines pos
-		if is-start line && indent-of line <= base {
+		if is-start line and indent-of line <= base {
 			if started {
 				list.push items (parse-lines cur)
 			} else {
@@ -398,7 +398,7 @@ def scan-inline :: fun (list string) int int (list string) (list inline) -> noth
 		flush-text buf out
 	} else {
 		let c = list.get cs i
-		if c == "\\" && i + 1 < n {
+		if c == "\\" and i + 1 < n {
 			scan-inline cs n (i + 2) (push-char buf (list.get cs (i + 1))) out
 		} else if c == "`" {
 			when find-from cs n (i + 1) "`" is some j {
@@ -408,7 +408,7 @@ def scan-inline :: fun (list string) int int (list string) (list inline) -> noth
 			} is none {
 				scan-inline cs n (i + 1) (push-char buf c) out
 			}
-		} else if c == "!" && at-eq cs n (i + 1) "[" {
+		} else if c == "!" and at-eq cs n (i + 1) "[" {
 			when parse-image cs n i is some res {
 				let (node, next) = res
 				flush-text buf out
@@ -426,7 +426,7 @@ def scan-inline :: fun (list string) int int (list string) (list inline) -> noth
 			} is none {
 				scan-inline cs n (i + 1) (push-char buf c) out
 			}
-		} else if c == "*" || c == "_" {
+		} else if c == "*" or c == "_" {
 			when parse-emphasis cs n i c is some res {
 				let (node, next) = res
 				flush-text buf out
@@ -513,15 +513,11 @@ def parse-image :: fun (list string) int int -> option (inline, int) = fun cs n 
 	}
 }
 
-# True when `cs[i]` exists and equals `ch`. A bounds-safe character compare for
-# use in conditions: `&&`/`||` evaluate both operands, so a bare `i < n &&
-# list.get cs i == ch` would still index out of range -- this guards the access.
+# True when `cs[i]` exists and equals `ch`. `and` short-circuits, so the
+# bounds check guards the index: `list.get cs i` only runs once `i` is known
+# to be in range.
 def at-eq :: fun (list string) int int string -> bool = fun cs n i ch {
-	if i >= 0 && i < n {
-		list.get cs i == ch
-	} else {
-		false
-	}
+	i >= 0 and i < n and list.get cs i == ch
 }
 
 def find-from :: fun (list string) int int string -> option int = fun cs n i target {
@@ -537,7 +533,7 @@ def find-from :: fun (list string) int int string -> option int = fun cs n i tar
 def find-double :: fun (list string) int int string -> option int = fun cs n i d {
 	if i + 1 >= n {
 		none
-	} else if list.get cs i == d && list.get cs (i + 1) == d {
+	} else if list.get cs i == d and list.get cs (i + 1) == d {
 		some i
 	} else {
 		find-double cs n (i + 1) d
@@ -556,7 +552,7 @@ def is-blank :: fun string -> bool = fun line {
 
 # A line that forces a hard `<br>` break: it ends in two spaces or a backslash.
 def hard-break-line :: fun string -> bool = fun line {
-	string.ends-with line "  " || string.ends-with line "\\"
+	string.ends-with line "  " or string.ends-with line "\\"
 }
 
 def indent-of :: fun string -> int = fun line {
@@ -593,7 +589,7 @@ def strip-quote :: fun string -> string = fun line {
 
 def is-fence :: fun string -> bool = fun line {
 	let t = string.trim line
-	string.starts-with t "```" || string.starts-with t "~~~"
+	string.starts-with t "```" or string.starts-with t "~~~"
 }
 
 def fence-info :: fun string -> string = fun line {
@@ -607,12 +603,12 @@ def fence-info :: fun string -> string = fun line {
 # after the colons opens a container; a line that is only colons closes one.
 def is-container-open :: fun string -> bool = fun line {
 	let t = string.trim line
-	string.starts-with t ":::" && string.length (container-spec t) > 0
+	string.starts-with t ":::" and string.length (container-spec t) > 0
 }
 
 def is-container-close :: fun string -> bool = fun line {
 	let t = string.trim line
-	string.starts-with t ":::" && string.length (container-spec t) == 0
+	string.starts-with t ":::" and string.length (container-spec t) == 0
 }
 
 # The text after the leading colons of a fence line: `name key="value" ...`.
@@ -684,7 +680,7 @@ def scan-spec :: fun (list string) int int string (list string) (list (string, s
 # index just past it.
 def read-value :: fun (list string) int int -> (string, int) = fun cs n i {
 	let q = cat cs n i
-	if q == "\"" || q == "'" {
+	if q == "\"" or q == "'" {
 		let close = next-or-end cs n (i + 1) q
 		(chars-slice cs (i + 1) close, close + 1)
 	} else {
@@ -702,7 +698,7 @@ def split-ws :: fun string -> list string = fun s {
 
 # The character at `cs[i]`, or `""` when out of range.
 def cat :: fun (list string) int int -> string = fun cs n i {
-	if i >= 0 && i < n {
+	if i >= 0 and i < n {
 		list.get cs i
 	} else {
 		""
@@ -746,7 +742,7 @@ def is-thematic :: fun string -> bool = fun line {
 		false
 	} else {
 		let c = string.slice compact 0 1
-		(c == "-" || c == "*" || c == "_") && all-char compact c
+		(c == "-" or c == "*" or c == "_") and all-char compact c
 	}
 }
 
@@ -759,7 +755,7 @@ def all-char :: fun string string -> bool = fun s c {
 def is-bullet :: fun string -> bool = fun line {
 	let t = trim-left line
 	let c = string.slice t 0 1
-	(c == "-" || c == "*" || c == "+") && string.slice t 1 2 == " "
+	(c == "-" or c == "*" or c == "+") and string.slice t 1 2 == " "
 }
 
 def bullet-strip :: fun string -> string = fun line {
@@ -774,7 +770,7 @@ def is-ordered :: fun string -> bool = fun line {
 	} else {
 		let after = string.drop t (string.length digits)
 		let d = string.slice after 0 1
-		(d == "." || d == ")") && string.slice after 1 2 == " "
+		(d == "." or d == ")") and string.slice after 1 2 == " "
 	}
 }
 
@@ -798,7 +794,7 @@ def heading-level :: fun string -> int = fun line {
 	let cs = string.chars t
 	let n = list.length cs
 	let h = scan-run cs n 0 "#"
-	if h >= 1 && h <= 6 && (h >= n || at-eq cs n h " ") {
+	if h >= 1 and h <= 6 and (h >= n or at-eq cs n h " ") {
 		h
 	} else {
 		0
@@ -834,7 +830,7 @@ def count-digits :: fun (list string) int int -> int = fun cs n i {
 }
 
 def is-digit-char :: fun string -> bool = fun ch {
-	string.contains "0123456789" ch && string.length ch == 1
+	string.contains "0123456789" ch and string.length ch == 1
 }
 
 # Counts the run of `ch` characters from index `i`, returning the index where it

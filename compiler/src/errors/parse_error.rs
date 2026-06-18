@@ -37,15 +37,32 @@ pub enum ParseErrorKind {
 	ExpectedExpressionAfterSpread,
 	ExpectedExpressionAfterDefer,
 	MisplacedRecordSpread,
-	UnexpectedEOF { expected: Token },
-	UnexpectedToken { actual: Token, expected: Token },
-	UnexpectedTopLevelToken { actual: Token },
-	MisplacedVisibility { keyword: &'static str },
+	UnexpectedEOF {
+		expected: Token,
+	},
+	UnexpectedToken {
+		actual: Token,
+		expected: Token,
+	},
+	UnexpectedTopLevelToken {
+		actual: Token,
+	},
+	MisplacedVisibility {
+		keyword: &'static str,
+	},
 	MisplacedRemote,
+	// The `&&`/`||` operators were replaced by the `and`/`or` keywords.
+	// `spelling` is the old operator, `replacement` the keyword to use.
+	RemovedLogicalOperator {
+		spelling: &'static str,
+		replacement: &'static str,
+	},
 	// An expression was required here (a def body, or the operand after a
 	// prefix/infix operator) but the next token can't start one. `found` is
 	// the offending token, or `None` at end of file.
-	ExpectedExpression { found: Option<Token> },
+	ExpectedExpression {
+		found: Option<Token>,
+	},
 }
 
 impl fmt::Display for ParseError {
@@ -141,6 +158,14 @@ impl fmt::Display for ParseError {
 			MisplacedRemote => {
 				write!(f, "`remote` can only modify a top-level `def`.")
 			}
+			RemovedLogicalOperator {
+				spelling,
+				replacement,
+			} => write!(
+				f,
+				"The `{}` operator was removed. Use the `{}` keyword instead.",
+				spelling, replacement
+			),
 			ExpectedExpression { found } => match found {
 				Some(token) => write!(f, "Expected an expression, but found {}.", token),
 				None => write!(
@@ -187,6 +212,7 @@ impl Reportable for ParseError {
 			ExpectedExpression { .. } => "E0029",
 			MisplacedRemote => "E0030",
 			LeadingDotOutsideUsing => "E0031",
+			RemovedLogicalOperator { .. } => "E0032",
 		}
 	}
 

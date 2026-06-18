@@ -42,20 +42,27 @@ pub enum Operator {
 impl Operator {
 	pub fn from_token(token: Token) -> Option<Operator> {
 		match token {
-			// Bare `&` is bitwise AND (infix). `&&` is `DoubleAnd` (logical and).
+			// Bare `&` is bitwise AND (infix). Logical and is the `and` keyword.
 			Token::And(..) => Some(Operator::BitAnd),
 			Token::BangEqual(..) => Some(Operator::Inequality),
 			// `^` is bitwise XOR in expression position (it also anchors regex
 			// literals, parsed in a separate context).
 			Token::Caret(..) => Some(Operator::BitXor),
 			Token::Dot(..) => Some(Operator::FieldAccess),
+			// `&&`/`||` still parse as the logical operators so the precedence
+			// machinery works, but the parser flags them as removed at the point
+			// it consumes them (see `parse_expression_with_binding_power`).
 			Token::DoubleAnd(..) => Some(Operator::LogicalAnd),
+			Token::DoublePipe(..) => Some(Operator::LogicalOr),
 			Token::DoubleDot(..) => Some(Operator::Range),
 			Token::DoubleEqual(..) => Some(Operator::Equality),
 			// `<<`/`>>`/`>>>` are the bit-shift operators.
 			Token::DoubleLeftAngle(..) => Some(Operator::ShiftLeft),
-			Token::DoublePipe(..) => Some(Operator::LogicalOr),
 			Token::DoublePlus(..) => Some(Operator::Concat),
+			// Logical and/or are the `and`/`or` keywords. The old `&&`/`||`
+			// spellings are rejected with a targeted diagnostic in the parser.
+			Token::KeywordAnd(..) => Some(Operator::LogicalAnd),
+			Token::KeywordOr(..) => Some(Operator::LogicalOr),
 			Token::DoubleQuestion(..) => Some(Operator::NullCoalescing),
 			Token::DoubleRightAngle(..) => Some(Operator::ShiftRight),
 			Token::DoubleStar(..) => Some(Operator::Exponentiation),
@@ -163,9 +170,9 @@ impl std::fmt::Display for Operator {
 			Inequality => write!(f, "!="),
 			LessThan => write!(f, "<"),
 			LessThanEquals => write!(f, "<="),
-			LogicalAnd => write!(f, "&&"),
+			LogicalAnd => write!(f, "and"),
 			LogicalNot => write!(f, "!"),
-			LogicalOr => write!(f, "||"),
+			LogicalOr => write!(f, "or"),
 			Multiplication => write!(f, "*"),
 			NullCoalescing => write!(f, "??"),
 			Range => write!(f, ".."),

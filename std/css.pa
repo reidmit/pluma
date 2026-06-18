@@ -752,7 +752,7 @@ def mask32 :: int = 4294967295
 # low-collision for an app's finite rule set -- enough to name a class uniquely.
 def hash-css :: fun string -> int = fun s {
 	list.fold (bytes.to-list (string.to-bytes s)) fnv-offset fun acc b {
-		bit.and (bit.xor acc b * fnv-prime) mask32
+		bit.bitwise-and (bit.xor acc b * fnv-prime) mask32
 	}
 }
 
@@ -771,7 +771,7 @@ def to-hex-loop :: fun int string -> string = fun n acc {
 	if n == 0 {
 		acc
 	} else {
-		let digit = string.char-at hex-digits (bit.and n 15) ?? "0"
+		let digit = string.char-at hex-digits (bit.bitwise-and n 15) ?? "0"
 		to-hex-loop (bit.shift-right-unsigned n 4) "$(digit)$(acc)"
 	}
 }

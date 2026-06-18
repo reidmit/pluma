@@ -45,7 +45,7 @@ public def span = fun s i pred {
 
 # Characters that continue a bare field name (anything but `.`/`[`/`]`).
 public def ident-char = fun c {
-	c != "." && c != "[" && c != "]"
+	c != "." and c != "[" and c != "]"
 }
 
 # Parse a path expression into a list of steps, or an error message.
@@ -90,7 +90,7 @@ public def parse-bracket = fun inner {
 	if t == "" {
 		ok step.iterate
 	} else if string.starts-with t "\"" {
-		if string.ends-with t "\"" && string.length t >= 2 {
+		if string.ends-with t "\"" and string.length t >= 2 {
 			ok (step.field (string.slice t 1 (string.length t - 1)))
 		} else {
 			err "unterminated string key: [$(inner)]"

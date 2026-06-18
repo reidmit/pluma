@@ -70,7 +70,7 @@ public def handle = fun env line {
 # ---------------------------------------------------------------------
 
 public def run-command = fun env cmd {
-	if cmd == ":q" || cmd == ":quit" {
+	if cmd == ":q" or cmd == ":quit" {
 		process.exit 0
 	} else if cmd == ":help" {
 		print-help ()

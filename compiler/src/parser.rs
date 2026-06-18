@@ -1268,6 +1268,29 @@ impl<'a> Parser<'a> {
 				} else {
 					let op_pos = self.current_token_points();
 
+					// `&&`/`||` were replaced by the `and`/`or` keywords. They still
+					// parse as the logical operators so the rest of the expression is
+					// recovered cleanly; we flag them here, where the operator is
+					// actually consumed, so precedence-driven re-entry on the same
+					// token can't report it twice.
+					match self.current_token {
+						Some(Token::DoubleAnd(..)) => self.errors.push(ParseError {
+							range: Range::between(op_pos.0, op_pos.1),
+							kind: ParseErrorKind::RemovedLogicalOperator {
+								spelling: "&&",
+								replacement: "and",
+							},
+						}),
+						Some(Token::DoublePipe(..)) => self.errors.push(ParseError {
+							range: Range::between(op_pos.0, op_pos.1),
+							kind: ParseErrorKind::RemovedLogicalOperator {
+								spelling: "||",
+								replacement: "or",
+							},
+						}),
+						_ => {}
+					}
+
 					// Baseline before the advance: it lexes the right-hand
 					// operand's first token, so a lexer error there counts as
 					// already-reported (used by `require_expression` below).

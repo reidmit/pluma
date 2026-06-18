@@ -25,11 +25,11 @@ enum outcome {
 }
 
 def classify :: fun int -> outcome = fun status {
-	if status >= 200 && status < 300 {
+	if status >= 200 and status < 300 {
 		outcome.live status
-	} else if status >= 300 && status < 400 {
+	} else if status >= 300 and status < 400 {
 		outcome.moved status
-	} else if status >= 400 && status < 500 {
+	} else if status >= 400 and status < 500 {
 		outcome.missing status
 	} else {
 		outcome.broken status

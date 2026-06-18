@@ -2019,6 +2019,13 @@ impl<'a> Lowerer<'a> {
 		if let Operator::Chain = op {
 			return self.lower_chain(left, right, range);
 		}
+		// Logical `&&`/`||` short-circuit: the right operand only runs when the
+		// left doesn't already decide the result, so a trapping right operand is
+		// safe behind a guarding left (`ok && (list.get xs i == v)`).
+		if matches!(op, Operator::LogicalAnd | Operator::LogicalOr) {
+			let is_and = matches!(op, Operator::LogicalAnd);
+			return self.lower_short_circuit(is_and, left, right, range);
+		}
 		// Concrete, non-dispatched operator: a direct `BinOp` picked by
 		// operand type. Evaluate left then right (matching `emit.rs`).
 		let is_float = matches!(left.ty, Type::Float) || matches!(right.ty, Type::Float);
@@ -2031,6 +2038,69 @@ impl<'a> Lowerer<'a> {
 		let l = self.lower_expr(left)?;
 		let r = self.lower_expr(right)?;
 		Ok(self.emit_let(Rvalue::Bin(binop, l, r), range))
+	}
+
+	/// Short-circuiting `&&`/`||`. Lowers to a `Match` on the left operand
+	/// (mirroring `lower_if`) so the right operand is evaluated only when the
+	/// left doesn't already decide the result: `a && b` runs `b` only when `a`
+	/// is true; `a || b` runs `b` only when `a` is false. The right operand's
+	/// statements land inside the taken arm, so they never run on the
+	/// short-circuit path.
+	fn lower_short_circuit(
+		&mut self,
+		is_and: bool,
+		left: &ExprNode,
+		right: &ExprNode,
+		range: Range,
+	) -> Result<Atom, String> {
+		let subject = self.lower_expr(left)?;
+		let result = self.alloc_var();
+
+		// Lower the right operand into its own block so its statements only run
+		// in the taken arm.
+		let saved = self.take_stmts();
+		let rhs = self.lower_expr(right);
+		let rhs_block = match rhs {
+			Ok(atom) => {
+				self.push_stmt(StmtKind::Let(result, Rvalue::Use(atom)), right.range);
+				Block(self.restore_stmts(saved))
+			}
+			Err(e) => {
+				self.restore_stmts(saved);
+				return Err(e);
+			}
+		};
+
+		// The short-circuit arm yields the constant the left already decided:
+		// `false` for `&&` (left was false), `true` for `||` (left was true).
+		let short_block = Block(vec![Stmt::new(
+			StmtKind::Let(result, Rvalue::Use(Atom::Const(Const::Bool(!is_and)))),
+			range,
+		)]);
+
+		// `&&`: true -> rhs, _ -> false.  `||`: true -> true, _ -> rhs.
+		let (true_block, else_block) = if is_and {
+			(rhs_block, short_block)
+		} else {
+			(short_block, rhs_block)
+		};
+		self.push_stmt(
+			StmtKind::Match {
+				subject,
+				arms: vec![
+					MatchArm {
+						pattern: Pattern::Literal(Const::Bool(true)),
+						body: true_block,
+					},
+					MatchArm {
+						pattern: Pattern::Wildcard,
+						body: else_block,
+					},
+				],
+			},
+			range,
+		);
+		Ok(Atom::Var(result))
 	}
 
 	fn lower_unary(
@@ -3635,8 +3705,8 @@ fn binop_for(op: &Operator, is_float: bool) -> Option<BinOp> {
 		(Operator::ShiftRight, _) => BinOp::ShiftRight,
 		(Operator::ShiftRightUnsigned, _) => BinOp::ShiftRightUnsigned,
 		(Operator::Concat, _) => BinOp::Concat,
-		(Operator::LogicalAnd, _) => BinOp::And,
-		(Operator::LogicalOr, _) => BinOp::Or,
+		// `&&`/`||` never reach here — they lower to short-circuiting control
+		// flow in `lower_short_circuit`, not a strict `BinOp`.
 		(Operator::Equality, _) => BinOp::Eq,
 		(Operator::Inequality, _) => BinOp::Ne,
 		// Ordering comparisons split by operand repr (see `BinOp`); reached only

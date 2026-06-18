@@ -598,7 +598,7 @@ def validate-components :: fun int int int int int int int -> result nothing tim
 }
 
 def in-range :: fun int int int -> bool = fun v lo hi {
-	v >= lo && v <= hi
+	v >= lo and v <= hi
 }
 
 # --- internals: formatting ----------------------------------------------

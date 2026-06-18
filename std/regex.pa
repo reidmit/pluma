@@ -57,7 +57,7 @@ def find-all-raw :: fun bytes bytes -> bytes = built-in "regex-find-all"
 # Regex metacharacters that must be backslash-escaped inside a literal:
 # `. * + ? ( ) [ ] { } ^ $ | \ /`.
 def meta-byte = fun b {
-	b == 46 || b == 42 || b == 43 || b == 63 || b == 40 || b == 41 || b == 91 || b == 93 || b == 123 || b == 125 || b == 94 || b == 36 || b == 124 || b == 92 || b == 47
+	b == 46 or b == 42 or b == 43 or b == 63 or b == 40 or b == 41 or b == 91 or b == 93 or b == 123 or b == 125 or b == 94 or b == 36 or b == 124 or b == 92 or b == 47
 }
 
 # Escape a literal byte-run into regex source, prefixing each metacharacter
@@ -113,11 +113,11 @@ def anchor-source = fun name {
 # `inner` repeated `lo`..`hi` times (`hi = -1` is unbounded), greedy -- the
 # `RegExp` default, matching the pattern tree's semantics.
 def quantifier = fun lo hi {
-	string.to-bytes if lo == 0 && hi == 0 - 1 {
+	string.to-bytes if lo == 0 and hi == 0 - 1 {
 		"*"
-	} else if lo == 1 && hi == 0 - 1 {
+	} else if lo == 1 and hi == 0 - 1 {
 		"+"
-	} else if lo == 0 && hi == 1 {
+	} else if lo == 0 and hi == 1 {
 		"?"
 	} else if hi == 0 - 1 {
 		"{$(to-string lo),}"

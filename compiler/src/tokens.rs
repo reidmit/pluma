@@ -121,6 +121,9 @@ pub enum Token {
 	/// `alias` keyword
 	KeywordAlias(usize, usize),
 
+	/// `and` keyword (short-circuiting logical and; infix operator)
+	KeywordAnd(usize, usize),
+
 	/// `as` keyword (import alias)
 	KeywordAs(usize, usize),
 
@@ -170,6 +173,9 @@ pub enum Token {
 	/// `opaque` keyword (visibility: export an enum's type but hide its
 	/// constructors)
 	KeywordOpaque(usize, usize),
+
+	/// `or` keyword (short-circuiting logical or; infix operator)
+	KeywordOr(usize, usize),
 
 	/// `public` keyword (visibility: export a top-level def fully)
 	KeywordPublic(usize, usize),
@@ -356,6 +362,7 @@ impl Token {
 			| InterpolationEnd(start, end)
 			| InterpolationStart(start, end)
 			| KeywordAlias(start, end)
+			| KeywordAnd(start, end)
 			| KeywordAs(start, end)
 			| KeywordBuiltin(start, end)
 			| KeywordDef(start, end)
@@ -371,6 +378,7 @@ impl Token {
 			| KeywordScope(start, end)
 			| KeywordManual(start, end)
 			| KeywordOpaque(start, end)
+			| KeywordOr(start, end)
 			| KeywordPublic(start, end)
 			| KeywordRemote(start, end)
 			| KeywordTrait(start, end)
@@ -487,6 +495,7 @@ impl fmt::Display for Token {
 			&InterpolationEnd(..) => "a ')'",
 			&InterpolationStart(..) => "a '$('",
 			&KeywordAlias(..) => "keyword `alias`",
+			&KeywordAnd(..) => "keyword `and`",
 			&KeywordAs(..) => "keyword `as`",
 			&KeywordBuiltin(..) => "keyword `built-in`",
 			&KeywordDef(..) => "keyword `def`",
@@ -502,6 +511,7 @@ impl fmt::Display for Token {
 			&KeywordScope(..) => "keyword `scope`",
 			&KeywordManual(..) => "keyword `manual`",
 			&KeywordOpaque(..) => "keyword `opaque`",
+			&KeywordOr(..) => "keyword `or`",
 			&KeywordPublic(..) => "keyword `public`",
 			&KeywordRemote(..) => "keyword `remote`",
 			&KeywordTrait(..) => "keyword `trait`",

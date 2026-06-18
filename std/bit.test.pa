@@ -5,13 +5,13 @@ use std/test
 def tests :: test.suite = [
 	test.case "and keeps shared bits" fun {
 		assert.all [
-			assert.equals (bit.and 12 10) 8,
-			assert.equals (bit.and 255 5) 5,
-			assert.equals (bit.and 0 12345) 0,
+			assert.equals (bit.bitwise-and 12 10) 8,
+			assert.equals (bit.bitwise-and 255 5) 5,
+			assert.equals (bit.bitwise-and 0 12345) 0,
 		]
 	},
 	test.case "or sets either bit" fun {
-		assert.all [assert.equals (bit.or 12 10) 14, assert.equals (bit.or 0 42) 42]
+		assert.all [assert.equals (bit.bitwise-or 12 10) 14, assert.equals (bit.bitwise-or 0 42) 42]
 	},
 	test.case "xor flips differing bits" fun {
 		assert.all [assert.equals (bit.xor 12 10) 6, assert.equals (bit.xor 42 42) 0]

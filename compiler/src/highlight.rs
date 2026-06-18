@@ -197,12 +197,12 @@ fn lexer_class(t: &Token) -> Option<Class> {
 		DurationLiteral(..) => Class::Number,
 		// `true`/`false` are bool-constructor tokens, but render best as keywords.
 		BoolTrue(..) | BoolFalse(..) => Class::Keyword,
-		KeywordAlias(..) | KeywordAs(..) | KeywordBuiltin(..) | KeywordDef(..) | KeywordDefer(..)
-		| KeywordElse(..) | KeywordEnum(..) | KeywordFun(..) | KeywordIf(..) | KeywordImplement(..)
-		| KeywordIn(..) | KeywordIs(..) | KeywordLet(..) | KeywordManual(..) | KeywordOpaque(..)
-		| KeywordPublic(..) | KeywordRemote(..) | KeywordScope(..) | KeywordTrait(..)
-		| KeywordTry(..) | KeywordUse(..) | KeywordUsing(..) | KeywordWhen(..) | KeywordWhere(..)
-		| KeywordWhile(..) => Class::Keyword,
+		KeywordAlias(..) | KeywordAnd(..) | KeywordAs(..) | KeywordBuiltin(..) | KeywordDef(..)
+		| KeywordDefer(..) | KeywordElse(..) | KeywordEnum(..) | KeywordFun(..) | KeywordIf(..)
+		| KeywordImplement(..) | KeywordIn(..) | KeywordIs(..) | KeywordLet(..) | KeywordManual(..)
+		| KeywordOpaque(..) | KeywordOr(..) | KeywordPublic(..) | KeywordRemote(..)
+		| KeywordScope(..) | KeywordTrait(..) | KeywordTry(..) | KeywordUse(..) | KeywordUsing(..)
+		| KeywordWhen(..) | KeywordWhere(..) | KeywordWhile(..) => Class::Keyword,
 		Arrow(..)
 		| Bang(..)
 		| BangEqual(..)

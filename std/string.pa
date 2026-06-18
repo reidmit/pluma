@@ -41,7 +41,7 @@ def count-chars :: fun bytes int int int -> int = fun b n i acc {
 		acc
 	} else {
 		let byte = bytes.get b i
-		if byte >= 128 && byte < 192 {
+		if byte >= 128 and byte < 192 {
 			count-chars b n (i + 1) acc
 		} else {
 			count-chars b n (i + 1) (acc + 1)
@@ -87,7 +87,7 @@ def char-len :: fun int -> int = fun b0 {
 # byte length `n` when the string runs out first, so callers get the
 # clamping `slice`/`char-at` want for free.
 def char-offset :: fun bytes int int int -> int = fun b n target at {
-	if target <= 0 || at >= n {
+	if target <= 0 or at >= n {
 		at
 	} else {
 		char-offset b n (target - 1) (at + char-len (bytes.get b at))
@@ -203,7 +203,7 @@ public def to-upper :: fun string -> string = fun s {
 	if has-byte-in-range b n 0 97 122 {
 		as-string (bytes.build n fun i {
 			let c = bytes.get b i
-			if c >= 97 && c <= 122 {
+			if c >= 97 and c <= 122 {
 				c - 32
 			} else {
 				c
@@ -222,7 +222,7 @@ def has-byte-in-range :: fun bytes int int int int -> bool = fun b n i lo hi {
 		false
 	} else {
 		let c = bytes.get b i
-		if c >= lo && c <= hi {
+		if c >= lo and c <= hi {
 			true
 		} else {
 			has-byte-in-range b n (i + 1) lo hi
@@ -242,7 +242,7 @@ public def to-lower :: fun string -> string = fun s {
 	if has-byte-in-range b n 0 65 90 {
 		as-string (bytes.build n fun i {
 			let c = bytes.get b i
-			if c >= 65 && c <= 90 {
+			if c >= 65 and c <= 90 {
 				c + 32
 			} else {
 				c
@@ -268,7 +268,7 @@ public def trim :: fun string -> string = fun s {
 	# Nothing to trim: hand back the original rather than allocating a slice
 	# that would copy the whole string. The offsets are already computed, so
 	# this check is free.
-	if lo == 0 && hi == n {
+	if lo == 0 and hi == n {
 		s
 	} else {
 		as-string (bytes.slice b lo hi)
@@ -278,7 +278,7 @@ public def trim :: fun string -> string = fun s {
 # Is `c` an ASCII whitespace byte? space / tab / newline / vertical tab /
 # form feed / carriage return.
 def is-space :: fun int -> bool = fun c {
-	c == 32 || c == 9 || c == 10 || c == 11 || c == 12 || c == 13
+	c == 32 or c == 9 or c == 10 or c == 11 or c == 12 or c == 13
 }
 
 # First byte offset that isn't leading whitespace (or `n` if all of it is).
@@ -418,7 +418,7 @@ public def replace :: fun string string string -> string = fun s pattern replace
 
 # True for an ASCII digit byte (`'0'`..`'9'`).
 def is-digit-byte :: fun int -> bool = fun c {
-	c >= 48 && c <= 57
+	c >= 48 and c <= 57
 }
 
 # Reduce a run of ASCII-digit bytes in `[i, n)` into `acc` (base 10). Stops
@@ -447,7 +447,7 @@ public def to-int :: fun string -> result int string = fun s {
 		err "cannot parse integer from empty string"
 	} else {
 		let c0 = bytes.get b 0
-		let start = if c0 == 43 || c0 == 45 {
+		let start = if c0 == 43 or c0 == 45 {
 			1
 		} else {
 			0
@@ -495,13 +495,13 @@ def apply-exp :: fun int int -> float = fun mantissa exp {
 def parse-exp :: fun bytes int int -> result (int, int) string = fun b n i {
 	if i >= n {
 		ok (i, 0)
-	} else if bytes.get b i == 101 || bytes.get b i == 69 {
+	} else if bytes.get b i == 101 or bytes.get b i == 69 {
 		let j = i + 1
 		if j >= n {
 			err "invalid float literal"
 		} else {
 			let cs = bytes.get b j
-			let dstart = if cs == 43 || cs == 45 {
+			let dstart = if cs == 43 or cs == 45 {
 				j + 1
 			} else {
 				j
@@ -566,7 +566,7 @@ public def to-float :: fun string -> result float string = fun s {
 		err "cannot parse float from empty string"
 	} else {
 		let c0 = bytes.get b 0
-		let start = if c0 == 43 || c0 == 45 {
+		let start = if c0 == 43 or c0 == 45 {
 			1
 		} else {
 			0

@@ -23,9 +23,9 @@ def unary = fun a b f {
 # Comparison / equality / logical, plus right-associative `??`.
 def logic = fun a b c d m {
 	let cmp-eq = (a < b) == (c < d)
-	let and-of-cmp = (a < b) && (c < d)
-	let or-binds-looser = (a && b) || c
-	let and-over-or = a && (b || c)
+	let and-of-cmp = (a < b) and (c < d)
+	let or-binds-looser = (a and b) or c
+	let and-over-or = a and (b or c)
 	let coalesce-chain = (a ?? b) ?? c
 	let coalesce-right = a ?? (b ?? c)
 	let coalesce-call = (lookup m a) ?? b

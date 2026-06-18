@@ -1,0 +1,7 @@
+# `&&` and `||` were replaced by the `and`/`or` keywords. Using the old
+# spellings is a parse error (E0032) pointing at the replacement keyword.
+def main = fun {
+	let a = true && false
+	let b = true || false
+	a or b
+}

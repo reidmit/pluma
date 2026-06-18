@@ -167,7 +167,7 @@ public def disjoint :: fun (set a) (set a) -> bool where (hash a) = fun a b {
 #     set.equals (set.from-list [1, 2, 3]) (set.from-list [3, 2, 1])   # => true
 #     set.equals (set.from-list [1, 2]) (set.from-list [1, 2, 3])      # => false
 public def equals :: fun (set a) (set a) -> bool where (hash a) = fun a b {
-	size a == size b && subset-of a b
+	size a == size b and subset-of a b
 }
 
 # Returns a new set with `f` applied to every element. Distinct elements
@@ -191,7 +191,7 @@ public def filter :: fun (set a) (fun a -> bool) -> set a = fun s pred {
 
 # Combines the elements into a single value, starting from `acc` and folding
 # in one element at a time. Order is unspecified, so prefer a `f` that doesn't
-# depend on it (a commutative combine like `+`, `union`, `&&`).
+# depend on it (a commutative combine like `+`, `union`, `and`).
 #
 #     set.fold (set.from-list [1, 2, 3, 4]) 0 (fun acc x { acc + x })   # => 10
 public def fold :: fun (set a) b (fun b a -> b) -> b = fun s acc f {
