@@ -12,18 +12,18 @@ def main = fun {
 }
 ```
 
-Import paths use `/` to separate segments — `use std/list`, `use std/sys/fs` —
+Import paths use `/` to separate segments (`use std/list`, `use std/sys/fs`),
 not dots. The last segment is the name you reach the module through, so `use
 std/list` lets you write `list.map`, `list.sum`, and so on.
 
 A handful of names are so common that Pluma imports them for you: `option`,
 `result`, and `ref` need no `use`. Everything else you ask for explicitly,
-including modules like `std/task` — naming an import is how a reader of your file
+including modules like `std/task`: naming an import is how a reader of your file
 knows where a name comes from.
 
 ## Public and private
 
-Within a file, definitions are private by default — visible only there. Mark one
+Within a file, definitions are private by default, visible only there. Mark one
 `public` to let other modules use it:
 
 ```pluma
@@ -34,13 +34,13 @@ def helper = fun n { n + n }         # private to this file
 Keeping things private by default means a module's surface is exactly what it
 declares `public`, nothing leaks by accident, and you can rework the private
 parts freely. An enum has a third option, `opaque`, which exports the type but
-hides its variants — callers can hold one and pass it around, but only the module
+hides its variants: callers can hold one and pass it around, but only the module
 can build or take one apart. That's how `std/error` keeps its internal frame
 structure to itself while still handing you an `error` to carry.
 
 ## Your own modules
 
-There's nothing special about standard-library modules — your own files work the
+There's nothing special about standard-library modules; your own files work the
 same way. A file `geometry.pa` is the module `geometry`, and from a neighbouring
 file you write `use geometry` and call `geometry.area`. Splitting a program
 across files is just this: `public` what the rest of the app needs, `use` it

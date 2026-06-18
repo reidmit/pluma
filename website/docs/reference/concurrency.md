@@ -1,8 +1,8 @@
 # Concurrency
 
 Pluma does asynchronous work without an `async` or `await` keyword. The unit is a
-`task`: a computation that may pause — waiting on a timer, a network reply, a
-database — and let other work run while it waits. Tasks are *cooperatively
+`task`: a computation that may pause (waiting on a timer, a network reply, a
+database) and let other work run while it waits. Tasks are *cooperatively
 scheduled* on a single thread, so nothing runs in parallel and you never juggle
 locks; a task makes progress until it suspends at a waiting point, and then a
 sibling gets its turn.
@@ -14,7 +14,7 @@ functions live in `std/task`.
 
 ## A task, and awaiting it
 
-A function that does async work returns a `task`. Its type is `task a e` — a task
+A function that does async work returns a `task`. Its type is `task a e`: a task
 that, when it finishes, either produces an `a` or fails with an `e`. (That's the
 same success/failure split as `result`, carried through an asynchronous
 computation.) You build the simplest tasks with `task.return`, which wraps a
@@ -29,7 +29,7 @@ def fetch-port :: fun nothing -> task int string = fun {
 ```
 
 Inside a task-returning function, `try` *awaits* another task: it runs it,
-waits for the result, and binds the success — or short-circuits with the failure,
+waits for the result, and binds the success, or short-circuits with the failure,
 exactly like `try` over a `result`. So async code reads top to bottom, with no
 callbacks and no special await syntax:
 
@@ -44,7 +44,7 @@ def load-greeting :: fun string -> task string string = fun url {
 This is the whole reason tasks exist as their own type: a sequence of awaits
 reads like ordinary straight-line code, and the failure path is implied. The
 [Errors and missing values](/docs/reference/errors) page covers the `try`/`??`
-mechanics in full — they work the same over a task as over a `result`, and a
+mechanics in full: they work the same over a task as over a `result`, and a
 precise failure erases into `std/error` the same way.
 
 ## Running tasks concurrently
@@ -62,7 +62,7 @@ def double = fun n {
 }
 
 try results = task.all (list.map [1, 2, 3] double)
-# results => [2, 4, 6]   — the three sleeps overlap
+# results => [2, 4, 6]   (the three sleeps overlap)
 ```
 
 The three `double` tasks all suspend on their timers together, so the whole batch
@@ -88,15 +88,15 @@ try task.sleep 250ms   # pause this task a quarter second
 ```
 
 For a long stretch of CPU-bound work that never naturally suspends, `task.yield
-()` hands the scheduler a turn voluntarily, so other tasks — and cancellation —
+()` hands the scheduler a turn voluntarily, so other tasks (and cancellation)
 get a chance to act. Without it, a tight compute loop would hold the thread until
 it finished, since nothing is preempted.
 
 ## Structured concurrency: scope
 
-`task.all` runs a batch and waits for it. When you want finer control — fire off
+`task.all` runs a batch and waits for it. When you want finer control, fire off
 some background work, await pieces of it, and guarantee none of it outlives the
-block — use a `scope`. Inside, `spawn` starts a task running, and the scope won't
+block: use a `scope`. Inside, `spawn` starts a task running, and the scope won't
 be left until everything it spawned has finished or been cancelled:
 
 ```pluma
@@ -112,15 +112,15 @@ scope as s {
 ```
 
 The promise a scope makes is the useful part: a spawned task can't escape its
-scope. When the block ends — normally, by failure, or by `s.cancel ()` — every
+scope. When the block ends (normally, by failure, or by `s.cancel ()`) every
 task it started is already done or stopped. No task leaks out to run against
 freed-up state, which is what makes concurrent Pluma safe to reason about.
 
 ## defer: cleanup on the way out
 
-Often a task — or any function — acquires something it must release: an open
+Often a task, or any function, acquires something it must release: an open
 connection, a lock, a temp file. `defer` schedules a piece of cleanup to run when
-the enclosing function exits, *by any path* — a normal return, or a `try` that
+the enclosing function exits, *by any path*: a normal return, or a `try` that
 bailed out early:
 
 ```pluma
@@ -135,13 +135,13 @@ def with-connection = fun addr {
 `close conn` runs whether `send` succeeds or fails, so you write the cleanup once,
 right next to the thing it cleans up, instead of repeating it on every exit.
 Several `defer`s run last-registered-first, and a `defer` inside a branch only
-fires if that branch actually ran. `defer` isn't async-only — it works in any
-function — but it's indispensable once failures and cancellation can cut a task
+fires if that branch actually ran. `defer` isn't async-only (it works in any
+function) but it's indispensable once failures and cancellation can cut a task
 short.
 
 ## See also
 
-- **[Errors and missing values](/docs/reference/errors)** — `try` and `??`, which
+- **[Errors and missing values](/docs/reference/errors)**: `try` and `??`, which
   drive a task's success and failure paths.
-- **[How RPC works](/docs/deep-dives/rpc)** — `remote def`, where a server call
+- **[How RPC works](/docs/deep-dives/rpc)**: `remote def`, where a server call
   becomes a `task` the browser awaits.

@@ -2,7 +2,7 @@
 
 This is the start of a tour that builds Pluma up from the ground, each page
 leaning on the ones before it. You don't need any functional-programming
-background — just the ability to program in *some* language. We'll define the
+background, just the ability to program in *some* language. We'll define the
 rest as we go.
 
 A Pluma program is a list of definitions. One of them is named `main`, and
@@ -14,7 +14,7 @@ def main = fun {
 }
 ```
 
-`def` gives a name to a value. `fun { ... }` is a function — here one that takes
+`def` gives a name to a value. `fun { ... }` is a function, here one that takes
 no arguments and prints a greeting. `print` writes a line to the screen. Run it
 and you get `hello, world`. Everything that follows is about the values you can
 name, the types they carry, and the handful of forms for putting them together.
@@ -34,7 +34,7 @@ let ready = true      # bool
 Every value has a type, and Pluma checks those types before your program runs,
 so a whole class of mistakes is caught early. But you rarely write the types out
 yourself: Pluma works them out from how each value is used. The `# int` comments
-above are just for us — the compiler already knew.
+above are just for us; the compiler already knew.
 
 Whole numbers (`int`) and decimals (`float`) are kept apart on purpose. There's
 no silent conversion between them, so `2 + 3.5` is a type error rather than a
@@ -56,12 +56,12 @@ def main = fun {
 ```
 
 Both use `=` to join the name and the value. A `def` is visible to the whole
-file — and, if you mark it `public`, to other files (more on that in
+file, and, if you mark it `public`, to other files (more on that in
 [Modules](/docs/tour/modules)). A `let` is visible only from where it appears to
 the end of its function.
 
 These names aren't variables in the change-it-later sense: once bound, a name
-keeps its value for good. That immutability is a feature — you can read a
+keeps its value for good. That immutability is a feature: you can read a
 function top to bottom and trust that a name means one thing throughout. When you
 genuinely need something that changes over time, you reach for a `ref`, covered
 in [Mutable state](/docs/tour/state).
@@ -80,5 +80,5 @@ Annotations are most useful on top-level `def`s, where they double as
 documentation and pin down exactly what a function accepts and returns. The next
 page, [Functions](/docs/tour/functions), shows that form.
 
-Up next: how functions are written and called — including the one calling
+Up next: how functions are written and called, including the one calling
 convention that trips up newcomers.

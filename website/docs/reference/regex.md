@@ -1,6 +1,6 @@
 # Regular expressions
 
-Pluma's regexes are a structured, whitespace-tolerant DSL — closer to a small
+Pluma's regexes are a structured, whitespace-tolerant DSL, closer to a small
 parser than to PCRE. Patterns compose *atoms* (string literals, named classes,
 anchors) with combinators for sequence, alternation, grouping, and repetition.
 Whitespace between atoms is meaningless, so a pattern can lay out across lines:
@@ -22,7 +22,7 @@ parse error.
 ## Atoms and classes
 
 Unlike most flavors, the building block is a *string literal*, not a single
-character — so metacharacters never need escaping at the regex level. For "any
+character, so metacharacters never need escaping at the regex level. For "any
 character of a kind," use a named class instead of `\d`-style shorthands:
 
 | Name | Matches |
@@ -68,7 +68,7 @@ A quantifier applies to the atom or group immediately to its left.
 
 ## Anchors
 
-Anchors are zero-width — they assert a position rather than consume input. A
+Anchors are zero-width: they assert a position rather than consume input. A
 quantifier on an anchor is a parse error.
 
 | Symbol | Asserts |
@@ -90,7 +90,7 @@ regex.replace       :: fun regex string string -> string
 regex.split         :: fun regex string -> list string
 ```
 
-Every match surfaces as a record — the text, its byte offsets, and the named
+Every match surfaces as a record: the text, its byte offsets, and the named
 captures that fired:
 
 ```pluma
@@ -119,5 +119,5 @@ def main = fun {
 ::: aside .callout
 **Coming from PCRE:** `\d \w \s .` become the bare names
 `digit word whitespace any`; `\b` becomes `%`; all groups are non-capturing; and
-`matches`/`find` are unanchored — pin them with `^` and `$`.
+`matches`/`find` are unanchored, so pin them with `^` and `$`.
 :::

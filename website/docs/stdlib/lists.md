@@ -1,12 +1,12 @@
 # Working with lists
 
-The [tour](/docs/tour/collections) introduced lists — ordered collections where
+The [tour](/docs/tour/collections) introduced lists, ordered collections where
 every element has the same type, written `[1, 2, 3]`. This page is the working
 tour of `std/list`, the module that does the real work: transforming, searching,
 slicing, and sorting.
 
 Lists are immutable. Everything here that "adds," "removes," or "sorts" hands you
-back a brand-new list and leaves the original alone — with a small set of
+back a brand-new list and leaves the original alone, with a small set of
 deliberate exceptions covered at the end. Many of these functions take a small
 function you write inline: a *predicate* that answers true or false about one
 element (`fun n { n > 0 }`), or a *transform* that turns it into something else
@@ -28,7 +28,7 @@ list.fold [1, 2, 3, 4] 0 (fun acc n { acc + n }) # => 10
 `fold` is the general one. You give it the list, a starting value, and a function
 `f acc element`; it walks front to back, calling `f` with the running total and
 the next element, and whatever `f` returns becomes the new total. Most other
-list operations could be written as a `fold` — `map` and `filter` are just the
+list operations could be written as a `fold`; `map` and `filter` are just the
 common shapes worth naming. When you want to run a side effect for each element
 rather than build a value, `each` does that and returns nothing.
 
@@ -46,7 +46,7 @@ list.head []                             # => none
 list.find [1, 2, 3, 4] (fun n { n > 2 }) # => some 3
 ```
 
-`get xs i` reads the element at a position directly — but unlike these, it's
+`get xs i` reads the element at a position directly, but unlike these, it's
 *partial*: an index outside the list stops the program rather than returning an
 option. Use `get` when you've already established the index is valid (a loop
 counter, a `find-index` result); reach for `head`/`find` when emptiness is
@@ -66,8 +66,8 @@ list.flatten [[1, 2], [], [3, 4]]        # => [1, 2, 3, 4]
 list.flat-map [1, 2, 3] (fun n { [n, n * 10] })  # => [1, 10, 2, 20, 3, 30]
 ```
 
-`flat-map` is `map` followed by `flatten` in one step — transform each element
-into a list, then concatenate them — which is the natural tool when each input
+`flat-map` is `map` followed by `flatten` in one step (transform each element
+into a list, then concatenate them), which is the natural tool when each input
 produces zero, one, or several outputs. Nearby in the module: `take-while` and
 `drop-while` (cut at the first element that fails a test), `chunk` (split into
 fixed-size groups), `partition` (split into the passes and the fails), and
@@ -91,7 +91,7 @@ list.find-index [10, 20, 30] (fun n { n > 15 }) # => some 1
 
 `sort` orders a list given a comparison; pass `ord.compare` to sort by the
 natural order of any [comparable](/docs/tour/traits) type. `sort-by` is the
-common convenience — sort by a key extracted from each element:
+common convenience: sort by a key extracted from each element:
 
 ```pluma
 use std/list
@@ -112,7 +112,7 @@ list.max []                # => none
 ## Pairing up: zip and enumerate
 
 `zip` pairs two lists element by element (stopping at the shorter), and
-`enumerate` pairs each element with its index — handy when a transform needs to
+`enumerate` pairs each element with its index, handy when a transform needs to
 know where it is:
 
 ```pluma
@@ -136,7 +136,7 @@ list.range 0 5                   # => [0, 1, 2, 3, 4]
 
 Most of the time you grow a list by transforming another one. But when you're
 accumulating in a loop and don't know the final size, `push` appends to the end
-*in place* in amortized constant time — and `pop` removes the last element,
+*in place* in amortized constant time, and `pop` removes the last element,
 making a list a fast stack:
 
 ```pluma
@@ -149,11 +149,11 @@ acc            # => [1, 2]
 ```
 
 ::: aside .callout
-**`push`, `pop`, and `set` mutate the list in place** — the one exception to
+**`push`, `pop`, and `set` mutate the list in place**, the one exception to
 lists being immutable. Because a list's storage is shared, the change shows up
 through *every* name pointing at that same list. So use them only on a list you
 just built and still solely own (the fresh-accumulator pattern above). When in
-doubt, build a fresh list with `build`, `map`, or a spread instead — that's the
+doubt, build a fresh list with `build`, `map`, or a spread instead: that's the
 norm, and it can never surprise another part of your program.
 :::
 
@@ -163,7 +163,7 @@ quietly O(n²) over a large one. `push` avoids that copy.
 
 ## See also
 
-- **[Lists, tuples, and records](/docs/tour/collections)** — list literals and
+- **[Lists, tuples, and records](/docs/tour/collections)**: list literals and
   the spread syntax.
-- **[Dictionaries and sets](/docs/stdlib/dict-set)** — when you look up by key or
+- **[Dictionaries and sets](/docs/stdlib/dict-set)**: when you look up by key or
   test membership instead of walking in order.

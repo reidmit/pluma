@@ -12,7 +12,7 @@ When you want it on your own machine, install the compiler below.
 
 ## Install
 
-Pluma builds from source with a stable `Rust` toolchain — that's the only
+Pluma builds from source with a stable `Rust` toolchain, the only
 prerequisite. Clone the repo and build the `pluma` binary:
 
 ```
@@ -28,7 +28,7 @@ install it:
 cargo install --path cli
 ```
 
-Editor support ships in the repo too — a language server (`pluma
+Editor support ships in the repo too: a language server (`pluma
 language-server`) with VS Code and Zed integrations for inline diagnostics,
 hovers, and formatting.
 
@@ -43,7 +43,7 @@ def main = fun {
 }
 ```
 
-Then run it — the source compiles to WebAssembly and executes on the spot:
+Then run it: the source compiles to WebAssembly and executes on the spot:
 
 ```
 pluma run main.pa
@@ -69,13 +69,13 @@ containing a `main.pa`.
 | `pluma lint .` | Report stylistic and correctness smells |
 
 Tests are a library, not syntax: a `*.test.pa` file exports a list of cases
-built from `std/test`, and `pluma test` runs them under V8 — the same engine
+built from `std/test`, and `pluma test` runs them under V8, the same engine
 your built artifact deploys to.
 
 ## Going fullstack
 
 Point `pluma` at a directory holding a `server.pa` and a `client.pa` and it
-builds a fullstack app — one language from the database to the DOM. A `remote
+builds a fullstack app: one language from the database to the DOM. A `remote
 def` becomes a typed RPC: the compiler writes the server route and the client
 stub, so the two agree by construction.
 

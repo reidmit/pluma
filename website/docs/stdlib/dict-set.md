@@ -3,12 +3,12 @@
 The [tour](/docs/tour/collections) covered lists, tuples, and records. Two more
 collections from the standard library round out the everyday toolkit: a
 *dictionary*, which looks values up by key, and a *set*, which remembers whether
-a value is present. Both live behind a `use` — `std/dict` and `std/set` — and
+a value is present. Both live behind a `use` (`std/dict` and `std/set`), and
 both are immutable values, like everything else in Pluma.
 
 ## Dictionaries
 
-A dictionary maps keys to values. `dict k v` reads "a dict from `k` to `v`" — so
+A dictionary maps keys to values. `dict k v` reads "a dict from `k` to `v`," so
 `dict string int` maps strings to whole numbers. Unlike a list, it finds a value
 by its key rather than its position, and each key appears at most once.
 
@@ -40,7 +40,7 @@ the entries.
 
 ### Updating in place of a key
 
-When the new value depends on the old one — counting occurrences, say —
+When the new value depends on the old one (counting occurrences, say),
 `dict.update` hands you the current value (as an `option`, since the key may be
 new) and stores whatever you return:
 
@@ -54,13 +54,13 @@ let counts = dict.update scores "ada" (fun cur { (cur ?? 0) + 1 })
 `dict.keys`, `dict.values`, and `dict.entries` give you the contents as lists
 (`entries` as a list of `(key, value)` tuples), and `dict.map`, `dict.filter`,
 and `dict.fold` transform a dict without unpacking it by hand. One caveat worth
-knowing: the order is unspecified — a dict tracks *which* keys it holds, not any
+knowing: the order is unspecified. A dict tracks *which* keys it holds, not any
 sequence, so don't rely on iteration coming out sorted.
 
 ## Sets
 
 A set is an unordered collection of distinct values. `set a` is "a set of `a`."
-It remembers *whether* a value is present, not how many times or in what order —
+It remembers *whether* a value is present, not how many times or in what order:
 adding a value that's already there changes nothing, so a set never holds
 duplicates. Reach for one when you care about membership: "have I seen this id?",
 "which tags are in use?"
@@ -92,26 +92,26 @@ set.to-list (set.intersection a b)  # the values 2, 3
 set.to-list (set.difference a b)    # the value 1
 ```
 
-There are membership comparisons to match — `subset-of`, `superset-of`,
-`disjoint`, and `equals` — each answering a yes/no question about how two sets
+There are membership comparisons to match (`subset-of`, `superset-of`,
+`disjoint`, and `equals`), each answering a yes/no question about how two sets
 relate.
 
 ## Keys must know how to hash
 
 Both collections find an element by hashing it, so a key (in a dict) or a member
-(in a set) has to be a type that knows how to `hash` itself. The built-in types —
-`int`, `float`, `string`, `bytes`, `bool` — all do, so they work with no setup.
+(in a set) has to be a type that knows how to `hash` itself. The built-in types
+(`int`, `float`, `string`, `bytes`, `bool`) all do, so they work with no setup.
 Your own enum can join them by implementing the `hash`
 [trait](/docs/tour/traits), the same way a type opts into `to-string` or
-comparison. Until it does, the compiler won't let you use it as a key — that's
+comparison. Until it does, the compiler won't let you use it as a key: that's
 the `where (hash k)` you'll see in these functions' signatures.
 
 ## Which to reach for
 
-- A **list** when order and duplicates matter, and you walk it front to back.
-- A **dict** when you look values up by a key.
-- A **set** when you only care whether something is a member, and want duplicates
-  collapsed.
+- A **list**: when order and duplicates matter, and you walk it front to back.
+- A **dict**: when you look values up by a key.
+- A **set**: when you only care whether something is a member, and want
+  duplicates collapsed.
 
 All three are immutable, so passing one to a function never lets the function
 change the copy you kept.

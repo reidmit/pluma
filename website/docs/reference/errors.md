@@ -3,9 +3,9 @@
 Most languages have a few different stories for "this might not have a value"
 and "this might fail": null, exceptions, error codes, sometimes all three. Pluma
 has one idea, used two ways. A value that might be absent is an `option`. A
-value that might fail with an explanation is a `result`. Both are ordinary enums
-— so the compiler makes you account for the empty case, and a failure is a value
-you pass around like any other, not a surprise that escapes up the stack.
+value that might fail with an explanation is a `result`. Both are ordinary
+enums, so the compiler makes you account for the empty case, and a failure is a
+value you pass around like any other, not a surprise that escapes up the stack.
 
 This page covers both, the two shortcuts (`??` and `try`) that make them
 pleasant to work with, and `std/error`, the carrier an app reaches for once it
@@ -15,7 +15,7 @@ stops caring exactly which failure it got.
 
 An `option` is either `some x`, holding a value, or `none`, holding nothing.
 Pluma builds it in, so you never write `null` and never get a surprise empty
-value — the type says it might be missing, and the compiler makes you handle it.
+value: the type says it might be missing, and the compiler makes you handle it.
 
 ```pluma
 def first = fun xs {
@@ -30,7 +30,7 @@ first [9, 8, 7]   # => some 9
 first []          # => none
 ```
 
-`some` and `none` are written bare — no module prefix — because `option` is one
+`some` and `none` are written bare (no module prefix) because `option` is one
 of the two enums seeded into every file. (Every other enum reaches its variants
 through its name, like `color.red`; `option` and `result` are the exception.)
 
@@ -54,8 +54,8 @@ divide 10 0   # => err "can't divide by zero"
 ```
 
 The failure here is a `string`, which is the common choice, but `err` can carry
-any type. A precise, closed enum is often better — `when` can then check that you
-handled every failure it defines:
+any type. A precise, closed enum is often better, since `when` can then check
+that you handled every failure it defines:
 
 ```pluma
 enum parse-error {
@@ -98,8 +98,8 @@ value on its right when it meets a `none` or an `err`:
 (divide 10 0) ?? -1   # => -1
 ```
 
-It's lazy in its right operand — the fallback is only evaluated if it's actually
-needed — and right-associative, so you can chain fallbacks and the first
+It's lazy in its right operand (the fallback is only evaluated if it's actually
+needed) and right-associative, so you can chain fallbacks and the first
 non-empty one wins:
 
 ```pluma
@@ -108,8 +108,8 @@ non-empty one wins:
 
 ## try: unwrap, or bail out early
 
-`??` is for "I have a sensible default." When you don't — when a failure should
-abandon the rest of the work and hand the problem back to your caller — reach for
+`??` is for "I have a sensible default." When you don't, when a failure should
+abandon the rest of the work and hand the problem back to your caller, reach for
 `try`. It unwraps a success and binds it to a name; on a failure, it stops the
 current function and returns that failure outward.
 
@@ -139,7 +139,7 @@ Each `try` either continues with the unwrapped value or short-circuits the whole
 function with the first failure it hits. The same `try` works on an `option`
 (short-circuiting with `none`) and, as the [async](/docs/guides/server) pages
 cover, on a `task`. One rule: a single function's `try` chain sticks to one of
-these — mix an `option` step into a `result` chain and the compiler will flag it.
+these: mix an `option` step into a `result` chain and the compiler will flag it.
 
 ::: aside .callout
 **`??` recovers, `try` propagates.** They're duals. Use `??` at the spot where
@@ -177,13 +177,13 @@ that might itself come up empty, so the result doesn't end up doubly wrapped.
 
 A precise failure type is exactly what you want at the leaf, where a caller might
 react to a specific case. But as a fallible chain crosses layers, the precise
-type stops earning its keep — at some point you only want to propagate the
+type stops paying for itself: at some point you only want to propagate the
 failure and, eventually, report it. Threading a different error enum through
 every layer becomes friction with no payoff.
 
 `std/error` is the carrier for that moment. Declare a function's failure type as
-`error`, and `try` will *erase* each precise failure into it as it propagates —
-no manual conversion:
+`error`, and `try` will *erase* each precise failure into it as it propagates,
+with no manual conversion:
 
 ```pluma
 use std/error
@@ -203,7 +203,7 @@ on.
 
 ### A trace that survives async
 
-An `error` isn't just a message — it's a chain of frames, each a message with an
+An `error` isn't just a message: it's a chain of frames, each a message with an
 optional cause beneath it. `error.context` adds a layer, putting new information
 on top and the original underneath, so the chain reads like a stack trace you
 built on purpose:
@@ -224,14 +224,14 @@ error.trace err     # => ["loading user 7", "querying db", "timed out"]
 ```
 
 Because the chain is plain data, not a native stack trace, it survives the
-boundaries an async program crosses — the trace through a `task` reads the same
+boundaries an async program crosses: the trace through a `task` reads the same
 as one through a plain `result`.
 
 ### Opting in, and recovering the leaf
 
 Erasing is deliberate, not automatic: a type erases into `error` only if it
 knows how to describe itself for a human. You grant that with a `describe`
-instance —
+instance:
 
 ```pluma
 use std/error
@@ -247,7 +247,7 @@ implement describe db-error {
 }
 ```
 
-— after which every `try` that propagates a `db-error` into an `error`-typed
+After that, every `try` that propagates a `db-error` into an `error`-typed
 function erases it for free. `string` already has a `describe` instance, so every
 standard API that fails with a string (`fs`, `sql`, `http`, …) erases the moment
 you call it from an `error` context, no setup required.
@@ -270,9 +270,9 @@ of truth; `error` is the convenience for the layers that have stopped looking.
 
 ## Where to go next
 
-- **[Operators](/docs/reference/operators)** — the full precedence and signature
+- **[Operators](/docs/reference/operators)**: the full precedence and signature
   table for `??`, comparison, and the rest.
-- **[Type aliases and nominal types](/docs/reference/aliases)** — how enums like
+- **[Type aliases and nominal types](/docs/reference/aliases)**: how enums like
   `option` get their identity, and why records work differently.
-- **[Diagnostics](/docs/reference/diagnostics)** — the error codes the compiler
+- **[Diagnostics](/docs/reference/diagnostics)**: the error codes the compiler
   emits when a failure case goes unhandled.

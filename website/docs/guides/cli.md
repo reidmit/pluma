@@ -24,5 +24,5 @@ Run it with `pluma run greet.pa -- Ada Grace`. `process.args` hands you the
 arguments as a `list string`, and the source compiles to WebAssembly and runs
 with no startup wait.
 
-To check your program's behavior as it grows, write a test suite alongside it —
-see [Testing](/docs/guides/testing).
+To check your program's behavior as it grows, write a test suite alongside it.
+See [Testing](/docs/guides/testing).

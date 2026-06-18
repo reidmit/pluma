@@ -1,7 +1,7 @@
 # Functions
 
 A function is written `fun`, then its argument names, then a block. The block's
-last expression is what the function gives back — there's no `return` keyword.
+last expression is what the function gives back. There's no `return` keyword.
 
 ```pluma
 let double = fun n { n * 2 }
@@ -9,8 +9,8 @@ let add = fun x y { x + y }
 let greet = fun { print "hi" }   # no arguments
 ```
 
-You call a function by writing it next to its arguments, separated by spaces — no
-parentheses around the whole call. Parentheses are only for grouping
+You call a function by writing it next to its arguments, separated by spaces, with
+no parentheses around the whole call. Parentheses are only for grouping
 sub-expressions.
 
 ```pluma
@@ -21,13 +21,13 @@ print (double 21)  # parens group the inner call, then print the result
 
 This paren-free style is the single biggest adjustment coming from most
 languages. `add 2 3`, not `add(2, 3)`. The parentheses in `print (double 21)`
-aren't a call — they group `double 21` so it's evaluated first and its result
+aren't a call; they group `double 21` so it's evaluated first and its result
 handed to `print`.
 
 ## Every argument at once
 
 Here's the rule that catches newcomers: a function takes *all* of its arguments
-at once. `add 2` isn't "add with one argument filled in" — it's an error,
+at once. `add 2` isn't "add with one argument filled in"; it's an error,
 because `add` wants two. If you want a version of `add` with the first argument
 fixed, write a small function that says so:
 
@@ -46,10 +46,10 @@ an empty argument list, written `()`:
 
 ```pluma
 let say-hi = fun { print "hi" }
-say-hi ()   # call it — prints "hi"
+say-hi ()   # call it: prints "hi"
 ```
 
-Watch the two empty brackets. `{}` is a block — the body of a function or branch.
+Watch the two empty brackets. `{}` is a block, the body of a function or branch.
 `()` is the empty argument list you use to call a zero-argument function. So
 `io.read ()` and `dict.empty ()` *call*; a bare `{ ... }` is code to run, not a
 call.
@@ -70,13 +70,13 @@ def square :: fun int -> int = fun n { n * n }
 def add :: fun int int -> int = fun x y { x + y }
 ```
 
-Compound argument types get parentheses so the arrow is unambiguous —
+Compound argument types get parentheses so the arrow is unambiguous:
 `fun (list int) -> int` is a function from a list of ints to an int.
 
 ## Functions are values
 
 A function is a value like any other, so you can pass one to another function.
-Many standard tools take a function as an argument — `list.map` applies one to
+Many standard tools take a function as an argument: `list.map` applies one to
 every element:
 
 ```pluma
@@ -87,7 +87,7 @@ list.map [1, 2, 3] (fun n { n * 10 })   # => [10, 20, 30]
 
 The function argument is often written inline like that, right at the call. When
 it's the last argument you can drop the surrounding parens entirely, which is why
-you'll see `list.map [1, 2, 3] fun n { n * 10 }` throughout the docs — same call,
+you'll see `list.map [1, 2, 3] fun n { n * 10 }` throughout the docs: same call,
 less punctuation.
 
 Next: [Strings and text](/docs/tour/strings).

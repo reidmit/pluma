@@ -1,7 +1,7 @@
 # Diagnostics and error codes
 
 When the compiler rejects a program it emits one or more *diagnostics*. Each
-carries a *stable code* — it never changes meaning across releases, so it's safe
+carries a *stable code*: it never changes meaning across releases, so it's safe
 to link to, filter on, or cite.
 
 ```
@@ -77,14 +77,14 @@ adds context. The language server surfaces all of it inline.
 
 ## Lints
 
-Lints are advisory warnings from `pluma lint` — stylistic and correctness smells
+Lints are advisory warnings from `pluma lint`: stylistic and correctness smells
 the type-checker tolerates. They never stop a run, build, or test, but
 `pluma lint` exits non-zero if any fire, so it can gate CI.
 
 | Code | Meaning |
 | --- | --- |
-| `L0001` | `let _ = expr` binds nothing — drop the `let _ =` |
-| `L0002` | `try _ = expr` binds nothing — write just `try expr` |
+| `L0001` | `let _ = expr` binds nothing; drop the `let _ =` |
+| `L0002` | `try _ = expr` binds nothing; write just `try expr` |
 | `L0003` | Comparing to a boolean literal (`x == true`) is redundant |
 | `L0004` | `if c { true } else { false }` is just the condition |
 | `L0005` | Boolean-literal operand of `and` / `or` is redundant |

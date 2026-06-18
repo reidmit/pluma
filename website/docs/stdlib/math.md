@@ -2,7 +2,7 @@
 
 Pluma has two number types: `int` for whole numbers and `float` for decimals. The
 [operators](/docs/reference/operators) page covers the arithmetic that works on
-both — `+`, `-`, `*`, `/`, `%`. This page is about `std/math`: rounding, roots,
+both: `+`, `-`, `*`, `/`, `%`. This page is about `std/math`: rounding, roots,
 logarithms, trigonometry, and the conversions for crossing between the two number
 types.
 
@@ -20,10 +20,10 @@ math.to-int 3.9     # => 3      (float → int, toward zero)
 math.to-int -3.9    # => -3
 ```
 
-`to-int` drops the fractional part toward zero — it doesn't round. (For rounding,
+`to-int` drops the fractional part toward zero; it doesn't round. (For rounding,
 see below.) This conversion matters more than it looks: division with `/` on two
 ints is *integer* division, so `7 / 2` is `3`. When you want a real quotient,
-convert first — `(math.to-float 7) / 2.0` is `3.5`.
+convert first: `(math.to-float 7) / 2.0` is `3.5`.
 
 ## Rounding
 
@@ -89,7 +89,7 @@ math.abs 5    # => 5
 
 ## See also
 
-- **[Operators](/docs/reference/operators)** — the arithmetic and comparison
+- **[Operators](/docs/reference/operators)**: the arithmetic and comparison
   operators, their precedence, and the no-implicit-promotion rule.
-- **[Working with strings](/docs/stdlib/strings)** — `string.to-int` and
+- **[Working with strings](/docs/stdlib/strings)**: `string.to-int` and
   `string.to-float` for turning text into numbers.

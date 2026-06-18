@@ -1,14 +1,14 @@
 # Strings and text
 
 Strings are written with double quotes. To drop a value into the middle of one,
-use `$(...)` — whatever's inside the parentheses is evaluated and spliced in.
+use `$(...)`: whatever's inside the parentheses is evaluated and spliced in.
 
 ```pluma
 let name = "Ada"
 print "hello, $(name)"          # hello, Ada
 ```
 
-Only `$(` starts interpolation. To write one literally — a shell snippet, say —
+Only `$(` starts interpolation. To write one literally (a shell snippet, say),
 escape the dollar as `\$(`.
 
 ## Text is always text
@@ -32,7 +32,7 @@ text, so the `to-string` is always explicit. Join two strings with `++`:
 ## Multi-line text
 
 For longer text, use a triple-quoted string. The opening `"""` is followed by a
-line break, and the indentation of the *closing* `"""` sets the left margin —
+line break, and the indentation of the *closing* `"""` sets the left margin:
 that much leading whitespace is stripped from every line, so the text lines up
 with your code without the indentation leaking into the value.
 

@@ -6,8 +6,8 @@ and a property name the compiler knows replace a hand-written `"color: red;
 padding: 1rem"`. It pairs with [`std/view`](/docs/stdlib/view): the same values
 serialize to identical CSS on the server and in the browser.
 
-There are two ways to apply styles — an inline `style` string, or a reusable
-scoped class — and both are built from the same typed values.
+There are two ways to apply styles, an inline `style` string or a reusable
+scoped class, and both are built from the same typed values.
 
 ## Typed values and declarations
 
@@ -25,8 +25,8 @@ css.width (css.pct 50.0)          # width: 50%
 
 Colors come from `css.hex`, `css.rgb`, `css.rgba`, and `css.named`; lengths from
 `css.px`, `css.rem`, `css.em`, `css.pct`, `css.vh`, `css.vw`, and `css.auto`.
-Because each property function only accepts the right *kind* of value — a length
-where a length belongs, a color where a color belongs — a mismatched unit is a
+Because each property function only accepts the right *kind* of value (a length
+where a length belongs, a color where a color belongs), a mismatched unit is a
 type error rather than CSS that silently does nothing.
 
 If you need a property the module doesn't have a named builder for, `css.property`
@@ -38,7 +38,7 @@ css.property "text-transform" "uppercase"
 
 ## Inline styles
 
-`css.inline` turns a list of declarations into a `style` string — useful for
+`css.inline` turns a list of declarations into a `style` string, useful for
 one-off styling on a single element:
 
 ```pluma
@@ -50,8 +50,8 @@ css.inline [css.color (css.hex "#e11"), css.padding (css.rem 1.0)]
 
 ## Reusable styles: rulesets
 
-For a style you apply in more than one place — and for anything needing hover
-states or media queries, which inline styles can't express — build a **ruleset**
+For a style you apply in more than one place (and for anything needing hover
+states or media queries, which inline styles can't express), build a **ruleset**
 with `css.rule`. A ruleset is the full power of CSS as a value:
 
 ```pluma
@@ -67,7 +67,7 @@ def card :: css.ruleset = css.rule [
 
 `css.on` adds a pseudo-class block (`"hover"`, `"focus"`), and `css.media` adds a
 responsive block. To apply a ruleset, hand it to `view.styled`, which registers
-its CSS once and gives the element a unique generated class — so styles are
+its CSS once and gives the element a unique generated class, so styles are
 scoped and never clash:
 
 ```pluma
@@ -86,13 +86,13 @@ def card :: css.ruleset = using css {
 ```
 
 Build bigger styles out of smaller ones with `css.compose`, which merges several
-rulesets into one — a base style plus a variant, say. Later rulesets win on any
+rulesets into one: a base style plus a variant, say. Later rulesets win on any
 property they both set.
 
 ## Global styles
 
 Most styling is scoped to an element, but a few rules belong to the document as a
-whole — resetting margins, styling the `body`. `css.global` registers rules
+whole, like resetting margins or styling the `body`. `css.global` registers rules
 against real selectors with `css.at`:
 
 ```pluma
@@ -105,7 +105,7 @@ css.global [
 
 ## See also
 
-- **[Views and HTML](/docs/stdlib/view)** — `view.styled` and `view.style-of`,
+- **[Views and HTML](/docs/stdlib/view)**: `view.styled` and `view.style-of`,
   which apply these styles to elements.
-- **[Server-side rendering](/docs/deep-dives/ssr)** — how scoped styles are
+- **[Server-side rendering](/docs/deep-dives/ssr)**: how scoped styles are
   collected and emitted with the server-rendered HTML.

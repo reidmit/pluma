@@ -1,9 +1,9 @@
 # Traits
 
 Sometimes you want one name to work across many types. `to-string` turns an int
-into text — it'd be nice if it worked for your own types too. `+` adds two ints,
-and also two floats. A `trait` is how Pluma expresses that: it describes a
-*capability* — a set of operations — that different types can provide.
+into text, and it'd be nice if it worked for your own types too. `+` adds two
+ints, and also two floats. A `trait` is how Pluma expresses that: it describes a
+*capability*, a set of operations, that different types can provide.
 
 ```pluma
 trait to-text a {
@@ -37,14 +37,14 @@ to-text false   # => "no"
 ```
 
 Add an `implement to-text` for another type and the same `to-text` name covers it
-too. The compiler picks the matching one by the argument's type — you never say
+too. The compiler picks the matching one by the argument's type; you never say
 which.
 
 ## Where you already rely on traits
 
 This isn't an exotic feature you opt into; Pluma's built-in operators are traits.
 `+`, `-`, `*`, and `/` come from a `numeric` trait that both `int` and `float`
-implement, which is why the same `+` works on either — and why a generic `fun x {
+implement, which is why the same `+` works on either, and why a generic `fun x {
 x + x }` works for any numeric type. The comparison operators come from an `ord`
 trait, so `<` works on anything that knows how to compare itself.
 
@@ -65,6 +65,6 @@ The `where (to-text a)` reads "for any type `a` that has the `to-text`
 capability." Inside, you're free to call `to-text x`, and the compiler guarantees
 every caller passes a type that supports it. This is the same machinery
 `std/error` uses: a precise error erases into the general `error` type only if it
-has a `describe` capability — opt-in, checked, no surprises.
+has a `describe` capability: opt-in, checked, no surprises.
 
 Next: [Modules](/docs/tour/modules).

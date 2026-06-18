@@ -1,15 +1,20 @@
 # Fullstack app
 
-A fullstack app is a directory with a `server.pa` and a `client.pa`. Mark a
-function `remote def` and the compiler writes both the server route and the
-browser stub, so the two never drift apart. Four small files:
+A fullstack app is a directory with two entrypoints: `server.pa` and
+`client.pa`. That pair is all `pluma build` needs to know it's building both
+halves at once; mark a function `remote def` and the compiler writes both the
+server route and the browser stub, so the two never drift apart.
+
+Everything else is ordinary modules the two entrypoints `use`. This guide factors
+the code they share into two more files (a convention, not a requirement) for
+four small files in all:
 
 ```
 app/
-	api.pa      # shared contract: the remote defs
-	server.pa   # serves the page, dispatches RPC
-	client.pa   # hydrates the server's HTML
-	ui.pa       # the shared view (server + browser)
+	api.pa      # shared:   the remote defs both sides agree on
+	server.pa   # required: serves the page, dispatches RPC
+	client.pa   # required: hydrates the server's HTML
+	ui.pa       # shared:   the view, rendered on the server and hydrated in the browser
 ```
 
 ## api.pa
@@ -54,7 +59,7 @@ def main = fun {
 
 ## client.pa
 
-Adopt the server's HTML instead of rebuilding it — no flash, no duplicate tree.
+Adopt the server's HTML instead of rebuilding it: no flash, no duplicate tree.
 
 ```pluma
 # client.pa -- boot the browser by hydrating the server's HTML.
@@ -67,9 +72,47 @@ def main = fun {
 }
 ```
 
-The `ui.pa` module holds the shared `view` — built once, rendered to HTML on the
-server and brought to life in the browser. Develop with live-reload, then build
-the deployable bundle:
+## ui.pa
+
+The shared `view`, compiled into both halves. `page` is a pure view builder with no
+effects at construction, so it renders the same on the server (`view.to-string`,
+inside `document`) and the client (`render.hydrate`). The one effect, the remote
+call, lives in a click handler, which runs only in the browser after hydration.
+
+```pluma
+# ui.pa -- the shared view: server-rendered, then hydrated in the browser.
+use std/signal
+use std/task
+use std/view
+use api
+
+# A pure view: built once, rendered to HTML on the server and brought to life in
+# the browser. The remote call sits in the click handler, which runs only after
+# hydration; view.to-string drops it on the server.
+public def page :: fun nothing -> view = using view {
+	fun {
+		let sum = signal.new 0
+		.div [.id "app"] [
+			.button [.on-click fun {
+				task.spawn (task.map (api.add 2 3) fun n { signal.set sum n })
+			}] [.text "add on the server"],
+			.p [] [.text-of fun { "sum = $(to-string (signal.get sum))" }],
+		]
+	}
+}
+
+# The server wraps that view in a full HTML document for the first paint, and links
+# the client bundle that hydrates it. Only the server calls this.
+public def document :: fun nothing -> string = fun {
+	"<!doctype html><html><body>$(view.to-string (page ()))<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+}
+```
+
+So the two names from the files above are one pair: the server serves
+`ui.document ()` (the whole HTML page) and the client hydrates `ui.page`, the
+`view` embedded inside it.
+
+Develop with live-reload, then build the deployable bundle:
 
 ```
 pluma dev app/      # live-reload dev server

@@ -2,13 +2,13 @@
 
 `std/json` reads and writes JSON: `parse` turns JSON text into a value you can
 pick apart, and `stringify` turns a value back into text. It's the module you
-reach for at the edge of a program — a reply from an API, a config file, a
-request body — wherever data arrives as text and needs to become something typed.
+reach for at the edge of a program (a reply from an API, a config file, a
+request body), wherever data arrives as text and needs to become something typed.
 
 ## Parsing never crashes
 
 JSON from outside your program is untrusted: it might be malformed, truncated, or
-not JSON at all. So `parse` doesn't throw or halt — it hands back a
+not JSON at all. So `parse` doesn't throw or halt: it hands back a
 [`result`](/docs/reference/errors), `ok` with the parsed value or `err` with
 where it gave up:
 
@@ -20,7 +20,7 @@ json.parse "{ oops"  # => err {line: 1, col: 3, message: "..."}
 ```
 
 That `err` carries a `{line, col, message}` pointing at the problem, so a bad
-payload is just a value you handle — `??` for a fallback, `try` to bail out — and
+payload is just a value you handle (`??` for a fallback, `try` to bail out), and
 never a surprise that escapes. This is the whole posture of the module: the
 text-to-value boundary is the one place you check, and everything past it is
 ordinary typed Pluma.
@@ -42,7 +42,7 @@ enum value {
 ```
 
 An array is a `list` of values; an object is a [`dict`](/docs/stdlib/dict-set)
-from string keys to values — the same standard collections from the rest of the
+from string keys to values, the same standard collections from the rest of the
 library, so once you're past the parse you walk JSON with tools you already know.
 
 Notice numbers split into `int` and `float`. JSON has one number type, but Pluma
@@ -54,7 +54,7 @@ either and gives you a float.
 
 You could match a `value` with `when`, but the `get-*` helpers are quicker. Each
 returns an [`option`](/docs/reference/errors): `some` when the value is the shape
-you asked for, `none` otherwise — so a wrong type or a missing key is handled the
+you asked for, `none` otherwise, so a wrong type or a missing key is handled the
 same gentle way as everywhere else.
 
 ```pluma
@@ -91,7 +91,7 @@ name-of "{ oops"                              # => none
 ```
 
 Each step narrows untrusted text toward a typed `string`, and any misstep along
-the way — bad JSON, no `name`, a `name` that isn't a string — lands on `none`
+the way (bad JSON, no `name`, a `name` that isn't a string) lands on `none`
 rather than blowing up.
 
 ## Building and writing JSON
@@ -112,7 +112,7 @@ for a config file or debug output.
 
 ## See also
 
-- **[Dictionaries and sets](/docs/stdlib/dict-set)** — a JSON object comes out as
+- **[Dictionaries and sets](/docs/stdlib/dict-set)**: a JSON object comes out as
   a `dict string value`, walked with `std/dict`.
-- **[Errors and missing values](/docs/reference/errors)** — the `result` from
+- **[Errors and missing values](/docs/reference/errors)**: the `result` from
   `parse` and the `option`s from the `get-*` helpers.

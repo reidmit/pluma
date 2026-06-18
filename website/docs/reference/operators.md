@@ -1,7 +1,7 @@
 # Operators
 
 Arithmetic and comparison operators are overloaded over `int` and `float`
-through traits — the same `+` works on both, and a generic `fun x { x + x }`
+through traits: the same `+` works on both, and a generic `fun x { x + x }`
 works for either. There is no dotted float operator set, and no implicit
 promotion.
 
@@ -12,7 +12,7 @@ promotion.
 | `+` | `numeric a => a a -> a` | Addition |
 | `-` | `numeric a => a a -> a` | Subtraction, and unary negation |
 | `*` | `numeric a => a a -> a` | Multiplication |
-| `/` | `numeric a => a a -> a` | Division — integer division on int, true division on float |
+| `/` | `numeric a => a a -> a` | Division: integer division on int, true division on float |
 | `%` | `int int -> int / float float -> float` | Remainder |
 
 The two operands must have the same type, so `2 + 3.5` is a type error rather
@@ -23,7 +23,7 @@ by its operands.
 
 The ordering operators are shorthand for `compare` (the `ord` trait) plus a check
 on the result, so they work on any ordered type. `==` and `!=` compare any two
-values of the same type by value — looking inside records, lists, and enums field
+values of the same type by value, looking inside records, lists, and enums field
 by field, not by identity.
 
 | Operator | Signature | Meaning |

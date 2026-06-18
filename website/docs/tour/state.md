@@ -2,7 +2,7 @@
 
 Names in Pluma don't change once bound, which is what lets you read a function
 top to bottom and trust that each name means one thing throughout. But sometimes
-you really do need a value that updates over time — a counter, a running total,
+you really do need a value that updates over time: a counter, a running total,
 an accumulator inside a loop. That's a `ref`: a small box you can read from and
 write to.
 
@@ -15,18 +15,18 @@ ref.get count                    # => 100
 
 Four operations cover it: `ref.new` makes a box around a starting value,
 `ref.get` reads what's inside, `ref.set` replaces it, and `ref.update` applies a
-function to the current contents — the usual choice when the new value depends on
+function to the current contents, the usual choice when the new value depends on
 the old one, like incrementing.
 
 `ref` is auto-imported, so you can write `ref.new` without a `use`. It's the one
 deliberate exception to immutability in the language. And because reaching into a
 box shows up in a function's type, you can always tell from a signature which
-functions can change state and which can't — the escape hatch is visible, never
+functions can change state and which can't: the escape hatch is visible, never
 hidden.
 
 ## A worked example
 
-A `while` loop is the classic place a `ref` earns its keep, since the loop needs
+A `while` loop is the classic place you reach for a `ref`, since the loop needs
 something that changes each time around:
 
 ```pluma

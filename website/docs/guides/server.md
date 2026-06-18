@@ -23,5 +23,5 @@ def main = fun {
 ```
 
 Run `pluma run server.pa` and open `http://127.0.0.1:8080`. Each route returns a
-`task http.response`, so the server handles many requests at once — and failures
+`task http.response`, so the server handles many requests at once, and failures
 come back as values you handle, not surprises that escape.

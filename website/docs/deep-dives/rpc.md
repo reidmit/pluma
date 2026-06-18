@@ -1,6 +1,6 @@
 # How RPC works
 
-Most apps just call a `remote def` and get back a value — the network is
+Most apps just call a `remote def` and get back a value, and the network is
 invisible. This page is for the curious: how a `remote def` becomes a real HTTP
 call, what the compiler generates, and where the boundary between client and
 server actually sits.
@@ -14,7 +14,7 @@ doing underneath.
 ## The `remote def` contract
 
 A `remote def` is the seam between the two halves of a fullstack app. Its
-signature is a plain logical contract — the arguments and the result — with no
+signature is a plain logical contract (the arguments and the result) with no
 mention of the network:
 
 ```pluma
@@ -30,7 +30,7 @@ public remote def add :: fun int int -> task int = fun a b {
 ```
 
 The body you write is the *server's* handler. The signature, though, belongs to
-both sides — and that's the whole trick. The browser calls it like any local
+both sides, and that's the whole trick. The browser calls it like any local
 async function:
 
 ```pluma
@@ -45,7 +45,7 @@ contract is the *logical* call, not the HTTP mechanics underneath.
 
 ## What the compiler generates
 
-A fullstack project compiles into two programs from one source tree — a server
+A fullstack project compiles into two programs from one source tree: a server
 and a browser bundle (see [the build](/docs/reference/build)). A `remote def` is
 where the two are stitched together, and the compiler gives it a different body in
 each:
@@ -68,15 +68,15 @@ def handler :: fun http.request -> task http.response = fun req {
 ```
 
 The split also decides what ships to the browser: only code the client can
-actually reach is compiled into the bundle. A `remote def`'s *body* — the
-server-side handler, and whatever it calls, like [database
-access](/docs/stdlib/database) — stays on the server. The browser gets the stub,
+actually reach is compiled into the bundle. A `remote def`'s *body*, the
+server-side handler and whatever it calls, like [database
+access](/docs/stdlib/database), stays on the server. The browser gets the stub,
 not the implementation.
 
 ## The wire and the transports
 
-A call's arguments are serialized with Pluma's binary `wire` codec — compact, and
-typed, so there's no JSON-shaped guessing about what a field holds — POSTed to
+A call's arguments are serialized with Pluma's binary `wire` codec (compact, and
+typed, so there's no JSON-shaped guessing about what a field holds), POSTed to
 `/rpc/<name>`, and the reply is decoded the same way. Two transports implement
 that round-trip with the same shape: the browser goes through the host page's
 `fetch`, and a native client goes through [`http.fetch`](/docs/stdlib/http). The
@@ -85,7 +85,7 @@ generated stub calls whichever one the build target installed.
 One danger with any client/server split is *drift*: you redeploy the server with a
 changed endpoint, but an old browser tab is still running the previous client. If
 the bytes happened to line up, that stale client could silently misread the new
-reply. Pluma closes that hole with a **schema fingerprint** — each route carries a
+reply. Pluma closes that hole with a **schema fingerprint**: each route carries a
 hash of its argument and result types. When a call's fingerprint doesn't match the
 server's, the server answers `409` and the client surfaces a typed
 "skew" error instead of decoding garbage. A stale client fails loudly and
@@ -96,11 +96,11 @@ honestly.
 A remote call can fail two very different ways, and Pluma keeps them on separate
 channels:
 
-- A **domain** failure — "no such user", "insufficient funds" — is part of what
+- A **domain** failure ("no such user", "insufficient funds") is part of what
   the endpoint means, so it lives in the result: the endpoint returns `task
   (result a e)`, and the caller handles the `result` as usual.
-- An **infrastructure** failure — the network is down, the request was
-  unauthorized, the schema drifted — isn't any one endpoint's business. These ride
+- An **infrastructure** failure (the network is down, the request was
+  unauthorized, the schema drifted) isn't any one endpoint's business. These ride
   the task's failure channel as an `rpc-error`, which you recover with
   `task.attempt` when you want to inspect it:
 
@@ -119,7 +119,7 @@ request might be rejected.
 
 ## Ambient context and rejection
 
-The contract has no `request` parameter — but a handler sometimes needs a fact
+The contract has no `request` parameter, but a handler sometimes needs a fact
 about the request anyway, like an auth header. Rather than thread a `request`
 through every signature, the dispatcher binds the inbound request for the duration
 of each handler call, and the handler reads what it needs from
@@ -138,16 +138,16 @@ when context.header "authorization" is some token {
 
 `rpc.reject` ends the handler with a status code, which the client receives as the
 matching `rpc-error` (an `unauthorized` for 401/403). On the outbound side,
-`rpc.with-headers` scopes extra headers onto the calls made within it — for
+`rpc.with-headers` scopes extra headers onto the calls made within it, for
 attaching that same auth token to a request from one service to another. Identity
 itself is left to your app: the context carries transport facts, and you build
 authentication on top.
 
 ## See also
 
-- **[Fullstack app](/docs/guides/fullstack)** — the `remote def` happy path, end
+- **[Fullstack app](/docs/guides/fullstack)**: the `remote def` happy path, end
   to end.
-- **[Fullstack build](/docs/reference/build)** — how one source tree becomes a
+- **[Fullstack build](/docs/reference/build)**: how one source tree becomes a
   server and a browser bundle.
-- **[Concurrency](/docs/reference/concurrency)** — the `task` a remote call
+- **[Concurrency](/docs/reference/concurrency)**: the `task` a remote call
   returns and `task.attempt` for recovering its failure.

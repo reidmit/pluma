@@ -20,7 +20,7 @@ every element of another list into this one:
 let more = [1, ...primes]   # => [1, 2, 3, 5, 7, 11]
 ```
 
-The `std/list` module has the usual tools — `list.map` to transform every
+The `std/list` module has the usual tools: `list.map` to transform every
 element, `list.filter` to keep some, `list.fold` to boil a list down to a single
 value, and plenty more.
 
@@ -42,7 +42,7 @@ let row = ("Ada", 36, true)
 ```
 
 Reach for a tuple when you want to return two or three related values from a
-function without inventing a name for each — a pair of coordinates, a key and a
+function without inventing a name for each: a pair of coordinates, a key and a
 value. When the pieces deserve names, use a record instead.
 
 ## Records
@@ -55,7 +55,7 @@ person.name        # => "Ada"
 ```
 
 Build a changed copy with the spread `...`, naming only the fields you want
-different — the rest are carried over from the original:
+different; the rest are carried over from the original:
 
 ```pluma
 let older = {...person, age: 37}   # => {name: "Ada", age: 37}
@@ -72,7 +72,7 @@ label {name: "Ada", age: 36}          # => "Ada"
 label {name: "Mars", radius: 3389.5}  # => "Mars"
 ```
 
-There's no separate "record type" to declare before you can use one — the shape
+There's no separate "record type" to declare before you can use one: the shape
 *is* the type. The [Type aliases](/docs/reference/aliases) page covers how to
 give a record shape a name when you want one, and why records and enums differ on
 what counts as "the same type."
@@ -81,4 +81,4 @@ These three are the built-in shapes. When you need to look values up by a key or
 test membership, the standard library adds [dictionaries and
 sets](/docs/stdlib/dict-set).
 
-Next: [Control flow and matching](/docs/tour/control-flow).
+Next: [Control flow](/docs/tour/control-flow).

@@ -1,7 +1,7 @@
 # Files and the filesystem
 
 `std/sys/fs` reads, writes, and manages files and directories. It's a server
-capability — a browser build can't reach the disk — and it shares the async,
+capability (a browser build can't reach the disk), and it shares the async,
 failures-as-values shape of the rest of the standard library.
 
 ## Async by default, with a sync twin
@@ -11,7 +11,7 @@ returns a [`task`](/docs/reference/concurrency), and a slow read parks just the
 calling fiber on a worker thread while every other fiber keeps running. You await
 the result with `try`, the same as any task.
 
-Each operation also has a synchronous `-sync` twin — `fs.read-text` and
+Each operation also has a synchronous `-sync` twin: `fs.read-text` and
 `fs.read-text-sync`, `fs.write-text` and `fs.write-text-sync`. The sync version
 blocks the current thread and returns a plain [`result`](/docs/reference/errors)
 instead of a task. Reach for the sync twins only in one-shot scripts and build
@@ -21,8 +21,8 @@ default so one slow file doesn't stall everything else.
 ## Reading
 
 `read-text` reads a whole file as a string, `read-bytes` as raw bytes, and
-`read-dir` lists a directory's entries. Each can fail — the file might not exist,
-the directory might not be readable — so each returns a `result` (sync) or a
+`read-dir` lists a directory's entries. Each can fail (the file might not exist,
+the directory might not be readable), so each returns a `result` (sync) or a
 failing `task` (async), with the operating system's message on the `err` side:
 
 ```pluma
@@ -63,7 +63,7 @@ any failure.
 
 ## Asking about a path
 
-The plain queries — `exists`, `is-file`, `is-dir` — answer with a `bool`, not a
+The plain queries (`exists`, `is-file`, `is-dir`) answer with a `bool`, not a
 `result`, because "no, it isn't there" is an ordinary answer rather than an error:
 
 ```pluma
@@ -72,8 +72,8 @@ use std/sys/fs
 fs.exists-sync "config.txt"   # => true or false
 ```
 
-For more detail, `fs.stat` returns a `file-info` record — `{size, kind,
-modified}` — where `kind` says whether the path is a file, a directory, or a
+For more detail, `fs.stat` returns a `file-info` record (`{size, kind,
+modified}`) where `kind` says whether the path is a file, a directory, or a
 symlink, and `modified` is an [instant](/docs/stdlib/time) you can format or
 compare.
 
@@ -108,7 +108,7 @@ path.extension "notes.md"        # => some "md"
 
 ## See also
 
-- **[Concurrency](/docs/reference/concurrency)** — the `task` every async op
+- **[Concurrency](/docs/reference/concurrency)**: the `task` every async op
   returns, and how `try` awaits it.
-- **[Bytes](/docs/reference/bytes)** — what `read-bytes` and `write-bytes` work
+- **[Bytes](/docs/reference/bytes)**: what `read-bytes` and `write-bytes` work
   with.

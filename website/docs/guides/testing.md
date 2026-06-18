@@ -2,7 +2,7 @@
 
 Pluma's testing story has a twist worth stating up front: **tests are a library,
 not syntax.** There's no `@test` annotation or special `test` keyword. A test
-suite is an ordinary value — a list — that you build with `std/test` and check
+suite is an ordinary value (a list) that you build with `std/test` and check
 with `std/assert`, and the `pluma test` command finds and runs it. That means you
 can build, group, and transform tests with the same tools you use for any other
 data.
@@ -24,7 +24,7 @@ def tests :: test.suite = [
 
 A case's body is a function that returns a [`result`](/docs/reference/errors):
 `ok ()` means the test passed, and `err message` means it failed. You rarely
-write those by hand, though — the `std/assert` checks produce exactly that result,
+write those by hand, though: the `std/assert` checks produce exactly that result,
 so a case body is usually just one assertion.
 
 ## Assertions
@@ -59,7 +59,7 @@ Because a suite is just a list, you shape it with a few constructors:
 
 - `test.group "name" [...]` nests related cases under a heading.
 - `test.skip case` keeps a case in the file but doesn't run it.
-- `test.focus case` runs *only* the focused cases — handy while chasing one
+- `test.focus case` runs *only* the focused cases, handy while chasing one
   failure.
 - `test.todo "name"` records a test you intend to write, with no body yet.
 
@@ -79,8 +79,8 @@ def tests :: test.suite = [
 ## Running them
 
 `pluma test` discovers every `*.test.pa` file in your project, runs the cases, and
-reports the results. Tests run under V8 — the same engine your built artifact
-deploys to — so a passing test exercises the exact code that ships.
+reports the results. Tests run under V8, the same engine your built artifact
+deploys to, so a passing test exercises the exact code that ships.
 
 ```
 pluma test
@@ -102,13 +102,13 @@ demo
 3 of 4 passed, 1 todo
 ```
 
-A failed assertion fails its case with a readable message — `assert.equals`, for
-instance, reports what it expected against what it got — so you can usually see
+A failed assertion fails its case with a readable message. `assert.equals`, for
+instance, reports what it expected against what it got, so you can usually see
 what went wrong without opening the file.
 
 ## See also
 
-- **[Command-line script](/docs/guides/cli)** — the broader `pluma` toolbelt,
+- **[Command-line script](/docs/guides/cli)**: the broader `pluma` toolbelt,
   including `run`, `build`, and `format`.
-- **[Errors and missing values](/docs/reference/errors)** — the `result` type a
+- **[Errors and missing values](/docs/reference/errors)**: the `result` type a
   test case returns.

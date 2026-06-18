@@ -2,7 +2,7 @@
 
 Pluma's frontend is built on fine-grained reactivity: a *signal* holds a value,
 and anything that reads it re-runs when it changes. There's no virtual DOM and no
-update loop — the framework tracks exactly which views depend on which data and
+update loop: the framework tracks exactly which views depend on which data and
 updates only those. This page explains how that works.
 
 ::: aside .callout
@@ -15,7 +15,7 @@ does.
 
 `std/signal` has three building blocks:
 
-- A **signal** is a cell you can read and write — `signal.new` creates one,
+- A **signal** is a cell you can read and write: `signal.new` creates one,
   `signal.get` reads it, `signal.set` writes it.
 - A **computed** is a derived value: `signal.computed` takes a function, and the
   result acts like a read-only signal that recomputes when its inputs change.
@@ -37,7 +37,7 @@ signal.set n 5
 ```
 
 You never tell the effect what it depends on. It read `doubled`, which read `n`,
-so it depends on both — and only those.
+so it depends on both, and only those.
 
 ## Automatic dependency tracking
 
@@ -55,7 +55,7 @@ this time. There's nothing to register by hand and nothing to forget.
 ## Updates without glitches
 
 A naive version of this idea has a famous bug. Suppose an effect reads two
-computeds that both depend on the same signal — a diamond:
+computeds that both depend on the same signal, a diamond:
 
 ```
         n
@@ -66,12 +66,12 @@ computeds that both depend on the same signal — a diamond:
 ```
 
 Change `n`, and a naive system might update `left`, run the effect, then update
-`right` and run the effect *again* — and in between, the effect saw a `left` and
+`right` and run the effect *again*. And in between, the effect saw a `left` and
 `right` that disagreed about `n`. That inconsistent in-between is called a glitch.
 
 Pluma avoids it with a *pull* model. A `set` doesn't eagerly recompute anything:
 it marks the dependent computeds as stale and queues the dependent effects. The
-computeds don't actually recompute until something reads them — so by the time the
+computeds don't actually recompute until something reads them, so by the time the
 effect runs and pulls `left` and `right`, both are already fresh, and the effect
 runs **once**, seeing a consistent world:
 
@@ -89,14 +89,14 @@ let _ = signal.effect (fun {
 })
 
 signal.set a 10
-ref.get runs   # => 2  (once on creation, once for the update — not three times)
+ref.get runs   # => 2  (once on creation, once for the update, not three times)
 ```
 
 When you want several writes to settle as a single update, wrap them in
-`signal.batch` — every effect still runs at most once, after all the writes land.
+`signal.batch`: every effect still runs at most once, after all the writes land.
 
 One more economy: `set` compares the new value to the current one (by value), and
-if they're equal it does nothing at all — no store, no notify. A redundant write
+if they're equal it does nothing at all: no store, no notify. A redundant write
 is free, and an effect that happens to write back an unchanged value settles
 instead of looping forever.
 
@@ -107,13 +107,13 @@ let _ = signal.effect (fun {
 	let _v = signal.get m
 	ref.update runs (fun x { x + 1 })
 })
-signal.set m 7      # same value — the effect does NOT re-run
+signal.set m 7      # same value, the effect does NOT re-run
 ref.get runs        # => 1
 ```
 
 ## Cleaning up: the owner tree
 
-A UI creates and destroys effects constantly — every time a list row appears or a
+A UI creates and destroys effects constantly, every time a list row appears or a
 panel closes. If those effects kept running after their part of the page was gone,
 they'd leak. So effects are arranged in an **owner tree**: a dynamic piece of UI
 runs under its own owner, and disposing that owner disposes exactly the effects
@@ -123,7 +123,7 @@ created beneath it, no more and no less.
 function; `signal.on-cleanup` registers a teardown to run when the current owner
 is disposed. The view layer uses these so that when a `view.show` hides its child
 or a `view.each` row drops out, that subtree's effects are torn down with it
-automatically — you don't manage any of it. (Each `signal.effect` also returns its
+automatically; you don't manage any of it. (Each `signal.effect` also returns its
 own dispose function for standalone use, which is the `_` we've been ignoring
 above.)
 
@@ -137,7 +137,7 @@ keys a list so only the rows that actually changed are touched.
 
 In the browser, `std/web/render` walks the view once and attaches each of these
 effects directly to a real DOM node. After that first pass there's no diffing and
-no retained shadow tree — a `set` flows straight through the effect to the one DOM
+no retained shadow tree: a `set` flows straight through the effect to the one DOM
 node that depends on it. That directness is the whole reason the model is fast:
 the framework never re-examines parts of the page that didn't change, because it
 already knows, edge by edge, what depends on what.
@@ -145,13 +145,13 @@ already knows, edge by edge, what depends on what.
 ## SSR
 
 Because signals are just a graph over ordinary values, the same reactive code runs
-on the server too — which is what lets a page render to HTML and then come alive in
+on the server too, which is what lets a page render to HTML and then come alive in
 the browser. The [server-side rendering](/docs/deep-dives/ssr) deep-dive covers
 that handoff.
 
 ## See also
 
-- **[Views and HTML](/docs/stdlib/view)** — the reactive builders that wrap these
+- **[Views and HTML](/docs/stdlib/view)**: the reactive builders that wrap these
   primitives.
-- **[Server-side rendering](/docs/deep-dives/ssr)** — rendering a signal-driven
+- **[Server-side rendering](/docs/deep-dives/ssr)**: rendering a signal-driven
   view on the server and hydrating it in the browser.

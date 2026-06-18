@@ -3,9 +3,9 @@
 `std/time` handles two related but distinct ideas, and keeping them straight is
 the key to the whole module:
 
-- An **instant** is a single point on the wall clock — "this moment", the time a
+- An **instant** is a single point on the wall clock: "this moment", the time a
   log line was written. It's what you compare and format.
-- A **duration** is a *length* of time — "three days", "500 milliseconds" — with
+- A **duration** is a *length* of time ("three days", "500 milliseconds") with
   no particular start. It's what you add to an instant, or get back from
   subtracting two.
 
@@ -15,7 +15,7 @@ works in UTC; named time zones aren't available yet.
 
 ## Durations
 
-A duration has two ways in. The quickest is a **duration literal** — a number
+A duration has two ways in. The quickest is a **duration literal**: a number
 glued to a unit, which is ordinary language syntax and needs no import:
 
 ```pluma
@@ -68,7 +68,7 @@ underneath you.
 
 To name a particular date, use `time.date` (just the day) or `time.date-time`
 (down to the second). They *validate* the components, so they return a
-[`result`](/docs/reference/errors) — an impossible date is an `err`, not a
+[`result`](/docs/reference/errors): an impossible date is an `err`, not a
 silently mangled instant:
 
 ```pluma
@@ -131,11 +131,11 @@ The `add-days`, `add-hours`, `add-minutes`, and `add-seconds` helpers skip the
 duration step for the common cases. `add-months` and `add-years` are special:
 shifting a calendar month can land on a day that doesn't exist (January 31 plus a
 month), so they return a `result`. To compare instants, use `before`, `after`, or
-`compare` — and `time.min`/`time.max` to pick the earlier or later of two.
+`compare`, and `time.min`/`time.max` to pick the earlier or later of two.
 
 ## See also
 
-- **[Concurrency](/docs/reference/concurrency)** — `task.sleep` and timeouts take
+- **[Concurrency](/docs/reference/concurrency)**: `task.sleep` and timeouts take
   the same durations.
-- **[Errors and missing values](/docs/reference/errors)** — the `result`s from
+- **[Errors and missing values](/docs/reference/errors)**: the `result`s from
   date construction and parsing, and how `time-error` erases into `std/error`.

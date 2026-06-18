@@ -1,20 +1,20 @@
 # Queues
 
 A queue is a first-in, first-out (FIFO) collection: you add values to the back and
-take them from the front, so they come out in the order they went in — like a line
+take them from the front, so they come out in the order they went in, like a line
 at a counter. Reach for one when arrival order matters: work waiting to be
 processed, the frontier of a breadth-first search, events to replay in sequence.
 
 `std/queue` rounds out the collection family alongside
 [lists, dicts, and sets](/docs/stdlib/dict-set). What makes it different is the
-access pattern — strictly front-and-back — and one other thing worth stating up
+access pattern (strictly front-and-back) and one other thing worth stating up
 front: unlike those, a queue is **mutable**.
 
 ## Adding and removing
 
 `enqueue` adds a value to the back, and `dequeue` removes and returns the one at
 the front. Because the queue might be empty, `dequeue` returns an
-[`option`](/docs/reference/errors) — `none` when there's nothing left:
+[`option`](/docs/reference/errors): `none` when there's nothing left:
 
 ```pluma
 use std/queue
@@ -40,13 +40,13 @@ queue.size (queue.from-list [1, 2, 3])    # => 3
 ## A queue mutates in place
 
 This is the part to keep in mind. `enqueue` and `dequeue` change the queue itself
-rather than handing back a new one — the same way [`list.push`](/docs/stdlib/lists)
+rather than handing back a new one, the same way [`list.push`](/docs/stdlib/lists)
 grows a list in place. That's what makes both operations fast (amortized constant
 time, so draining a large queue stays cheap), but it means a queue follows the
 same aliasing rule: the change shows up through *every* name pointing at the same
 queue.
 
-So treat a queue as owned by the code filling and draining it — pass it around
+So treat a queue as owned by the code filling and draining it: pass it around
 within that, but don't hand the same queue to two parts of a program expecting
 independent copies. When you need a stable, shareable view of the contents, take a
 `to-list` snapshot instead.
@@ -73,7 +73,7 @@ value in arrival order and stops on its own when the queue runs dry.
 
 ## See also
 
-- **[Dictionaries and sets](/docs/stdlib/dict-set)** — the other collections, and
+- **[Dictionaries and sets](/docs/stdlib/dict-set)**: the other collections, and
   when to pick which.
-- **[Working with lists](/docs/stdlib/lists)** — including `push`/`pop`, the
+- **[Working with lists](/docs/stdlib/lists)**: including `push`/`pop`, the
   list's own in-place stack operations.

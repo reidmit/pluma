@@ -2,7 +2,7 @@
 
 When a fullstack app serves a page, the server renders the view to HTML first, so
 the browser shows real content before any code runs. The browser then *hydrates*
-that markup — taking over the existing DOM and wiring up reactivity without
+that markup, taking over the existing DOM and wiring up reactivity without
 rebuilding it. This page explains the round trip.
 
 ::: aside .callout
@@ -17,7 +17,7 @@ reactivity actually meet.
 
 ## One view, rendered to HTML
 
-A page is a function returning a [`view`](/docs/stdlib/view) — a description of
+A page is a function returning a [`view`](/docs/stdlib/view), a description of
 the UI as data. On the server, `view.to-string` walks that tree and produces an
 HTML string, which the server sends as the page body:
 
@@ -26,22 +26,22 @@ HTML string, which the server sends as the page body:
 task.return (http.html 200 (document-html "Title" (page ())))
 ```
 
-The browser receives finished, styled markup and paints it immediately — no
+The browser receives finished, styled markup and paints it immediately, with no
 waiting for a bundle to download and build the DOM first. That's the whole point
 of rendering on the server: a fast first paint that works even before the
 JavaScript loads.
 
 Crucially, it's the *same* `view` the browser will use. The server doesn't
-produce one description of the page and the client another — there's a single
+produce one description of the page and the client another: there's a single
 function, run two ways, so the two can't drift out of agreement. That agreement is
 what makes the next step safe.
 
 ## Carrying the data across
 
-A page is rendered from some data — the rows for this user, the post being viewed.
+A page is rendered from some data: the rows for this user, the post being viewed.
 The server has that data in hand when it renders. For the browser to hydrate the
-*same* tree, it needs the *same* data, and the obvious approach — have the client
-re-fetch it over the network — is wasteful: it's a second round-trip, and it opens
+*same* tree, it needs the *same* data, and the obvious approach (have the client
+re-fetch it over the network) is wasteful: it's a second round-trip, and it opens
 a window where the page is visible but not yet interactive.
 
 So the server embeds the data in the page instead. It serializes the data once and
@@ -53,7 +53,7 @@ browser reads it straight back with `render.boot-data` before it builds the view
 when render.boot-data "page-data" is ok data {
 	render.hydrate (dom.body ()) (fun { page data })
 } else {
-	# no embedded data (served as a plain client shell) — fetch it instead
+	# no embedded data (served as a plain client shell): fetch it instead
 	render.mount (dom.body ()) (fun { loading () })
 }
 ```
@@ -68,7 +68,7 @@ in step.
 `hydrate` is the third way to consume a view, alongside `view.to-string` (server)
 and `render.mount` (build DOM from scratch). Instead of creating nodes, it walks
 the view tree alongside the DOM the server already produced and **adopts** each
-existing node — attaching effects to the reactive parts and listeners to the
+existing node, attaching effects to the reactive parts and listeners to the
 handlers, while leaving the static structure untouched.
 
 That's why hydration causes no flash and no re-render: the nodes are already on
@@ -78,7 +78,7 @@ position.
 
 That one-to-one alignment is also the thing to keep in mind when it goes wrong. If
 two reactive text nodes sit directly next to each other, the browser collapses
-them into a single text node when it parses the server's HTML — and now the view
+them into a single text node when it parses the server's HTML, and now the view
 expects two children where the DOM has one, knocking the alignment off. The fix is
 to give reactive text its own element so it stays a distinct node:
 
@@ -90,7 +90,7 @@ view.span [] [view.text-of (fun { to-string (signal.get n) })]
 ## The two halves of the build
 
 All of this assumes one program compiled into both a server and a browser bundle.
-The build figures out which code each side needs and splits accordingly —
+The build figures out which code each side needs and splits accordingly:
 server-only work like [database access](/docs/stdlib/database) never reaches the
 browser. The [fullstack build](/docs/reference/build) reference covers what's
 produced, and [how RPC works](/docs/deep-dives/rpc) covers how a `remote def`
@@ -98,9 +98,9 @@ bridges the two halves with a typed call.
 
 ## See also
 
-- **[Fullstack build](/docs/reference/build)** — the files a build produces and
+- **[Fullstack build](/docs/reference/build)**: the files a build produces and
   the SSR-versus-CSR choice.
-- **[Reactive frontend with signals](/docs/deep-dives/signals)** — the reactivity
+- **[Reactive frontend with signals](/docs/deep-dives/signals)**: the reactivity
   that hydration re-attaches to the server's DOM.
-- **[Views and HTML](/docs/stdlib/view)** — `view.to-string` and the element
+- **[Views and HTML](/docs/stdlib/view)**: `view.to-string` and the element
   builders the server renders.
