@@ -9,7 +9,7 @@
 #     handing back a `result` with a named error -- the same shape `std/json` uses, just
 #     typed and column-named. Thread several with `try` to decode a whole row into your own
 #     record.
-#   - a query builder you pipe together with `|`, and `compile`, which turns a query into
+#   - a query builder you pipe together with `|>`, and `compile`, which turns a query into
 #     parameterized SQL plus its bind list. `compile` is total: every value is *bound* (a
 #     `?` placeholder), never spliced into the text, and every identifier is quote-escaped,
 #     so a query can't be malformed by its inputs and SQL injection is impossible by
@@ -207,7 +207,7 @@ public def one-of :: fun string (list value) -> predicate = predicate.one-of
 # `filter` list is still AND-joined, so these only matter when you need OR or NOT *inside*
 # a condition:
 #
-#     sql.from "users" | sql.filter (sql.any [sql.eq "role" (sql.text "admin"), sql.gt "age" (sql.int 17)])
+#     sql.from "users" |> sql.filter (sql.any [sql.eq "role" (sql.text "admin"), sql.gt "age" (sql.int 17)])
 #     # => ... WHERE ("role" = ? OR "age" > ?)
 public def all :: fun (list predicate) -> predicate = predicate.all
 
@@ -231,7 +231,7 @@ public def asc :: fun string -> sort = sort.asc
 public def desc :: fun string -> sort = sort.desc
 
 # A SELECT query as plain, inspectable data. You build one by piping the stages below with
-# `|` (each takes the query first, so it threads), then hand it to `std/sql.compile` or a
+# `|>` (each takes the query first, so it threads), then hand it to `std/sql.compile` or a
 # `std/sys/db` runner. An empty `select` means `SELECT *`; `filter` terms are AND-joined.
 public alias query {
 	from :: string,
@@ -255,7 +255,7 @@ public def select :: fun query (list string) -> query = fun q cols {
 # Adds a WHERE condition. Multiple `filter`s are joined with AND, in the order added. (The
 # stage is `filter`, not `where`, because `where` is a reserved word in Pluma.)
 #
-#     sql.from "users" | sql.filter (sql.gt "age" (sql.int 17))
+#     sql.from "users" |> sql.filter (sql.gt "age" (sql.int 17))
 public def filter :: fun query predicate -> query = fun q p {
 	{...q, filter: [...q.filter, p]}
 }
@@ -288,7 +288,7 @@ public def offset :: fun query int -> query = fun q n {
 #      token -- a weird column name becomes a (nonexistent) quoted column, an execute-time
 #      "no such column" error, never injection.
 #
-#     sql.compile (sql.from "users" | sql.filter (sql.gt "age" (sql.int 17)))
+#     sql.compile (sql.from "users" |> sql.filter (sql.gt "age" (sql.int 17)))
 #     # => ("SELECT * FROM \"users\" WHERE \"age\" > ?", [value.int 17])
 public def compile :: fun query -> (string, list value) = fun q {
 	let cols = if list.length q.select == 0 {

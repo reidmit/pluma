@@ -9,8 +9,8 @@
 #
 #     def adults :: fun connection -> task (list user) string = fun conn {
 #         sql.from "users"
-#         | sql.filter (sql.gt "age" (sql.int 17))
-#         | db.fetch conn decode-user
+#         |> sql.filter (sql.gt "age" (sql.int 17))
+#         |> db.fetch conn decode-user
 #     }
 #
 # Values cross to the host as a small length-prefixed binary blob and rows come back the
@@ -149,9 +149,9 @@ public def transaction :: fun connection (fun nothing -> task a string) -> task 
 }
 
 # Compiles a `std/sql` query, runs it, and decodes each row with `decode`. The terminal
-# stage of a `|`-built query pipeline: total, injection-free SQL in, typed rows out.
+# stage of a `|>`-built query pipeline: total, injection-free SQL in, typed rows out.
 #
-#     sql.from "users" | sql.filter (sql.gt "age" (sql.int 17)) | db.fetch conn decode-user
+#     sql.from "users" |> sql.filter (sql.gt "age" (sql.int 17)) |> db.fetch conn decode-user
 public def fetch :: fun query connection (fun row -> result a string) -> task (list a) string = fun q conn decode {
 	let compiled = sql.compile q
 	let (text, binds) = compiled
@@ -167,7 +167,7 @@ public def fetch :: fun query connection (fun row -> result a string) -> task (l
 # predicates and ordering, and finish with `db.run` -- the row type flows the whole way and
 # the SELECT list is always the schema's columns, so the decoder always matches:
 #
-#     db.from users | db.filter (sql.gt "age" (sql.int 17)) | db.order-by (sql.desc "age") | db.run conn
+#     db.from users |> db.filter (sql.gt "age" (sql.int 17)) |> db.order-by (sql.desc "age") |> db.run conn
 #     # :: task (list user) string
 
 # A query against a typed table: the table (schema + decoder) plus the accumulating
@@ -225,7 +225,7 @@ public def run :: fun (table-query a) connection -> task (list a) string = fun q
 	}
 }
 
-# Every row of a table, decoded -- `db.from t | db.run conn` with no clauses.
+# Every row of a table, decoded -- `db.from t |> db.run conn` with no clauses.
 public def all :: fun connection (table a) -> task (list a) string = fun conn t {
 	run (from t) conn
 }
