@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::watch::scan;
 
@@ -32,6 +32,12 @@ type Served = Arc<Mutex<Vec<u8>>>;
 type Clients = Arc<Mutex<Vec<TcpStream>>>;
 
 const POLL: Duration = Duration::from_millis(250);
+
+// How long a proxy/SSR request will wait for the server subprocess to come back
+// when it can't connect — long enough to bridge a rebuild's kill→respawn→bind gap
+// (typically well under a second) without hanging forever on a genuinely dead
+// server. Normal traffic connects on the first try and never waits.
+const RESTART_GRACE: Duration = Duration::from_secs(5);
 
 // --------------------------------------------------------------------------
 // The dev dashboard: a full-screen status panel for the browser-facing modes
@@ -565,6 +571,10 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 				}
 				child = spawn_server(&exe, &server_path.to_string_lossy(), server_port);
 				*served.lock().unwrap() = client_bytes;
+				// Wait for the new server to start listening before telling the browser
+				// to reload — otherwise the reloaded page's SSR/RPC fetches race the
+				// still-binding server and the user sees a 502 flash.
+				wait_for_server(server_port);
 				let n = broadcast_reload(&clients);
 				builds += 1;
 				dash.draw(&Status::Ready(Some(format!(
@@ -709,7 +719,7 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients, server_po
 /// a 200 HTML page (e.g. a route the server doesn't render, or a bare RPC server that
 /// answers `/` with a 404) — the caller then falls back to the static handler.
 fn fetch_ssr_document(server_port: u16, path: &str) -> Option<String> {
-	let mut up = TcpStream::connect(("127.0.0.1", server_port)).ok()?;
+	let mut up = connect_server(server_port)?;
 	let req =
 		format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{server_port}\r\nConnection: close\r\n\r\n");
 	up.write_all(req.as_bytes()).ok()?;
@@ -745,9 +755,9 @@ fn proxy_rpc(
 	body: &[u8],
 	server_port: u16,
 ) {
-	let mut up = match TcpStream::connect(("127.0.0.1", server_port)) {
-		Ok(u) => u,
-		Err(_) => {
+	let mut up = match connect_server(server_port) {
+		Some(u) => u,
+		None => {
 			respond(
 				downstream,
 				"502 Bad Gateway",
@@ -855,6 +865,32 @@ fn spawn_run(exe: &Path, entry_path: &str) -> Child {
 /// `http.serve` honors). The fullstack server subprocess binds there instead of
 /// the literal address in `server.pa`, so the dev proxy and the server always
 /// agree on the port without hardcoding one.
+/// Connect to the server subprocess, retrying briefly so a request that lands
+/// mid-rebuild — after the old server is killed but before the new one has bound
+/// its port — waits for the restart instead of failing with a 502. Normal traffic
+/// connects on the first attempt with no added latency; a server that's genuinely
+/// dead surfaces as `None` once `RESTART_GRACE` elapses.
+fn connect_server(port: u16) -> Option<TcpStream> {
+	let start = Instant::now();
+	loop {
+		match TcpStream::connect(("127.0.0.1", port)) {
+			Ok(s) => return Some(s),
+			Err(_) if start.elapsed() < RESTART_GRACE => {
+				thread::sleep(Duration::from_millis(25));
+			}
+			Err(_) => return None,
+		}
+	}
+}
+
+/// Block until the freshly-spawned server subprocess is accepting connections (or
+/// `RESTART_GRACE` passes). Gating the live-reload broadcast on this is what keeps
+/// the browser from reloading into a not-yet-listening server and flashing an error
+/// page: by the time we say "reload", the new server can already answer.
+fn wait_for_server(port: u16) -> bool {
+	connect_server(port).is_some()
+}
+
 fn spawn_server(exe: &Path, server_wasm: &str, port: u16) -> Child {
 	match Command::new(exe)
 		.arg("run")
