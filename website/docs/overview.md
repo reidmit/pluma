@@ -10,8 +10,10 @@ AST to the HTML you're reading. The docs are part of the app.
 
 ## Where to go next
 
-- **[Reference](/docs/reference)** — the language reference: syntax, types, and
-  the standard library, one idea at a time.
+- **[Language tour](/docs/tour/basics)** — learn the language from the ground up,
+  one idea at a time. The best front-to-back introduction.
+- **[Reference](/docs/reference)** — look things up: operators, types, error
+  codes, and the standard library.
 - **[Get started](/docs/start)** — install the compiler and run your first program.
 - **[Recipes](/recipes)** — small, complete programs in each flavor Pluma is
   built for.

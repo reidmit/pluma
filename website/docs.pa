@@ -44,14 +44,43 @@ def groups :: list doc-group = [
 		],
 	},
 	{
+		title: "Language tour",
+		pages: [
+			{slug: "tour/basics", title: "The basics", file: "tour/basics"},
+			{slug: "tour/functions", title: "Functions", file: "tour/functions"},
+			{slug: "tour/strings", title: "Strings & text", file: "tour/strings"},
+			{slug: "tour/collections", title: "Lists, tuples & records", file: "tour/collections"},
+			{
+				slug: "tour/control-flow",
+				title: "Control flow & matching",
+				file: "tour/control-flow",
+			},
+			{slug: "tour/enums", title: "Enums", file: "tour/enums"},
+			{slug: "tour/state", title: "Mutable state", file: "tour/state"},
+			{slug: "tour/traits", title: "Traits", file: "tour/traits"},
+			{slug: "tour/modules", title: "Modules", file: "tour/modules"},
+		],
+	},
+	{
 		title: "Language reference",
 		pages: [
 			{slug: "reference/operators", title: "Operators", file: "reference/operators"},
+			{slug: "reference/errors", title: "Errors & options", file: "reference/errors"},
+			{slug: "reference/concurrency", title: "Concurrency", file: "reference/concurrency"},
 			{slug: "reference/aliases", title: "Type aliases", file: "reference/aliases"},
+			{slug: "reference/using", title: "Using blocks", file: "reference/using"},
 			{slug: "reference/bytes", title: "Bytes", file: "reference/bytes"},
 			{slug: "reference/regex", title: "Regular expressions", file: "reference/regex"},
 			{slug: "reference/diagnostics", title: "Diagnostics", file: "reference/diagnostics"},
 			{slug: "reference/build", title: "Fullstack build", file: "reference/build"},
+		],
+	},
+	{
+		title: "Standard library",
+		pages: [
+			{slug: "stdlib/strings", title: "Working with strings", file: "stdlib/strings"},
+			{slug: "stdlib/dict-set", title: "Dictionaries & sets", file: "stdlib/dict-set"},
+			{slug: "stdlib/json", title: "JSON", file: "stdlib/json"},
 		],
 	},
 	{
@@ -60,6 +89,18 @@ def groups :: list doc-group = [
 			{slug: "guides/cli", title: "Command-line script", file: "guides/cli"},
 			{slug: "guides/server", title: "Web server", file: "guides/server"},
 			{slug: "guides/fullstack", title: "Fullstack app", file: "guides/fullstack"},
+		],
+	},
+	{
+		title: "Deep dives",
+		pages: [
+			{slug: "deep-dives/rpc", title: "How RPC works", file: "deep-dives/rpc"},
+			{
+				slug: "deep-dives/signals",
+				title: "Reactive frontend with signals",
+				file: "deep-dives/signals",
+			},
+			{slug: "deep-dives/ssr", title: "Server-side rendering", file: "deep-dives/ssr"},
 		],
 	},
 ]
