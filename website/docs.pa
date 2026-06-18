@@ -79,6 +79,7 @@ def groups :: list doc-group = [
 	{
 		title: "Standard library",
 		pages: [
+			{slug: "stdlib", title: "Overview", file: "stdlib/overview"},
 			{slug: "stdlib/lists", title: "Working with lists", file: "stdlib/lists"},
 			{slug: "stdlib/strings", title: "Working with strings", file: "stdlib/strings"},
 			{slug: "stdlib/dict-set", title: "Dictionaries & sets", file: "stdlib/dict-set"},
