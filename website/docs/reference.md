@@ -20,6 +20,8 @@ The reference is split into focused pages — listed here and in the sidebar.
   running work concurrently, `scope`, and `defer`.
 - **[Type aliases](/docs/reference/aliases)** — naming types, and when two types
   count as the same (nominal enums, structural records).
+- **[Generics](/docs/reference/generics)** — type variables, generic functions
+  and types, and constraining them with `where`.
 - **[Using blocks](/docs/reference/using)** — the `using M { ... }` ambient-module
   syntax and its leading-dot shorthand.
 - **[Bytes](/docs/reference/bytes)** — binary data, byte literals, and the
