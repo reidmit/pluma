@@ -43,14 +43,6 @@ def groups :: list doc-group = [
 		],
 	},
 	{
-		title: "Guides",
-		pages: [
-			{slug: "guides/cli", title: "Command-line script", file: "guides/cli"},
-			{slug: "guides/server", title: "Web server", file: "guides/server"},
-			{slug: "guides/fullstack", title: "Fullstack app", file: "guides/fullstack"},
-		],
-	},
-	{
 		title: "Language reference",
 		pages: [
 			{slug: "reference/operators", title: "Operators", file: "reference/operators"},
@@ -59,6 +51,14 @@ def groups :: list doc-group = [
 			{slug: "reference/regex", title: "Regular expressions", file: "reference/regex"},
 			{slug: "reference/diagnostics", title: "Diagnostics", file: "reference/diagnostics"},
 			{slug: "reference/build", title: "Fullstack build", file: "reference/build"},
+		],
+	},
+	{
+		title: "Guides",
+		pages: [
+			{slug: "guides/cli", title: "Command-line script", file: "guides/cli"},
+			{slug: "guides/server", title: "Web server", file: "guides/server"},
+			{slug: "guides/fullstack", title: "Fullstack app", file: "guides/fullstack"},
 		],
 	},
 ]
