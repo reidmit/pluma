@@ -22,6 +22,8 @@ pub(crate) fn build_command(
 		std::process::exit(1);
 	}
 
+	let start = std::time::Instant::now();
+
 	// Post-optimize the emitted wasm with Binaryen's wasm-opt. On by default at
 	// `-O3` (the pass is a code-size win and never slower at runtime); `-O <level>`
 	// overrides, and `-O 0` opts out.
@@ -47,7 +49,7 @@ pub(crate) fn build_command(
 	// artifacts from one source — `server.wasm` + a browser client bundle —
 	// regardless of `--web` (each half has its own).
 	if Compiler::is_fullstack_dir(&entry_path) {
-		build_fullstack(entry_path, out_base, server_url, opt_level);
+		build_fullstack(entry_path, out_base, server_url, opt_level, start);
 		return;
 	}
 
@@ -99,12 +101,17 @@ pub(crate) fn build_command(
 	let bytes = run_wasm_opt(bytes, opt_level);
 	match target {
 		Target::Sys => {
-			let wasm_path = format!("{base}.wasm");
+			let wasm_path = std::path::PathBuf::from(format!("{base}.wasm"));
 			if let Err(e) = std::fs::write(&wasm_path, &bytes) {
-				print_error(format!("writing {wasm_path}: {e}"));
+				print_error(format!("writing {}: {e}", wasm_path.display()));
 				std::process::exit(1);
 			}
-			println!("wrote {wasm_path} (run with `pluma run {wasm_path}`)");
+			print_build_summary(
+				&wasm_path.display().to_string(),
+				&[Artifact::file(&wasm_path, None)],
+				&[(format!("pluma run {}", wasm_path.display()), "run it")],
+				start.elapsed(),
+			);
 		}
 		// The web bundle: the wasm artifact plus the JS loader + HTML shell that run
 		// it against the real DOM. Written into a `<base>/` directory; serve it over HTTP
@@ -115,39 +122,139 @@ pub(crate) fn build_command(
 				print_error(format!("writing web bundle to {}: {e}", dir.display()));
 				std::process::exit(1);
 			}
-			println!(
-				"wrote {0}/app.wasm, {0}/loader.js, {0}/index.html\n\
-				 serve with `python3 -m http.server --directory {0}` and open the printed URL",
-				dir.display()
+			print_build_summary(
+				&format!("web bundle → {}/", dir.display()),
+				&[
+					Artifact::file(&dir.join("app.wasm"), None),
+					Artifact::file(&dir.join("loader.js"), None),
+					Artifact::file(&dir.join("index.html"), None),
+				],
+				&[(
+					format!("python3 -m http.server --directory {}", dir.display()),
+					"serve it, then open the printed URL",
+				)],
+				start.elapsed(),
 			);
 		}
 	}
 }
 
-/// Apply the optional `wasm-opt` pass, reporting the size delta and time spent.
-/// A `None` level is a no-op; a wasm-opt failure is non-fatal — we warn and keep
-/// the unoptimized bytes so the build still produces a runnable artifact.
+/// Apply the optional `wasm-opt` pass. A `None` level is a no-op; a wasm-opt failure
+/// is non-fatal — we warn and keep the unoptimized bytes so the build still produces a
+/// runnable artifact.
 fn run_wasm_opt(bytes: Vec<u8>, level: Option<wasm::OptLevel>) -> Vec<u8> {
 	let Some(level) = level else {
 		return bytes;
 	};
-	let before = bytes.len();
-	let start = std::time::Instant::now();
 	match wasm::optimize(&bytes, level) {
-		Ok(opt) => {
-			let after = opt.len();
-			// Signed size change: negative means the module shrank.
-			let pct = 100.0 * (after as f64 - before as f64) / before as f64;
-			println!(
-				"wasm-opt {level:?}: {before} -> {after} bytes ({pct:+.1}%) in {:.2}s",
-				start.elapsed().as_secs_f64()
-			);
-			opt
-		}
+		Ok(opt) => opt,
 		Err(e) => {
 			print_error(format!("wasm-opt failed ({e}); using unoptimized module"));
 			bytes
 		}
+	}
+}
+
+/// One line in the build summary: a written file (or asset directory), its on-disk
+/// size (or a count like "2 assets"), an optional dim note (e.g. "extracted from SSR"),
+/// and how many files it actually represents (1 for a file, N for an asset directory).
+struct Artifact {
+	path: String,
+	size: String,
+	note: Option<String>,
+	files: usize,
+}
+
+impl Artifact {
+	/// A file artifact, sizing it from disk (a missing/unreadable file reads as 0 B —
+	/// the summary is cosmetic, never worth failing the build over).
+	fn file(path: &std::path::Path, note: Option<String>) -> Self {
+		Artifact {
+			path: path.display().to_string(),
+			size: human_size(std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)),
+			note,
+			files: 1,
+		}
+	}
+}
+
+/// Render a byte count as a short human-readable size (`480 B`, `5.9 KB`, `1.2 MB`).
+fn human_size(bytes: u64) -> String {
+	const KB: f64 = 1024.0;
+	let n = bytes as f64;
+	if n < KB {
+		format!("{bytes} B")
+	} else if n < KB * KB {
+		format!("{:.1} KB", n / KB)
+	} else {
+		format!("{:.1} MB", n / (KB * KB))
+	}
+}
+
+/// Print the build summary: a header naming what was built, a column-aligned list of
+/// the written artifacts, a `next:` block of the commands to run them, and a footer
+/// with the total file count and elapsed time. Replaces the older interleaved prose so
+/// everything the build produced lands in one ordered block.
+fn print_build_summary(
+	title: &str,
+	artifacts: &[Artifact],
+	next: &[(String, &str)],
+	elapsed: std::time::Duration,
+) {
+	let s = crate::colors::Style::detect();
+
+	// Align the size column to the widest path and the note column to the widest size.
+	let path_w = artifacts.iter().map(|a| a.path.len()).max().unwrap_or(0);
+	let size_w = artifacts.iter().map(|a| a.size.len()).max().unwrap_or(0);
+
+	let mut o = format!("\n  {}\n\n", s.bold(title));
+	for a in artifacts {
+		o += &format!(
+			"    {:<path_w$}   {:>size_w$}",
+			s.cyan(&a.path),
+			a.size,
+			// Pad against the raw (uncolored) widths; the ANSI codes add invisible bytes.
+			path_w = path_w + s.cyan(&a.path).len() - a.path.len(),
+			size_w = size_w,
+		);
+		if let Some(note) = &a.note {
+			o += &format!("   {}", s.dim(note));
+		}
+		o.push('\n');
+	}
+
+	if !next.is_empty() {
+		o += &format!("\n  {}\n", s.dim("next:"));
+		let cmd_w = next.iter().map(|(c, _)| c.len()).max().unwrap_or(0);
+		for (cmd, desc) in next {
+			o += &format!(
+				"    {:<cmd_w$}   {}\n",
+				s.bold(cmd),
+				s.dim(desc),
+				cmd_w = cmd_w + s.bold(cmd).len() - cmd.len(),
+			);
+		}
+	}
+
+	let n: usize = artifacts.iter().map(|a| a.files).sum();
+	o += &format!(
+		"\n  {}\n",
+		s.dim(&format!(
+			"built {n} file{} in {}",
+			if n == 1 { "" } else { "s" },
+			human_duration(elapsed),
+		))
+	);
+	print!("{o}");
+}
+
+/// Render a build duration as `230ms` under a second, or `1.3s` at or above it.
+fn human_duration(d: std::time::Duration) -> String {
+	let ms = d.as_millis();
+	if ms < 1000 {
+		format!("{ms}ms")
+	} else {
+		format!("{:.1}s", d.as_secs_f64())
 	}
 }
 
@@ -162,6 +269,7 @@ fn build_fullstack(
 	out_base: Option<String>,
 	server_url: String,
 	opt_level: Option<wasm::OptLevel>,
+	start: std::time::Instant,
 ) {
 	let mut compiler = match Compiler::from_fullstack_dir(entry_path.clone()) {
 		Ok(c) => c.with_rpc_base_url(server_url),
@@ -227,40 +335,74 @@ fn build_fullstack(
 		print_error(format!("writing {}: {e}", server_path.display()));
 		std::process::exit(1);
 	}
-	println!(
-		"wrote {0}/server.wasm + {0}/app.wasm, {0}/loader.js, {0}/index.html\n\
-		 + {0}/_built/ (loader.js, app.wasm) — the server hydration bundle\n\
-		 run the server with `pluma run {0}/server.wasm` (it serves the client too)",
-		dir.display()
-	);
+
+	let mut artifacts = vec![
+		Artifact::file(&server_path, None),
+		Artifact::file(&dir.join("app.wasm"), None),
+		Artifact::file(&dir.join("loader.js"), None),
+		Artifact::file(&dir.join("index.html"), None),
+		// `_built/` holds the client bundle (loader.js + app.wasm) the server serves
+		// itself for hydration — written by `write_built_dir` above.
+		Artifact {
+			path: format!("{}/", dir.join("_built").display()),
+			size: "2 files".to_string(),
+			note: Some("served for hydration".to_string()),
+			files: 2,
+		},
+	];
+
+	// Build-time CSS extraction: lift the SSR stylesheet into a cacheable `app.css`
+	// linked from the static client shell.
+	artifacts.extend(extract_css_to_bundle(&dir, &server_path));
 
 	// Carry the app's static assets into the build: `<entry>/public` → `out/public`,
 	// so `pluma run out/server.wasm` (started from `out/`) serves `/logo.svg` and
 	// friends from the same `public/` the server reads under `pluma dev`.
-	copy_public_assets(&entry_path, &dir);
+	artifacts.extend(copy_public_assets(&entry_path, &dir));
 
-	// Build-time CSS extraction: lift the
-	// SSR stylesheet into a cacheable `app.css` linked from the static client shell.
-	extract_css_to_bundle(&dir, &server_path);
+	print_build_summary(
+		&format!("fullstack app → {}/", dir.display()),
+		&artifacts,
+		&[
+			(
+				format!("pluma run {}", server_path.display()),
+				"serve page + RPC + client bundle",
+			),
+			(
+				format!("python3 -m http.server --directory {}", dir.display()),
+				"or serve the static client shell only",
+			),
+		],
+		start.elapsed(),
+	);
 }
 
 /// Copy `<entry>/public` into the output directory as `public/`, if it exists. The
 /// served files live next to the server artifact so a deployment that runs from the
 /// output directory finds them at the same relative path the dev server does. A
-/// missing `public/` is fine — the app just serves no assets.
-fn copy_public_assets(entry_path: &str, out_dir: &std::path::Path) {
+/// missing `public/` is fine — the app just serves no assets. Returns a summary row
+/// when assets were copied (`None` when there's no `public/` dir).
+fn copy_public_assets(entry_path: &str, out_dir: &std::path::Path) -> Option<Artifact> {
 	let src = std::path::Path::new(entry_path).join("public");
 	if !src.is_dir() {
-		return;
+		return None;
 	}
 	let dst = out_dir.join("public");
 	match copy_dir_all(&src, &dst) {
-		Ok(n) => println!("  + {}/public ({n} asset(s))", out_dir.display()),
-		Err(e) => print_error(format!(
-			"copying {} to {}: {e}",
-			src.display(),
-			dst.display()
-		)),
+		Ok(n) => Some(Artifact {
+			path: format!("{}/", dst.display()),
+			size: format!("{n} asset{}", if n == 1 { "" } else { "s" }),
+			note: None,
+			files: n,
+		}),
+		Err(e) => {
+			print_error(format!(
+				"copying {} to {}: {e}",
+				src.display(),
+				dst.display()
+			));
+			None
+		}
 	}
 }
 
@@ -290,10 +432,8 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
 /// SSR server in front of it. Never fails the build: any hiccup (server doesn't SSR
 /// `/`, port busy, sandbox blocks the socket) silently skips, leaving the inline-only
 /// behaviour unchanged.
-fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) {
-	let Ok(exe) = std::env::current_exe() else {
-		return;
-	};
+fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) -> Option<Artifact> {
+	let exe = std::env::current_exe().ok()?;
 	// Pin the server to a free port via `$PORT` (which `http.serve` honors), so the
 	// probe always knows where to reach it — no matter what address `server.pa` names.
 	let port = crate::commands::dev::pick_free_port();
@@ -306,7 +446,7 @@ fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) {
 		.stderr(std::process::Stdio::null())
 		.spawn()
 	else {
-		return;
+		return None;
 	};
 	let doc = fetch_ssr_document(&mut child, port);
 	let _ = child.kill();
@@ -319,18 +459,17 @@ fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) {
 	if css.trim().is_empty() {
 		// No SSR stylesheet (the app uses no extracted rules, or the server doesn't
 		// SSR `/`) — leave the bundle as-is.
-		return;
+		return None;
 	}
 	let css_path = dir.join("app.css");
 	if std::fs::write(&css_path, css.as_bytes()).is_err() {
-		return;
+		return None;
 	}
 	link_stylesheet_in_index(dir);
-	println!(
-		"  + {0}/app.css ({1} bytes, extracted from SSR) — linked in {0}/index.html",
-		dir.display(),
-		css.len()
-	);
+	Some(Artifact::file(
+		&css_path,
+		Some("extracted from SSR".to_string()),
+	))
 }
 
 /// Connect to the running server on the probe port and `GET /`, returning the HTML

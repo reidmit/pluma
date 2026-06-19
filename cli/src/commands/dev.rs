@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::colors::Style;
 use crate::watch::scan;
 
 use compiler::*;
@@ -61,41 +62,6 @@ const RESTART_GRACE: Duration = Duration::from_secs(5);
 // When stdout can't take ANSI (not a TTY, or NO_COLOR) `tui` is false and the
 // dashboard degrades to the old one-line-per-event logging, so piped output and
 // CI stay readable.
-
-/// ANSI styling, gated on a single `on` flag so the same call sites work colored
-/// or plain. Mirrors the compiler's `Palette` but for the CLI's own chrome.
-#[derive(Clone, Copy)]
-struct Style {
-	on: bool,
-}
-
-impl Style {
-	fn paint(self, codes: &str, text: &str) -> String {
-		if self.on {
-			format!("\x1b[{codes}m{text}\x1b[0m")
-		} else {
-			text.to_string()
-		}
-	}
-	fn bold(self, t: &str) -> String {
-		self.paint("1", t)
-	}
-	fn dim(self, t: &str) -> String {
-		self.paint("2", t)
-	}
-	fn green(self, t: &str) -> String {
-		self.paint("1;32", t)
-	}
-	fn red(self, t: &str) -> String {
-		self.paint("1;31", t)
-	}
-	fn yellow(self, t: &str) -> String {
-		self.paint("33", t)
-	}
-	fn cyan(self, t: &str) -> String {
-		self.paint("36", t)
-	}
-}
 
 /// The resting state of the panel: ready (with an optional last-build detail), or
 /// failing (carrying the rendered diagnostics to show inline).
