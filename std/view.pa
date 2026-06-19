@@ -273,6 +273,24 @@ def is-void :: fun string -> bool = fun tag {
 	list.contains void-tags tag
 }
 
+# Raw-text elements: their text content is verbatim CSS/JS, never HTML-escaped.
+def is-raw-text :: fun string -> bool = fun tag {
+	tag == "style" or tag == "script"
+}
+
+# The verbatim text a raw-text element's child contributes -- the unescaped string of
+# a `text`/`text-of` node. Anything else (an element nested in `<style>`, which is
+# malformed) falls back to the normal renderer rather than silently dropping it.
+def raw-text-of :: fun view -> string = fun v {
+	when v is view.txt s {
+		s
+	} is view.dynamic-text f {
+		f ()
+	} else {
+		to-string v
+	}
+}
+
 # HTML-escape text content (`& < >`) and attribute values (also `"`) in one pass
 # over the bytes -- one allocation, no intermediate strings, versus a chain of
 # `string.replace` split+joins.
@@ -499,6 +517,12 @@ public def to-string :: fun view -> string = fun v {
 		let attr-str = render-attrs attrs
 		if is-void tag {
 			"<$(tag)$(attr-str)>"
+		} else if is-raw-text tag {
+			# `<style>`/`<script>` are HTML raw-text elements: their content is CSS/JS,
+			# not markup, so it must be emitted verbatim. Escaping it (turning `a > b`
+			# into `a &gt; b`) would corrupt the stylesheet or script.
+			let kids-str = string.join (list.map kids raw-text-of) ""
+			"<$(tag)$(attr-str)>$(kids-str)</$(tag)>"
 		} else {
 			let kids-str = string.join (list.map kids to-string) ""
 			"<$(tag)$(attr-str)>$(kids-str)</$(tag)>"

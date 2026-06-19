@@ -28,8 +28,11 @@
 # `app.serve` is the fullstack idiom; reach for `http.serve` directly only when you
 # want a bare server with none of this wiring.
 
+use std/css
+use std/list
 use std/string
 use std/task
+use std/view
 use std/sys/http
 use std/sys/rpc
 use std/sys/static
@@ -50,4 +53,40 @@ public def serve :: fun string (fun http.request -> task http.response) -> task 
 			handler req
 		}
 	}
+}
+
+# Assemble the full HTML document for a server-rendered page. The framework owns the
+# skeleton so you never hand-write one: it injects `<meta charset>` + viewport, the
+# `<title>`, the collected CSS (`css.style-tag`, emitted *after* the body renders so it
+# captures every `view.styled` rule the page used), and the client hydration `<script>`
+# that loads the `/_built/` bundle. You supply only what's yours -- the page `title`,
+# any extra `<head>` content (`meta`/`link` tags, font preloads, a boot-data `<script>`),
+# and the `body` view, which the server renders and the browser then hydrates.
+#
+#     handler = fun req {
+#         task.return (http.html 200 (app.document {
+#             title: "Home",
+#             head: [],
+#             body: page (),
+#         }))
+#     }
+public def document :: fun {
+	title :: string,
+	head :: list view,
+	body :: view,
+} -> string = fun page {
+	# Render the body first, so every `view.styled` it uses has registered its rule
+	# before `css.style-tag` collects them below.
+	let body-html = view.to-string page.body
+	let head-tags = [
+		view.element "meta" [view.attr "charset" "utf-8"] [],
+		view.element "meta" [
+			view.attr "name" "viewport",
+			view.attr "content" "width=device-width, initial-scale=1",
+		] [],
+		view.element "title" [] [view.text page.title],
+		...page.head,
+	]
+	let head-html = string.join (list.map head-tags view.to-string) ""
+	"<!doctype html><html lang=\"en\"><head>$(head-html)$(css.style-tag ())</head><body>$(body-html)<script type=\"module\" src=\"/_built/loader.js\"></script></body></html>"
 }

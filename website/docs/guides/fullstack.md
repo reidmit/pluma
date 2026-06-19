@@ -48,7 +48,14 @@ use ui
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
-		task.return (http.html 200 (ui.document ()))
+		# app.document builds the HTML shell: it injects charset/viewport, the
+		# collected CSS, and the client hydration script. You give it the page body
+		# (and a title, and any extra <head> tags) -- no hand-written HTML.
+		task.return (http.html 200 (app.document {
+			title: "Sum",
+			head: [],
+			body: ui.page (),
+		}))
 	} else {
 		task.return (http.not-found ())
 	}
@@ -77,9 +84,9 @@ def main = fun {
 ## ui.pa
 
 The shared `view`, compiled into both halves. `page` is a pure view builder with no
-effects at construction, so it renders the same on the server (`view.to-string`,
-inside `document`) and the client (`render.hydrate`). The one effect, the remote
-call, lives in a click handler, which runs only in the browser after hydration.
+effects at construction, so it renders the same on the server (via `app.document`)
+and the client (`render.hydrate`). The one effect, the remote call, lives in a click
+handler, which runs only in the browser after hydration.
 
 ```pluma
 # ui.pa -- the shared view: server-rendered, then hydrated in the browser.
@@ -102,17 +109,12 @@ public def page :: fun nothing -> view = using view {
 		]
 	}
 }
-
-# The server wraps that view in a full HTML document for the first paint, and links
-# the client bundle that hydrates it. Only the server calls this.
-public def document :: fun nothing -> string = fun {
-	"<!doctype html><html><body>$(view.to-string (page ()))<script type=\"module\" src=\"/_built/loader.js\"></script></body></html>"
-}
 ```
 
-So the two names from the files above are one pair: the server serves
-`ui.document ()` (the whole HTML page) and the client hydrates `ui.page`, the
-`view` embedded inside it.
+`ui.pa` only describes the `view` -- it never builds an HTML document. The server
+hands `ui.page ()` to `app.document` (above), which wraps it in the full page; the
+client hydrates the same `ui.page`. One `view`, rendered on the server and brought
+to life in the browser.
 
 Develop with live-reload, then build the deployable bundle:
 

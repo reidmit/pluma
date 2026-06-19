@@ -6,13 +6,14 @@
 #   - GET `/docs/*`    → the Markdown documentation, rendered by `docs`
 #   - everything else  → a static file from `public/` (the logo, favicon, ...)
 #
-# Each page is rendered to HTML by `theme.document-html` for a real first paint; the
+# Each page is rendered to HTML by `document` for a real first paint; the
 # client then hydrates whichever page matches the path. `app.serve` binds to `$PORT`
 # when set (so `pluma dev` and a real host can hand it a port) and the address below
 # otherwise.
 
 use std/sys/app
 use std/string
+use std/view
 use std/task
 use std/sys/fs
 use std/sys/http
@@ -44,9 +45,20 @@ def read-docs-json :: fun nothing -> string = fun {
 	}
 }
 
+# Wrap a page's body in the full HTML document. `app.document` injects the skeleton,
+# the collected CSS, and the hydration script; we add the site's shared `<head>` extras
+# (`theme.head-tags`). Server-only — the client never builds the document shell.
+def document :: fun string view -> string = fun title body {
+	app.document {
+		title: title,
+		head: theme.head-tags,
+		body: body,
+	}
+}
+
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
-		task.return (http.html 200 (theme.document-html "Pluma — a fullstack functional language" (ui.page ())))
+		task.return (http.html 200 (document "Pluma — a fullstack functional language" (ui.page ())))
 	} else if req.path == "/reference" {
 		# The old single-page reference moved into the `/docs/reference` section;
 		# keep the old URL working with a permanent redirect.
@@ -62,16 +74,16 @@ def handler :: fun http.request -> task http.response = fun req {
 	} else if string.starts-with req.path "/docs" {
 		# The docs pages are Markdown files under `docs/`, parsed and rendered at
 		# request time. `docs.page` reads the file the path selects.
-		task.return (http.html 200 (theme.document-html "Documentation — Pluma" (docs.page req.path)))
+		task.return (http.html 200 (document "Documentation — Pluma" (docs.page req.path)))
 	} else if string.starts-with req.path "/std" {
 		# The path is the module name: `/std/list` → `std/list`. Bare `/std` (and
 		# any unknown name) falls back to the first module.
-		task.return (http.html 200 (theme.document-html "Standard library — Pluma" (stddocs.page stdlib-docs (string.drop req.path 1))))
+		task.return (http.html 200 (document "Standard library — Pluma" (stddocs.page stdlib-docs (string.drop req.path 1))))
 	} else if req.path == "/playground" {
 		# The browser capabilities are inert here; the server just renders the shell, so
 		# it passes stubs that never fire (SSR drops event handlers, and the editor starts
 		# from its default example — `""` means "no shared snippet").
-		task.return (http.html 200 (theme.document-html "Playground — Pluma" (playground.page fun _hex {
+		task.return (http.html 200 (document "Playground — Pluma" (playground.page fun _hex {
 			err "the playground runs in the browser"
 		} fun { "" } fun _src {
 			()

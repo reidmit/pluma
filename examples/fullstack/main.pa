@@ -24,7 +24,11 @@ use ui
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
-		task.return (http.html 200 (ui.document ()))
+		task.return (http.html 200 (app.document {
+			title: "Pluma SSR",
+			head: [],
+			body: ui.page (),
+		}))
 	} else {
 		task.return (http.not-found ())
 	}

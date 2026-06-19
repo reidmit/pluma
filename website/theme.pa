@@ -226,11 +226,25 @@ public def site-footer :: fun nothing -> view = using view {
 	}
 }
 
-# The full HTML document for a server-rendered first paint. The `body` view is
-# already built by the time we get here (so every `view.styled` has registered its
-# rule in the CSS collector); `css.style-tag ()` then emits exactly those rules
-# into `<head>`, so the page arrives fully styled with no extra asset request.
-public def document-html :: fun string view -> string = fun title body {
-	let rendered = view.to-string body
-	"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>$(title)</title><meta name=\"description\" content=\"Pluma is a small, statically-typed functional language with full type inference and a fullstack framework that compiles to WebAssembly.\"><link rel=\"icon\" href=\"/logo.svg\" type=\"image/svg+xml\"><link rel=\"preload\" href=\"/fonts/lexend.woff2\" as=\"font\" type=\"font/woff2\" crossorigin><style>@font-face{font-family:'Lexend';font-style:normal;font-weight:100 900;font-display:swap;src:url('/fonts/lexend.woff2') format('woff2')}</style><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&display=swap\" rel=\"stylesheet\">$(css.style-tag ())</head><body>$(rendered)<script type=\"module\" src=\"/_built/loader.js\"></script></body></html>"
-}
+# The site's own `<head>` extras — the description, favicon, and font setup — for the
+# server's `app.document` call (which owns the rest of the skeleton: charset/viewport,
+# the `<title>`, the collected CSS, and the hydration script). Pure `view`s, so this
+# stays usable from either half; the server (`main.pa`) hands it to `app.document`.
+public def head-tags :: list view = [
+	view.element "meta" [
+		view.attr "name" "description",
+		view.attr "content" "Pluma is a small, statically-typed functional language with full type inference and a fullstack framework that compiles to WebAssembly.",
+	] [],
+	view.element "link" [view.attr "rel" "icon", view.attr "href" "/logo.svg", view.attr "type" "image/svg+xml"] [],
+	view.element "link" [
+		view.attr "rel" "preload",
+		view.attr "href" "/fonts/lexend.woff2",
+		view.attr "as" "font",
+		view.attr "type" "font/woff2",
+		view.attr "crossorigin" "",
+	] [],
+	view.element "style" [] [view.text "@font-face{font-family:'Lexend';font-style:normal;font-weight:100 900;font-display:swap;src:url('/fonts/lexend.woff2') format('woff2')}"],
+	view.element "link" [view.attr "rel" "preconnect", view.attr "href" "https://fonts.googleapis.com"] [],
+	view.element "link" [view.attr "rel" "preconnect", view.attr "href" "https://fonts.gstatic.com", view.attr "crossorigin" ""] [],
+	view.element "link" [view.attr "rel" "stylesheet", view.attr "href" "https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&display=swap"] [],
+]

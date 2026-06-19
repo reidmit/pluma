@@ -43,8 +43,8 @@ the HTML the server already produced and re-attaches the interactive parts (even
 handlers, anything reactive) to the existing elements, instead of rebuilding them.
 
 ```pluma
-# server: render the view to HTML for this route
-task.return (http.html 200 (theme.document-html "Title" (page ())))
+# server: wrap the view in the full HTML document for this route
+task.return (http.html 200 (app.document { title: "Title", head: [], body: page () }))
 
 # browser: adopt that server HTML rather than rebuild it
 render.hydrate (dom.body ()) page

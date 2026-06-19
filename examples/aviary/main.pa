@@ -49,9 +49,24 @@ def status-for :: fun route -> int = fun r {
 def document :: fun route model.page-data -> string = fun r data {
 	let route-sig = signal.new r
 	let data-sig = signal.new data
-	let body = view.to-string (ui.app route-sig data-sig no-nav)
 	let boot = hex.encode (wire.encode data)
-	"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><base href=\"/\"><title>Aviary · Field Logbook</title><style>$(reset-css)</style>$(css.style-tag ())<script id=\"pluma-boot\" type=\"application/pluma\">$(boot)</script></head><body>$(body)<script type=\"module\" src=\"/_built/loader.js\"></script></body></html>"
+	# `app.document` injects charset/viewport, the collected CSS, and the hydration
+	# script. Our `<head>` extras: a `<base>` so root-relative URLs resolve from `/` on
+	# nested routes, the reset stylesheet, and the `pluma-boot` data script the client
+	# decodes to hydrate without a refetch (it sits in `<head>`, outside the hydrated
+	# body root, so it doesn't perturb the view/DOM index alignment).
+	app.document {
+		title: "Aviary · Field Logbook",
+		head: [
+			view.element "base" [view.attr "href" "/"] [],
+			view.element "style" [] [view.text reset-css],
+			view.element "script" [
+				view.attr "id" "pluma-boot",
+				view.attr "type" "application/pluma",
+			] [view.text boot],
+		],
+		body: ui.app route-sig data-sig no-nav,
+	}
 }
 
 # Navigation only happens in the browser; during SSR the handlers never run, so the
