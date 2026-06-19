@@ -61,8 +61,8 @@ pub(crate) enum Command {
 	///
 	/// To build only a client bundle, do `pluma build --web path/to/client.pa`.
 	Build {
-		/// Build a browser bundle instead of a server/CLI artifact.
-		#[arg(long)]
+		/// Removed — a directory with a `client.pa` (no `main.pa`) builds a static site.
+		#[arg(long, hide = true)]
 		web: bool,
 
 		/// Output directory (default `out/`).

@@ -11,19 +11,17 @@ A fullstack project builds into two halves from one set of source files, a
 server and a browser bundle:
 
 ```
-main.wasm     the server: HTTP routes, your remote defs, page rendering
-app.wasm        the browser bundle (the client half of the same code)
-loader.js       a tiny script that boots app.wasm in the page
-index.html      the first file the browser loads
-app.css         the stylesheet, lifted out at build time (see below)
+main.wasm       the server: HTTP routes, your remote defs, page rendering
 _built/         the client bundle the server serves for hydration
   loader.js     (loader.js + app.wasm, under the reserved /_built/ path)
   app.wasm
+public/         your static assets (logo, fonts, ...), served as-is
 ```
 
-Only the code the browser can actually reach is compiled into `app.wasm`;
-server-only work like database access stays in `main.wasm`. You write one
-program; the build splits it.
+Only the code the browser can actually reach is compiled into the client
+`app.wasm`; server-only work like database access stays in `main.wasm`. You write
+one program; the build splits it. The server *is* the deployable — there's no
+standalone HTML/JS shell to host separately; everything is served by `main.wasm`.
 
 `pluma run main.wasm` is self-sufficient: `app.serve` renders each page, routes
 the `/_rpc/*` calls, and serves the `/_built/*` client bundle the page hydrates
@@ -57,9 +55,9 @@ JavaScript, plus full interactivity once the bundle loads.
 
 ## Client-rendered (CSR): a pure browser app
 
-With `pluma build --web` there is no server rendering the page. The browser loads
-a near-empty `index.html` shell, and your code builds the whole DOM itself at
-startup with `render.mount`:
+A project that's just a `client.pa` (no `main.pa`) builds a **static site**: there
+is no server rendering the page. The browser loads a near-empty `index.html` shell,
+and your code builds the whole DOM itself at startup with `render.mount`:
 
 ```pluma
 # browser: build the DOM from scratch under <body>
@@ -90,10 +88,6 @@ On the **server (SSR)**, the page body is rendered first (which registers every
 rule it uses) and then `css.style-tag ()` drops exactly those rules into an
 inline `<style>` in the page's `<head>`. The page arrives already styled, with no
 extra request.
-
-For **production**, `pluma build` runs that same render once and lifts the
-stylesheet out into a cacheable `app.css` file, linked from `index.html`, so the
-browser can cache it across visits.
 
 In a pure **browser app (CSR)**, there's no server to emit the `<style>`, so the
 runtime injects one from the collector when the app mounts, and refreshes it

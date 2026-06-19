@@ -62,7 +62,7 @@ containing a `main.pa`.
 | Command | What it does |
 | --- | --- |
 | `pluma run main.pa` | Compile to WasmGC and run it under V8 |
-| `pluma build main.pa` | Produce a deployable `.wasm` artifact |
+| `pluma build app/` | Compile a project directory to deployable artifacts in `out/` |
 | `pluma dev main.pa` | Watch sources and re-run on every save |
 | `pluma test` | Discover and run every `*.test.pa` suite |
 | `pluma format .` | Canonicalize formatting in place |
@@ -89,7 +89,7 @@ Develop it with live-reload, then build the deployable bundle:
 
 ```
 pluma dev app/      # live-reload dev server
-pluma build app/    # server .wasm + browser bundle
+pluma build app/    # out/main.wasm + the client bundle it serves
 ```
 
 This very website is exactly that: a fullstack Pluma app, server-rendered for an

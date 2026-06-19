@@ -3,10 +3,10 @@ use compiler::*;
 use crate::browser_bundle;
 use crate::printing::*;
 
-/// `pluma build [--web] <file> [-o out]` — compile a module to a deploy artifact.
-/// By default this lowers the shared IR for a machine/OS host through the WasmGC
-/// backend and writes `<out>.wasm`, run with `pluma run <out>.wasm`. `--web` instead
-/// lowers for the web/DOM sandbox and writes a browser bundle.
+/// `pluma build <dir> [-o out]` — compile a project directory into `out/`. The mode is
+/// read from the directory's entry files: a `main.pa` builds a CLI/server (`out/main.wasm`),
+/// a `client.pa` builds a static browser site, and both together build a fullstack app
+/// (server + the client bundle it serves).
 pub(crate) fn build_command(
 	web: bool,
 	out_base: Option<String>,
@@ -17,7 +17,15 @@ pub(crate) fn build_command(
 ) {
 	if target.is_some() {
 		print_error(
-			"`--target` was removed. Use `--web` for a browser build; omit it for a server/CLI build.",
+			"`--target` was removed. The build mode comes from the directory's entry files — \
+			 a `main.pa`, a `client.pa`, or both.",
+		);
+		std::process::exit(1);
+	}
+	if web {
+		print_error(
+			"`--web` was removed. A directory with a `client.pa` (and no `main.pa`) builds a \
+			 static site; that's the browser build now.",
 		);
 		std::process::exit(1);
 	}
@@ -45,18 +53,76 @@ pub(crate) fn build_command(
 	// bind; `--server-url` overrides (use "" for same-origin behind a proxy).
 	let server_url = server_url.unwrap_or_else(|| "http://localhost:8080".to_string());
 
-	// FULLSTACK: a directory with both `main.pa` and `client.pa` builds two
-	// artifacts from one source — `main.wasm` + a browser client bundle —
-	// regardless of `--web` (each half has its own).
-	if Compiler::is_fullstack_dir(&entry_path) {
-		build_fullstack(entry_path, out_base, server_url, opt_level, start);
-		return;
+	// The build mode is read from the directory's entry files — there is no mode flag.
+	// `main.pa` → a CLI or standalone server (one wasm); `client.pa` → a static browser
+	// site; both → a fullstack app (server + client).
+	let dir = std::path::Path::new(&entry_path);
+	if !dir.is_dir() {
+		print_error(format!(
+			"`pluma build` takes a project directory, not a file — one with a `main.pa` \
+			 (CLI/server), a `client.pa` (static site), or both (fullstack). Got `{entry_path}`."
+		));
+		std::process::exit(1);
 	}
+	let has_main = dir.join("main.pa").is_file();
+	let has_client = dir.join("client.pa").is_file();
+	match (has_main, has_client) {
+		(true, true) => build_fullstack(entry_path, out_base, server_url, opt_level, start),
+		(true, false) => build_sys(entry_path, out_base, server_url, opt_level, start),
+		(false, true) => build_static(entry_path, out_base, server_url, opt_level, start),
+		(false, false) => {
+			print_error(format!(
+				"`{entry_path}` has no `main.pa` or `client.pa` — `pluma build` needs at \
+				 least one (both, for a fullstack app)."
+			));
+			std::process::exit(1);
+		}
+	}
+}
 
-	let target = if web { Target::Web } else { Target::Sys };
+/// Lower the checked program to WasmGC and run the optional wasm-opt pass; `browser`
+/// selects the web/DOM emit profile. Exits the process on a lowering or codegen error.
+fn lower_and_emit(
+	compiler: &Compiler,
+	browser: bool,
+	opt_level: Option<wasm::OptLevel>,
+) -> Vec<u8> {
+	let program = match ir::lower(compiler) {
+		Ok(p) => p,
+		Err(msg) => {
+			print_error(format!("ir::lower: {msg}"));
+			std::process::exit(1);
+		}
+	};
+	let bytes = match wasm::emit_with_options(
+		&program,
+		wasm::EmitOptions {
+			browser,
+			..Default::default()
+		},
+	) {
+		Ok(b) => b,
+		Err(diags) => {
+			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
+			std::process::exit(1);
+		}
+	};
+	run_wasm_opt(bytes, opt_level)
+}
 
-	let mut compiler = match Compiler::from_entry_path(entry_path.clone()) {
-		Ok(c) => c.with_target(Some(target)).with_rpc_base_url(server_url),
+/// CLI / standalone-server build: a directory with a `main.pa` compiles to a single
+/// `out/main.wasm`, run with `pluma run out/main.wasm`.
+fn build_sys(
+	entry_path: String,
+	out_base: Option<String>,
+	server_url: String,
+	opt_level: Option<wasm::OptLevel>,
+	start: std::time::Instant,
+) {
+	let mut compiler = match Compiler::from_entry_path(entry_path) {
+		Ok(c) => c
+			.with_target(Some(Target::Sys))
+			.with_rpc_base_url(server_url),
 		Err(diagnostics) => {
 			print_diagnostics(diagnostics);
 			std::process::exit(1);
@@ -67,85 +133,82 @@ pub(crate) fn build_command(
 			std::process::exit(1);
 		}
 	}
+	let bytes = lower_and_emit(&compiler, false, opt_level);
 
-	let program = match ir::lower(&compiler) {
-		Ok(p) => p,
-		Err(msg) => {
-			print_error(format!("ir::lower: {msg}"));
-			std::process::exit(1);
-		}
-	};
-
-	// Every build mode writes into an output directory (default `out/`); `-o` overrides
-	// the directory, not a file name.
 	let out_dir = std::path::PathBuf::from(out_base.unwrap_or_else(|| "out".to_string()));
+	let wasm_path = out_dir.join("main.wasm");
+	if let Err(e) = std::fs::create_dir_all(&out_dir) {
+		print_error(format!("creating {}: {e}", out_dir.display()));
+		std::process::exit(1);
+	}
+	if let Err(e) = std::fs::write(&wasm_path, &bytes) {
+		print_error(format!("writing {}: {e}", wasm_path.display()));
+		std::process::exit(1);
+	}
+	print_build_summary(
+		&format!("app → {}/", out_dir.display()),
+		&[Artifact::file(&wasm_path, None)],
+		&[(format!("pluma run {}", wasm_path.display()), "run it")],
+		start.elapsed(),
+	);
+}
 
-	let bytes = match wasm::emit_with_options(
-		&program,
-		wasm::EmitOptions {
-			browser: target == Target::Web,
-			..Default::default()
-		},
-	) {
-		Ok(b) => b,
-		Err(diags) => {
-			print_error(format!("wasm codegen error: {}", diags.0.join("; ")));
+/// Static-site build: a directory with a `client.pa` (and no `main.pa`) compiles a
+/// browser bundle into `out/` — `index.html` + `loader.js` + `app.wasm`. Serve it from
+/// any static host over HTTP (WasmGC needs a real origin, not `file://`). A static site
+/// has no backend, so a `remote def` in it is rejected — nothing would answer the call.
+fn build_static(
+	entry_path: String,
+	out_base: Option<String>,
+	server_url: String,
+	opt_level: Option<wasm::OptLevel>,
+	start: std::time::Instant,
+) {
+	let mut compiler = match Compiler::from_entry_path(format!("{entry_path}/client")) {
+		Ok(c) => c
+			.with_target(Some(Target::Web))
+			.with_rpc_base_url(server_url),
+		Err(diagnostics) => {
+			print_diagnostics(diagnostics);
 			std::process::exit(1);
 		}
 	};
-	let bytes = run_wasm_opt(bytes, opt_level);
-	match target {
-		Target::Sys => {
-			// Name the artifact for its entry: a `main.pa` directory → `main.wasm`
-			// (matching the fullstack server), a single file → `<stem>.wasm`.
-			let name = if std::path::Path::new(&entry_path).is_dir() {
-				"main".to_string()
-			} else {
-				std::path::Path::new(&entry_path)
-					.file_stem()
-					.and_then(|s| s.to_str())
-					.unwrap_or("main")
-					.to_string()
-			};
-			let wasm_path = out_dir.join(format!("{name}.wasm"));
-			if let Err(e) = std::fs::create_dir_all(&out_dir) {
-				print_error(format!("creating {}: {e}", out_dir.display()));
-				std::process::exit(1);
-			}
-			if let Err(e) = std::fs::write(&wasm_path, &bytes) {
-				print_error(format!("writing {}: {e}", wasm_path.display()));
-				std::process::exit(1);
-			}
-			print_build_summary(
-				&format!("app → {}/", out_dir.display()),
-				&[Artifact::file(&wasm_path, None)],
-				&[(format!("pluma run {}", wasm_path.display()), "run it")],
-				start.elapsed(),
-			);
-		}
-		// The web bundle: the wasm artifact plus the JS loader + HTML shell that run
-		// it against the real DOM. Written into the output directory; serve it over HTTP
-		// (WasmGC needs a real origin, not file://) and open `index.html`.
-		Target::Web => {
-			if let Err(e) = browser_bundle::write_bundle(&out_dir, &bytes) {
-				print_error(format!("writing web bundle to {}: {e}", out_dir.display()));
-				std::process::exit(1);
-			}
-			print_build_summary(
-				&format!("web bundle → {}/", out_dir.display()),
-				&[
-					Artifact::file(&out_dir.join("app.wasm"), None),
-					Artifact::file(&out_dir.join("loader.js"), None),
-					Artifact::file(&out_dir.join("index.html"), None),
-				],
-				&[(
-					format!("python3 -m http.server --directory {}", out_dir.display()),
-					"serve it, then open the printed URL",
-				)],
-				start.elapsed(),
-			);
+	if let Err(diagnostics) = compiler.check() {
+		if print_diagnostics_is_fatal(diagnostics) {
+			std::process::exit(1);
 		}
 	}
+	// No server means no RPC: a `remote def` here has no endpoint to reach. Reject it
+	// rather than emit a client that fetches a route nothing serves. Adding a `main.pa`
+	// makes it a fullstack app, where the server answers these.
+	if !compiler.rpc_endpoints.is_empty() {
+		print_error(
+			"a static site has no backend, so `remote def` isn't allowed in a \
+			 `client.pa`-only build. Add a `main.pa` (making it a fullstack app) to serve \
+			 these calls.",
+		);
+		std::process::exit(1);
+	}
+	let bytes = lower_and_emit(&compiler, true, opt_level);
+
+	let out_dir = std::path::PathBuf::from(out_base.unwrap_or_else(|| "out".to_string()));
+	if let Err(e) = browser_bundle::write_bundle(&out_dir, &bytes) {
+		print_error(format!("writing web bundle to {}: {e}", out_dir.display()));
+		std::process::exit(1);
+	}
+	print_build_summary(
+		&format!("static site → {}/", out_dir.display()),
+		&[
+			Artifact::file(&out_dir.join("index.html"), None),
+			Artifact::file(&out_dir.join("app.wasm"), None),
+			Artifact::file(&out_dir.join("loader.js"), None),
+		],
+		&[(
+			format!("python3 -m http.server --directory {}", out_dir.display()),
+			"serve it, then open the printed URL",
+		)],
+		start.elapsed(),
+	);
 }
 
 /// Apply the optional `wasm-opt` pass. A `None` level is a no-op; a wasm-opt failure
