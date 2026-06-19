@@ -55,9 +55,7 @@ def rail-left :: css.ruleset = using css {
 
 def side-title :: css.ruleset = using css {
 	.rule [
-		.property "text-transform" "uppercase",
-		.letter-spacing (.em 0.1),
-		.font-size (.rem 0.7),
+		.property "text-transform" "lowercase",
 		.font-weight "600",
 		.color (.hex theme.faint),
 		.margin-bottom (.rem 0.7),

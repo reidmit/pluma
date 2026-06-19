@@ -16,7 +16,7 @@ use theme
 
 public def doc-title :: css.ruleset = using css {
 	.rule [
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.font-size (.rem 2.6),
 		.line-height 1.1,
 		.letter-spacing (.em (-0.025)),
@@ -27,7 +27,7 @@ public def doc-title :: css.ruleset = using css {
 
 public def doc-sub :: css.ruleset = using css {
 	.rule [
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.font-size (.rem 1.25),
 		.property "font-style" "italic",
 		.color (.hex theme.muted),
@@ -41,7 +41,7 @@ def sect :: css.ruleset = using css {
 
 def doc-h2 :: css.ruleset = using css {
 	.rule [
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.font-size (.rem 1.7),
 		.letter-spacing (.em (-0.02)),
 		.font-weight "600",
@@ -60,7 +60,7 @@ def doc-h3 :: css.ruleset = using css {
 
 def doc-p :: css.ruleset = using css {
 	.rule [
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.font-size (.rem 1.08),
 		.line-height 1.75,
 		.color (.hex "#2b2823"),
@@ -144,7 +144,7 @@ def td :: css.ruleset = using css {
 		.padding-right (.rem 0.9),
 		.property "border-bottom" "1px solid #efeae2",
 		.property "vertical-align" "top",
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.line-height 1.55,
 		.color (.hex "#2b2823"),
 	]

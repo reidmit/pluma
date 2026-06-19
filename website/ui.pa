@@ -42,7 +42,7 @@ def eyebrow :: css.ruleset = using css {
 
 def headline :: css.ruleset = using css {
 	.rule [
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.property "font-size" "clamp(2.4rem, 5vw, 3.5rem)",
 		.line-height 1.06,
 		.letter-spacing (.em (-0.025)),
@@ -134,7 +134,7 @@ def section-head :: css.ruleset = using css {
 
 def section-title :: css.ruleset = using css {
 	.rule [
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.font-size (.rem 2.0),
 		.line-height 1.15,
 		.letter-spacing (.em (-0.02)),
@@ -202,7 +202,7 @@ def strip-eyebrow :: css.ruleset = using css { .compose [eyebrow, .rule [.color 
 
 def strip-title :: css.ruleset = using css {
 	.rule [
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.font-size (.rem 2.1),
 		.font-weight "600",
 		.margin-bottom (.rem 0.8),

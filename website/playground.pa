@@ -139,7 +139,7 @@ def head :: css.ruleset = using css { .rule [.max-width (.rem 44.0), .margin-bot
 
 def title :: css.ruleset = using css {
 	.rule [
-		.font-family theme.serif,
+		.font-family theme.sans,
 		.font-size (.rem 2.4),
 		.line-height 1.1,
 		.letter-spacing (.em (-0.025)),

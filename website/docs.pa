@@ -216,9 +216,7 @@ def toc-sub :: css.ruleset = using css { .compose [side-item, .rule [.padding-le
 
 def side-title :: css.ruleset = using css {
 	.rule [
-		.property "text-transform" "uppercase",
-		.letter-spacing (.em 0.1),
-		.font-size (.rem 0.7),
+		.property "text-transform" "lowercase",
 		.font-weight "600",
 		.color (.hex theme.faint),
 		.margin-bottom (.rem 0.7),
@@ -317,7 +315,7 @@ def doc-styles :: fun nothing -> nothing = using css {
 		.global [
 			.at ".doc-prose" [.color (.hex "#2b2823")],
 			.at ".doc-prose h1" [
-				.property "font-family" theme.serif,
+				.property "font-family" theme.sans,
 				.property "font-size" "2.4rem",
 				.property "line-height" "1.1",
 				.property "letter-spacing" "-0.025em",
@@ -325,7 +323,7 @@ def doc-styles :: fun nothing -> nothing = using css {
 				.property "margin" "0 0 0.6rem",
 			],
 			.at ".doc-prose h2" [
-				.property "font-family" theme.serif,
+				.property "font-family" theme.sans,
 				.property "font-size" "1.6rem",
 				.property "letter-spacing" "-0.02em",
 				.property "font-weight" "600",
@@ -339,7 +337,7 @@ def doc-styles :: fun nothing -> nothing = using css {
 				.property "scroll-margin-top" "1.5rem",
 			],
 			.at ".doc-prose p" [
-				.property "font-family" theme.serif,
+				.property "font-family" theme.sans,
 				.property "font-size" "1.08rem",
 				.property "line-height" "1.75",
 				.property "margin" "1.0rem 0",
@@ -352,7 +350,7 @@ def doc-styles :: fun nothing -> nothing = using css {
 			.at ".doc-prose a:hover" [.property "color" theme.accent-deep],
 			.at ".doc-prose strong" [.property "font-weight" "600", .property "color" "#1f1d1a"],
 			.at ".doc-prose ul, .doc-prose ol" [
-				.property "font-family" theme.serif,
+				.property "font-family" theme.sans,
 				.property "font-size" "1.08rem",
 				.property "line-height" "1.75",
 				.property "padding-left" "1.4rem",
