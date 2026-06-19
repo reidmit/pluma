@@ -192,15 +192,21 @@ fn build_static(
 	let bytes = lower_and_emit(&compiler, true, opt_level);
 
 	let out_dir = std::path::PathBuf::from(out_base.unwrap_or_else(|| "out".to_string()));
-	if let Err(e) = browser_bundle::write_bundle(&out_dir, &bytes) {
-		print_error(format!("writing web bundle to {}: {e}", out_dir.display()));
-		std::process::exit(1);
-	}
+	let wasm_name = match browser_bundle::write_bundle(&out_dir, &bytes) {
+		Ok(name) => name,
+		Err(e) => {
+			print_error(format!("writing web bundle to {}: {e}", out_dir.display()));
+			std::process::exit(1);
+		}
+	};
 	print_build_summary(
 		&format!("static site → {}/", out_dir.display()),
 		&[
 			Artifact::file(&out_dir.join("index.html"), None),
-			Artifact::file(&out_dir.join("app.wasm"), None),
+			Artifact::file(
+				&out_dir.join(&wasm_name),
+				Some("content-hashed".to_string()),
+			),
 			Artifact::file(&out_dir.join("loader.js"), None),
 		],
 		&[(

@@ -48,7 +48,7 @@ public def serve-file :: fun string string -> task http.response = fun root path
 				status: 200,
 				headers: dict.from-entries [
 					("content-type", content-type path),
-					("cache-control", "public, max-age=3600"),
+					("cache-control", cache-control path),
 				],
 				body,
 				stream-body: none,
@@ -68,6 +68,32 @@ public def content-type :: fun string -> string = fun path {
 	let segs = string.split path "."
 	let ext = string.to-lower (list.last segs ?? "")
 	dict.lookup mime-types ext ?? "application/octet-stream"
+}
+
+# The `Cache-Control` for a path. A content-hashed (fingerprinted) asset is immutable
+# -- its URL changes whenever its bytes do -- so it can be cached for a year and never
+# revalidated. Everything else gets a modest cache with revalidation.
+def cache-control :: fun string -> string = fun path {
+	if is-fingerprinted path {
+		"public, max-age=31536000, immutable"
+	} else {
+		"public, max-age=3600"
+	}
+}
+
+# Whether a path looks content-hashed: `name.<hash>.ext`, where the segment before the
+# extension is a long lowercase-hex digest (what `pluma build` emits for the client wasm,
+# e.g. `app.9f2c1ab34d5e6f70.wasm`). Such a URL is safe to cache forever.
+def is-fingerprinted :: fun string -> bool = fun path {
+	let segs = string.split path "."
+	let n = list.length segs
+	if n >= 3 {
+		let digest = list.get segs (n - 2)
+		let cs = string.chars digest
+		list.length cs >= 8 and list.all cs (fun c { string.contains "0123456789abcdef" c })
+	} else {
+		false
+	}
 }
 
 # A path is safe to join onto the root if it's anchored at `/` and holds no `..`

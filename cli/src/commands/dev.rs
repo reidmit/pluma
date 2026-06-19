@@ -370,7 +370,9 @@ fn serve_static(path: &str, mut stream: TcpStream, served: &Served, clients: &Cl
 			&mut stream,
 			"200 OK",
 			"text/javascript; charset=utf-8",
-			crate::browser_bundle::LOADER_JS.as_bytes(),
+			// Dev serves the wasm under its plain name (no content hash — caching is a
+			// production concern), so bind the loader to `app.wasm`.
+			crate::browser_bundle::loader_js("app.wasm").as_bytes(),
 		),
 		"/app.wasm" | "/_built/app.wasm" => {
 			let bytes = served.lock().unwrap().clone();

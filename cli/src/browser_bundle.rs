@@ -12,26 +12,48 @@
 
 use std::path::Path;
 
-/// Write the three-file browser bundle into `dir`: `app.wasm`, `loader.js`,
-/// `index.html`. `dir` is created if missing.
-pub(crate) fn write_bundle(dir: &Path, wasm: &[u8]) -> std::io::Result<()> {
-	std::fs::create_dir_all(dir)?;
-	std::fs::write(dir.join("app.wasm"), wasm)?;
-	std::fs::write(dir.join("loader.js"), LOADER_JS)?;
-	std::fs::write(dir.join("index.html"), INDEX_HTML)?;
-	Ok(())
+/// The content-addressed wasm filename, `app.<hash>.wasm`. The hash is a digest of the
+/// bytes, so the URL changes exactly when the module does — the browser/CDN can cache it
+/// forever (immutable) and a new build busts the cache automatically. `loader.js` keeps a
+/// stable name (it's the indirection that points at the hashed wasm), so the page's
+/// `<script src=".../loader.js">` never has to change.
+fn hashed_wasm_name(wasm: &[u8]) -> String {
+	use std::hash::Hasher;
+	let mut h = std::collections::hash_map::DefaultHasher::new();
+	h.write(wasm);
+	format!("app.{:016x}.wasm", h.finish())
 }
 
-/// Write the client hydration bundle into `<dir>/_built/`: `loader.js` + `app.wasm`,
-/// the two files the SSR document loads to hydrate. A fullstack `main.wasm` serves
-/// these at `/_built/*` (via `app.serve`), so they sit under a reserved path that
-/// never collides with a page route. `index.html` isn't needed — the server SSRs `/`.
-pub(crate) fn write_built_dir(dir: &Path, wasm: &[u8]) -> std::io::Result<()> {
+/// The loader, with its wasm URL bound to `wasm_name` (the content-hashed file in the
+/// same directory). The `__PLUMA_WASM_URL__` placeholder in `LOADER_JS` is filled here.
+pub(crate) fn loader_js(wasm_name: &str) -> String {
+	LOADER_JS.replace("__PLUMA_WASM_URL__", wasm_name)
+}
+
+/// Write the browser bundle into `dir`: the content-hashed `app.<hash>.wasm`, the
+/// `loader.js` that fetches it, and the `index.html` shell that loads the loader. `dir`
+/// is created if missing. Returns the hashed wasm filename (for the build summary).
+pub(crate) fn write_bundle(dir: &Path, wasm: &[u8]) -> std::io::Result<String> {
+	std::fs::create_dir_all(dir)?;
+	let name = hashed_wasm_name(wasm);
+	std::fs::write(dir.join(&name), wasm)?;
+	std::fs::write(dir.join("loader.js"), loader_js(&name))?;
+	std::fs::write(dir.join("index.html"), INDEX_HTML)?;
+	Ok(name)
+}
+
+/// Write the client hydration bundle into `<dir>/_built/`: `loader.js` + the
+/// content-hashed `app.<hash>.wasm`, the files the SSR document loads to hydrate. A
+/// fullstack `main.wasm` serves these at `/_built/*` (via `app.serve`), so they sit under
+/// a reserved path that never collides with a page route. `index.html` isn't needed — the
+/// server SSRs `/`. Returns the hashed wasm filename.
+pub(crate) fn write_built_dir(dir: &Path, wasm: &[u8]) -> std::io::Result<String> {
 	let built = dir.join("_built");
 	std::fs::create_dir_all(&built)?;
-	std::fs::write(built.join("app.wasm"), wasm)?;
-	std::fs::write(built.join("loader.js"), LOADER_JS)?;
-	Ok(())
+	let name = hashed_wasm_name(wasm);
+	std::fs::write(built.join(&name), wasm)?;
+	std::fs::write(built.join("loader.js"), loader_js(&name))?;
+	Ok(name)
 }
 
 const INDEX_HTML: &str = "<!doctype html>\n\
@@ -363,10 +385,11 @@ const pluma = {
 };
 
 async function main() {
-  // Resolve `app.wasm` against this script's own URL, not the document's, so the
-  // same loader works whether it's served at `/loader.js` (→ `/app.wasm`) or at
-  // `/_built/loader.js` (→ `/_built/app.wasm`, the fullstack server's path).
-  const wasmUrl = new URL("app.wasm", import.meta.url);
+  // Resolve the (content-hashed) wasm against this script's own URL, not the
+  // document's, so the same loader works whether it's served at `/loader.js` or at
+  // `/_built/loader.js` (the fullstack server's path). `pluma build` substitutes the
+  // hashed filename for the placeholder; `pluma dev` substitutes the plain `app.wasm`.
+  const wasmUrl = new URL("__PLUMA_WASM_URL__", import.meta.url);
   const bytes = await (await fetch(wasmUrl)).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, { pluma });
   exports = instance.exports;
