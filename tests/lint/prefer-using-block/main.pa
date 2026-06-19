@@ -36,10 +36,11 @@ def thin = fun {
 # Does not fire: a non-function def below the threshold.
 def one-off :: css.ruleset = css.rule [css.property "color" "red"]
 
-# Does not fire: the projections are already inside a matching `using css`.
+# Does not fire: the projections are already inside a matching `using css`, and
+# written as the bare `.member` form the block enables.
 def wrapped = fun {
 	using css {
-		css.at ".y" [css.background (css.hex "000"), css.padding (css.px 2.0)]
+		.at ".y" [.background (.hex "000"), .padding (.px 2.0)]
 	}
 }
 
@@ -62,9 +63,9 @@ def mixed = fun {
 def nested = fun {
 	using css {
 		run (fun {
-			css.reset ()
+			.reset ()
 			view.button
-				[view.styled (css.rule [css.color (css.hex "fff")])]
+				[view.styled (.rule [.color (.hex "fff")])]
 				[view.text "Save"]
 		})
 	}

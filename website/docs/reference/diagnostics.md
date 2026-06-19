@@ -91,3 +91,5 @@ the type-checker tolerates. They never stop a run, build, or test, but
 | `L0006` | Function only forwards its arguments (`fun x { f x }` is `f`) |
 | `L0007` | Both branches of an `if` are identical |
 | `L0008` | A binding returned immediately doesn't need the `let` |
+| `L0009` | Repeated `ns.member` projections read better as a `using ns` block |
+| `L0010` | Inside `using ns`, the `ns.` prefix is redundant; write `.member` |

@@ -10,6 +10,7 @@ mod redundant_bool_operand;
 mod redundant_lambda;
 mod redundant_let_underscore;
 mod redundant_try_underscore;
+mod redundant_using_prefix;
 
 pub use bind_then_return::BindThenReturn;
 pub use identical_branches::IdenticalBranches;
@@ -20,3 +21,4 @@ pub use redundant_bool_operand::RedundantBoolOperand;
 pub use redundant_lambda::RedundantLambda;
 pub use redundant_let_underscore::RedundantLetUnderscore;
 pub use redundant_try_underscore::RedundantTryUnderscore;
+pub use redundant_using_prefix::RedundantUsingPrefix;

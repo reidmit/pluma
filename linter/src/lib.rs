@@ -180,6 +180,7 @@ fn rules() -> Vec<Box<dyn Rule>> {
 		Box::new(rules::RedundantBoolOperand),
 		Box::new(rules::IfReturnsBool),
 		Box::new(rules::PreferUsingBlock),
+		Box::new(rules::RedundantUsingPrefix),
 		Box::new(rules::RedundantLambda),
 		Box::new(rules::IdenticalBranches),
 		Box::new(rules::BindThenReturn),

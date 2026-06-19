@@ -1,0 +1,37 @@
+use std/css
+use std/view
+
+# Fires: inside `using css`, each `css.` prefix repeats the block's namespace —
+# every member can be written as a bare `.member`.
+def card = fun {
+	using css {
+		css.at ".card" [css.background (css.hex "fff"), css.padding "8px"]
+	}
+}
+
+# Does not fire: the members are already written as bare `.member` projections.
+def tidy = fun {
+	using css {
+		.at ".card" [.background (.hex "111")]
+	}
+}
+
+# Does not fire: two nested `using` blocks are in scope, so a bare `.member`
+# would resolve in the innermost (`view`). The `css.` prefix names which block
+# `rule` comes from, so it's load-bearing — left to the author.
+def nested = fun {
+	using css {
+		using view {
+			view.styled (css.rule [css.color (css.hex "000")])
+		}
+	}
+}
+
+# Does not fire: `css` is a local binding shadowing the namespace, so `css.theme`
+# is a field access on that value — dropping the prefix would change its meaning.
+def shadowed = fun {
+	using css {
+		let css = active-theme ()
+		.global [.at ".card" [.color css.theme]]
+	}
+}

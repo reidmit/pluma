@@ -1,0 +1,35 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0010]: Redundant `css` prefix inside `using css`.
+  │
+  ├─𜱶 help: drop the `css` prefix and write the member as `.at`.
+  │
+8 │   css.at ".card" [css.background (css.hex "fff"), css.padding "8px"]
+  │   ^^^
+  ╰─𜱶 tests/lint/redundant-using-prefix/main.pa:8:3
+
+warning[L0010]: Redundant `css` prefix inside `using css`.
+  │
+  ├─𜱶 help: drop the `css` prefix and write the member as `.background`.
+  │
+8 │   css.at ".card" [css.background (css.hex "fff"), css.padding "8px"]
+  │                   ^^^
+  ╰─𜱶 tests/lint/redundant-using-prefix/main.pa:8:19
+
+warning[L0010]: Redundant `css` prefix inside `using css`.
+  │
+  ├─𜱶 help: drop the `css` prefix and write the member as `.hex`.
+  │
+8 │   css.at ".card" [css.background (css.hex "fff"), css.padding "8px"]
+  │                                   ^^^
+  ╰─𜱶 tests/lint/redundant-using-prefix/main.pa:8:35
+
+warning[L0010]: Redundant `css` prefix inside `using css`.
+  │
+  ├─𜱶 help: drop the `css` prefix and write the member as `.padding`.
+  │
+8 │   css.at ".card" [css.background (css.hex "fff"), css.padding "8px"]
+  │                                                   ^^^
+  ╰─𜱶 tests/lint/redundant-using-prefix/main.pa:8:51
