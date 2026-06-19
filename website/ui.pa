@@ -214,7 +214,7 @@ def strip-text :: css.ruleset = using css {
 		.color (.hex "#c9c4dd"),
 		.font-size (.rem 1.08),
 		.max-width (.rem 38.0),
-		.margin-inline css.auto,
+		.margin-inline .auto,
 		.margin-bottom (.rem 2.0),
 	]
 }
@@ -358,9 +358,7 @@ def hero-section :: fun nothing -> view = using view {
 					],
 					.pre [.styled code-block] [
 						.code [] [
-							view.dyn fun {
-								.span [] (prose.tokens (snippet-code (signal.get active)))
-							},
+							.dyn fun { .span [] (prose.tokens (snippet-code (signal.get active))) },
 						],
 					],
 				],

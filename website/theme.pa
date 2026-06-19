@@ -89,7 +89,7 @@ public def install-globals :: fun nothing -> nothing = fun {
 # --- layout + chrome --------------------------------------------------------
 
 public def shell :: css.ruleset = using css {
-	.rule [.max-width (.px 1080.0), .margin-inline css.auto, .padding-inline (.rem 1.5)]
+	.rule [.max-width (.px 1080.0), .margin-inline .auto, .padding-inline (.rem 1.5)]
 }
 
 # The nav spans the full window width: brand pinned to the left gutter, links to
