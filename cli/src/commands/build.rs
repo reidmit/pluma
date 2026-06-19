@@ -217,6 +217,11 @@ fn build_fullstack(
 		print_error(format!("writing web bundle to {}: {e}", dir.display()));
 		std::process::exit(1);
 	}
+	// The fullstack server serves the hydration bundle itself, from `_built/`.
+	if let Err(e) = browser_bundle::write_built_dir(&dir, &client_bytes) {
+		print_error(format!("writing _built bundle to {}: {e}", dir.display()));
+		std::process::exit(1);
+	}
 	let server_path = dir.join("server.wasm");
 	if let Err(e) = std::fs::write(&server_path, &server_bytes) {
 		print_error(format!("writing {}: {e}", server_path.display()));
@@ -224,8 +229,8 @@ fn build_fullstack(
 	}
 	println!(
 		"wrote {0}/server.wasm + {0}/app.wasm, {0}/loader.js, {0}/index.html\n\
-		 run the server with `pluma run {0}/server.wasm`; serve the client with\n\
-		 `python3 -m http.server --directory {0}` and open the printed URL",
+		 + {0}/_built/ (loader.js, app.wasm) — the server hydration bundle\n\
+		 run the server with `pluma run {0}/server.wasm` (it serves the client too)",
 		dir.display()
 	);
 

@@ -9,7 +9,7 @@
 # run in the browser exactly as before.
 #
 # The build installs the web transport pointed at the baked origin (same-origin
-# under `pluma dev`, which proxies `/rpc/*` to the server); no transport plumbing
+# under `pluma dev`, which proxies `/_rpc/*` to the server); no transport plumbing
 # appears in the code.
 
 use std/web/dom

@@ -676,7 +676,7 @@ def parse-response-head :: fun bytes -> {
 # terminus -- drained, faulted, or cancelled (the consumer stopping early).
 #
 #     try _ = stream.for-each
-#         (http.fetch-stream "http://127.0.0.1:8080/rpc/api.ticks" post hdrs body)
+#         (http.fetch-stream "http://127.0.0.1:8080/_rpc/api.ticks" post hdrs body)
 #         (fun frame { io.print (hex.encode frame); task.return () })
 public def fetch-stream :: fun string method (dict string string) bytes -> stream bytes = fun url verb headers body {
 	stream.from-resource {

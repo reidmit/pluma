@@ -1,7 +1,7 @@
 # The RPC contract — compiled into BOTH artifacts. On the server each `remote def`
 # body is the real handler: it opens the database and runs the query. On the client
 # the compiler replaces the body with a transport stub (encode args → POST
-# /rpc/<name> → decode reply), so `api.list-sightings ()` reads like a local async
+# /_rpc/<name> → decode reply), so `api.list-sightings ()` reads like a local async
 # call on both ends. Because the database work lives only inside these bodies,
 # `std/sys/db` never enters the browser build (the stub makes it unreachable).
 

@@ -40,7 +40,7 @@ def main = fun {
 			scope as s {
 				s.spawn (http.serve-on server sysrpc.dispatch)
 				rpc.configure-stream fun route body headers {
-					http.fetch-stream ("http://" ++ addr ++ "/rpc/" ++ route) http.method.post headers body
+					http.fetch-stream ("http://" ++ addr ++ "/_rpc/" ++ route) http.method.post headers body
 				}
 				let ha = s.spawn (sum-sub "api.slow" 5)
 				let hb = s.spawn (sum-sub "api.ticks" 6)

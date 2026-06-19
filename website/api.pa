@@ -1,7 +1,7 @@
 # The RPC contract for pluma.fun — compiled into BOTH artifacts. Each `remote def`
 # is one signature with two bodies: on the server the body below is the real
 # handler; on the client the compiler swaps it for a transport stub (encode args →
-# POST /rpc/<name> → decode reply). So `api.cheer ()` reads like a local async call
+# POST /_rpc/<name> → decode reply). So `api.cheer ()` reads like a local async call
 # on both ends, and they agree by construction.
 #
 # The site needs no real backend yet, but it is still a fullstack app: this module

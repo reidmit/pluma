@@ -34,12 +34,14 @@ public remote def add :: fun int int -> task int = fun a b {
 
 ## server.pa
 
-Serve the page for the first paint, and hand everything else to the router the
-compiler generates from your remote defs.
+Serve the page for the first paint with `app.serve`, the fullstack server. It owns
+two reserved route families so your handler stays focused on your own pages: the
+`/_rpc/*` router the compiler generates from your remote defs, and the `/_built/*`
+client bundle the browser hydrates with. Everything else falls through to `handler`.
 
 ```pluma
-# server.pa -- serve the page, let the compiler route the RPC calls.
-use std/sys/rpc
+# server.pa -- serve the page; app.serve routes RPC calls and the client bundle.
+use std/sys/app
 use std/task
 use std/sys/http
 use ui
@@ -48,12 +50,12 @@ def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		task.return (http.html 200 (ui.document ()))
 	} else {
-		rpc.dispatch req
+		task.return (http.not-found ())
 	}
 }
 
 def main = fun {
-	http.serve "127.0.0.1:8080" handler
+	app.serve "127.0.0.1:8080" handler
 }
 ```
 
@@ -104,7 +106,7 @@ public def page :: fun nothing -> view = using view {
 # The server wraps that view in a full HTML document for the first paint, and links
 # the client bundle that hydrates it. Only the server calls this.
 public def document :: fun nothing -> string = fun {
-	"<!doctype html><html><body>$(view.to-string (page ()))<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+	"<!doctype html><html><body>$(view.to-string (page ()))<script type=\"module\" src=\"/_built/loader.js\"></script></body></html>"
 }
 ```
 
@@ -116,8 +118,12 @@ Develop with live-reload, then build the deployable bundle:
 
 ```
 pluma dev app/      # live-reload dev server
-pluma build app/    # server .wasm + browser bundle
+pluma build app/    # out/server.wasm + the client bundle in out/_built/
 ```
+
+`pluma run out/server.wasm` is then self-sufficient: it renders the page, routes
+the `/_rpc/*` calls, and serves the `/_built/*` client bundle the browser hydrates
+with — no separate static file server in front of it.
 
 ::: aside .callout
 Ready to build one? [Get started](/docs/start) gets the compiler on your machine, or

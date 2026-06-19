@@ -1,0 +1,53 @@
+# The fullstack entry point. `app.serve` runs a server that already knows how to
+# answer the two things every fullstack app needs -- the RPC route table the
+# compiler synthesizes from your `remote def`s, and the client bundle the browser
+# loads to hydrate -- so your own handler only ever sees your own routes.
+#
+#     def handler = fun req {
+#         if req.path == "/" {
+#             task.return (http.html 200 (page ()))
+#         } else {
+#             task.return (http.not-found ())
+#         }
+#     }
+#
+#     def main = fun { app.serve "127.0.0.1:8080" handler }
+#
+# The framework owns two reserved path prefixes, both under a leading `_` so they
+# never collide with a page route:
+#
+#   - `/_rpc/<route>`  -- an inbound RPC call, routed to the matching `remote def`
+#                         (the body of `rpc.dispatch`, which the compiler fills in).
+#   - `/_built/<file>` -- the client hydration bundle (`loader.js`, `app.wasm`),
+#                         emitted by `pluma build` into `<out>/_built/` next to the
+#                         server. Served from the working directory, like `public/`.
+#
+# Anything else falls through to `handler`. To serve your own static assets, call
+# `static.serve "public" req` from the fall-through branch.
+#
+# `app.serve` is the fullstack idiom; reach for `http.serve` directly only when you
+# want a bare server with none of this wiring.
+
+use std/string
+use std/task
+use std/sys/http
+use std/sys/rpc
+use std/sys/static
+
+# Serve a fullstack app on `address`. The framework answers `/_rpc/*` and
+# `/_built/*`; every other request is handed to `handler`. `$PORT` overrides the
+# port in `address` (see `http.serve`), so the same binary runs locally and on a
+# host that assigns the port.
+public def serve :: fun string (fun http.request -> task http.response) -> task nothing = fun address handler {
+	http.serve address fun req {
+		if string.starts-with req.path "/_rpc/" {
+			rpc.dispatch req
+		} else if string.starts-with req.path "/_built/" {
+			# Only reached for `/_built/*`, so rooting at the working directory just
+			# resolves `./_built/<file>`; `serve-file` still refuses any `..` escape.
+			static.serve-file "." req.path
+		} else {
+			handler req
+		}
+	}
+}

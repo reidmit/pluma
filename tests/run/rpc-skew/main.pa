@@ -33,7 +33,7 @@ def main = fun {
 		if net.local-addr server is ok addr {
 			scope as s {
 				s.spawn (http.serve-on server rpc.dispatch)
-				let url = "http://" ++ addr ++ "/rpc/api.add"
+				let url = "http://" ++ addr ++ "/_rpc/api.add"
 				try wrong = probe url (dict.from-entries [("x-rpc-fingerprint", "0")])
 				print "wrong fingerprint -> $(to-string wrong)"
 				try missing = probe url (dict.empty ())

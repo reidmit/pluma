@@ -1,32 +1,35 @@
-# The server half. It serves two things on one `std/sys/http` server:
-#   - GET `/`        → the server-side-rendered page (`ui.document`), for an
-#                      instant first paint the client then hydrates.
-#   - everything else → `rpc.dispatch`, the route table the compiler synthesizes
-#                      from `api.pa`'s `remote def`s (it handles the `/rpc/*` calls).
+# The server half. `app.serve` runs the fullstack server, owning the two reserved
+# route families so `handler` only deals with this app's own pages:
+#   - `/_rpc/*`   → the route table the compiler synthesizes from `api.pa`'s
+#                   `remote def`s (it decodes each call's arguments, guards the
+#                   per-route fingerprint — rejecting a stale client with a 409 —
+#                   calls the matching handler, and encodes the reply).
+#   - `/_built/*` → the client hydration bundle (`loader.js`, `app.wasm`), which
+#                   `pluma build` writes into `out/_built/` next to the server.
 #
-# `pluma build` emits this to `server.wasm`; run it with `pluma run out/server.wasm`.
-# Because `ui.page`'s remote calls are the *real* handlers in this (server)
-# artifact, `view.to-string (page ())` could even fetch data in-process — here the
-# page is a pure shell, so SSR just renders the initial markup.
+# `handler` then handles only this app's routes:
+#   - GET `/` → the server-side-rendered page (`ui.document`), for an instant first
+#               paint the client then hydrates.
 #
-# `rpc.dispatch` is a `fun http.request -> task http.response` whose body the
-# compiler fills in: it decodes each request's arguments, guards the per-route
-# fingerprint (rejecting a stale client with a 409), calls the matching handler in
-# `api.pa`, and encodes the reply.
+# `pluma build` emits this to `server.wasm`; run it with `pluma run out/server.wasm`,
+# which now serves the page, the RPC routes, and the client bundle all on its own.
+# Because `ui.page`'s remote calls are the *real* handlers in this (server) artifact,
+# `view.to-string (page ())` could even fetch data in-process — here the page is a
+# pure shell, so SSR just renders the initial markup.
 
+use std/sys/app
 use std/task
 use std/sys/http
-use std/sys/rpc
 use ui
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		task.return (http.html 200 (ui.document ()))
 	} else {
-		rpc.dispatch req
+		task.return (http.not-found ())
 	}
 }
 
 def main = fun {
-	http.serve "127.0.0.1:8080" handler
+	app.serve "127.0.0.1:8080" handler
 }

@@ -150,5 +150,5 @@ public def document :: fun nothing -> string = fun {
 	# its rule in `std/css`'s collector. Then `css.style-tag ()` emits exactly those
 	# rules into `<head>`, so the page is styled on first paint with no asset request.
 	let body = view.to-string (page ())
-	"<!doctype html><html><head><meta charset=\"utf-8\"><title>Pluma SSR</title>$(css.style-tag ())</head><body>$(body)<script type=\"module\" src=\"/loader.js\"></script></body></html>"
+	"<!doctype html><html><head><meta charset=\"utf-8\"><title>Pluma SSR</title>$(css.style-tag ())</head><body>$(body)<script type=\"module\" src=\"/_built/loader.js\"></script></body></html>"
 }

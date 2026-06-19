@@ -1,21 +1,23 @@
-# The server half. One `std/sys/http` server serves two things:
-#   - GET `/`        → the server-side-rendered page (`ui.document`).
-#   - everything else → `rpc.dispatch`, the route table the compiler synthesizes
-#                       from `api.pa`'s `remote def`s (handles the `/rpc/*` calls).
+# The server half. `app.serve` runs the fullstack server: the framework owns the
+# `/_rpc/*` route table the compiler synthesizes from `api.pa`'s `remote def`s and
+# the `/_built/*` client bundle the browser hydrates with, so `handler` below only
+# deals with this app's own routes:
+#   - GET `/` → the server-side-rendered page (`ui.document`).
+#   - anything else → this app has no other page, so a 404.
 
+use std/sys/app
 use std/task
 use std/sys/http
-use std/sys/rpc
 use ui
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		task.return (http.html 200 (ui.document ()))
 	} else {
-		rpc.dispatch req
+		task.return (http.not-found ())
 	}
 }
 
 def main = fun {
-	http.serve "127.0.0.1:8080" handler
+	app.serve "127.0.0.1:8080" handler
 }

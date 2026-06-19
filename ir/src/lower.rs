@@ -564,7 +564,7 @@ impl<'a> Lowerer<'a> {
 	}
 
 	/// The server `dispatch` handler, synthesized from every discovered endpoint:
-	/// `fun req { match req.path { "/rpc/<route>" => <decode→call→encode> … _ => 404 } }`.
+	/// `fun req { match req.path { "/_rpc/<route>" => <decode→call→encode> … _ => 404 } }`.
 	/// With no endpoints it's an always-404 router. The function isn't `is_async`
 	/// (it builds task values and returns them; the server awaits the result).
 	fn synthesize_dispatch(&mut self) -> Result<FuncId, String> {
@@ -579,7 +579,7 @@ impl<'a> Lowerer<'a> {
 
 		let mut arms: Vec<MatchArm> = Vec::new();
 		for ep in &endpoints {
-			let route_path = format!("/rpc/{}", ep.route());
+			let route_path = format!("/_rpc/{}", ep.route());
 			let saved = self.take_stmts();
 			let r = self.build_dispatch_arm(&req, result, ep);
 			let block = Block(self.restore_stmts(saved));

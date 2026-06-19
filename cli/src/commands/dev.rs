@@ -52,7 +52,7 @@ const RESTART_GRACE: Duration = Duration::from_secs(5);
 //       build #3 · reloaded 1 client
 //
 //     http://localhost:2222/    client · live-reload
-//     /rpc/*  →  127.0.0.1:8080  server subprocess
+//     /_rpc/*  →  127.0.0.1:8080  server subprocess
 //
 //     ctrl-c to stop
 //
@@ -220,9 +220,9 @@ impl Dashboard {
 
 pub(crate) fn dev_command(web: bool, port: u16, server_url: Option<String>, entry_path: String) {
 	// A fullstack directory (`server.pa` + `client.pa`) runs both halves: the server
-	// as a subprocess, the client served + live-reloaded, with `/rpc/*` proxied to
+	// as a subprocess, the client served + live-reloaded, with `/_rpc/*` proxied to
 	// the server (same origin, so no CORS). The client posts same-origin by default
-	// (a relative `/rpc/...`, which the proxy forwards regardless of how the page was
+	// (a relative `/_rpc/...`, which the proxy forwards regardless of how the page was
 	// reached — localhost vs 127.0.0.1); `--server-url` overrides for an external server.
 	if Compiler::is_fullstack_dir(&entry_path) {
 		let base = server_url.unwrap_or_default();
@@ -389,7 +389,7 @@ fn handle_conn(stream: TcpStream, served: Served, clients: Clients) {
 }
 
 /// Serve the dev shell / loader / live wasm / SSE channel for `path`. Shared by the
-/// web and fullstack dev servers (the fullstack one handles `/rpc/*` first).
+/// web and fullstack dev servers (the fullstack one handles `/_rpc/*` first).
 fn serve_static(path: &str, mut stream: TcpStream, served: &Served, clients: &Clients) {
 	match path {
 		"/" | "/index.html" => respond(
@@ -398,13 +398,15 @@ fn serve_static(path: &str, mut stream: TcpStream, served: &Served, clients: &Cl
 			"text/html; charset=utf-8",
 			INDEX_HTML_DEV.as_bytes(),
 		),
-		"/loader.js" => respond(
+		// The hydration bundle is served at the root (`pluma dev --web` shell) and at
+		// the reserved `/_built/` prefix (what a fullstack SSR document references).
+		"/loader.js" | "/_built/loader.js" => respond(
 			&mut stream,
 			"200 OK",
 			"text/javascript; charset=utf-8",
 			crate::browser_bundle::LOADER_JS.as_bytes(),
 		),
-		"/app.wasm" => {
+		"/app.wasm" | "/_built/app.wasm" => {
 			let bytes = served.lock().unwrap().clone();
 			respond(&mut stream, "200 OK", "application/wasm", &bytes);
 		}
@@ -549,7 +551,7 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 				"client · live-reload".to_string(),
 			),
 			(
-				format!("/rpc/*  →  127.0.0.1:{server_port}"),
+				format!("/_rpc/*  →  127.0.0.1:{server_port}"),
 				"server subprocess".to_string(),
 			),
 		],
@@ -653,7 +655,7 @@ fn build_fullstack_with_hmr(
 	Ok((server_bytes, client_bytes))
 }
 
-/// Like `handle_conn`, but proxies `/rpc/*` to the server subprocess (same origin,
+/// Like `handle_conn`, but proxies `/_rpc/*` to the server subprocess (same origin,
 /// so the browser needs no CORS) and serves the client bundle for everything else.
 fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients, server_port: u16) {
 	let clone = match stream.try_clone() {
@@ -692,7 +694,7 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients, server_po
 		.unwrap_or("/")
 		.to_string();
 	let mut stream = stream;
-	if path.starts_with("/rpc/") {
+	if path.starts_with("/_rpc/") {
 		let mut body = vec![0u8; content_length];
 		if content_length > 0 && reader.read_exact(&mut body).is_err() {
 			respond(&mut stream, "400 Bad Request", "text/plain", b"short body");
@@ -711,7 +713,10 @@ fn handle_conn_fs(stream: TcpStream, served: Served, clients: Clients, server_po
 	// The client bundle's own files are served locally (never treated as page routes).
 	// If the server is down or answers non-2xx, fall back to the plain static handler
 	// (the CSR dev shell for `/`, else 404).
-	let is_asset = matches!(path.as_str(), "/loader.js" | "/app.wasm" | "/__livereload");
+	let is_asset = matches!(
+		path.as_str(),
+		"/loader.js" | "/app.wasm" | "/_built/loader.js" | "/_built/app.wasm" | "/__livereload"
+	);
 	if !is_asset {
 		if let Some(resp) = fetch_server_response(server_port, &path) {
 			if resp.is_html {

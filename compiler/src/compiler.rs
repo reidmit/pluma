@@ -90,7 +90,7 @@ pub struct Compiler {
 	pub fullstack: bool,
 	// The server origin the synthesized RPC client stubs POST to, baked at build
 	// time into `std/rpc.server-origin` (`pluma build/dev --server-url`). `None`
-	// keeps the built-in fallback. Empty string = same-origin (`/rpc/...`).
+	// keeps the built-in fallback. Empty string = same-origin (`/_rpc/...`).
 	pub rpc_base_url: Option<String>,
 	// Every `remote def` discovered during analysis, with its resolved wire
 	// shapes + per-route fingerprint. The lowerer reads this to synthesize the
@@ -234,7 +234,7 @@ impl Compiler {
 
 	// Set the server origin the generated `rpc-client` stubs default to (`pluma
 	// build/dev --server-url`). Must be called before `check()` (RPC codegen reads
-	// it). An empty string bakes a same-origin base (`/rpc/...`).
+	// it). An empty string bakes a same-origin base (`/_rpc/...`).
 	pub fn with_rpc_base_url(mut self, url: String) -> Self {
 		self.rpc_base_url = Some(url);
 		self

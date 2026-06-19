@@ -22,6 +22,18 @@ pub(crate) fn write_bundle(dir: &Path, wasm: &[u8]) -> std::io::Result<()> {
 	Ok(())
 }
 
+/// Write the client hydration bundle into `<dir>/_built/`: `loader.js` + `app.wasm`,
+/// the two files the SSR document loads to hydrate. A fullstack `server.wasm` serves
+/// these at `/_built/*` (via `app.serve`), so they sit under a reserved path that
+/// never collides with a page route. `index.html` isn't needed — the server SSRs `/`.
+pub(crate) fn write_built_dir(dir: &Path, wasm: &[u8]) -> std::io::Result<()> {
+	let built = dir.join("_built");
+	std::fs::create_dir_all(&built)?;
+	std::fs::write(built.join("app.wasm"), wasm)?;
+	std::fs::write(built.join("loader.js"), LOADER_JS)?;
+	Ok(())
+}
+
 const INDEX_HTML: &str = "<!doctype html>\n\
 <html>\n\
 <head><meta charset=\"utf-8\"><title>Pluma app</title></head>\n\
@@ -351,7 +363,11 @@ const pluma = {
 };
 
 async function main() {
-  const bytes = await (await fetch("app.wasm")).arrayBuffer();
+  // Resolve `app.wasm` against this script's own URL, not the document's, so the
+  // same loader works whether it's served at `/loader.js` (→ `/app.wasm`) or at
+  // `/_built/loader.js` (→ `/_built/app.wasm`, the fullstack server's path).
+  const wasmUrl = new URL("app.wasm", import.meta.url);
+  const bytes = await (await fetch(wasmUrl)).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, { pluma });
   exports = instance.exports;
   memory = exports.memory;

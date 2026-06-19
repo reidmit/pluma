@@ -121,7 +121,7 @@ public def configure-stream :: fun stream-sender -> nothing = fun f {
 	ref.set current-stream (some f)
 }
 
-# The server origin the client posts to (`<origin>/rpc/<route>`), baked at build
+# The server origin the client posts to (`<origin>/_rpc/<route>`), baked at build
 # time from `pluma build/dev --server-url`. Empty = same-origin. Never settable at
 # runtime: a client always talks to exactly the origin it was built for.
 public def server-origin :: string = built-in "rpc-server-origin"

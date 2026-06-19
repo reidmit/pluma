@@ -3,13 +3,13 @@
 # path onto a file inside it, guessing the right `Content-Type` from the file
 # extension.
 #
-# A fullstack handler usually tries its pages and `/rpc/...` routes first, then
+# A fullstack handler usually tries its pages and `/_rpc/...` routes first, then
 # falls back to static files for everything else:
 #
 #     def handler = fun req {
 #         if req.path == "/" {
 #             task.return (http.html 200 (page ()))
-#         } else if string.starts-with req.path "/rpc/" {
+#         } else if string.starts-with req.path "/_rpc/" {
 #             rpc.dispatch req
 #         } else {
 #             static.serve "public" req

@@ -51,18 +51,24 @@ where the two are stitched together, and the compiler gives it a different body 
 each:
 
 - On the **server**, it keeps the handler you wrote, and adds the endpoint to a
-  generated dispatcher that routes an incoming `/rpc/<name>` request to it.
+  generated dispatcher that routes an incoming `/_rpc/<name>` request to it.
 - On the **client**, it replaces the body with a generated transport stub: encode
   the arguments, POST them, decode the reply.
 
-Your server's request handler hands RPC traffic to that dispatcher:
+You don't wire the dispatcher in yourself: `app.serve` owns the reserved `/_rpc/*`
+routes (alongside the `/_built/*` client bundle), and hands everything else to the
+handler you write — so your handler only ever sees your own pages:
 
 ```pluma
+def main = fun {
+	app.serve "127.0.0.1:8080" handler   # owns /_rpc/* and /_built/*
+}
+
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		task.return (http.html 200 (ui.document ()))
 	} else {
-		rpc.dispatch req   # the generated router for every remote def
+		task.return (http.not-found ())
 	}
 }
 ```
@@ -77,7 +83,7 @@ not the implementation.
 
 A call's arguments are serialized with Pluma's binary `wire` codec (compact, and
 typed, so there's no JSON-shaped guessing about what a field holds), POSTed to
-`/rpc/<name>`, and the reply is decoded the same way. Two transports implement
+`/_rpc/<name>`, and the reply is decoded the same way. Two transports implement
 that round-trip with the same shape: the browser goes through the host page's
 `fetch`, and a native client goes through [`http.fetch`](/docs/stdlib/http). The
 generated stub calls whichever one the build target installed.

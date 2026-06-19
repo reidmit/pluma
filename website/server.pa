@@ -1,20 +1,21 @@
-# The server half of pluma.fun. One `std/sys/http` server, four responsibilities:
+# The server half of pluma.fun. `app.serve` runs the fullstack server, owning the
+# framework's reserved routes — `/_rpc/*` (the route table the compiler synthesizes
+# from `api.pa`'s `remote def`s) and `/_built/*` (the client hydration bundle) — so
+# `handler` below only routes this site's own pages:
 #   - GET `/`          → the server-side-rendered landing page
 #   - GET `/docs/*`    → the Markdown documentation, rendered by `docs`
-#   - `/rpc/*`         → `rpc.dispatch`, the route table the compiler synthesizes
-#                        from `api.pa`'s `remote def`s
 #   - everything else  → a static file from `public/` (the logo, favicon, ...)
 #
 # Each page is rendered to HTML by `theme.document-html` for a real first paint; the
-# client then hydrates whichever page matches the path. `http.serve` binds to
-# `$PORT` when set (so `pluma dev` and a real host can hand it a port) and the
-# address below otherwise.
+# client then hydrates whichever page matches the path. `app.serve` binds to `$PORT`
+# when set (so `pluma dev` and a real host can hand it a port) and the address below
+# otherwise.
 
+use std/sys/app
 use std/string
 use std/task
 use std/sys/fs
 use std/sys/http
-use std/sys/rpc
 use std/sys/static
 use docdata
 use docs
@@ -75,8 +76,6 @@ def handler :: fun http.request -> task http.response = fun req {
 		} fun { "" } fun _src {
 			()
 		})))
-	} else if string.starts-with req.path "/rpc/" {
-		rpc.dispatch req
 	} else {
 		# Anything left is a static asset (the logo, favicon, ...) served from
 		# `public/` next to the app — `public/logo.svg` answers `GET /logo.svg`.
@@ -85,5 +84,5 @@ def handler :: fun http.request -> task http.response = fun req {
 }
 
 def main = fun {
-	http.serve "127.0.0.1:8080" handler
+	app.serve "127.0.0.1:8080" handler
 }

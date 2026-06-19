@@ -27,7 +27,7 @@ def inner :: fun http.request -> task http.response = fun _req {
 def req :: fun http.method (list (string, string)) -> http.request = fun m hs {
 	{
 		method: m,
-		path: "/rpc/api.add",
+		path: "/_rpc/api.add",
 		query: "",
 		headers: dict.from-entries hs,
 		body: string.to-bytes "",

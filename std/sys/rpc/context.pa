@@ -67,7 +67,7 @@ public def method :: fun nothing -> http.method = fun {
 	}
 }
 
-# The request path (`/rpc/<route>` for an rpc call). Empty off-dispatch.
+# The request path (`/_rpc/<route>` for an rpc call). Empty off-dispatch.
 public def path :: fun nothing -> string = fun {
 	when local.get current is some req {
 		req.path

@@ -46,7 +46,7 @@ def web-fetch :: fun string -> task (result string string) = built-in "web-fetch
 # transport or decode error *fails* the task. The web counterpart of
 # `http.fetch ... post ...`.
 #
-#     try resp = fetch.post "http://host/rpc/x" headers body
+#     try resp = fetch.post "http://host/_rpc/x" headers body
 public def post :: fun string (dict string string) bytes -> task response string = fun url headers body {
 	let req = string.join ["POST", url, render-headers headers, hex.encode body] "\t"
 	try text = task.unwrap (web-fetch req)
@@ -77,7 +77,7 @@ def stream-close :: fun int -> task nothing = built-in "rpc-stream-close"
 # faulted, or cancelled. The web counterpart of `http.fetch-stream ... post ...`.
 #
 #     stream.for-each
-#         (fetch.fetch-stream "http://host/rpc/x" headers body)
+#         (fetch.fetch-stream "http://host/_rpc/x" headers body)
 #         (fun frame { ... })
 public def fetch-stream :: fun string (dict string string) bytes -> stream bytes = fun url headers body {
 	let req = string.join ["POST", url, render-headers headers, hex.encode body] "\t"

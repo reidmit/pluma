@@ -52,7 +52,7 @@ pub struct RpcEndpointMeta {
 
 impl RpcEndpointMeta {
 	// The route the call travels over: `<module>.<name>`. Client and server
-	// derive it identically; the path is `/rpc/<route>`.
+	// derive it identically; the path is `/_rpc/<route>`.
 	pub fn route(&self) -> String {
 		format!("{}.{}", self.module, self.name)
 	}

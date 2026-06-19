@@ -1,6 +1,6 @@
 # std/web/rpc -- the browser transport for remote calls.
 #
-# Installs a sender that POSTs each encoded call to `<origin>/rpc/<route>` via the
+# Installs a sender that POSTs each encoded call to `<origin>/_rpc/<route>` via the
 # host page's `fetch` (std/web/fetch), mapping the HTTP outcome to reply bytes or a
 # typed `rpc-error`. The build auto-installs this on a web client, so application
 # code configures nothing. This module imports `std/web/*`, so it only enters a web
@@ -14,7 +14,7 @@ use std/web/fetch
 # the matching typed `rpc-error` (`rpc.status-error`); a transport-level failure →
 # `transport`.
 def send :: fun string bytes (dict string string) -> task bytes = fun route body headers {
-	try outcome = task.attempt (fetch.post (rpc.server-origin ++ "/rpc/" ++ route) headers body)
+	try outcome = task.attempt (fetch.post (rpc.server-origin ++ "/_rpc/" ++ route) headers body)
 	when outcome is ok resp {
 		if resp.status == 200 {
 			task.return resp.body
@@ -26,13 +26,13 @@ def send :: fun string bytes (dict string string) -> task bytes = fun route body
 	}
 }
 
-# Opens a streaming call: subscribe to `<origin>/rpc/<route>` and surface each
+# Opens a streaming call: subscribe to `<origin>/_rpc/<route>` and surface each
 # server SSE frame as one stream element. The dual of `send` for `stream R`
 # endpoints. Transport/non-200 faults ride the stream as task failures (v1: not
 # yet remapped to a typed `rpc-error`, unlike the unary path). Mirrors
 # `std/sys/rpc`'s `send-stream`.
 def send-stream :: fun string bytes (dict string string) -> stream bytes = fun route body headers {
-	fetch.fetch-stream (rpc.server-origin ++ "/rpc/" ++ route) headers body
+	fetch.fetch-stream (rpc.server-origin ++ "/_rpc/" ++ route) headers body
 }
 
 # Installs this transport (unary + streaming) as the ambient sender. The build runs
