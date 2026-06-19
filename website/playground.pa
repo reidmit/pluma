@@ -133,7 +133,9 @@ def placeholder :: string = "Press Run to compile this program on the server and
 
 # --- styles -----------------------------------------------------------------
 
-def wrap :: css.ruleset = css.rule [css.padding-top (css.rem 2.0), css.padding-bottom (css.rem 4.0)]
+def wrap :: css.ruleset = using css {
+	.rule [.padding-top (.rem 2.0), .padding-bottom (.rem 4.0)]
+}
 
 def grid :: css.ruleset = using css {
 	.rule [
