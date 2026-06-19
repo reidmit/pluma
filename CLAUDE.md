@@ -42,6 +42,7 @@ Tests are insta snapshots under `tests/<suite>/<name>/`: `analyze/` pins the fro
 
 ## Conventions
 
+- **Work directly on `main`.** The old `pencil` rewrite branch was merged into `main` (2026-06-19) — `main` is now the active branch. Don't reach for `pencil`; the pre-rewrite 2022 history is reachable from `main` (second parent of the merge) and parked on `old-before-pencil-rewrite`.
 - **Tabs**, not spaces (`cargo fmt`; config in `rustfmt.toml`).
 - Diagnostics are **accumulated, not raised** — thread `&mut Vec<Diagnostic>` rather than returning `Result` for non-fatal issues.
 - The analyzer **mutates the AST in place** to attach inferred types — don't clone it out.
