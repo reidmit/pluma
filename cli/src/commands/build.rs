@@ -318,14 +318,11 @@ fn build_fullstack(
 	let server_bytes = run_wasm_opt(emit_one(&server_module, false), opt_level);
 	let client_bytes = run_wasm_opt(emit_one(&client_module, true), opt_level);
 
-	// Artifacts land in an output directory (default `out/`): the server wasm
-	// alongside the browser bundle (app.wasm + loader.js + index.html).
+	// Artifacts land in an output directory (default `out/`): the server wasm and the
+	// client hydration bundle it serves. The server *is* the app — it SSRs each page,
+	// so there's no standalone HTML/JS shell, only the `_built/` bundle the SSR document
+	// loads to hydrate.
 	let dir = std::path::PathBuf::from(out_base.unwrap_or_else(|| "out".to_string()));
-	if let Err(e) = browser_bundle::write_bundle(&dir, &client_bytes) {
-		print_error(format!("writing web bundle to {}: {e}", dir.display()));
-		std::process::exit(1);
-	}
-	// The fullstack server serves the hydration bundle itself, from `_built/`.
 	if let Err(e) = browser_bundle::write_built_dir(&dir, &client_bytes) {
 		print_error(format!("writing _built bundle to {}: {e}", dir.display()));
 		std::process::exit(1);
@@ -338,9 +335,6 @@ fn build_fullstack(
 
 	let mut artifacts = vec![
 		Artifact::file(&server_path, None),
-		Artifact::file(&dir.join("app.wasm"), None),
-		Artifact::file(&dir.join("loader.js"), None),
-		Artifact::file(&dir.join("index.html"), None),
 		// `_built/` holds the client bundle (loader.js + app.wasm) the server serves
 		// itself for hydration — written by `write_built_dir` above.
 		Artifact {
@@ -350,10 +344,6 @@ fn build_fullstack(
 			files: 2,
 		},
 	];
-
-	// Build-time CSS extraction: lift the SSR stylesheet into a cacheable `app.css`
-	// linked from the static client shell.
-	artifacts.extend(extract_css_to_bundle(&dir, &server_path));
 
 	// Carry the app's static assets into the build: `<entry>/public` → `out/public`,
 	// so `pluma run out/main.wasm` (started from `out/`) serves `/logo.svg` and
@@ -422,127 +412,4 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
 		}
 	}
 	Ok(count)
-}
-
-/// Best-effort: run the freshly-built server, `GET /`, and lift the inline `<style>`
-/// the server-side render emits (via `css.style-tag`) into a cacheable `app.css`
-/// linked from the client `index.html`. The SSR document still inlines its CSS at
-/// runtime; `app.css` is for the *static* CSR path — `index.html` served without the
-/// SSR server in front of it. Never fails the build: any hiccup (server doesn't SSR
-/// `/`, port busy, sandbox blocks the socket) silently skips, leaving the inline-only
-/// behaviour unchanged.
-fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) -> Option<Artifact> {
-	let exe = std::env::current_exe().ok()?;
-	// Pin the server to a free port via `$PORT` (which `http.serve` honors), so the
-	// probe always knows where to reach it — no matter what address `main.pa` names.
-	let port = crate::commands::dev::pick_free_port();
-	// Run the server as a child (`pluma run main.wasm`), silenced.
-	let Ok(mut child) = std::process::Command::new(&exe)
-		.arg("run")
-		.arg(server_wasm)
-		.env("PORT", port.to_string())
-		.stdout(std::process::Stdio::null())
-		.stderr(std::process::Stdio::null())
-		.spawn()
-	else {
-		return None;
-	};
-	let doc = fetch_ssr_document(&mut child, port);
-	let _ = child.kill();
-	let _ = child.wait();
-
-	let css = doc
-		.as_deref()
-		.and_then(extract_style_block)
-		.unwrap_or_default();
-	if css.trim().is_empty() {
-		// No SSR stylesheet (the app uses no extracted rules, or the server doesn't
-		// SSR `/`) — leave the bundle as-is.
-		return None;
-	}
-	let css_path = dir.join("app.css");
-	if std::fs::write(&css_path, css.as_bytes()).is_err() {
-		return None;
-	}
-	link_stylesheet_in_index(dir);
-	Some(Artifact::file(
-		&css_path,
-		Some("extracted from SSR".to_string()),
-	))
-}
-
-/// Connect to the running server on the probe port and `GET /`, returning the HTML
-/// body of a 200 response. Retries briefly while the child boots; `None` if it never
-/// answers a 200 (e.g. a bare RPC server 404s `/`) or the child exits first (a port
-/// clash — fail fast rather than burn the whole retry budget).
-fn fetch_ssr_document(child: &mut std::process::Child, port: u16) -> Option<String> {
-	use std::io::{Read, Write};
-	use std::net::TcpStream;
-
-	for _ in 0..30 {
-		std::thread::sleep(std::time::Duration::from_millis(100));
-		// If the server already exited (couldn't bind the port), there's nothing to hit.
-		if matches!(child.try_wait(), Ok(Some(_))) {
-			return None;
-		}
-		let Ok(mut up) = TcpStream::connect(("127.0.0.1", port)) else {
-			continue;
-		};
-		let req = format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
-		if up.write_all(req.as_bytes()).is_err() {
-			continue;
-		}
-		let _ = up.flush();
-		let mut raw = Vec::new();
-		if up.read_to_end(&mut raw).is_err() {
-			continue;
-		}
-		let text = String::from_utf8_lossy(&raw);
-		let status_ok = text
-			.lines()
-			.next()
-			.map(|l| l.contains(" 200 "))
-			.unwrap_or(false);
-		if !status_ok {
-			return None;
-		}
-		return text
-			.split_once("\r\n\r\n")
-			.map(|(_, body)| body.to_string());
-	}
-	None
-}
-
-/// Lift the concatenated contents of every `<style>…</style>` block out of an HTML
-/// document. We emit one (from `css.style-tag`), but join any others defensively.
-fn extract_style_block(html: &str) -> Option<String> {
-	let mut out = String::new();
-	let mut rest = html;
-	while let Some(open) = rest.find("<style>") {
-		let after = &rest[open + "<style>".len()..];
-		let Some(close) = after.find("</style>") else {
-			break;
-		};
-		out.push_str(&after[..close]);
-		rest = &after[close + "</style>".len()..];
-	}
-	if out.is_empty() { None } else { Some(out) }
-}
-
-/// Add `<link rel="stylesheet" href="app.css">` to the client `index.html` `<head>`
-/// (idempotent). Best-effort — a missing/unreadable file just leaves it unlinked.
-fn link_stylesheet_in_index(dir: &std::path::Path) {
-	let index = dir.join("index.html");
-	let Ok(html) = std::fs::read_to_string(&index) else {
-		return;
-	};
-	if html.contains("href=\"app.css\"") {
-		return;
-	}
-	let linked = html.replacen(
-		"</head>",
-		"<link rel=\"stylesheet\" href=\"app.css\"></head>",
-		1,
-	);
-	let _ = std::fs::write(&index, linked);
 }
