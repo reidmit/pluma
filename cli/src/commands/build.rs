@@ -76,14 +76,9 @@ pub(crate) fn build_command(
 		}
 	};
 
-	// Default the output base name to the entry file's stem.
-	let base = out_base.unwrap_or_else(|| {
-		std::path::Path::new(&entry_path)
-			.file_stem()
-			.and_then(|s| s.to_str())
-			.unwrap_or("out")
-			.to_string()
-	});
+	// Every build mode writes into an output directory (default `out/`); `-o` overrides
+	// the directory, not a file name.
+	let out_dir = std::path::PathBuf::from(out_base.unwrap_or_else(|| "out".to_string()));
 
 	let bytes = match wasm::emit_with_options(
 		&program,
@@ -101,36 +96,50 @@ pub(crate) fn build_command(
 	let bytes = run_wasm_opt(bytes, opt_level);
 	match target {
 		Target::Sys => {
-			let wasm_path = std::path::PathBuf::from(format!("{base}.wasm"));
+			// Name the artifact for its entry: a `main.pa` directory → `main.wasm`
+			// (matching the fullstack server), a single file → `<stem>.wasm`.
+			let name = if std::path::Path::new(&entry_path).is_dir() {
+				"main".to_string()
+			} else {
+				std::path::Path::new(&entry_path)
+					.file_stem()
+					.and_then(|s| s.to_str())
+					.unwrap_or("main")
+					.to_string()
+			};
+			let wasm_path = out_dir.join(format!("{name}.wasm"));
+			if let Err(e) = std::fs::create_dir_all(&out_dir) {
+				print_error(format!("creating {}: {e}", out_dir.display()));
+				std::process::exit(1);
+			}
 			if let Err(e) = std::fs::write(&wasm_path, &bytes) {
 				print_error(format!("writing {}: {e}", wasm_path.display()));
 				std::process::exit(1);
 			}
 			print_build_summary(
-				&wasm_path.display().to_string(),
+				&format!("app → {}/", out_dir.display()),
 				&[Artifact::file(&wasm_path, None)],
 				&[(format!("pluma run {}", wasm_path.display()), "run it")],
 				start.elapsed(),
 			);
 		}
 		// The web bundle: the wasm artifact plus the JS loader + HTML shell that run
-		// it against the real DOM. Written into a `<base>/` directory; serve it over HTTP
+		// it against the real DOM. Written into the output directory; serve it over HTTP
 		// (WasmGC needs a real origin, not file://) and open `index.html`.
 		Target::Web => {
-			let dir = std::path::PathBuf::from(&base);
-			if let Err(e) = browser_bundle::write_bundle(&dir, &bytes) {
-				print_error(format!("writing web bundle to {}: {e}", dir.display()));
+			if let Err(e) = browser_bundle::write_bundle(&out_dir, &bytes) {
+				print_error(format!("writing web bundle to {}: {e}", out_dir.display()));
 				std::process::exit(1);
 			}
 			print_build_summary(
-				&format!("web bundle → {}/", dir.display()),
+				&format!("web bundle → {}/", out_dir.display()),
 				&[
-					Artifact::file(&dir.join("app.wasm"), None),
-					Artifact::file(&dir.join("loader.js"), None),
-					Artifact::file(&dir.join("index.html"), None),
+					Artifact::file(&out_dir.join("app.wasm"), None),
+					Artifact::file(&out_dir.join("loader.js"), None),
+					Artifact::file(&out_dir.join("index.html"), None),
 				],
 				&[(
-					format!("python3 -m http.server --directory {}", dir.display()),
+					format!("python3 -m http.server --directory {}", out_dir.display()),
 					"serve it, then open the printed URL",
 				)],
 				start.elapsed(),
@@ -346,8 +355,8 @@ fn build_fullstack(
 	];
 
 	// Carry the app's static assets into the build: `<entry>/public` → `out/public`,
-	// so `pluma run out/main.wasm` (started from `out/`) serves `/logo.svg` and
-	// friends from the same `public/` the server reads under `pluma dev`.
+	// so the running server serves `/logo.svg` and friends from the same `public/` it
+	// reads under `pluma dev` (`pluma run` chdirs into the bundle dir to find it).
 	artifacts.extend(copy_public_assets(&entry_path, &dir));
 
 	print_build_summary(
@@ -356,10 +365,10 @@ fn build_fullstack(
 		&[(
 			// The server is the whole app: it SSRs each page, answers `/_rpc/*`, and
 			// serves `/_built/*` for hydration — a static file server would skip all of
-			// that, so this is the one way to run a fullstack build. It reads its sibling
-			// `_built/`, `public/`, and data files relative to the working directory, so
-			// it has to run from inside the output dir — `cd` in, then run `main.wasm`.
-			format!("cd {} && pluma run main.wasm", dir.display()),
+			// that, so this is the one way to run a fullstack build. `pluma run` chdirs
+			// into the wasm's own directory, so it finds its sibling `_built/`, `public/`,
+			// and data files no matter where the command is invoked from.
+			format!("pluma run {}", server_path.display()),
 			"serve page + RPC + client bundle",
 		)],
 		start.elapsed(),

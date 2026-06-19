@@ -14,6 +14,21 @@ pub(crate) fn run_command(hmr: bool, entry_path: String, program_args: Vec<Strin
 				std::process::exit(1);
 			}
 		};
+		// A built artifact runs from its own directory: a fullstack server reads its
+		// sibling `_built/`, `public/`, and data files relative to the working dir, so
+		// `pluma run out/main.wasm` has to behave as if launched from `out/`. We read the
+		// bytes first (above, against the original path), then chdir into the wasm's
+		// folder. The trade-off — a relative *path argument* to a CLI tool now resolves
+		// against the bundle dir, not the shell's — is rare and worth the "runs from
+		// anywhere" simplicity. `pluma dev` manages the working directory itself and opts
+		// out via `PLUMA_RUN_NO_CHDIR`.
+		if std::env::var_os("PLUMA_RUN_NO_CHDIR").is_none() {
+			if let Some(parent) = std::path::Path::new(&entry_path).parent() {
+				if !parent.as_os_str().is_empty() {
+					let _ = std::env::set_current_dir(parent);
+				}
+			}
+		}
 		std::process::exit(host::run_streaming_v8(&bytes, &program_args));
 	}
 

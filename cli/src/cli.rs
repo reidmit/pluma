@@ -51,12 +51,13 @@ pub(crate) enum Command {
 		program_args: Vec<String>,
 	},
 
-	/// Compile a module to a deploy artifact.
+	/// Compile a module to a deploy artifact, written into an output directory (`out/`).
 	///
-	/// If given a `main.pa` file, generates a WASM file to be run with `pluma run <out>.wasm`.
+	/// A directory with a `main.pa` builds `out/main.wasm`, run with `pluma run
+	/// out/main.wasm`.
 	///
-	/// If given a directory with a `client.pa` and `main.pa`, builds in "fullstack"
-	/// mode. Generates `main.wasm` for the server, and a bundle of HTML/JS/WASM files for the client.
+	/// A directory with both `main.pa` and `client.pa` builds in "fullstack" mode:
+	/// `out/main.wasm` for the server plus the client hydration bundle it serves.
 	///
 	/// To build only a client bundle, do `pluma build --web path/to/client.pa`.
 	Build {
@@ -64,8 +65,8 @@ pub(crate) enum Command {
 		#[arg(long)]
 		web: bool,
 
-		/// Output base name (or directory for a web/fullstack bundle).
-		#[arg(short = 'o', long = "out", value_name = "OUT")]
+		/// Output directory (default `out/`).
+		#[arg(short = 'o', long = "out", value_name = "DIR")]
 		out: Option<String>,
 
 		/// Base URL the generated RPC client targets (use "" for same-origin).

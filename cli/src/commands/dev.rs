@@ -908,7 +908,10 @@ fn spawn_server(exe: &Path, server_wasm: &str, port: u16, cwd: &str) -> Child {
 		// Run the server from its own app directory, so relative paths it reads
 		// (a `public/` of static assets, a data file) resolve the same way under
 		// `pluma dev` as they will in a deployment that runs from the build output.
+		// The wasm lives in a temp dir, so suppress `pluma run`'s own chdir-to-the-
+		// wasm's-folder — the working directory we set here is the one we want.
 		.current_dir(cwd)
+		.env("PLUMA_RUN_NO_CHDIR", "1")
 		.env("PORT", port.to_string())
 		.spawn()
 	{
