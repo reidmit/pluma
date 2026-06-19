@@ -45,8 +45,8 @@ pub(crate) fn build_command(
 	// bind; `--server-url` overrides (use "" for same-origin behind a proxy).
 	let server_url = server_url.unwrap_or_else(|| "http://localhost:8080".to_string());
 
-	// FULLSTACK: a directory with both `server.pa` and `client.pa` builds two
-	// artifacts from one source — `server.wasm` + a browser client bundle —
+	// FULLSTACK: a directory with both `main.pa` and `client.pa` builds two
+	// artifacts from one source — `main.wasm` + a browser client bundle —
 	// regardless of `--web` (each half has its own).
 	if Compiler::is_fullstack_dir(&entry_path) {
 		build_fullstack(entry_path, out_base, server_url, opt_level, start);
@@ -258,7 +258,7 @@ fn human_duration(d: std::time::Duration) -> String {
 	}
 }
 
-// FULLSTACK build: from one analyzed program emit two artifacts — a `server.wasm`
+// FULLSTACK build: from one analyzed program emit two artifacts — a `main.wasm`
 // (the `std/sys/http` server mounting the generated `dispatch`) and a browser client
 // bundle (the generated stubs riding the host `fetch`). One `check()`, one schema
 // fingerprint stamped into both, per-artifact target gating, and the emitter's
@@ -330,7 +330,7 @@ fn build_fullstack(
 		print_error(format!("writing _built bundle to {}: {e}", dir.display()));
 		std::process::exit(1);
 	}
-	let server_path = dir.join("server.wasm");
+	let server_path = dir.join("main.wasm");
 	if let Err(e) = std::fs::write(&server_path, &server_bytes) {
 		print_error(format!("writing {}: {e}", server_path.display()));
 		std::process::exit(1);
@@ -356,23 +356,22 @@ fn build_fullstack(
 	artifacts.extend(extract_css_to_bundle(&dir, &server_path));
 
 	// Carry the app's static assets into the build: `<entry>/public` → `out/public`,
-	// so `pluma run out/server.wasm` (started from `out/`) serves `/logo.svg` and
+	// so `pluma run out/main.wasm` (started from `out/`) serves `/logo.svg` and
 	// friends from the same `public/` the server reads under `pluma dev`.
 	artifacts.extend(copy_public_assets(&entry_path, &dir));
 
 	print_build_summary(
 		&format!("fullstack app → {}/", dir.display()),
 		&artifacts,
-		&[
-			(
-				format!("pluma run {}", server_path.display()),
-				"serve page + RPC + client bundle",
-			),
-			(
-				format!("python3 -m http.server --directory {}", dir.display()),
-				"or serve the static client shell only",
-			),
-		],
+		&[(
+			// The server is the whole app: it SSRs each page, answers `/_rpc/*`, and
+			// serves `/_built/*` for hydration — a static file server would skip all of
+			// that, so this is the one way to run a fullstack build. It reads its sibling
+			// `_built/`, `public/`, and data files relative to the working directory, so
+			// it has to run from inside the output dir — `cd` in, then run `main.wasm`.
+			format!("cd {} && pluma run main.wasm", dir.display()),
+			"serve page + RPC + client bundle",
+		)],
 		start.elapsed(),
 	);
 }
@@ -435,9 +434,9 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
 fn extract_css_to_bundle(dir: &std::path::Path, server_wasm: &std::path::Path) -> Option<Artifact> {
 	let exe = std::env::current_exe().ok()?;
 	// Pin the server to a free port via `$PORT` (which `http.serve` honors), so the
-	// probe always knows where to reach it — no matter what address `server.pa` names.
+	// probe always knows where to reach it — no matter what address `main.pa` names.
 	let port = crate::commands::dev::pick_free_port();
-	// Run the server as a child (`pluma run server.wasm`), silenced.
+	// Run the server as a child (`pluma run main.wasm`), silenced.
 	let Ok(mut child) = std::process::Command::new(&exe)
 		.arg("run")
 		.arg(server_wasm)

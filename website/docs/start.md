@@ -74,14 +74,14 @@ your built artifact deploys to.
 
 ## Going fullstack
 
-Point `pluma` at a directory holding a `server.pa` and a `client.pa` and it
+Point `pluma` at a directory holding a `main.pa` and a `client.pa` and it
 builds a fullstack app: one language from the database to the DOM. A `remote
 def` becomes a typed RPC: the compiler writes the server route and the client
 stub, so the two agree by construction.
 
 ```
 app/
-	server.pa   # the http handler + remote defs
+	main.pa   # the http handler + remote defs
 	client.pa   # boots the browser, hydrates the server's HTML
 ```
 

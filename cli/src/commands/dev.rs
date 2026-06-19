@@ -185,7 +185,7 @@ impl Dashboard {
 }
 
 pub(crate) fn dev_command(web: bool, port: u16, server_url: Option<String>, entry_path: String) {
-	// A fullstack directory (`server.pa` + `client.pa`) runs both halves: the server
+	// A fullstack directory (`main.pa` + `client.pa`) runs both halves: the server
 	// as a subprocess, the client served + live-reloaded, with `/_rpc/*` proxied to
 	// the server (same origin, so no CORS). The client posts same-origin by default
 	// (a relative `/_rpc/...`, which the proxy forwards regardless of how the page was
@@ -465,11 +465,11 @@ fn dev_fullstack(entry_path: String, port: u16, server_url: String) {
 
 	// Pick a free port for the server subprocess and hand it over via `$PORT`, which
 	// `http.serve` honors — so the server binds wherever we put it instead of the
-	// literal address in `server.pa`, and the proxy below always knows where it is.
+	// literal address in `main.pa`, and the proxy below always knows where it is.
 	// No more guessing a hardcoded 8080 (and no collision when 8080 is taken).
 	let server_port = pick_free_port();
 
-	// The server runs as a `pluma run <server.wasm>` child, rebuilt + restarted on
+	// The server runs as a `pluma run <main.wasm>` child, rebuilt + restarted on
 	// change. Keep the wasm in a temp file the child re-reads.
 	let server_path = std::env::temp_dir().join("pluma-dev-server.wasm");
 	if let Err(e) = std::fs::write(&server_path, &server_bytes) {
@@ -873,7 +873,7 @@ fn spawn_run(exe: &Path, entry_path: &str) -> Child {
 
 /// Like `spawn_run`, but pins the child's listening port via `$PORT` (which
 /// `http.serve` honors). The fullstack server subprocess binds there instead of
-/// the literal address in `server.pa`, so the dev proxy and the server always
+/// the literal address in `main.pa`, so the dev proxy and the server always
 /// agree on the port without hardcoding one.
 /// Connect to the server subprocess, retrying briefly so a request that lands
 /// mid-rebuild — after the old server is killed but before the new one has bound

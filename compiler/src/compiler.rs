@@ -83,7 +83,7 @@ pub struct Compiler {
 	// `pluma dev` hot-reload mode: the analyzer redirects `app.sandbox`/`app.element`
 	// to their model-persisting `-hmr` variants. Off everywhere else.
 	pub hmr: bool,
-	// FULLSTACK dual build (`server.pa` + `client.pa` in one directory). The two
+	// FULLSTACK dual build (`main.pa` + `client.pa` in one directory). The two
 	// entries compile from one `check()`, then emit twice; gating runs per artifact
 	// (`entry_modules[0]`=server→`Sys`, `[1]`=client→`Web`) via `gate_fullstack`, and
 	// the generated `rpc-client` targets the web transport (`fetch.post`).
@@ -224,7 +224,7 @@ impl Compiler {
 		}
 	}
 
-	// Mark this as a FULLSTACK dual build (`server.pa` + `client.pa`). The driver
+	// Mark this as a FULLSTACK dual build (`main.pa` + `client.pa`). The driver
 	// sets `entry_modules = [server, client]`; this flag tells RPC codegen the
 	// client is web (`fetch.post` transport) and enables `gate_fullstack`.
 	pub fn with_fullstack(mut self, fullstack: bool) -> Self {
@@ -245,28 +245,19 @@ impl Compiler {
 	}
 
 	// Whether `entry_path` names a FULLSTACK project directory — one holding BOTH
-	// `server.pa` and `client.pa`. The driver dispatches on this to build two
+	// `main.pa` and `client.pa`. The driver dispatches on this to build two
 	// artifacts from one source (`from_fullstack_dir`).
 	pub fn is_fullstack_dir(entry_path: &str) -> bool {
 		let dir = Path::new(entry_path);
-		dir.is_dir() && dir.join("server.pa").is_file() && dir.join("client.pa").is_file()
+		dir.is_dir() && dir.join("main.pa").is_file() && dir.join("client.pa").is_file()
 	}
 
-	// Construct a FULLSTACK compiler from a directory holding `server.pa` +
-	// `client.pa`: `entry_modules = [server, client]`, `fullstack = true`. A `main.pa`
-	// alongside the pair is rejected — the entry would be ambiguous. Module names are
-	// resolved by the normal rule (honoring a `pluma.pa` package root above, if any),
-	// so both halves and their shared modules share one root.
+	// Construct a FULLSTACK compiler from a directory holding `main.pa` (the server)
+	// + `client.pa`: `entry_modules = [server, client]`, `fullstack = true`. Module
+	// names are resolved by the normal rule (honoring a `pluma.pa` package root above,
+	// if any), so both halves and their shared modules share one root.
 	pub fn from_fullstack_dir(entry_path: String) -> Result<Self, Vec<Diagnostic>> {
-		let dir = Path::new(&env::current_dir().unwrap()).join(&entry_path);
-		if dir.join("main.pa").is_file() {
-			return Err(vec![Diagnostic::error(
-				"a fullstack directory has `server.pa` + `client.pa`; remove `main.pa` \
-				 (the entry would be ambiguous)"
-					.to_string(),
-			)]);
-		}
-		let mut compiler = Self::from_entry_path(format!("{entry_path}/server"))?;
+		let mut compiler = Self::from_entry_path(format!("{entry_path}/main"))?;
 		let (_, client) = resolve_entry(format!("{entry_path}/client"))?;
 		compiler.entry_modules.push(client);
 		compiler.fullstack = true;

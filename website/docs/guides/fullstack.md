@@ -1,6 +1,6 @@
 # Fullstack app
 
-A fullstack app is a directory with two entrypoints: `server.pa` and
+A fullstack app is a directory with two entrypoints: `main.pa` and
 `client.pa`. That pair is all `pluma build` needs to know it's building both
 halves at once; mark a function `remote def` and the compiler writes both the
 server route and the browser stub, so the two never drift apart.
@@ -12,7 +12,7 @@ four small files in all:
 ```
 app/
 	api.pa      # shared:   the remote defs both sides agree on
-	server.pa   # required: serves the page, dispatches RPC
+	main.pa   # required: serves the page, dispatches RPC
 	client.pa   # required: hydrates the server's HTML
 	ui.pa       # shared:   the view, rendered on the server and hydrated in the browser
 ```
@@ -32,7 +32,7 @@ public remote def add :: fun int int -> task int = fun a b {
 }
 ```
 
-## server.pa
+## main.pa
 
 Serve the page for the first paint with `app.serve`, the fullstack server. It owns
 two reserved route families so your handler stays focused on your own pages: the
@@ -40,7 +40,7 @@ two reserved route families so your handler stays focused on your own pages: the
 client bundle the browser hydrates with. Everything else falls through to `handler`.
 
 ```pluma
-# server.pa -- serve the page; app.serve routes RPC calls and the client bundle.
+# main.pa -- serve the page; app.serve routes RPC calls and the client bundle.
 use std/sys/app
 use std/task
 use std/sys/http
@@ -118,10 +118,10 @@ Develop with live-reload, then build the deployable bundle:
 
 ```
 pluma dev app/      # live-reload dev server
-pluma build app/    # out/server.wasm + the client bundle in out/_built/
+pluma build app/    # out/main.wasm + the client bundle in out/_built/
 ```
 
-`pluma run out/server.wasm` is then self-sufficient: it renders the page, routes
+`pluma run out/main.wasm` is then self-sufficient: it renders the page, routes
 the `/_rpc/*` calls, and serves the `/_built/*` client bundle the browser hydrates
 with — no separate static file server in front of it.
 

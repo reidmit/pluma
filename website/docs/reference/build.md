@@ -11,7 +11,7 @@ A fullstack project builds into two halves from one set of source files, a
 server and a browser bundle:
 
 ```
-server.wasm     the server: HTTP routes, your remote defs, page rendering
+main.wasm     the server: HTTP routes, your remote defs, page rendering
 app.wasm        the browser bundle (the client half of the same code)
 loader.js       a tiny script that boots app.wasm in the page
 index.html      the first file the browser loads
@@ -22,10 +22,10 @@ _built/         the client bundle the server serves for hydration
 ```
 
 Only the code the browser can actually reach is compiled into `app.wasm`;
-server-only work like database access stays in `server.wasm`. You write one
+server-only work like database access stays in `main.wasm`. You write one
 program; the build splits it.
 
-`pluma run server.wasm` is self-sufficient: `app.serve` renders each page, routes
+`pluma run main.wasm` is self-sufficient: `app.serve` renders each page, routes
 the `/_rpc/*` calls, and serves the `/_built/*` client bundle the page hydrates
 with — so a production deploy is just the one server process, with no separate
 static host required.

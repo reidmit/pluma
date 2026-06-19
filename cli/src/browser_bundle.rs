@@ -23,7 +23,7 @@ pub(crate) fn write_bundle(dir: &Path, wasm: &[u8]) -> std::io::Result<()> {
 }
 
 /// Write the client hydration bundle into `<dir>/_built/`: `loader.js` + `app.wasm`,
-/// the two files the SSR document loads to hydrate. A fullstack `server.wasm` serves
+/// the two files the SSR document loads to hydrate. A fullstack `main.wasm` serves
 /// these at `/_built/*` (via `app.serve`), so they sit under a reserved path that
 /// never collides with a page route. `index.html` isn't needed — the server SSRs `/`.
 pub(crate) fn write_built_dir(dir: &Path, wasm: &[u8]) -> std::io::Result<()> {

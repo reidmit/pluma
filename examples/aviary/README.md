@@ -9,7 +9,7 @@ browser.
 pluma dev examples/aviary        # http://localhost:7777
 ```
 
-(or `pluma build examples/aviary` for the deployable `server.wasm` + client bundle.)
+(or `pluma build examples/aviary` for the deployable `main.wasm` + client bundle.)
 
 ## The pages
 
@@ -36,7 +36,7 @@ server-rendered.
 | `db.pa`      | Server-only SQLite layer: schema, seed, queries. Pruned from the web build. |
 | `api.pa`     | The `remote def` contract. Real handlers on the server, transport stubs on the client. |
 | `ui.pa`      | Isomorphic views (pure `view` builders) + the extracted CSS. Runs on both ends. |
-| `server.pa`  | HTTP server: SSR each route, dispatch `/_rpc/*`. |
+| `main.pa`  | HTTP server: SSR each route, dispatch `/_rpc/*`. |
 | `client.pa`  | Reads the URL, fetches the page's data, hydrates, then drives navigation. |
 
 The key split: database access lives only inside `remote def` bodies (`api.pa` →

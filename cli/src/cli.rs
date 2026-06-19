@@ -55,8 +55,8 @@ pub(crate) enum Command {
 	///
 	/// If given a `main.pa` file, generates a WASM file to be run with `pluma run <out>.wasm`.
 	///
-	/// If given a directory with a `client.pa` and `server.pa`, builds in "fullstack"
-	/// mode. Generates `<out>.wasm` for the server, and a bundle of HTML/JS/WASM files for the client.
+	/// If given a directory with a `client.pa` and `main.pa`, builds in "fullstack"
+	/// mode. Generates `main.wasm` for the server, and a bundle of HTML/JS/WASM files for the client.
 	///
 	/// To build only a client bundle, do `pluma build --web path/to/client.pa`.
 	Build {

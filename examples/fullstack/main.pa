@@ -11,7 +11,7 @@
 #   - GET `/` → the server-side-rendered page (`ui.document`), for an instant first
 #               paint the client then hydrates.
 #
-# `pluma build` emits this to `server.wasm`; run it with `pluma run out/server.wasm`,
+# `pluma build` emits this to `main.wasm`; run it with `pluma run out/main.wasm`,
 # which now serves the page, the RPC routes, and the client bundle all on its own.
 # Because `ui.page`'s remote calls are the *real* handlers in this (server) artifact,
 # `view.to-string (page ())` could even fetch data in-process — here the page is a
