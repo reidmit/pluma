@@ -241,21 +241,16 @@ impl<'a> Lowerer<'a> {
 		// Copy the `&Compiler` out so the per-module borrow is independent of
 		// `&mut self` in the loop body.
 		let compiler = self.compiler;
-		// `compiler.modules` is a HashMap, so iterate it in a fixed (name-sorted)
-		// order. Lowering order fixes the order functions/globals are appended,
-		// hence every FuncId/GlobalId — and, downstream in the wasm backend, the
-		// order record shapes intern (which assigns each shape's struct type +
-		// `shape_id`). Leaving it to HashMap iteration made codegen differ per
-		// process: a `ref.cast` could target a shape interned under a different id,
-		// trapping as "illegal cast" on some runs but not others.
-		let mut modules: Vec<(&str, &ModuleNode)> = compiler
-			.modules
-			.iter()
-			.filter_map(|(m, data)| data.ast.as_ref().map(|ast| (m.as_str(), ast)))
-			.collect();
-		modules.sort_by_key(|(m, _)| *m);
-		for (module, ast) in modules {
-			self.lower_module(module, ast);
+		// Lowering order fixes the order functions/globals are appended, hence
+		// every FuncId/GlobalId — and, downstream in the wasm backend, the order
+		// record shapes intern (each shape's struct type + `shape_id`). So lower
+		// in the canonical module order (`modules_sorted`), never raw HashMap
+		// order, which made codegen differ per process: a `ref.cast` could target
+		// a shape interned under a different id, trapping as "illegal cast".
+		for (module, data) in compiler.modules_sorted() {
+			if let Some(ast) = data.ast.as_ref() {
+				self.lower_module(module, ast);
+			}
 		}
 
 		let test_suites: Vec<(String, GlobalId)> = self
@@ -3562,7 +3557,7 @@ fn build_imports(ast: &ModuleNode) -> HashMap<String, String> {
 /// Only `DefinitionKind::Expr` defs (the call targets) are indexed.
 fn build_def_index(compiler: &Compiler) -> HashMap<(String, String), DefEntry<'_>> {
 	let mut index = HashMap::new();
-	for (module, data) in &compiler.modules {
+	for (module, data) in compiler.modules_sorted() {
 		let Some(ast) = data.ast.as_ref() else {
 			continue;
 		};
@@ -3587,8 +3582,8 @@ fn build_def_index(compiler: &Compiler) -> HashMap<(String, String), DefEntry<'_
 /// `use`s rather than the caller's.
 fn build_module_imports(compiler: &Compiler) -> HashMap<String, HashMap<String, String>> {
 	compiler
-		.modules
-		.iter()
+		.modules_sorted()
+		.into_iter()
 		.filter_map(|(m, data)| data.ast.as_ref().map(|ast| (m.clone(), build_imports(ast))))
 		.collect()
 }
@@ -3917,7 +3912,7 @@ fn expr_kind_name(kind: &ExprKind) -> &'static str {
 /// `option`/`result`/`ordering`).
 fn collect_enums(compiler: &Compiler) -> HashMap<String, Vec<(String, usize)>> {
 	let mut out = HashMap::new();
-	for (module_name, module) in &compiler.modules {
+	for (module_name, module) in compiler.modules_sorted() {
 		let Some(ast) = &module.ast else { continue };
 		for def in &ast.body {
 			if let DefinitionKind::Enum(enum_node) = &def.kind {
@@ -4066,14 +4061,12 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 /// constructor), and trait instance (its method dictionary). Enums and trait
 /// declarations are types, not values, so they get no slot.
 fn reserve_user_globals(g: &mut GlobalTable, compiler: &Compiler) {
-	// `compiler.modules` is a HashMap; reserve in a fixed (name-sorted) order so
-	// every user global's GlobalId is assigned deterministically. These ids thread
-	// through the whole backend — global slot order, lifted-closure names, and the
-	// order functions/shapes are emitted — so a random reservation order made
-	// codegen non-reproducible (and could trap as "illegal cast" on some runs).
-	let mut modules: Vec<_> = compiler.modules.iter().collect();
-	modules.sort_by_key(|(name, _)| *name);
-	for (module_name, module) in modules {
+	// Reserve in the canonical module order so every user global's GlobalId is
+	// assigned deterministically. These ids thread through the whole backend —
+	// global slot order, lifted-closure names, and the order functions/shapes are
+	// emitted — so a random reservation order made codegen non-reproducible (and
+	// could trap as "illegal cast" on some runs).
+	for (module_name, module) in compiler.modules_sorted() {
 		let Some(ast) = &module.ast else { continue };
 		for def in &ast.body {
 			match &def.kind {

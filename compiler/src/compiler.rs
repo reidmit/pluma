@@ -68,6 +68,8 @@ pub struct Compiler {
 	// discovered `*.test.pa` file. Codegen, LSP, etc. that previously read a
 	// single entry module name read `entry_modules[0]` instead.
 	pub entry_modules: Vec<String>,
+	// Iterate this via `modules_sorted()`, not `.iter()` — hash order is
+	// per-process-random and any id assigned in iteration order must be stable.
 	pub modules: HashMap<String, Module>,
 	diagnostics: Vec<Diagnostic>,
 	// Per fully-qualified module name, the top-level defs (values, aliases,
@@ -270,6 +272,20 @@ impl Compiler {
 	// kept for any future module whose signature the `.pa` surface can't express.
 	pub fn register_native_module(&mut self, name: String, exports: ModuleExports) {
 		self.native_modules.insert(name, exports);
+	}
+
+	/// Every loaded module in a canonical (name-sorted) order. **Always iterate
+	/// modules through this, never `self.modules.iter()` directly.** `modules` is
+	/// a `HashMap`, whose iteration order is seeded per process; a pass that
+	/// assigns sequential ids (FuncId/GlobalId) or emits in module order would
+	/// then produce different — and occasionally miscompiled — wasm each run.
+	/// Routing all iteration through one sorted accessor makes the build a pure
+	/// function of the source and keeps a future iteration site from silently
+	/// reintroducing that non-determinism. (Point `get`/`insert` are unaffected.)
+	pub fn modules_sorted(&self) -> Vec<(&String, &Module)> {
+		let mut modules: Vec<(&String, &Module)> = self.modules.iter().collect();
+		modules.sort_by(|a, b| a.0.cmp(b.0));
+		modules
 	}
 
 	// Pre-parse a module from in-memory bytes and insert it into the
