@@ -1,0 +1,14 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+ok
+== stdout ==
+14:30:00 INFO  starting up
+14:30:00 WARN  served page  path=/docs status=200 ratio=0.5 cache-hit=true tags=["a","b"]
+{"time":"2024-05-25T14:30:00Z","level":"info","msg":"starting up"}
+{"time":"2024-05-25T14:30:00Z","level":"error","msg":"served page","path":"/docs","status":200,"ratio":0.5,"cache-hit":true,"tags":["a","b"]}
+14:30:00 DEBUG d
+{"time":"2024-05-25T14:30:00Z","level":"debug","msg":"d"}
+== stderr ==

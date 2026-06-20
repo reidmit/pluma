@@ -1,0 +1,252 @@
+# std/sys/log -- structured logging for servers.
+#
+# A log entry is a level, a message, and a list of typed key/value `field`s --
+# not just a string -- so the things you'll later want to grep, filter, or graph
+# on (a status code, a request id, a duration) stay as real, separate values
+# instead of being baked into prose. Entries go to standard error, one per line,
+# in one of two renderings: `text` for reading at a terminal during development,
+# or `json` (one object per line) for a host that ingests logs as structured
+# data. `configure-from-env` picks the rendering from `$LOG_FORMAT` so the same
+# binary reads nicely locally and ships JSON in production.
+#
+#     log.info "served page" [log.str "path" req.path, log.int "status" 200]
+#     # text: 14:30:00 INFO  served page  path=/ status=200
+#     # json: {"time":"2026-06-19T14:30:00Z","level":"info","msg":"served page","path":"/","status":200}
+#
+# Emitting is synchronous -- a plain `nothing`, like `io.print` -- so you can log
+# from anywhere, async or not, without a `try`. For request-scoped context that
+# should ride along on every line a handler emits (a request id, the path), bind
+# it once with `with`; it follows the running task and concurrent requests stay
+# isolated, the same way `std/sys/rpc/context` carries the request.
+use std/json
+use std/list
+use std/local
+use std/string
+use std/task
+use std/time
+use std/sys/io
+use std/sys/process
+
+# How serious an entry is. `debug` is the chattiest and `error` the most severe;
+# `configure` sets a floor (`min-level`) below which entries are dropped, so the
+# same `log.debug` calls cost nothing in production once the floor is `info`.
+public enum level {
+	debug
+	info
+	warn
+	error
+}
+
+# How a line is rendered. `text` is a compact human form for a terminal; `json`
+# is one JSON object per line, the shape a log aggregator wants to index.
+public enum format {
+	text
+	json
+}
+
+# One structured key/value pair on an entry. Build these with the typed
+# constructors below (`str`, `int`, ...) rather than by hand, so the value keeps
+# its JSON type -- a number stays a number, a bool stays a bool.
+public alias field {key :: string, value :: json.value}
+
+# What `configure` sets: the rendering and the lowest level that still prints.
+public alias config {min-level :: level, format :: format}
+
+# A string field.            `log.str "path" req.path`
+public def str :: fun string string -> field = fun k v {
+	{key: k, value: json.value.string v}
+}
+
+# A whole-number field.      `log.int "status" 200`
+public def int :: fun string int -> field = fun k v {
+	{key: k, value: json.value.int v}
+}
+
+# A decimal field.           `log.float "ratio" 0.91`
+public def float :: fun string float -> field = fun k v {
+	{key: k, value: json.value.float v}
+}
+
+# A boolean field.           `log.bool "cache-hit" true`
+public def bool :: fun string bool -> field = fun k v {
+	{key: k, value: json.value.bool v}
+}
+
+# A field carrying an already-built JSON value -- the escape hatch for nesting an
+# array or object under one key when the scalar constructors don't fit.
+public def raw :: fun string json.value -> field = fun k v {
+	{key: k, value: v}
+}
+
+# The active settings. Logs default to human `text` at `info` and up until
+# `configure`/`configure-from-env` says otherwise; a plain `ref` because settings
+# are written once at startup and only read after.
+def settings :: ref config = ref.new {min-level: level.info, format: format.text}
+
+# The ambient fields bound for the current task -- empty until a `with` binds
+# some. `local`, not `ref`, so concurrent requests don't clobber each other.
+def context :: local (list field) = local.new []
+
+# Replaces the active settings. Call once in `main` before serving:
+#
+#     log.configure {min-level: level.info, format: format.json}
+public def configure :: fun config -> nothing = fun c {
+	ref.set settings c
+}
+
+# Reads settings from the environment: `$LOG_FORMAT` (`json` selects JSON, any
+# other value or unset stays `text`) and `$LOG_LEVEL` (`debug`/`info`/`warn`/
+# `error`, defaulting to `info`). Lets one binary log readable text locally and
+# structured JSON wherever the host sets `LOG_FORMAT=json`.
+public def configure-from-env :: fun nothing -> nothing = fun {
+	let fmt = when process.env "LOG_FORMAT" is some s {
+		if s == "json" {
+			format.json
+		} else {
+			format.text
+		}
+	} else {
+		format.text
+	}
+	ref.set settings {min-level: level-from-env (), format: fmt}
+}
+
+def level-from-env :: fun nothing -> level = fun {
+	when process.env "LOG_LEVEL" is some s {
+		if s == "debug" {
+			level.debug
+		} else if s == "warn" {
+			level.warn
+		} else if s == "error" {
+			level.error
+		} else {
+			level.info
+		}
+	} else {
+		level.info
+	}
+}
+
+# Binds `fields` as ambient context for `body` and every task it spawns: each
+# entry emitted inside carries them, prepended to the call's own fields, without
+# threading them through. Nesting merges -- an inner `with` adds to the outer
+# one. The natural home is a request-logging middleware:
+#
+#     fun next { fun req {
+#         log.with [log.str "request-id" (uuid.v4 ()), log.str "path" req.path] fun {
+#             try resp = next req
+#             log.info "request" [log.int "status" resp.status]
+#             task.return resp
+#         }
+#     } }
+public def with :: fun (list field) (fun nothing -> task a) -> task a = fun fields body {
+	local.with context (list.concat (local.get context) fields) body
+}
+
+# Emit at each level. `msg` is the human summary; `fields` is the structured
+# detail (pass `[]` for none). All write one line to standard error and return
+# immediately.
+public def debug :: fun string (list field) -> nothing = fun msg fields {
+	emit level.debug msg fields
+}
+
+public def info :: fun string (list field) -> nothing = fun msg fields {
+	emit level.info msg fields
+}
+
+public def warn :: fun string (list field) -> nothing = fun msg fields {
+	emit level.warn msg fields
+}
+
+public def error :: fun string (list field) -> nothing = fun msg fields {
+	emit level.error msg fields
+}
+
+def emit :: fun level string (list field) -> nothing = fun lvl msg fields {
+	let cfg = ref.get settings
+	if rank lvl >= rank cfg.min-level {
+		let line = render cfg.format (time.now ()) lvl msg (list.concat (local.get context) fields)
+		io.print-err line
+	} else {
+		()
+	}
+}
+
+# Renders one entry to its line of text, without emitting it -- the seam for
+# routing logs somewhere other than standard error, and what the level helpers
+# format. `at` is the entry's timestamp (`time.now ()` in normal use).
+public def render :: fun format instant level string (list field) -> string = fun fmt at lvl msg fields {
+	if fmt is format.json {
+		render-json at lvl msg fields
+	} else {
+		render-text at lvl msg fields
+	}
+}
+
+def render-json :: fun instant level string (list field) -> string = fun at lvl msg fields {
+	let head = [str "time" (time.to-iso at), str "level" (name lvl), str "msg" msg]
+	let parts = list.map (list.concat head fields) field-json
+	"{" ++ string.join parts "," ++ "}"
+}
+
+def field-json :: fun field -> string = fun f {
+	# Run the key through `json.stringify` too, so it's quoted and escaped exactly
+	# like any JSON string -- no separate escaper to keep in sync.
+	json.stringify (json.value.string f.key) ++ ":" ++ json.stringify f.value
+}
+
+def render-text :: fun instant level string (list field) -> string = fun at lvl msg fields {
+	let head = "$(time.format at "%H:%M:%S") $(label lvl) $(msg)"
+	if list.is-empty fields {
+		head
+	} else {
+		head ++ "  " ++ string.join (list.map fields field-text) " "
+	}
+}
+
+def field-text :: fun field -> string = fun f {
+	# A bare string reads best unquoted; everything else (number, bool, nested
+	# value) shows in its JSON form so it's unambiguous.
+	let shown = if f.value is json.value.string s {
+		s
+	} else {
+		json.stringify f.value
+	}
+	"$(f.key)=$(shown)"
+}
+
+def rank :: fun level -> int = fun l {
+	when l is level.debug {
+		0
+	} is level.info {
+		1
+	} is level.warn {
+		2
+	} is level.error {
+		3
+	}
+}
+
+def name :: fun level -> string = fun l {
+	when l is level.debug {
+		"debug"
+	} is level.info {
+		"info"
+	} is level.warn {
+		"warn"
+	} is level.error {
+		"error"
+	}
+}
+
+def label :: fun level -> string = fun l {
+	when l is level.debug {
+		"DEBUG"
+	} is level.info {
+		"INFO "
+	} is level.warn {
+		"WARN "
+	} is level.error {
+		"ERROR"
+	}
+}

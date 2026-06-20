@@ -13,10 +13,13 @@
 
 use std/string
 use std/task
+use std/time
+use std/uuid
 use std/view
 use std/sys/app
 use std/sys/fs
 use std/sys/http
+use std/sys/log
 use std/sys/static
 use docdata
 use docs
@@ -91,6 +94,23 @@ def handler :: fun http.request -> task http.response = fun req {
 	}
 }
 
+# Wrap `handler` so every request emits one structured log line. A fresh
+# request id and the path are bound as ambient context for the request's whole
+# task (`log.with`), so anything the handler logs along the way carries them too;
+# on the way out we add the response status and how long it took.
+def logged :: fun http.request -> task http.response = fun req {
+	let started = time.monotonic ()
+	log.with [log.str "request-id" (uuid.v7 ()), log.str "path" req.path] fun {
+		try resp = handler req
+		let elapsed = time.duration-diff (time.monotonic ()) started
+		log.info "request" [log.int "status" resp.status, log.int "dur-ms" (time.as-millis elapsed)]
+		task.return resp
+	}
+}
+
 def main = fun {
-	app.serve "127.0.0.1:8080" handler
+	# Read the log format/level from the environment: readable text locally, and
+	# JSON wherever the host sets `LOG_FORMAT=json`.
+	log.configure-from-env ()
+	app.serve "127.0.0.1:8080" logged
 }
