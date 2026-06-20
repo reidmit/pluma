@@ -185,11 +185,27 @@ impl HostIo for CapturingIo {
 /// rather than blocking until the whole stream reaches EOF.
 struct StdioIo {
 	stdin: Option<std::io::BufReader<std::io::Stdin>>,
+	/// When true, stdin reads return EOF without ever touching the process stdin.
+	/// `pluma test` uses this so a case that calls `io.read` gets EOF immediately
+	/// rather than blocking on the terminal — a test runner has no one interactive
+	/// stdin to hand a suite of cases, matching the empty-stdin the snapshot harness
+	/// fed these same programs.
+	stdin_closed: bool,
 }
 
 impl StdioIo {
 	fn new() -> Self {
-		StdioIo { stdin: None }
+		StdioIo {
+			stdin: None,
+			stdin_closed: false,
+		}
+	}
+	/// Stream stdout/stderr live, but treat stdin as already at EOF.
+	fn without_stdin() -> Self {
+		StdioIo {
+			stdin: None,
+			stdin_closed: true,
+		}
 	}
 	fn reader(&mut self) -> &mut std::io::BufReader<std::io::Stdin> {
 		self
@@ -211,6 +227,9 @@ impl HostIo for StdioIo {
 	}
 	fn read_line(&mut self) -> Option<String> {
 		use std::io::BufRead;
+		if self.stdin_closed {
+			return None;
+		}
 		let mut buf = Vec::new();
 		match self.reader().read_until(b'\n', &mut buf) {
 			Ok(0) => None,
@@ -227,6 +246,9 @@ impl HostIo for StdioIo {
 		}
 	}
 	fn read_rest(&mut self) -> Vec<u8> {
+		if self.stdin_closed {
+			return Vec::new();
+		}
 		let mut buf = Vec::new();
 		let _ = self.reader().read_to_end(&mut buf);
 		buf

@@ -110,7 +110,10 @@ pub fn run_streaming_v8(bytes: &[u8], args: &[String]) -> i32 {
 /// — so a clean failure (`"runtime error: "` with an empty message) just exits 1
 /// silently, while a genuine trap (a crashing case) still surfaces its message.
 pub fn run_test_v8(bytes: &[u8]) -> i32 {
-	let result = run_v8(bytes, Box::new(StdioIo::new()), Vec::new());
+	// Stream the report live, but keep stdin at EOF: a case that reads stdin (e.g.
+	// `io.read`) must not block on the terminal — there's no single interactive
+	// stdin to feed a whole suite.
+	let result = run_v8(bytes, Box::new(StdioIo::without_stdin()), Vec::new());
 	match result.status.as_str() {
 		"ok" => 0,
 		"runtime error: " => 1,
