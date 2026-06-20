@@ -332,11 +332,25 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 		}
 		None => {
 			// A trap. An `io.fail` stashed its message host-side; surface that, else the
-			// raw exception text.
-			let _ = tc.exception();
+			// raw V8 exception text (e.g. a wasm RuntimeError) so the reason isn't lost.
 			match unsafe { &*ctx_ptr }.state.fail.clone() {
 				Some(msg) => format!("runtime error: {msg}"),
-				None => "runtime error: trap".to_string(),
+				None => {
+					let detail = tc
+						.exception()
+						.map(|e| e.to_rust_string_lossy(tc))
+						.unwrap_or_default();
+					if std::env::var_os("PLUMA_TRAP_STACK").is_some() {
+						if let Some(st) = tc.stack_trace() {
+							eprintln!("[trap stack] {}", st.to_rust_string_lossy(tc));
+						}
+					}
+					if detail.is_empty() {
+						"runtime error: trap".to_string()
+					} else {
+						format!("runtime error: {detail}")
+					}
+				}
 			}
 		}
 	}
