@@ -554,11 +554,16 @@ impl FuncTypes {
 	/// apart after WasmGC canonicalization). Empty before any nominal record is built —
 	/// `__denominalize` then degenerates to identity.
 	pub fn shapes_for_lift(&self) -> Vec<(u32, u32, ir::RecordShape)> {
-		self
+		// `shape_keys` is a HashMap, so sort by the dense `shape_id` for a stable
+		// result — otherwise the `__denominalize` dispatch is emitted in a random
+		// per-process order, making codegen non-reproducible.
+		let mut out: Vec<(u32, u32, ir::RecordShape)> = self
 			.shape_keys
 			.iter()
 			.map(|(shape, info)| (info.type_idx, info.shape_id, shape.clone()))
-			.collect()
+			.collect();
+		out.sort_by_key(|(_, shape_id, _)| *shape_id);
+		out
 	}
 
 	/// The type index for a Pluma function of the given arity (boxed in/out).

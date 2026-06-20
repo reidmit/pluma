@@ -794,6 +794,12 @@ impl<'compiler> Analyzer<'compiler> {
 				.iter()
 				.map(move |(name, t)| (qualified_module.clone(), name.clone(), t.clone()))
 		}));
+		// `self.imports`/`exports.traits` are HashMaps, so the collected order is
+		// per-process random. The loop below mints a fresh type var per trait in this
+		// order (and first-seen wins a duplicate name), so an unsorted list makes
+		// type-var numbering — and every id derived from it downstream — differ run to
+		// run, leaving codegen non-reproducible. Sort by module then trait name.
+		imported_traits.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
 		for (qualified_module, trait_name, texport) in imported_traits {
 			if self.traits.contains_key(&trait_name) {
 				continue;
@@ -827,11 +833,17 @@ impl<'compiler> Analyzer<'compiler> {
 		// seeds the prelude's separately). Already-present keys are skipped,
 		// so prelude/local instances win; the orphan rule keeps an instance
 		// co-located with its trait or head type, so direct imports suffice.
-		let imported_instances: Vec<crate::module::InstanceExport> = self
+		let mut imported_instances: Vec<crate::module::InstanceExport> = self
 			.imports
 			.values()
 			.flat_map(|exports| exports.instances.iter().cloned())
 			.collect();
+		// `self.imports` is a HashMap, so iterate-then-flatten yields a per-process
+		// random order. `add_imported_instances` mints fresh type vars per parametric
+		// instance in this order, so an unsorted list makes type-var numbering — and
+		// every id minted downstream during analysis and lowering — differ run to run,
+		// which leaves codegen non-reproducible. Sort by the unique slot name.
+		imported_instances.sort_by(|a, b| a.instance_slot_name.cmp(&b.instance_slot_name));
 		self.add_imported_instances(&imported_instances);
 
 		// PLUMA_TIMING=2 prints per-phase timing within analyze().

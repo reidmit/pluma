@@ -241,11 +241,19 @@ impl<'a> Lowerer<'a> {
 		// Copy the `&Compiler` out so the per-module borrow is independent of
 		// `&mut self` in the loop body.
 		let compiler = self.compiler;
-		let modules: Vec<(&str, &ModuleNode)> = compiler
+		// `compiler.modules` is a HashMap, so iterate it in a fixed (name-sorted)
+		// order. Lowering order fixes the order functions/globals are appended,
+		// hence every FuncId/GlobalId — and, downstream in the wasm backend, the
+		// order record shapes intern (which assigns each shape's struct type +
+		// `shape_id`). Leaving it to HashMap iteration made codegen differ per
+		// process: a `ref.cast` could target a shape interned under a different id,
+		// trapping as "illegal cast" on some runs but not others.
+		let mut modules: Vec<(&str, &ModuleNode)> = compiler
 			.modules
 			.iter()
 			.filter_map(|(m, data)| data.ast.as_ref().map(|ast| (m.as_str(), ast)))
 			.collect();
+		modules.sort_by_key(|(m, _)| *m);
 		for (module, ast) in modules {
 			self.lower_module(module, ast);
 		}
@@ -4048,7 +4056,14 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 /// constructor), and trait instance (its method dictionary). Enums and trait
 /// declarations are types, not values, so they get no slot.
 fn reserve_user_globals(g: &mut GlobalTable, compiler: &Compiler) {
-	for (module_name, module) in &compiler.modules {
+	// `compiler.modules` is a HashMap; reserve in a fixed (name-sorted) order so
+	// every user global's GlobalId is assigned deterministically. These ids thread
+	// through the whole backend — global slot order, lifted-closure names, and the
+	// order functions/shapes are emitted — so a random reservation order made
+	// codegen non-reproducible (and could trap as "illegal cast" on some runs).
+	let mut modules: Vec<_> = compiler.modules.iter().collect();
+	modules.sort_by_key(|(name, _)| *name);
+	for (module_name, module) in modules {
 		let Some(ast) = &module.ast else { continue };
 		for def in &ast.body {
 			match &def.kind {
