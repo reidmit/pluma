@@ -587,12 +587,31 @@ impl Compiler {
 		// qualified enum type names can be reconstructed at use sites.
 		let mut imports_map: HashMap<String, ModuleExports> = HashMap::new();
 		let mut import_qualified: HashMap<String, String> = HashMap::new();
+		// A test file (`foo.test`) importing the module it tests (`foo`) sees that
+		// module's *private* surface too, so a unit test can reach its helpers
+		// without exporting them just for testing. The link is the name: the test's
+		// stem (`foo.test` → `foo`) names the module under test. The stem is matched
+		// as a path *suffix* of the import — a test rooted at a subdirectory is named
+		// relative to that root (`sys/static.test`) while it imports the module by its
+		// full path (`std/sys/static`), so the stem is a suffix, not always equal.
+		let test_stem: Option<&str> = if importer_is_test {
+			module_name.strip_suffix(".test")
+		} else {
+			None
+		};
 		for (full_name, local_name, _, _) in &imports {
 			if rejected_imports.contains(full_name) {
 				continue;
 			}
 			if let Some(exports) = self.exports_cache.get(full_name) {
-				imports_map.insert(local_name.clone(), exports.clone());
+				let is_module_under_test = test_stem
+					.is_some_and(|stem| full_name == stem || full_name.ends_with(&format!("/{stem}")));
+				let exports = if is_module_under_test {
+					exports.internal_view()
+				} else {
+					exports.clone()
+				};
+				imports_map.insert(local_name.clone(), exports);
 				import_qualified.insert(local_name.clone(), full_name.clone());
 			}
 		}
@@ -976,6 +995,137 @@ mod platform_gating_tests {
 				.any(|d| d.message.contains("std/sys/io") && d.message.contains("web")),
 			"expected the client root to bar std/sys/io on web, got: {:?}",
 			diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+		);
+	}
+}
+
+// A test file (`foo.test`) sees the private surface of the module it tests
+// (`foo`), so a unit test can reach a module's helpers without exporting them
+// just for testing. Every other importer still sees only the public surface.
+#[cfg(test)]
+mod test_sibling_visibility_tests {
+	use super::*;
+
+	fn check_multi(modules: &[(&str, &str)], entry: &str) -> Vec<Diagnostic> {
+		let mut compiler = Compiler::for_root_dir(std::env::temp_dir());
+		for (name, src) in modules {
+			compiler.set_module_source(name.to_string(), src.as_bytes().to_vec());
+		}
+		compiler.add_entry_module(entry.to_string());
+		match compiler.check() {
+			Ok(()) => Vec::new(),
+			Err(diags) => diags,
+		}
+	}
+
+	fn errors(diags: &[Diagnostic]) -> Vec<&String> {
+		diags
+			.iter()
+			.filter(|d| d.is_error())
+			.map(|d| &d.message)
+			.collect()
+	}
+
+	// A module exposing a non-public surface of every kind: a private value, a
+	// private enum, an `opaque` enum (type public, constructors hidden), a
+	// private alias, and a private trait + instance.
+	const FOO: &str = "\
+def secret-add :: fun int int -> int = fun a b {\n\
+\ta + b\n\
+}\n\
+\n\
+enum shade {\n\
+\tdark\n\
+\tlight\n\
+}\n\
+\n\
+opaque enum tag {\n\
+\ttag-of int\n\
+}\n\
+\n\
+alias pt {\n\
+\tx :: int,\n\
+\ty :: int,\n\
+}\n\
+\n\
+trait my-show a {\n\
+\tmy-show :: fun a -> string\n\
+}\n\
+\n\
+implement my-show int {\n\
+\tdef my-show = fun n {\n\
+\t\tto-string n\n\
+\t}\n\
+}\n";
+
+	#[test]
+	fn sibling_test_sees_every_private_kind() {
+		// The sibling test reaches the private value, constructs and matches the
+		// private enum, constructs the `opaque` enum's hidden constructor, builds
+		// the private alias, and dispatches the private trait method.
+		let foo_test = "\
+use foo\n\
+\n\
+def use-value :: fun int -> int = fun x {\n\
+\tfoo.secret-add x 1\n\
+}\n\
+\n\
+def make-enum :: fun nothing -> foo.shade = fun {\n\
+\tfoo.shade.dark\n\
+}\n\
+\n\
+def match-enum :: fun foo.shade -> int = fun s {\n\
+\twhen s is foo.shade.dark {\n\
+\t\t0\n\
+\t} is foo.shade.light {\n\
+\t\t1\n\
+\t}\n\
+}\n\
+\n\
+def make-opaque :: fun nothing -> foo.tag = fun {\n\
+\tfoo.tag.tag-of 5\n\
+}\n\
+\n\
+def make-alias :: fun nothing -> foo.pt = fun {\n\
+\tfoo.pt { x: 1, y: 2 }\n\
+}\n\
+\n\
+def call-trait :: fun nothing -> string = fun {\n\
+\tmy-show 7\n\
+}\n";
+		let diags = check_multi(&[("foo", FOO), ("foo.test", foo_test)], "foo.test");
+		assert!(
+			errors(&diags).is_empty(),
+			"a sibling test was denied access to its module's private surface: {:?}",
+			errors(&diags)
+		);
+	}
+
+	#[test]
+	fn non_test_importer_still_cannot_reach_private() {
+		let client = "use foo\n\ndef out :: int = foo.secret-add 2 3\n";
+		let diags = check_multi(&[("foo", FOO), ("client", client)], "client");
+		assert!(
+			diags
+				.iter()
+				.any(|d| d.message.contains("secret-add") && d.message.contains("private")),
+			"expected `secret-add` to stay private to a non-test importer, got: {:?}",
+			errors(&diags)
+		);
+	}
+
+	#[test]
+	fn unrelated_test_module_cannot_reach_private() {
+		// `other.test` is a test file, but it doesn't test `foo` (its stem is
+		// `other`, not `foo`), so it sees only `foo`'s public surface.
+		let other_test = "use foo\n\ndef out :: int = foo.secret-add 2 3\n";
+		let diags = check_multi(&[("foo", FOO), ("other.test", other_test)], "other.test");
+		assert!(
+			diags
+				.iter()
+				.any(|d| d.message.contains("secret-add") && d.message.contains("private")),
+			"expected `secret-add` to stay private to a non-sibling test, got: {:?}",
+			errors(&diags)
 		);
 	}
 }

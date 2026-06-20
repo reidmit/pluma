@@ -46,6 +46,59 @@ pub struct ModuleExports {
 	// a bare "not found". Opaque enum *type* names are NOT listed here (the
 	// type is accessible — only its constructors are withheld).
 	pub private: std::collections::HashSet<String>,
+	// The full signatures of the module's *non-public* surface, mirroring the
+	// public maps above. Only a sibling test file (`foo.test` importing `foo`)
+	// is handed these, via `internal_view`, so a unit test can reach a module's
+	// private helpers without exporting them just for testing. `private_enums`
+	// also holds the *full* (constructors-included) form of an `opaque` enum, so
+	// a test can construct and match values the public surface keeps abstract.
+	pub private_values: HashMap<String, Type>,
+	pub private_value_constraints: HashMap<String, Vec<ValueConstraintExport>>,
+	pub private_aliases: HashMap<String, Type>,
+	pub private_enums: HashMap<String, EnumExport>,
+	pub private_traits: HashMap<String, TraitExport>,
+}
+
+impl ModuleExports {
+	// The view a sibling test module (`foo.test`) gets of the module it tests
+	// (`foo`): every private def folded into the public maps and the `private`
+	// name-set cleared, so its helpers resolve like ordinary exports. Private
+	// entries win over public ones — that only matters for an `opaque` enum,
+	// whose full (constructors-included) form replaces the abstract public one.
+	// Used only at the test-sibling import site; every other importer sees the
+	// public surface untouched.
+	pub fn internal_view(&self) -> ModuleExports {
+		let mut e = self.clone();
+		e.values.extend(
+			self
+				.private_values
+				.iter()
+				.map(|(k, v)| (k.clone(), v.clone())),
+		);
+		for (k, v) in &self.private_value_constraints {
+			e.value_constraints.insert(k.clone(), v.clone());
+		}
+		e.aliases.extend(
+			self
+				.private_aliases
+				.iter()
+				.map(|(k, v)| (k.clone(), v.clone())),
+		);
+		e.enums.extend(
+			self
+				.private_enums
+				.iter()
+				.map(|(k, v)| (k.clone(), v.clone())),
+		);
+		e.traits.extend(
+			self
+				.private_traits
+				.iter()
+				.map(|(k, v)| (k.clone(), v.clone())),
+		);
+		e.private.clear();
+		e
+	}
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]

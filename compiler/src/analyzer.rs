@@ -1004,92 +1004,134 @@ impl<'compiler> Analyzer<'compiler> {
 							}
 						} else {
 							exports.private.insert(def.name.name.clone());
+							// Retain the private def's signature for a sibling test
+							// file (`internal_view`); ordinary importers never see it.
+							exports
+								.private_values
+								.insert(def.name.name.clone(), expr.ty.clone());
+							if let Some(cs) = self.def_value_constraints.get(&def.name.name) {
+								exports
+									.private_value_constraints
+									.insert(def.name.name.clone(), cs.clone());
+							}
 						}
 					}
 					DefinitionKind::Alias(_) => {
-						if def.visibility != Visibility::Public {
-							exports.private.insert(def.name.name.clone());
-						} else if let Some(binding) = self.type_scope.get(&def.name.name) {
-							// Alias types are exported both as types (for use in
-							// type positions like `module.alias-name`) and as
-							// constructor functions (for use in value positions
-							// like `module.alias-name { ... }`).
-							let resolved = match &substitution {
+						// Alias types are exposed both as types (for use in type
+						// positions like `module.alias-name`) and as constructor
+						// functions (for use in value positions like
+						// `module.alias-name { ... }`). A private alias resolves the
+						// same way, but lands in the `private_*` maps so only a
+						// sibling test file (`internal_view`) sees it.
+						let resolved = self
+							.type_scope
+							.get(&def.name.name)
+							.map(|binding| match &substitution {
 								Some(s) => s.apply_to_type(&binding.ty),
 								None => binding.ty.clone(),
-							};
-							exports
-								.aliases
-								.insert(def.name.name.clone(), resolved.clone());
-							exports.values.insert(
-								def.name.name.clone(),
-								Type::Fun(vec![resolved.clone()], Box::new(resolved)),
-							);
+							});
+						if def.visibility == Visibility::Public {
+							if let Some(resolved) = resolved {
+								exports
+									.aliases
+									.insert(def.name.name.clone(), resolved.clone());
+								exports.values.insert(
+									def.name.name.clone(),
+									Type::Fun(vec![resolved.clone()], Box::new(resolved)),
+								);
+							}
+						} else {
+							exports.private.insert(def.name.name.clone());
+							if let Some(resolved) = resolved {
+								exports
+									.private_aliases
+									.insert(def.name.name.clone(), resolved.clone());
+								exports.private_values.insert(
+									def.name.name.clone(),
+									Type::Fun(vec![resolved.clone()], Box::new(resolved)),
+								);
+							}
 						}
 					}
 					DefinitionKind::Enum(_) => {
-						if def.visibility == Visibility::Private {
-							exports.private.insert(def.name.name.clone());
-						} else {
-							let qualified = format!("{}.{}", module.module_name, def.name.name);
-							if let Some(enum_def) = self.enum_defs.get(&qualified) {
-								// Canonicalize variant params: local fresh vars (e.g.
-								// 42, 43) get rewritten to Var(0), Var(1), ... so
-								// importers see a stable, var-namespace-independent
-								// signature.
-								let canonicalize = Substitution {
-									solutions: enum_def
-										.param_vars
+						let qualified = format!("{}.{}", module.module_name, def.name.name);
+						if let Some(enum_def) = self.enum_defs.get(&qualified) {
+							// Canonicalize variant params: local fresh vars (e.g.
+							// 42, 43) get rewritten to Var(0), Var(1), ... so
+							// importers see a stable, var-namespace-independent
+							// signature.
+							let canonicalize = Substitution {
+								solutions: enum_def
+									.param_vars
+									.iter()
+									.enumerate()
+									.map(|(i, local)| (*local, Type::Var(i)))
+									.collect(),
+								row_solutions: HashMap::new(),
+								tuple_row_solutions: HashMap::new(),
+							};
+							// The full constructor list (canonicalized). Used as-is for
+							// a public enum; kept in `private_enums` for an `opaque` or
+							// private one so a sibling test can still construct and
+							// match its values.
+							let full_variants: Vec<(String, Vec<Type>)> = enum_def
+								.variants
+								.iter()
+								.map(|(n, params)| {
+									// Resolve the solved substitution *before* canonicalizing the
+									// enum's own params. A variant payload that is an alias was
+									// captured as the alias's fresh type var (aliases resolve to
+									// their underlying type only by later unification); applying
+									// the substitution turns it into the concrete payload, so an
+									// importer derives `wire` (and reads the real shape) for an
+									// enum like `e { v (list some-alias) }` rather than seeing a
+									// dangling var. The enum's generic params aren't in the
+									// substitution, so `canonicalize` still maps them to Var(0..).
+									let mapped = params
 										.iter()
-										.enumerate()
-										.map(|(i, local)| (*local, Type::Var(i)))
-										.collect(),
-									row_solutions: HashMap::new(),
-									tuple_row_solutions: HashMap::new(),
-								};
-								// `opaque` exports the type name but withholds its
-								// constructors: importers get an empty variant list,
-								// so they can name the type yet can't construct or
-								// pattern-match its values. `param_count` is still
-								// exported so the type takes the right arguments.
-								let variants: Vec<(String, Vec<Type>)> = if def.visibility == Visibility::Opaque {
-									Vec::new()
-								} else {
-									enum_def
-										.variants
-										.iter()
-										.map(|(n, params)| {
-											// Resolve the solved substitution *before* canonicalizing the
-											// enum's own params. A variant payload that is an alias was
-											// captured as the alias's fresh type var (aliases resolve to
-											// their underlying type only by later unification); applying
-											// the substitution turns it into the concrete payload, so an
-											// importer derives `wire` (and reads the real shape) for an
-											// enum like `e { v (list some-alias) }` rather than seeing a
-											// dangling var. The enum's generic params aren't in the
-											// substitution, so `canonicalize` still maps them to Var(0..).
-											let mapped = params
-												.iter()
-												.map(|p| {
-													let solved = match &substitution {
-														Some(s) => s.apply_to_type(p),
-														None => p.clone(),
-													};
-													canonicalize.apply_to_type(&solved)
-												})
-												.collect();
-											(n.clone(), mapped)
+										.map(|p| {
+											let solved = match &substitution {
+												Some(s) => s.apply_to_type(p),
+												None => p.clone(),
+											};
+											canonicalize.apply_to_type(&solved)
 										})
-										.collect()
-								};
-								exports.enums.insert(
-									def.name.name.clone(),
-									EnumExport {
-										param_count: enum_def.param_vars.len(),
-										variants,
-									},
-								);
+										.collect();
+									(n.clone(), mapped)
+								})
+								.collect();
+							let param_count = enum_def.param_vars.len();
+							let full = EnumExport {
+								param_count,
+								variants: full_variants,
+							};
+							match def.visibility {
+								// `opaque` exports the type name but withholds its
+								// constructors: importers get an empty variant list, so
+								// they can name the type yet can't construct or
+								// pattern-match its values. `param_count` is still
+								// exported so the type takes the right arguments. The full
+								// form goes to `private_enums` for a sibling test.
+								Visibility::Opaque => {
+									exports.enums.insert(
+										def.name.name.clone(),
+										EnumExport {
+											param_count,
+											variants: Vec::new(),
+										},
+									);
+									exports.private_enums.insert(def.name.name.clone(), full);
+								}
+								Visibility::Private => {
+									exports.private.insert(def.name.name.clone());
+									exports.private_enums.insert(def.name.name.clone(), full);
+								}
+								_ => {
+									exports.enums.insert(def.name.name.clone(), full);
+								}
 							}
+						} else if def.visibility == Visibility::Private {
+							exports.private.insert(def.name.name.clone());
 						}
 					}
 					// A `public trait` is exported like a `public enum`: its
@@ -1099,28 +1141,34 @@ impl<'compiler> Analyzer<'compiler> {
 					// The param tyvar is canonicalized to `Var(0)` for a stable,
 					// var-namespace-independent signature.
 					DefinitionKind::Trait(_) => {
-						if def.visibility == Visibility::Public {
-							if let Some(decl) = self.traits.get(&def.name.name) {
-								let canonicalize = Substitution {
-									solutions: [(decl.param_var, Type::Var(0))].into_iter().collect(),
-									row_solutions: HashMap::new(),
-									tuple_row_solutions: HashMap::new(),
-								};
-								let method_types = decl
-									.method_types
-									.iter()
-									.map(|(name, ty)| (name.clone(), canonicalize.apply_to_type(ty)))
-									.collect();
-								exports.traits.insert(
-									def.name.name.clone(),
-									crate::module::TraitExport {
-										method_order: decl.method_order.clone(),
-										method_types,
-										defaults: decl.defaults.clone(),
-									},
-								);
+						if let Some(decl) = self.traits.get(&def.name.name) {
+							let canonicalize = Substitution {
+								solutions: [(decl.param_var, Type::Var(0))].into_iter().collect(),
+								row_solutions: HashMap::new(),
+								tuple_row_solutions: HashMap::new(),
+							};
+							let method_types = decl
+								.method_types
+								.iter()
+								.map(|(name, ty)| (name.clone(), canonicalize.apply_to_type(ty)))
+								.collect();
+							let trait_export = crate::module::TraitExport {
+								method_order: decl.method_order.clone(),
+								method_types,
+								defaults: decl.defaults.clone(),
+							};
+							if def.visibility == Visibility::Public {
+								exports.traits.insert(def.name.name.clone(), trait_export);
+							} else {
+								// A private trait stays module-local (its name is listed
+								// in `private` for a precise diagnostic), but its signature
+								// is kept for a sibling test.
+								exports.private.insert(def.name.name.clone());
+								exports
+									.private_traits
+									.insert(def.name.name.clone(), trait_export);
 							}
-						} else {
+						} else if def.visibility != Visibility::Public {
 							exports.private.insert(def.name.name.clone());
 						}
 					}
