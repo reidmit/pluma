@@ -72,10 +72,14 @@ public def content-type :: fun string -> string = fun path {
 
 # The `Cache-Control` for a path. A content-hashed (fingerprinted) asset is immutable
 # -- its URL changes whenever its bytes do -- so it can be cached for a year and never
-# revalidated. Everything else gets a modest cache with revalidation.
+# revalidated. The `loader.js` entry point is the opposite: it names the hashed wasm, so
+# a stale copy would point at a file a new deploy has already replaced -- it must
+# revalidate every load (a cheap 304 when unchanged). Everything else gets a modest cache.
 def cache-control :: fun string -> string = fun path {
 	if is-fingerprinted path {
 		"public, max-age=31536000, immutable"
+	} else if string.ends-with path "/loader.js" {
+		"no-cache"
 	} else {
 		"public, max-age=3600"
 	}
