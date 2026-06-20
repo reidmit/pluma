@@ -6367,8 +6367,12 @@ impl<'compiler> Analyzer<'compiler> {
 				if t.task_carrier {
 					return false;
 				}
+				// Mark the node handled (`task_carrier`) even on these error exits, so
+				// the guard above short-circuits the next pass. Without it the dispatch
+				// fixpoint would re-fire the error every iteration and never terminate.
 				if t.rest.is_empty() {
 					self.error(t.range, TryEmptyBody);
+					t.task_carrier = true;
 					expr.ty = Type::Unknown;
 					return true;
 				}
@@ -6377,6 +6381,7 @@ impl<'compiler> Analyzer<'compiler> {
 					PatternKind::Identifier(_) | PatternKind::Underscore
 				) {
 					self.error(t.range, TryUnsupportedPattern);
+					t.task_carrier = true;
 					expr.ty = Type::Unknown;
 					return true;
 				}

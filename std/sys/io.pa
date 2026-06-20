@@ -7,6 +7,8 @@
 # the writers return their values directly; the readers hand back a
 # `result` only to signal end of input.
 
+use std/task
+
 # Prints `value` to standard output, followed by a newline. Works on any
 # value, not just strings -- numbers, lists, options, and so on all
 # print sensibly. Returns `nothing`.
@@ -50,3 +52,40 @@ public def write-bytes :: fun bytes -> nothing = built-in "io-write-bytes"
 
 # Writes raw `bytes` to standard error, with no trailing newline.
 public def write-err-bytes :: fun bytes -> nothing = built-in "io-write-err-bytes"
+
+# `capture-start` diverts stdout and stderr into a fresh frame; `capture-out` and
+# `capture-err` read each stream back and tear the frame down (`capture-out` first
+# — it pops the frame and parks the stderr that `capture-err` then returns). While
+# a frame is active the writers above land in it instead of the real streams. The
+# host never fails these (it always answers `ok <text>`), so `capture` unwraps with
+# `?? ""`. Internal plumbing for `capture`.
+def capture-start :: fun nothing -> result string string = built-in "io-capture-start"
+def capture-out :: fun nothing -> result string string = built-in "io-capture-out"
+def capture-err :: fun nothing -> result string string = built-in "io-capture-err"
+
+# Runs the task `thunk` with stdout and stderr diverted into buffers, and returns
+# what it wrote to each as `{out, err}` -- so a test can assert on a program's
+# output directly:
+#
+#     test.case "greets" (fun {
+#         try cap = io.capture (fun { greet "world" })
+#         assert.equals cap.out "hello, world\n"
+#     })
+#
+# `thunk` is a task, awaited to completion with the streams diverted -- so output
+# produced *across* suspension points (sleeps, spawned children) is captured too.
+# For synchronous code under test, end the thunk with `task.return`. The frame is
+# always torn down, even if `thunk` fails (the failure then propagates). Captures
+# nest -- an inner `capture` collects only its own thunk's output.
+public def capture :: fun (fun nothing -> task a e) -> task {out :: string, err :: string} e = fun thunk {
+	capture-start ()
+	# `attempt` so the frame is torn down whether the thunk succeeds or fails.
+	try outcome = task.attempt (thunk ())
+	let out = (capture-out ()) ?? ""
+	let err = (capture-err ()) ?? ""
+	when outcome is ok _v {
+		task.return {out: out, err: err}
+	} is err e {
+		task.fail e
+	}
+}

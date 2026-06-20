@@ -1,8 +1,8 @@
-# Checks for use inside tests. Each check returns a `result`: `ok ()`
-# when it holds, `err message` when it doesn't. A `std/test` case
-# body returns one of these — `pluma test` passes the case when it's `ok`
-# and reports the message when it's `err`. Combine several checks in one
-# case with `assert.all`.
+# Checks for use inside tests. Each check returns a `task`: it succeeds
+# (`task.return ()`) when it holds and fails (`task.fail message`) when it
+# doesn't. A `std/test` case body returns one of these — `pluma test` passes
+# the case when the task succeeds and reports the message when it fails.
+# Combine several checks in one case with `assert.all`.
 #
 #     use std/test
 #     use std/assert
@@ -11,92 +11,93 @@
 #         test.case "two and two" (fun { assert.equals (2 + 2) 4 }),
 #     ]
 
-# `ok ()` when the two values are equal, compared deeply by value, else
-# `err` showing both sides. The everyday workhorse.
+use std/task
+
+# `task.return ()` when the two values are equal, compared deeply by value,
+# else `task.fail` showing both sides. The everyday workhorse.
 #
 #     assert.equals (1 + 1) 2
 #     assert.equals (string.to-upper "hi") "HI"
-public def equals :: fun a a -> result nothing string = fun a b {
+public def equals :: fun a a -> task nothing string = fun a b {
 	if a == b {
-		ok ()
+		task.return ()
 	} else {
-		err "expected $(to-string b), got $(to-string a)"
+		task.fail "expected $(to-string b), got $(to-string a)"
 	}
 }
 
-# `ok ()` when the two values are *not* equal.
+# Succeeds when the two values are *not* equal.
 #
 #     assert.not-equals "cat" "dog"
-public def not-equals :: fun a a -> result nothing string = fun a b {
+public def not-equals :: fun a a -> task nothing string = fun a b {
 	if a == b {
-		err "expected a value other than $(to-string a)"
+		task.fail "expected a value other than $(to-string a)"
 	} else {
-		ok ()
+		task.return ()
 	}
 }
 
-# `ok ()` when `value` is `true`.
-public def is-true :: fun bool -> result nothing string = fun value {
+# Succeeds when `value` is `true`.
+public def is-true :: fun bool -> task nothing string = fun value {
 	if value {
-		ok ()
+		task.return ()
 	} else {
-		err "expected true, got false"
+		task.fail "expected true, got false"
 	}
 }
 
-# `ok ()` when `value` is `false`.
-public def is-false :: fun bool -> result nothing string = fun value {
+# Succeeds when `value` is `false`.
+public def is-false :: fun bool -> task nothing string = fun value {
 	if value is false {
-		ok ()
+		task.return ()
 	} else {
-		err "expected false, got true"
+		task.fail "expected false, got true"
 	}
 }
 
-# `ok ()` when the option holds a value (`some _`).
+# Succeeds when the option holds a value (`some _`).
 #
 #     assert.is-some (list.head [1, 2, 3])
-public def is-some :: fun (option a) -> result nothing string = fun value {
+public def is-some :: fun (option a) -> task nothing string = fun value {
 	if value is some _ {
-		ok ()
+		task.return ()
 	} else {
-		err "expected some, got none"
+		task.fail "expected some, got none"
 	}
 }
 
-# `ok ()` when the option is `none`.
-public def is-none :: fun (option a) -> result nothing string = fun value {
+# Succeeds when the option is `none`.
+public def is-none :: fun (option a) -> task nothing string = fun value {
 	if value is none {
-		ok ()
+		task.return ()
 	} else {
-		err "expected none, got some"
+		task.fail "expected none, got some"
 	}
 }
 
-# `ok ()` when the result is a success (`ok _`).
+# Succeeds when the result is a success (`ok _`).
 #
 #     assert.is-ok (string.to-int "42")
-public def is-ok :: fun (result a e) -> result nothing string = fun value {
+public def is-ok :: fun (result a e) -> task nothing string = fun value {
 	if value is ok _ {
-		ok ()
+		task.return ()
 	} else {
-		err "expected ok, got err"
+		task.fail "expected ok, got err"
 	}
 }
 
-# `ok ()` when the result is a failure (`err _`).
-public def is-err :: fun (result a e) -> result nothing string = fun value {
+# Succeeds when the result is a failure (`err _`).
+public def is-err :: fun (result a e) -> task nothing string = fun value {
 	if value is err _ {
-		ok ()
+		task.return ()
 	} else {
-		err "expected err, got ok"
+		task.fail "expected err, got ok"
 	}
 }
 
-# Combine many checks into one. `ok ()` when every check is `ok`,
-# otherwise an `err` listing each failure (one per line). All the checks
-# are evaluated — assertions are pure — so a case reports every failure,
-# not just the first.
+# Combine many checks into one. Succeeds when every check does, otherwise
+# fails listing each failure (one per line). Every check is awaited — so a
+# case reports every failure, not just the first.
 #
 #     test.case "arithmetic" (fun {
 #         assert.all [
@@ -104,22 +105,24 @@ public def is-err :: fun (result a e) -> result nothing string = fun value {
 #             assert.equals (4 * 2) 8,
 #         ]
 #     })
-public def all :: fun (list (result nothing string)) -> result nothing string = fun checks {
+public def all :: fun (list (task nothing string)) -> task nothing string = fun checks {
 	all-go checks false ""
 }
 
-# Walk the checks, gluing every `err` message onto `acc` (newline
-# separated) and remembering with `had` whether we saw any failure --
-# so an empty failure message still counts as a failure.
-def all-go :: fun (list (result nothing string)) bool string -> result nothing string = fun checks had acc {
+# Walk the checks, gluing every failure message onto `acc` (newline
+# separated) and remembering with `had` whether we saw any failure -- so an
+# empty failure message still counts as a failure. `attempt` reifies each
+# check's outcome so a failure doesn't short-circuit the remaining checks.
+def all-go :: fun (list (task nothing string)) bool string -> task nothing string = fun checks had acc {
 	when checks is [] {
 		if had {
-			err acc
+			task.fail acc
 		} else {
-			ok ()
+			task.return ()
 		}
 	} is [first, ...rest] {
-		when first is ok _ {
+		try outcome = task.attempt first
+		when outcome is ok _ {
 			all-go rest had acc
 		} is err msg {
 			let next = if had {

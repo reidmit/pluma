@@ -3,7 +3,7 @@
 // shuttle scratch bytes to the io sink (or, for `float_to_str`, format a float into
 // scratch).
 
-use super::marshal::{argi, ctx_and_mem, read_mem, write_mem};
+use super::marshal::{argi, ctx_and_mem, deliver_read_v8, read_mem, write_mem};
 
 /// The shared writer body: read the pre-rendered `(ptr, len)` bytes out of scratch and
 /// write them to stdout/stderr, optionally newline-terminated. wasm already rendered
@@ -20,11 +20,58 @@ fn write_impl(
 	if newline {
 		bytes.push(b'\n');
 	}
-	if to_err {
-		ctx.state.io.write_err(&bytes);
-	} else {
-		ctx.state.io.write_out(&bytes);
+	// While an `io.capture` block is live, divert both streams into its frame instead
+	// of the real sinks, so a test can assert on exactly what a thunk printed.
+	match ctx.state.capture.last_mut() {
+		Some(frame) if to_err => frame.err.extend_from_slice(&bytes),
+		Some(frame) => frame.out.extend_from_slice(&bytes),
+		None if to_err => ctx.state.io.write_err(&bytes),
+		None => ctx.state.io.write_out(&bytes),
 	}
+}
+
+/// `io-capture-start(dst, cap) -> 0`: push a fresh capture frame (stdout + stderr).
+/// Shares the `(dst, cap) -> len` read shape (it always "returns" the empty string,
+/// len 0) so it rides the generic io-read marshalling; the Pluma wrapper ignores it.
+pub(super) fn cb_capture_start(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	ctx.state.capture.push(crate::CaptureFrame::default());
+	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, Vec::new()));
+}
+
+/// `io-capture-out(dst, cap) -> len`: pop the top capture frame, deliver its stdout
+/// through the `(dst, cap)` read path (overflow → `read_stash`), and park its stderr
+/// for the immediately-following `io-capture-err`. An empty stack (unbalanced use)
+/// yields the empty string.
+pub(super) fn cb_capture_out(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let frame = ctx.state.capture.pop().unwrap_or_default();
+	ctx.state.capture_err = frame.err;
+	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, frame.out));
+}
+
+/// `io-capture-err(dst, cap) -> len`: deliver the stderr parked by the preceding
+/// `io-capture-end` (the second half of one `io.capture`). Drains it, so a stray call
+/// yields the empty string.
+pub(super) fn cb_capture_err(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let bytes = std::mem::take(&mut ctx.state.capture_err);
+	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, bytes));
 }
 
 pub(super) fn cb_print(

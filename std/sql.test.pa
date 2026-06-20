@@ -4,7 +4,7 @@ use std/string
 use std/test
 
 # Helper: compile a query and check both halves -- the SQL text and the bind list.
-def check :: fun query string (list value) -> result nothing string = fun q want-sql want-binds {
+def check :: fun query string (list value) -> task nothing string = fun q want-sql want-binds {
 	let (got-sql, got-binds) = sql.compile q
 	assert.all [assert.equals got-sql want-sql, assert.equals got-binds want-binds]
 }

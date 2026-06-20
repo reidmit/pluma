@@ -1182,6 +1182,9 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		// "is this a host builtin?" classification.
 		"io-read" | "io-read-all" | "io-read-all-bytes" | "io-read-file" | "io-read-file-bytes"
 		| "io-delete-file" | "io-make-dir" | "io-read-dir" | "io-cwd"
+		// `io.capture` (std/sys/io): stdout/stderr diversion around a thunk. Same
+		// `(dst,cap) -> len` read shape; each returns captured text as `result string string`.
+		| "io-capture-start" | "io-capture-out" | "io-capture-err"
 		// `io.args` rides the same marshalled-read path (`(dst,cap) -> len`, a blob in
 		// scratch) but returns a bare `list string`, not a `result` (`IoKind::Args`).
 		| "io-args"
@@ -1566,6 +1569,9 @@ pub(crate) enum IoKind {
 pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 	Some(match tag {
 		"io-read" | "io-read-all" | "io-last-error" | "io-cwd" => IoKind::ReadStr,
+		// `io.capture` (std/sys/io) — push/pop a capture frame and return its stdout/stderr
+		// text as a `result string string`, shaped exactly like a stdin read.
+		"io-capture-start" | "io-capture-out" | "io-capture-err" => IoKind::ReadStr,
 		"io-read-all-bytes" => IoKind::ReadBytes,
 		// `uuid-parse` isn't io, but it has the same shape — a string in, a `result
 		// string` out — so it reuses the `(path, plen, dst, cap)` read marshalling.
@@ -1620,6 +1626,10 @@ pub(crate) fn is_io_result(tag: &str) -> bool {
 			| "io-make-dir"
 			| "io-read-dir"
 			| "io-cwd"
+			// `io.capture` (std/sys/io) start/end/err — `result string string` via `__io_result`.
+			| "io-capture-start"
+			| "io-capture-out"
+			| "io-capture-err"
 			// rides the io read path; its `result string` is shaped by `__io_result`.
 			| "uuid-parse"
 			// the sync `std/sys/fs` op — its `result bytes` is shaped by `__io_result`.

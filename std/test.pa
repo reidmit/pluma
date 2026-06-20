@@ -26,6 +26,7 @@
 use std/bytes
 use std/list
 use std/string
+use std/task
 
 # --- inlined ANSI styling --------------------------------------------------
 # `std/test` is a shared module (it runs under V8 on both the `sys` and `web`
@@ -72,7 +73,7 @@ def bold-dim :: fun string -> string = fun s {
 # (`test.case`, `test.group`, `test.skip`, `test.focus`, `test.todo`) — a suite
 # is data you assemble, never inspect. `skip`/`focus` mark a whole subtree.
 opaque enum test {
-	leaf string (fun nothing -> result nothing string)
+	leaf string (fun nothing -> task nothing string)
 	nest string (list test)
 	omit test
 	only test
@@ -84,8 +85,11 @@ public alias suite list test
 
 # --- constructors (the public surface) ---------------------------------------
 
-# A single case: a name and a function returning `ok ()` to pass / `err msg` to fail.
-public def case :: fun string (fun nothing -> result nothing string) -> test = test.leaf
+# A single case: a name and a task that succeeds to pass / fails (`task.fail msg`,
+# or a failing assertion) to fail. The body is a task, so a case can `try` async
+# work directly; a purely synchronous body is just an instantaneous task (the
+# `assert.*` checks already return one).
+public def case :: fun string (fun nothing -> task nothing string) -> test = test.leaf
 
 # A named group of nested cases/groups.
 public def group :: fun string (list test) -> test = test.nest
@@ -115,7 +119,7 @@ alias entry {
 	path :: list string,
 	name :: string,
 	status :: run-status,
-	body :: fun nothing -> result nothing string,
+	body :: fun nothing -> task nothing string,
 }
 
 # Flatten one node into entries, threading the enclosing group `path` and the
@@ -124,7 +128,7 @@ def flatten-node :: fun (list string) run-status test -> list entry = fun path s
 	when node is test.leaf name body {
 		[{path, name, status: stat, body}]
 	} is test.pend name {
-		[{path, name, status: run-status.pending, body: fun { ok () }}]
+		[{path, name, status: run-status.pending, body: fun { task.return () }}]
 	} is test.nest name children {
 		list.flat-map children fun child {
 			flatten-node [...path, name] stat child
@@ -200,36 +204,52 @@ def print-msg :: fun string string -> nothing = fun indent msg {
 	}
 }
 
-# Run one case body and print its pass/fail line; return the updated totals.
-def run-case :: fun bool string entry acc -> acc = fun color indent e a {
-	when e.body () is ok _u {
+# Fold `f` left-to-right over `items`, threading `acc`, where each step yields a
+# task — the sequential, accumulator-threading async fold the runner is built on
+# (`list.fold` can't await). Each step is awaited before the next begins, so cases
+# run one at a time and their output never interleaves.
+def task-fold :: fun (list b) a (fun a b -> task a e) -> task a e = fun items acc f {
+	when items is [] {
+		task.return acc
+	} is [first, ...rest] {
+		try next = f acc first
+		task-fold rest next f
+	}
+}
+
+# Run one case body to completion and print its pass/fail line; return the updated
+# totals. The body is a task; `attempt` reifies its outcome so a failing case (or a
+# trapping assertion) is reported, not propagated.
+def run-case :: fun bool string entry acc -> task acc e = fun color indent e a {
+	try outcome = task.attempt (e.body ())
+	when outcome is ok _u {
 		print (indent ++ paint color bold-green "✓" ++ " " ++ e.name)
-		{...a, passed: a.passed + 1}
+		task.return {...a, passed: a.passed + 1}
 	} is err msg {
 		print (indent ++ paint color bold-red "✗" ++ " " ++ e.name)
 		print-msg indent msg
-		{...a, failed: a.failed + 1}
+		task.return {...a, failed: a.failed + 1}
 	}
 }
 
 # Walk one module's flattened entries, printing the tree and running each case
 # that should run (respecting skip/todo and, if any case is focused, focus).
-def run-entries :: fun bool bool (list entry) acc -> acc = fun color any-focused entries a0 {
-	list.fold entries a0 fun a e {
+def run-entries :: fun bool bool (list entry) acc -> task acc e = fun color any-focused entries a0 {
+	task-fold entries a0 fun a e {
 		let a1 = {...a, printed: emit-headers color a.printed e.path}
 		let indent = spaces (list.length e.path + 1)
 		when e.status is run-status.pending {
 			print (indent ++ paint color bold-yellow "○" ++ " " ++ e.name ++ " " ++ paint color dim "(todo)")
-			{...a1, todo: a1.todo + 1}
+			task.return {...a1, todo: a1.todo + 1}
 		} is run-status.skipped {
 			print (indent ++ paint color dim "-" ++ " " ++ e.name ++ " " ++ paint color dim "(skipped)")
-			{...a1, skipped: a1.skipped + 1}
+			task.return {...a1, skipped: a1.skipped + 1}
 		} is run-status.focused {
 			run-case color indent e a1
 		} is run-status.normal {
 			if any-focused {
 				print (indent ++ paint color dim "-" ++ " " ++ e.name ++ " " ++ paint color dim "(not focused)")
-				{...a1, skipped: a1.skipped + 1}
+				task.return {...a1, skipped: a1.skipped + 1}
 			} else {
 				run-case color indent e a1
 			}
@@ -258,14 +278,16 @@ def summary-line :: fun bool acc -> string = fun color a {
 	}
 }
 
-# Run every suite: print each module's tree, then a summary. Returns `ok ()` if
-# nothing failed, else `err ""` (the report is already printed; the host maps
-# this to a non-zero exit). `color` enables ANSI styling.
+# Run every suite: print each module's tree, then a summary. The returned task
+# yields `ok ()` if nothing failed, else `err ""` (the report is already printed;
+# the host maps this to a non-zero exit). `color` enables ANSI styling. Cases are
+# tasks awaited one at a time, so async cases drive their work to completion (and
+# any `io.capture` around it stays correct) without interleaving.
 public def run-all :: fun bool (list {
 	name :: string,
 	tests :: list test,
-}) -> result nothing string = fun color suites {
-	let final = list.fold (list.enumerate suites) (zero-acc ()) fun a indexed {
+}) -> task (result nothing string) e = fun color suites {
+	try final = task-fold (list.enumerate suites) (zero-acc ()) fun a indexed {
 		# Blank line between modules (not before the first).
 		let lead = if indexed.0 > 0 {
 			"\n"
@@ -282,8 +304,8 @@ public def run-all :: fun bool (list {
 	print ""
 	print (summary-line color final)
 	if final.failed == 0 {
-		ok ()
+		task.return (ok ())
 	} else {
-		err ""
+		task.return (err "")
 	}
 }

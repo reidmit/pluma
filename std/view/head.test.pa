@@ -60,6 +60,6 @@ def tests :: test.suite = [
 ]
 
 # Render a head entry and check its HTML against `want`.
-def renders :: fun head string -> result nothing string = fun h want {
+def renders :: fun head string -> task nothing string = fun h want {
 	assert.equals (head.to-string h) want
 }

@@ -255,6 +255,13 @@ fn read_line_from(buf: &[u8], pos: &mut usize) -> Option<String> {
 	Some(s)
 }
 
+/// One `io.capture` frame: stdout and stderr diverted while the block is live.
+#[derive(Default)]
+struct CaptureFrame {
+	out: Vec<u8>,
+	err: Vec<u8>,
+}
+
 struct HostState {
 	io: Box<dyn HostIo>,
 	/// The program's command-line arguments (interpreter + script path already
@@ -271,6 +278,15 @@ struct HostState {
 	/// wasm side then reserves the true size and drains this via `__io_copyout`. Empty
 	/// on the common (fits-first-try) path. (The read overflow path.)
 	read_stash: Vec<u8>,
+	/// Active capture frames, used by the `io-capture-*` imports (`io.capture` in
+	/// std/sys/io). While the stack is non-empty, `print`/`io.write` and the stderr
+	/// writers land in the top frame's `out`/`err` instead of the real sinks. A stack
+	/// so captures nest. Empty in normal runs.
+	capture: Vec<CaptureFrame>,
+	/// The stderr bytes of the most recently ended frame, parked between the paired
+	/// `io-capture-end` (pops the frame, returns its stdout) and `io-capture-err`
+	/// (returns this) calls that `io.capture` makes back-to-back.
+	capture_err: Vec<u8>,
 	/// `std/sys/net` runtime state: the socket table.
 	net: HostNet,
 	/// The shared readiness + completion reactor (poller + worker pool) that socket reads
