@@ -1,0 +1,25 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+use row-poly-record-import/lib
+
+def run = fun {
+	# Two distinct record shapes through one imported row-polymorphic accessor.
+	print (lib.id-of {id: 7, label: "a"})
+	print (lib.id-of {id: 99, done: true, tag: "x"})
+}
+
+def tests :: test.suite = [
+	test.case "row-poly-record-import" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			7
+			99
+
+			"""
+	},
+]

@@ -1,0 +1,35 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+use cross-module/colors
+use cross-module/math
+
+def name-of = fun c {
+	when c is colors.color.red {
+		"red"
+	} is colors.color.green {
+		"green"
+	} is colors.color.blue {
+		"blue"
+	}
+}
+
+def run = fun {
+	print (math.add 2 3)
+	print (name-of colors.color.green)
+}
+
+def tests :: test.suite = [
+	test.case "cross-module" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			5
+			green
+
+			"""
+	},
+]

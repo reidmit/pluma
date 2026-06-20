@@ -1,3 +1,9 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+use rpc-loopback/api
+
 # In-process endpoint test. In a server-context build (`pluma run`/
 # `test`), a `remote def` has its *real* body — so calling `api.add 2 3` runs the
 # handler directly, in process, with no socket, transport, or fingerprint. This
@@ -5,10 +11,8 @@
 # the handler bodies); the wire path (encode → dispatch → decode, fingerprint
 # guard) is exercised by `rpc-skew`, and the dual-build client/server split by
 # `examples/fullstack`.
-use std/task
-use api
 
-def main = fun {
+def run = fun {
 	try greeting = api.ping ()
 	print greeting
 	try msg = api.greet "world"
@@ -17,3 +21,18 @@ def main = fun {
 	print "2 + 3 = $(to-string sum)"
 	task.return 0
 }
+
+def tests :: test.suite = [
+	test.case "rpc-loopback" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			pong
+			hello, world
+			2 + 3 = 5
+
+			"""
+	},
+]

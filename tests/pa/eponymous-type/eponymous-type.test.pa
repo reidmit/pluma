@@ -1,4 +1,8 @@
-use shapes/circle
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+use eponymous-type/shapes/circle
 
 # `circle` used bare in type positions — no `circle.circle` stutter.
 def describe :: fun circle -> string = fun c {
@@ -7,7 +11,7 @@ def describe :: fun circle -> string = fun c {
 	}
 }
 
-def main = fun {
+def run = fun {
 	let small = circle.radius 1.0
 	let big = circle.radius 5.0
 	# bare type annotation, construction, matching, and module functions
@@ -15,3 +19,18 @@ def main = fun {
 	print (circle.area big)
 	print (describe (circle.bigger small big))
 }
+
+def tests :: test.suite = [
+	test.case "eponymous-type" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			circle r=1.0
+			78.5
+			circle r=5.0
+
+			"""
+	},
+]

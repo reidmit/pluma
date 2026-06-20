@@ -1,0 +1,28 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+use trait-qualified-cross-module/labels
+use trait-qualified-cross-module/marks
+
+# Both imported traits export a method named `tag`, so a bare `tag 7`
+# would be ambiguous (see tests/analyze/trait-ambiguous-cross-module).
+# `module.trait.method` picks the one you mean.
+def run = fun {
+	print (labels.labeled.tag 7)
+	print (marks.marked.tag 7)
+}
+
+def tests :: test.suite = [
+	test.case "trait-qualified-cross-module" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			labeled:7
+			marked:7
+
+			"""
+	},
+]

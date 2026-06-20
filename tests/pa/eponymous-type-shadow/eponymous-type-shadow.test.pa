@@ -1,4 +1,8 @@
-use shapes/circle
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+use eponymous-type-shadow/shapes/circle
 
 # A local enum named `circle` shadows the imported eponymous type. The local
 # declaration wins (it's seeded after the import), so `circle` is the local
@@ -13,6 +17,16 @@ def describe :: fun circle -> string = fun c {
 	}
 }
 
-def main = fun {
+def run = fun {
 	print (describe circle.unit)
 }
+
+def tests :: test.suite = [
+	test.case "eponymous-type-shadow" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "the local unit circle\n"
+	},
+]
