@@ -3315,27 +3315,37 @@ impl<'a> Lowerer<'a> {
 
 	fn lookup_bare_variant(&self, name: &str) -> Option<ScopeSlot> {
 		// Local-module enums win over imported/prelude variants of the same
-		// name (mirrors the analyzer's disambiguation).
+		// name (mirrors the analyzer's disambiguation). `self.enums` is a
+		// HashMap, so a bare variant matching several enums must pick a *stable*
+		// owner — iterating in hash order would attribute it to a different
+		// module per process, which shifts every downstream id and miscompiles
+		// the build non-deterministically. Among non-local matches prefer the
+		// prelude (the only legitimate cross-module bare variant, e.g. `some`),
+		// then fall back to the lexicographically-smallest qualified name.
 		let local_prefix = format!("{}.", self.current_module);
-		let mut local = None;
-		let mut other = None;
+		let mut local: Option<(&str, usize)> = None;
+		let mut prelude: Option<(&str, usize)> = None;
+		let mut other: Option<(&str, usize)> = None;
 		for (qualified, variants) in &self.enums {
-			for (variant, arity) in variants {
+			for (variant, ar) in variants {
 				if variant == name {
-					let slot = ScopeSlot::BareVariant {
-						qualified: qualified.clone(),
-						variant: variant.clone(),
-						arity: *arity,
-					};
+					let cand = (qualified.as_str(), *ar);
 					if qualified.starts_with(&local_prefix) {
-						local = Some(slot);
-					} else if other.is_none() {
-						other = Some(slot);
+						local = Some(cand);
+					} else if qualified.starts_with("__prelude__.") {
+						prelude = Some(cand);
+					} else if other.is_none_or(|(o, _)| cand.0 < o) {
+						other = Some(cand);
 					}
 				}
 			}
 		}
-		local.or(other)
+		let (qualified, arity) = local.or(prelude).or(other)?;
+		Some(ScopeSlot::BareVariant {
+			qualified: qualified.to_string(),
+			variant: name.to_string(),
+			arity,
+		})
 	}
 
 	// ---- entry / poison / function table -------------------------------
