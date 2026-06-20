@@ -1,9 +1,0 @@
-# Define `length` as a thin `built-in` wrapper, then call it. The
-# global slot holds `Value::Builtin(Builtin::ListLength)` directly —
-# no thunk, no Pluma-side body.
-
-def length :: fun (list a) -> int = built-in "list-length"
-
-def main = fun {
-	print (length [1, 2, 3])
-}

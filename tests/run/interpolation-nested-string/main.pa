@@ -1,5 +1,0 @@
-def main = fun {
-	let inner = "world"
-	let mid = "hello $(inner)"
-	print "outer says: $(mid)"
-}

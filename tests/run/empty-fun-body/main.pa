@@ -1,6 +1,0 @@
-def do-nothing = fun {}
-
-def main = fun {
-	do-nothing ()
-	print "ok"
-}

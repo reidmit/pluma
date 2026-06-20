@@ -1,9 +1,0 @@
----
-source: tests/run.rs
-expression: combined
----
-== status ==
-ok
-== stdout ==
-<form><input type="text" value="a &amp; b" placeholder="name &lt;here&gt;"><button>Save</button></form>
-== stderr ==

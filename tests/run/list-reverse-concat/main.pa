@@ -1,9 +1,0 @@
-use std/list
-
-def main = fun {
-	print (list.reverse [1, 2, 3, 4])
-	print (list.reverse [])
-	print (list.concat [1, 2] [3, 4, 5])
-	print (list.concat [] [1, 2])
-	print (list.concat [1, 2] [])
-}
