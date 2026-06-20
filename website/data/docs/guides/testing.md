@@ -38,6 +38,7 @@ case body wants:
 | --- | --- |
 | `assert.equals a b` | `a` equals `b` (compared by value) |
 | `assert.not-equals a b` | `a` differs from `b` |
+| `assert.matches actual expected` | two strings are equal — a mismatch fails with a line-by-line diff |
 | `assert.is-true c` / `assert.is-false c` | the bool is `true` / `false` |
 | `assert.is-some o` / `assert.is-none o` | the option is `some` / `none` |
 | `assert.is-ok r` / `assert.is-err r` | the result is `ok` / `err` |

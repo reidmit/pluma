@@ -11,6 +11,8 @@
 #         test.case "two and two" (fun { assert.equals (2 + 2) 4 }),
 #     ]
 
+use std/list
+use std/string
 use std/task
 
 # `task.return ()` when the two values are equal, compared deeply by value,
@@ -35,6 +37,53 @@ public def not-equals :: fun a a -> task nothing string = fun a b {
 	} else {
 		task.return ()
 	}
+}
+
+# Like `equals` for two strings, but a mismatch fails with a line-by-line diff
+# instead of dumping both whole values -- so a difference deep in multi-line text
+# is easy to spot. Use it for output snapshots and other block strings.
+#
+#     assert.matches rendered """
+#         <h1>Title</h1>
+#         <p>Body</p>
+#         """
+public def matches :: fun string string -> task nothing string = fun actual expected {
+	if actual == expected {
+		task.return ()
+	} else {
+		task.fail ("output differs (- expected, + actual):\n" ++ diff-lines actual expected)
+	}
+}
+
+# The length of the common run at the front of `a` and `b` -- how many leading
+# lines are pairwise equal.
+def common-run :: fun (list string) (list string) -> int = fun a b {
+	list.length (list.take-while (list.zip a b) fun pair {
+		pair.0 == pair.1
+	})
+}
+
+# A line-oriented diff of `actual` against `expected`. Lines shared at the top and
+# bottom keep a two-space gutter; the block that differs in the middle is shown as
+# `- expected` lines followed by `+ actual` lines. It trims the common prefix and
+# suffix and treats everything between as one replaced hunk -- enough for the
+# contiguous differences typical of test output, without a full line-LCS.
+def diff-lines :: fun string string -> string = fun actual expected {
+	let a = string.split actual "\n"
+	let e = string.split expected "\n"
+	let prefix = common-run a e
+	let a-mid = list.drop a prefix
+	let e-mid = list.drop e prefix
+	# A common suffix can't reach back into the prefix already consumed on either
+	# side, so measure it over the post-prefix remainders.
+	let suffix = common-run (list.reverse a-mid) (list.reverse e-mid)
+	let a-cut = list.length a-mid - suffix
+	let e-cut = list.length e-mid - suffix
+	let head = list.map (list.take a prefix) fun line { "  " ++ line }
+	let removed = list.map (list.take e-mid e-cut) fun line { "- " ++ line }
+	let added = list.map (list.take a-mid a-cut) fun line { "+ " ++ line }
+	let tail = list.map (list.drop a-mid a-cut) fun line { "  " ++ line }
+	string.join (list.flatten [head, removed, added, tail]) "\n"
 }
 
 # Succeeds when `value` is `true`.

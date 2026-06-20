@@ -1,4 +1,6 @@
 use std/assert
+use std/string
+use std/task
 use std/test
 
 # `none` and bare `err "..."` need pinning so the assertion sees a
@@ -28,5 +30,21 @@ def tests :: test.suite = [
 	test.case "is-err passes on err with non-string error" fun {
 		let r :: result int int = err 7
 		assert.is-err r
+	},
+	test.case "matches passes on equal multi-line text" fun {
+		# --- matches (string diff) ---
+
+		assert.matches "a\nb\nc\n" "a\nb\nc\n"
+	},
+	test.case "matches fails with a +/- diff of the changed line" fun {
+		try outcome = task.attempt (assert.matches "a\nX\nc\n" "a\nb\nc\n")
+		when outcome is ok _u {
+			assert.is-true false
+		} is err msg {
+			assert.all [
+				assert.is-true (string.contains msg "- b"),
+				assert.is-true (string.contains msg "+ X"),
+			]
+		}
 	},
 ]
