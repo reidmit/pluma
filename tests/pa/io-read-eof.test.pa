@@ -3,7 +3,11 @@ use std/task
 use std/test
 use std/sys/io
 
-# no stdin.txt for this fixture, so stdin is empty — first read returns err
+# Under `pluma test` stdin is held at EOF, so every read returns err — this only
+# covers the empty-input case.
+#
+# TODO: add a way to mock/inject stdin per test, so a case can feed real input and
+# exercise the reading path (not just EOF). Not blocking on it now.
 def run = fun {
 	when io.read () is ok _ {
 		print "unexpected ok"
