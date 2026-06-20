@@ -1,0 +1,30 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (list.contains [1, 2, 3] 2)
+	print (list.contains [1, 2, 3] 99)
+	print (list.contains [] 1)
+	print (list.contains ["a", "b", "c"] "b")
+	print (list.contains [(1, 2), (3, 4)] (3, 4))
+}
+
+def tests :: test.suite = [
+	test.case "list-contains" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			false
+			false
+			true
+			true
+
+			"""
+	},
+]

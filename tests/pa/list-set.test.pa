@@ -1,0 +1,37 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let xs = list.build 4 fun i {
+		i
+	}
+	list.set xs 0 10
+	list.set xs 3 99
+	print xs
+	# alias sees the mutation
+	let ys = xs
+	list.set xs 1 7
+	print ys
+	# build a fresh list and keep using list ops after set
+	print (list.map xs fun n {
+		n + 1
+	})
+}
+
+def tests :: test.suite = [
+	test.case "list-set" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[10, 1, 2, 99]
+			[10, 7, 2, 99]
+			[11, 8, 3, 100]
+
+			"""
+	},
+]

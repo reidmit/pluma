@@ -1,0 +1,25 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let x = 1
+	let y = 2
+	let z = 3
+	when (x, y, z) is (1, _, _) {
+		print "first is one"
+	} else {
+		print "other"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "let-then-pattern" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "first is one\n"
+	},
+]

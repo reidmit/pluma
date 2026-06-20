@@ -1,0 +1,26 @@
+use std/assert
+use std/regex as re
+use std/task
+use std/test
+use std/sys/io
+
+def is-yes = `"yes"`
+
+def run = fun {
+	print (re.matches is-yes "yes!")
+	print (re.matches is-yes "no thanks")
+}
+
+def tests :: test.suite = [
+	test.case "regex-as-alias" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			false
+
+			"""
+	},
+]

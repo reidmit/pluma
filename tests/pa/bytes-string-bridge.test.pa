@@ -1,0 +1,32 @@
+use std/assert
+use std/bytes
+use std/string
+use std/task
+use std/test
+use std/sys/io
+
+def show = fun r {
+	when r is ok s {
+		print s
+	} is err _ {
+		print "bad utf8"
+	}
+}
+
+def run = fun {
+	print (string.to-bytes "hello")
+	print (string.to-bytes "café")
+	show (bytes.to-string 'hello')
+	show (bytes.to-string '\xff\xfe')
+	show (bytes.to-string (string.to-bytes "round-trip"))
+}
+
+def tests :: test.suite = [
+	test.case "bytes-string-bridge" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "'hello'\n'caf\\xc3\\xa9'\nhello\nbad utf8\nround-trip\n"
+	},
+]

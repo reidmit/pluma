@@ -1,0 +1,27 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def double = fun x {
+	x + x
+}
+
+def run = fun {
+	print (double 5)
+	print (double 3.14)
+}
+
+def tests :: test.suite = [
+	test.case "double-int-float" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			10
+			6.28
+
+			"""
+	},
+]

@@ -1,0 +1,37 @@
+use std/assert
+use std/json
+use std/string
+use std/task
+use std/test
+use std/sys/io
+
+# JSON stress: parse a small document and stringify it back, repeatedly.
+# Exercises the std/json recursive-descent parser and serializer.
+
+def loop = fun doc n acc {
+	when n is 0 {
+		acc
+	} else {
+		let len = when json.parse doc is ok v {
+			string.length (json.stringify v)
+		} is err _e {
+			0
+		}
+		loop doc (n - 1) (acc + len)
+	}
+}
+
+def run = fun {
+	let doc = "{\"a\": 1, \"b\": [1, 2, 3, 4], \"c\": {\"d\": true, \"e\": null}}"
+	print (to-string (loop doc 700 0))
+}
+
+def tests :: test.suite = [
+	test.case "json-roundtrip" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "31500\n"
+	},
+]

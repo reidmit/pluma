@@ -1,0 +1,44 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Recursive-enum binary tree: build a full tree, then fold it. Exercises nominal
+# enum construction and `when` pattern matching at depth (vs the linear linked
+# list in sum-list).
+
+enum tree {
+	leaf int
+	node tree tree
+}
+
+def build = fun depth start {
+	when depth is 0 {
+		tree.leaf start
+	} else {
+		tree.node (build (depth - 1) start) (build (depth - 1) (start + 1))
+	}
+}
+
+def sum = fun t {
+	when t is tree.leaf v {
+		v
+	} is tree.node l r {
+		sum l + sum r
+	}
+}
+
+def run = fun {
+	let t = build 16 1
+	print (to-string (sum t))
+}
+
+def tests :: test.suite = [
+	test.case "tree-sum" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "589824\n"
+	},
+]

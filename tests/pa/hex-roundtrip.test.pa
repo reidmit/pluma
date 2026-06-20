@@ -1,0 +1,37 @@
+use std/assert
+use std/error
+use std/hex
+use std/task
+use std/test
+use std/sys/io
+
+def show = fun r {
+	when r is ok b {
+		print b
+	} is err m {
+		print "err: $(describe m)"
+	}
+}
+
+def run = fun {
+	print (hex.encode 'hello')
+	print (hex.encode '\x00\xff\x10')
+	print (hex.encode '')
+
+	show (hex.decode "414243")
+	show (hex.decode "ff")
+	show (hex.decode "AbCd")
+	show (hex.decode "")
+	show (hex.decode "abc")
+	show (hex.decode "zz")
+}
+
+def tests :: test.suite = [
+	test.case "hex-roundtrip" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "68656c6c6f\n00ff10\n\n'ABC'\n'\\xff'\n'\\xab\\xcd'\n''\nerr: hex string has odd length\nerr: invalid hex digit\n"
+	},
+]

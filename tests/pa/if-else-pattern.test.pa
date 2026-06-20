@@ -1,0 +1,43 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `else` works on pattern-matching `if` too — it's the "no match" branch.
+
+def describe = fun opt {
+	if opt is some n {
+		"got $(to-string n)"
+	} else {
+		"nothing"
+	}
+}
+
+def run = fun {
+	print (describe (some 42))
+	print (describe none)
+
+	# `else` on a result-style pattern
+	let r = ok 7
+	let summary = if r is ok v {
+		v
+	} else {
+		0 - 1
+	}
+	print summary
+}
+
+def tests :: test.suite = [
+	test.case "if-else-pattern" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			got 42
+			nothing
+			7
+
+			"""
+	},
+]

@@ -1,0 +1,30 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Tail-call-style recursion. Frames live on the heap, so this is bounded only
+# by memory rather than a native call stack.
+
+def count-down = fun n {
+	when n is 0 {
+		()
+	} else {
+		count-down (n - 1)
+	}
+}
+
+def run = fun {
+	count-down 5000
+	print "ok"
+}
+
+def tests :: test.suite = [
+	test.case "deep-recursion" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "ok\n"
+	},
+]

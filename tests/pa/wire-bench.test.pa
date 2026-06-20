@@ -1,0 +1,41 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# `wire` codec stress: encode a list of int tuples to the compact binary format
+# and decode it back, repeatedly. Exercises auto-derived structural encode/decode
+# (varint, length-prefixed lists, tuples).
+
+def loop = fun data n acc {
+	when n is 0 {
+		acc
+	} else {
+		let bytes = wire.encode data
+		let back :: result (list (int, int)) wire-error = wire.decode bytes
+		let len = when back is ok xs {
+			list.length xs
+		} is err _e {
+			0
+		}
+		loop data (n - 1) (acc + len)
+	}
+}
+
+def run = fun {
+	let data = list.build 400 fun i {
+		(i, i * 2)
+	}
+	print (to-string (loop data 150 0))
+}
+
+def tests :: test.suite = [
+	test.case "wire-bench" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "60000\n"
+	},
+]

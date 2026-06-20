@@ -1,0 +1,52 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+# A dict is an immutable value: insert/remove return a new dict and leave
+# the original untouched, so two bindings never interfere (the opposite of a
+# `ref`).
+def run = fun {
+	let a = dict.from-entries [("x", 1), ("y", 2)]
+	# `b` adds a key; `a` is unaffected.
+	let b = dict.insert a "z" 3
+	print (dict.size a) # 2
+	print (dict.size b) # 3
+	print (dict.contains-key a "z") # false
+	print (dict.contains-key b "z") # true
+
+	# Replacing a key in `c` leaves `a` and `b` alone.
+	let c = dict.insert b "x" 99
+	print (dict.lookup a "x" ?? 0) # 1
+	print (dict.lookup c "x" ?? 0) # 99
+
+	# Removing from `d` doesn't touch `c`.
+	let d = dict.remove c "y"
+	print (dict.contains-key c "y") # true
+	print (dict.contains-key d "y") # false
+	print (dict.size c) # 3
+	print (dict.size d) # 2
+}
+
+def tests :: test.suite = [
+	test.case "core-dict-persistent" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			2
+			3
+			false
+			true
+			1
+			99
+			true
+			false
+			3
+			2
+
+			"""
+	},
+]

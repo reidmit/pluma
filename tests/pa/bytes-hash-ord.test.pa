@@ -1,0 +1,53 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	# bytes as dict keys — exercises hash bytes
+	let m = dict.empty ()
+	let m = dict.insert m 'GET' 1
+	let m = dict.insert m 'POST' 2
+	let m = dict.insert m 'PUT' 3
+	when dict.lookup m 'POST' is some v {
+		print v
+	} is none {
+		print (-1)
+	}
+	when dict.lookup m 'GET' is some v {
+		print v
+	} is none {
+		print (-1)
+	}
+	when dict.lookup m 'DELETE' is some v {
+		print v
+	} is none {
+		print (-1)
+	}
+
+	# ord bytes — exercise compare
+	print (compare 'abc' 'abd')
+	print (compare 'abc' 'abc')
+	print (compare 'abd' 'abc')
+	print (compare '' 'a')
+}
+
+def tests :: test.suite = [
+	test.case "bytes-hash-ord" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			2
+			1
+			-1
+			ordering.lt
+			ordering.eq
+			ordering.gt
+			ordering.lt
+
+			"""
+	},
+]

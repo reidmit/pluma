@@ -1,0 +1,49 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `try` on result. Each `try` desugars to `result.then expr fun pattern { rest }`.
+# Returning `err` from the chain short-circuits past every following expression.
+
+def all-ok = fun {
+	try a = ok 5
+	try b = ok 10
+	ok (a + b)
+}
+
+def early-err = fun {
+	try a = ok 5
+	try err "boom"
+	ok a
+}
+
+def run = fun {
+	let r1 = all-ok ()
+	when r1 is ok v {
+		print v
+	} is err _ {
+		print (0 - 1)
+	}
+
+	let r2 = early-err ()
+	when r2 is ok v {
+		print v
+	} is err _ {
+		print (0 - 1)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "try-result" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			15
+			-1
+
+			"""
+	},
+]

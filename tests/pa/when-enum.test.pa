@@ -1,0 +1,41 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+enum color {
+	red
+	green
+	blue
+}
+
+def name-of = fun c {
+	when c is color.red {
+		"red"
+	} is color.green {
+		"green"
+	} is color.blue {
+		"blue"
+	}
+}
+
+def run = fun {
+	print (name-of color.red)
+	print (name-of color.green)
+	print (name-of color.blue)
+}
+
+def tests :: test.suite = [
+	test.case "when-enum" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			red
+			green
+			blue
+
+			"""
+	},
+]

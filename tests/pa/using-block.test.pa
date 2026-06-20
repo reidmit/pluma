@@ -1,0 +1,40 @@
+use std/assert
+use std/list
+use std/math
+use std/task
+use std/test
+use std/sys/io
+
+# A `using <namespace> { ... }` block: inside, a leading-dot `.member` resolves in
+# that namespace, so the repeated prefix drops away. Nested blocks switch the
+# ambient (innermost wins); other namespaces stay qualified.
+
+def run = fun {
+	# Outer ambient `list`; the inner `using math` makes `.abs` resolve in `math`.
+	let xs = using list {
+		.map [-2, 5, -8] fun n {
+			using math { .abs n }
+		}
+	}
+	# `list.length` written qualified still works alongside the block above.
+	print (to-string (list.length xs))
+	print (to-string (list.get xs 0))
+	print (to-string (list.get xs 1))
+	print (to-string (list.get xs 2))
+}
+
+def tests :: test.suite = [
+	test.case "using-block" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			2
+			5
+			8
+
+			"""
+	},
+]

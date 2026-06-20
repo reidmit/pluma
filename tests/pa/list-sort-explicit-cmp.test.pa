@@ -1,0 +1,47 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# An explicit int comparator (avoids passing the `ord.compare` trait
+# method as a first-class value, which the wasm backend can't wrap yet).
+def cmp :: fun int int -> ordering = fun a b {
+	if a < b {
+		ordering.lt
+	} else if a > b {
+		ordering.gt
+	} else {
+		ordering.eq
+	}
+}
+
+def run = fun {
+	print (list.sort [3, 1, 4, 1, 5, 9, 2, 6] cmp)
+	print (list.sort [5, 4, 3, 2, 1] cmp)
+	print (list.sort [42] cmp)
+	print (list.sort [9, 3, 7, 1, 8, 2, 9, 4, 0, 6, 5, 3, 1, 7, 2] cmp)
+	print (list.sort [1, 2, 3] fun a b {
+		cmp b a
+	})
+	let empty :: list int = []
+	print (list.sort empty cmp)
+}
+
+def tests :: test.suite = [
+	test.case "list-sort-explicit-cmp" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[1, 1, 2, 3, 4, 5, 6, 9]
+			[1, 2, 3, 4, 5]
+			[42]
+			[0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 7, 8, 9, 9]
+			[3, 2, 1]
+			[]
+
+			"""
+	},
+]

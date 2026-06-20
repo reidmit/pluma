@@ -1,0 +1,37 @@
+use std/assert
+use std/list
+use std/string
+use std/task
+use std/test
+use std/sys/io
+
+# String stress: build a list of numbers, join into one big string, split it
+# back, and measure the round-trip. Exercises to-string, join (divide-and-
+# conquer concat), split (position list), and codepoint-indexed length.
+
+def run = fun {
+	let parts = list.build 500 fun i {
+		to-string (i * i)
+	}
+	let joined = string.join parts ","
+	let back = string.split joined ","
+	let upper = string.to-upper joined
+	print (to-string (list.length back))
+	print (to-string (string.length joined))
+	print (to-string (string.length upper))
+}
+
+def tests :: test.suite = [
+	test.case "string-bench" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			500
+			3036
+			3036
+
+			"""
+	},
+]

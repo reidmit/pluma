@@ -1,0 +1,48 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def describe = fun result {
+	when result is ordering.lt {
+		"less"
+	} is ordering.eq {
+		"equal"
+	} is ordering.gt {
+		"greater"
+	}
+}
+
+def run = fun {
+	# `<` / `>` / `<=` / `>=` lower to ord.compare + a variant check.
+	print (1 < 2)
+	print (2 < 1)
+	print (5 <= 5)
+	print (3.14 > 2.71)
+	print (1.0 >= 2.0)
+
+	# direct trait method use also works.
+	print (describe (ord.compare 10 20))
+	print (describe (ord.compare 5 5))
+	print (describe (ord.compare "z" "a"))
+}
+
+def tests :: test.suite = [
+	test.case "ord-operators" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			false
+			true
+			true
+			false
+			less
+			equal
+			greater
+
+			"""
+	},
+]

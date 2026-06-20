@@ -1,0 +1,28 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	if 47 is 47 {
+		print "matched"
+	}
+	if 47 is 99 {
+		print "should never print"
+	}
+	print "after"
+}
+
+def tests :: test.suite = [
+	test.case "if-no-match" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			matched
+			after
+
+			"""
+	},
+]

@@ -1,0 +1,29 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (1 + 2)
+	print (10 - 3)
+	print (6 * 7)
+	print (100 / 4)
+	print (17 % 5)
+}
+
+def tests :: test.suite = [
+	test.case "arithmetic" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			7
+			42
+			25
+			2
+
+			"""
+	},
+]

@@ -1,0 +1,33 @@
+use std/assert
+use std/error
+use std/task
+use std/test
+use std/sys/io
+
+# A propagation chain built by hand with `error.context`: each layer names
+# what it was doing, the leaf the root cause. `message` renders the chain on
+# one line; `trace` gives the frames as a list.
+
+def root :: fun nothing -> error = fun {
+	error.new "connection refused"
+}
+
+def run = fun {
+	let e = error.context "loading user 7" (error.context "querying db" (root ()))
+	print (error.message e)
+	print (to-string (error.trace e))
+}
+
+def tests :: test.suite = [
+	test.case "error-chain" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			loading user 7: querying db: connection refused
+			[loading user 7, querying db, connection refused]
+
+			"""
+	},
+]

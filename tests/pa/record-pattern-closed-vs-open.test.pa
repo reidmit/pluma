@@ -1,0 +1,49 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Closed vs open record patterns.
+#
+# `{name: n}` (no `...`) requires the subject to be exactly that shape.
+# `{name: n, ...}` allows extra fields.
+# `{}` matches only the empty record.
+def run = fun {
+	# closed match on the exact shape
+	let {name: n, age: a} = {name: "reid", age: 28}
+	print n
+	print (to-string a)
+
+	# open match — the value carries an extra field
+	when {name: "alice", age: 30, role: "engineer"} is {name: nn, ...} {
+		print nn
+	}
+
+	# matching just an empty record
+	let {} = {}
+	print "empty"
+
+	# `when` on an exactly-shaped record is exhaustive without `else`
+	# (only one possible shape).
+	let pt = {x: 1, y: 2}
+	when pt is {x: xv, y: yv} {
+		print (to-string (xv + yv))
+	}
+}
+
+def tests :: test.suite = [
+	test.case "record-pattern-closed-vs-open" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			reid
+			28
+			alice
+			empty
+			3
+
+			"""
+	},
+]

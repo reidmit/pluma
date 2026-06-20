@@ -1,0 +1,27 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print ('abc' == 'abc')
+	print ('abc' == 'abd')
+	print ('\x00\x01' == '\x00\x01')
+	print ('' == '')
+}
+
+def tests :: test.suite = [
+	test.case "bytes-equality" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			false
+			true
+			true
+
+			"""
+	},
+]

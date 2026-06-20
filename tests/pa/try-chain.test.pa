@@ -1,0 +1,46 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Error-carrier stress: chained `try` over `option` with `??` recovery, in a
+# tight loop. Exercises the option carrier, `try` short-circuit propagation, and
+# the `??` coalesce.
+
+def safe-div = fun a b {
+	if b is 0 {
+		none
+	} else {
+		some (a / b)
+	}
+}
+
+def chain = fun n {
+	try a = safe-div 1000000 n
+	try b = safe-div a 1
+	try c = safe-div b 2
+	some (a + b + c)
+}
+
+def loop = fun n acc {
+	when n is 0 {
+		acc
+	} else {
+		let v = chain n ?? 0
+		loop (n - 1) (acc + v)
+	}
+}
+
+def run = fun {
+	print (to-string (loop 30000 0))
+}
+
+def tests :: test.suite = [
+	test.case "try-chain" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "27170577\n"
+	},
+]

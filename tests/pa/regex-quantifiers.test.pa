@@ -1,0 +1,44 @@
+use std/assert
+use std/regex
+use std/task
+use std/test
+use std/sys/io
+
+def two-to-four-a = `"a"{2,4}`
+
+def at-least-one-b = `"b"+`
+
+def optional-c = `"c"?`
+
+def run = fun {
+	print (regex.matches two-to-four-a "a")
+	print (regex.matches two-to-four-a "aa")
+	print (regex.matches two-to-four-a "aaaa")
+
+	print (regex.matches at-least-one-b "")
+	print (regex.matches at-least-one-b "b")
+	print (regex.matches at-least-one-b "bbb")
+
+	print (regex.matches optional-c "")
+	print (regex.matches optional-c "c")
+}
+
+def tests :: test.suite = [
+	test.case "regex-quantifiers" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			false
+			true
+			true
+			false
+			true
+			true
+			true
+			true
+
+			"""
+	},
+]

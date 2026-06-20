@@ -1,0 +1,30 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Tail-recursive countdown. With TCO, frame count stays bounded.
+
+def count = fun n {
+	when n is 0 {
+		"done"
+	} else {
+		count (n - 1)
+	}
+}
+
+def run = fun {
+	# 5000 is past a typical native stack limit; TCO handles this in O(1)
+	# frames.
+	print (count 5000)
+}
+
+def tests :: test.suite = [
+	test.case "count-tail" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "done\n"
+	},
+]

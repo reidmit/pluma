@@ -1,0 +1,61 @@
+use std/assert
+use std/bytes
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let b = 'hello'
+	print (bytes.length b)
+	print (bytes.is-empty b)
+	print (bytes.is-empty '')
+
+	when bytes.at b 0 is some n {
+		print n
+	} is none {
+		print (-1)
+	}
+	when bytes.at b 4 is some n {
+		print n
+	} is none {
+		print (-1)
+	}
+	when bytes.at b 99 is some n {
+		print n
+	} is none {
+		print (-1)
+	}
+
+	print (bytes.concat 'foo' 'bar')
+	print (bytes.slice b 1 4)
+	print (bytes.slice b 0 99)
+	print (bytes.slice b 3 1)
+	print (bytes.repeat 'ab' 3)
+	print (bytes.reverse 'abcde')
+	print (bytes.to-list 'A\x01\xff')
+}
+
+def tests :: test.suite = [
+	test.case "bytes-module-basics" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			5
+			false
+			true
+			104
+			111
+			-1
+			'foobar'
+			'ell'
+			'hello'
+			''
+			'ababab'
+			'edcba'
+			[65, 1, 255]
+
+			"""
+	},
+]

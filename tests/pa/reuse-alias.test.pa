@@ -1,0 +1,46 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+# Soundness guard for the reuse pass. The accumulator `m` is a loop-carried dict (so
+# loopify + the reuse analysis run), but every intermediate version `m2` is also
+# retained in `versions`. The inserted dict therefore escapes, so in-place reuse must
+# NOT fire — if it did, each retained version would alias the same nodes and later
+# inserts would corrupt them, collapsing all sizes to the final one. Correct output is
+# the distinct sizes 3, 2, 1.
+def build = fun m i versions {
+	if i == 0 {
+		versions
+	} else {
+		let m2 = dict.insert m (to-string i) i
+		build m2 (i - 1) [m2, ...versions]
+	}
+}
+
+def run = fun {
+	let versions = build (dict.empty ()) 3 []
+	when versions is [a, b, c] {
+		print (dict.size a)
+		print (dict.size b)
+		print (dict.size c)
+	} else {
+		print "unexpected length"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "reuse-alias" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			2
+			1
+
+			"""
+	},
+]

@@ -1,0 +1,36 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `??` on `option`: `some` yields its payload, `none` yields the
+# default. Desugars to `option.or-else value (fun { default })`.
+def run = fun {
+	# bare option values
+	print (some 7 ?? 0)
+	print (none ?? 0)
+
+	# the default can be any expression of the payload type
+	print (some "hi" ?? "fallback")
+	print (none ?? "fallback")
+
+	# nested in a larger expression
+	print ((some 10 ?? 0) + (none ?? 5))
+}
+
+def tests :: test.suite = [
+	test.case "coalesce-option" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			7
+			0
+			hi
+			fallback
+			15
+
+			"""
+	},
+]

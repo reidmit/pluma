@@ -1,0 +1,59 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Tuple destructuring in `let` bindings.
+def run = fun {
+	let (a, b) = (1, 2)
+	print (to-string a)
+	print (to-string b)
+
+	# heterogeneous
+	let (n, s, flag) = (7, "seven", true)
+	print (to-string n)
+	print s
+	print (to-string flag)
+
+	# nested
+	let ((x, y), z) = ((10, 20), 30)
+	print (to-string x)
+	print (to-string y)
+	print (to-string z)
+
+	# wildcard for parts we don't care about
+	let (kept, _) = (100, 999)
+	print (to-string kept)
+
+	# destructure from a function result
+	let (lo, hi) = bounds ()
+	print (to-string lo)
+	print (to-string hi)
+}
+
+def bounds = fun {
+	(1, 100)
+}
+
+def tests :: test.suite = [
+	test.case "let-destructure-tuple" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			1
+			2
+			7
+			seven
+			true
+			10
+			20
+			30
+			100
+			1
+			100
+
+			"""
+	},
+]

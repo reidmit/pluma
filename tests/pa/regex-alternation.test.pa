@@ -1,0 +1,37 @@
+use std/assert
+use std/regex
+use std/task
+use std/test
+use std/sys/io
+
+def yes-or-no = `"yes" | "no"`
+
+def label-then-color = `"color: " ("red" | "green" | "blue")`
+
+def run = fun {
+	print (regex.matches yes-or-no "yes")
+	print (regex.matches yes-or-no "no")
+	print (regex.matches yes-or-no "maybe")
+
+	print (regex.matches label-then-color "color: red")
+	print (regex.matches label-then-color "color: blue")
+	print (regex.matches label-then-color "color: purple")
+}
+
+def tests :: test.suite = [
+	test.case "regex-alternation" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			true
+			false
+			true
+			true
+			false
+
+			"""
+	},
+]

@@ -1,0 +1,136 @@
+use std/assert
+use std/json
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# Walker helpers compose via `try`. Build a small nested document and
+# pull values back out by field path.
+
+def doc = "{\"user\": {\"name\": \"ada\", \"age\": 36, \"admin\": true}, \"tags\": [\"math\", \"engine\"]}"
+
+# Each lookup is one `try` chain — first `none` short-circuits.
+def lookup-name = fun v {
+	try user = json.get-field v "user"
+	try n = json.get-field user "name"
+	json.get-string n
+}
+
+def lookup-age = fun v {
+	try user = json.get-field v "user"
+	try n = json.get-field user "age"
+	json.get-int n
+}
+
+def lookup-admin = fun v {
+	try user = json.get-field v "user"
+	try b = json.get-field user "admin"
+	json.get-bool b
+}
+
+def lookup-tags = fun v {
+	try t = json.get-field v "tags"
+	json.get-array t
+}
+
+# get-int on a string field — should return none, not miscoerce.
+def lookup-name-as-int = fun v {
+	try user = json.get-field v "user"
+	try n = json.get-field user "name"
+	json.get-int n
+}
+
+# Helpers to normalize `when` branches to the same type — every branch
+# prints a string.
+def show-opt-string = fun o miss {
+	when o is some s {
+		print s
+	} is none {
+		print miss
+	}
+}
+
+def show-opt-int = fun o miss {
+	when o is some n {
+		print (to-string n)
+	} is none {
+		print miss
+	}
+}
+
+def show-opt-bool = fun o miss {
+	when o is some b {
+		print (to-string b)
+	} is none {
+		print miss
+	}
+}
+
+def show-opt-float = fun o miss {
+	when o is some f {
+		print (to-string f)
+	} is none {
+		print miss
+	}
+}
+
+def run = fun {
+	when json.parse doc is ok v {
+		# Missing key.
+		when json.get-field v "nope" is some _x {
+			print "found nope"
+		} is none {
+			print "no nope"
+		}
+
+		show-opt-string (lookup-name v) "no name"
+		show-opt-int (lookup-age v) "no age"
+		show-opt-bool (lookup-admin v) "no admin"
+
+		# Array length via list module.
+		when lookup-tags v is some xs {
+			print (to-string (list.length xs))
+		} is none {
+			print "no tags"
+		}
+
+		# Wrong type: get-int on a string returns none.
+		show-opt-int (lookup-name-as-int v) "good: not an int"
+
+		print (to-string (json.is-null json.value.null))
+		print (to-string (json.is-null (json.value.int 0)))
+
+		# get-number coerces `value.int` to float; get-float doesn't.
+		show-opt-float (json.get-number (json.value.int 42)) "no number"
+		show-opt-float (json.get-number (json.value.float 3.5)) "no number"
+		show-opt-float (json.get-float (json.value.int 42)) "no plain float"
+		show-opt-float (json.get-number (json.value.string "x")) "no number"
+	} is err _e {
+		print "parse failed"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "json-walkers" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			no nope
+			ada
+			36
+			true
+			2
+			good: not an int
+			true
+			false
+			42.0
+			3.5
+			no plain float
+			no number
+
+			"""
+	},
+]

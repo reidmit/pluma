@@ -1,0 +1,48 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+# A dict built transiently (`from-entries`) is still a normal immutable value:
+# persistent ops on it must not mutate it, and `merge`'s inputs stay untouched.
+def run = fun {
+	let a = dict.from-entries [("x", 1), ("y", 2), ("z", 3)]
+	let b = dict.insert a "w" 4
+	let c = dict.remove a "x"
+	print (dict.size a) # 3 (untouched)
+	print (dict.size b) # 4
+	print (dict.size c) # 2
+	print (dict.contains-key a "w") # false
+	print (dict.contains-key a "x") # true
+
+	let r = dict.from-entries [("y", 20), ("q", 5)]
+	let m = dict.merge a r
+	print (dict.size a) # 3 (left untouched)
+	print (dict.size r) # 2 (right untouched)
+	print (dict.lookup a "y" ?? 0) # 2
+	print (dict.lookup m "y" ?? 0) # 20 (right wins)
+	print (dict.size m) # 4
+}
+
+def tests :: test.suite = [
+	test.case "dict-transient-alias" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			4
+			2
+			false
+			true
+			3
+			2
+			2
+			20
+			4
+
+			"""
+	},
+]

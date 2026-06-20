@@ -1,0 +1,35 @@
+use std/assert
+use std/json
+use std/task
+use std/test
+use std/sys/io
+
+# Pretty-print: 2-space indent, one element per line, insertion order
+# preserved.
+def run = fun {
+	when json.parse "{\"name\": \"ada\", \"scores\": [10, 20], \"on\": true}" is ok v {
+		print (json.stringify-pretty v)
+	} is err _e {
+		print "parse failed"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "json-pretty" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			{
+			  "on": true,
+			  "scores": [
+			    10,
+			    20
+			  ],
+			  "name": "ada"
+			}
+
+			"""
+	},
+]

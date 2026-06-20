@@ -1,0 +1,48 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (1 == 1)
+	print (1 == 2)
+	print (1 != 2)
+	print (1 < 2)
+	print (2 < 2)
+	print (2 <= 2)
+	print (3 > 2)
+	print (3 >= 3)
+
+	if 5 > 3 {
+		print "five > three"
+	}
+
+	let in-range = fun n {
+		n >= 1 and n <= 10
+	}
+	print (in-range 5)
+	print (in-range 20)
+}
+
+def tests :: test.suite = [
+	test.case "comparison-ops" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			false
+			true
+			true
+			false
+			true
+			true
+			true
+			five > three
+			true
+			false
+
+			"""
+	},
+]

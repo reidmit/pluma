@@ -1,0 +1,53 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+# `??` is right-associative, so `a ?? b ?? c` groups as `a ?? (b ?? c)`
+# and the first non-empty option wins. The default is lazy — evaluated
+# only on the failure arm.
+
+# Records whether it ran, so we can prove laziness.
+def loud = fun {
+	print "  (evaluated fallback)"
+	0 - 1
+}
+
+def run = fun {
+	# right-associative chain: first `some` short-circuits
+	print (none ?? none ?? some 3 ?? 0)
+	print (none ?? none ?? none ?? 99)
+
+	# the real motivating use: lookup with a default
+	let m = dict.from-entries [("a", 1), ("b", 2)]
+	print (dict.lookup m "a" ?? 0)
+	print (dict.lookup m "missing" ?? 0)
+
+	# laziness: the `some` arm must not evaluate the fallback
+	print "expect value, no fallback line:"
+	print (some 42 ?? loud ())
+	print "expect fallback line, then -1:"
+	print (none ?? loud ())
+}
+
+def tests :: test.suite = [
+	test.case "coalesce-chain" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			99
+			1
+			0
+			expect value, no fallback line:
+			42
+			expect fallback line, then -1:
+			  (evaluated fallback)
+			-1
+
+			"""
+	},
+]

@@ -1,0 +1,31 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# Closure stress: build a list of closures that each capture their index, then
+# apply every one to a running accumulator. Exercises closure allocation (env
+# capture) and indirect calls.
+
+def run = fun {
+	let adders = list.build 5000 fun i {
+		fun x {
+			x + i
+		}
+	}
+	let total = list.fold adders 0 fun acc f {
+		f acc
+	}
+	print (to-string total)
+}
+
+def tests :: test.suite = [
+	test.case "closures-bench" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "12497500\n"
+	},
+]

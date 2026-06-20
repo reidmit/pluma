@@ -1,0 +1,53 @@
+use std/assert
+use std/task
+use std/test
+use std/time
+use std/sys/io
+
+def run = fun {
+	# Bare literals print through the duration Display.
+	print 1s
+	print 2m20s
+	print 3h2m10s
+	print 250ms
+
+	# Conversions confirm each literal lowered to the right nanosecond count.
+	print (time.as-seconds 2m20s)
+	print (time.as-millis 1s)
+	print (time.as-nanos 1us)
+	print (time.as-seconds 1h30m)
+
+	# Equality is structural across spellings.
+	print (1s == 1s)
+	print (1m == 1m)
+
+	# Duration literals work in patterns too.
+	when 5s is 5s {
+		print "five"
+	} else {
+		print "nope"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "duration-literals" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			1s
+			2m20s
+			3h2m10s
+			250ms
+			140
+			1000
+			1000
+			5400
+			true
+			true
+			five
+
+			"""
+	},
+]

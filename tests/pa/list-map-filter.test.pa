@@ -1,0 +1,33 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let xs = [1, 2, 3, 4, 5]
+	print (list.map xs fun n {
+		n * n
+	})
+	print (list.filter xs fun n {
+		n % 2 == 0
+	})
+	print (list.map (list.filter xs fun n { n > 2 }) fun n {
+		n + 100
+	})
+}
+
+def tests :: test.suite = [
+	test.case "list-map-filter" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[1, 4, 9, 16, 25]
+			[2, 4]
+			[103, 104, 105]
+
+			"""
+	},
+]

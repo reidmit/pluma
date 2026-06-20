@@ -1,0 +1,57 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Constructing a prelude variant in *qualified* form — `ordering.gt`,
+# `option.some`, `result.ok` — as a plain expression. This was a latent
+# lowering gap: prelude variants used to only ever be written bare, so the
+# `Enum.variant` construction path never resolved a prelude enum (it only
+# tried the current module). `ordering.*` is the interesting case now that
+# its variants must be qualified (only some/none/ok/err stay bare).
+
+def cmp :: fun int int -> ordering = fun a b {
+	if a < b {
+		ordering.lt
+	} else if a > b {
+		ordering.gt
+	} else {
+		ordering.eq
+	}
+}
+
+def label :: fun ordering -> string = fun o {
+	when o is ordering.lt {
+		"lt"
+	} is ordering.eq {
+		"eq"
+	} is ordering.gt {
+		"gt"
+	}
+}
+
+def run = fun {
+	print (label (cmp 1 9))
+	print (label (cmp 5 5))
+	print (label (cmp 9 1))
+	# qualified option/result construction (these also work bare)
+	print (option.some 42)
+	print (result.ok "yes")
+}
+
+def tests :: test.suite = [
+	test.case "qualified-prelude-variant" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			lt
+			eq
+			gt
+			option.some 42
+			result.ok yes
+
+			"""
+	},
+]

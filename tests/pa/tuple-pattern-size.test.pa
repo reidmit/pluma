@@ -1,0 +1,37 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let two-tuple = (1, 2)
+	when two-tuple is (a, b) {
+		print (a + b)
+	}
+
+	let three-tuple = (1, 2, 3)
+	when three-tuple is (a, b, c) {
+		print (a + b + c)
+	}
+
+	# nested
+	let nested = ((1, 2), 3)
+	when nested is ((a, b), c) {
+		print (a + b + c)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "tuple-pattern-size" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			6
+			6
+
+			"""
+	},
+]

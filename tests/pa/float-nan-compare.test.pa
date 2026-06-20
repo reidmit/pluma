@@ -1,0 +1,42 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Concrete float relational operators follow IEEE-754: NaN is unordered, so
+# every comparison against it is false (and NaN != NaN is true). This is the
+# language's semantics for concrete float relations — distinct from the
+# total-order `ord.compare` used by `list.sort`/generic `ord` code.
+def run = fun {
+	let nan = 0.0 / 0.0
+	print (nan < 1.0)
+	print (nan <= 1.0)
+	print (nan > 1.0)
+	print (nan >= 1.0)
+	print (1.0 < nan)
+	print (1.0 <= nan)
+	print (nan <= nan)
+	print (nan == nan)
+	print (nan != nan)
+}
+
+def tests :: test.suite = [
+	test.case "float-nan-compare" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			false
+			false
+			false
+			false
+			false
+			false
+			false
+			false
+			true
+
+			"""
+	},
+]

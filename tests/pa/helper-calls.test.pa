@@ -1,0 +1,47 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Hot loop calling small non-recursive top-level helpers. Each iteration makes
+# several direct `Call(Function)`s to one-line defs — exactly what the IR inliner
+# splices away. The driver `go` is tail-recursive, so its own self-call stays a
+# `TailCall` (already frame-reusing); only the helper calls are inlined. Stresses
+# call-frame overhead (push/arg-copy/Return/truncate) vs inlined straight-line code.
+
+def inc = fun x {
+	x + 1
+}
+
+def dbl = fun x {
+	x * 2
+}
+
+def mix = fun a b {
+	(a + b) % 1000000
+}
+
+def go = fun n acc {
+	when n is 0 {
+		acc
+	} else {
+		let a = inc n
+		let b = dbl a
+		let c = mix a b
+		go (n - 1) (mix acc c)
+	}
+}
+
+def run = fun {
+	print (to-string (go 1000000 0))
+}
+
+def tests :: test.suite = [
+	test.case "helper-calls" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "500000\n"
+	},
+]

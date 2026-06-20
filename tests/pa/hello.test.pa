@@ -1,0 +1,18 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print "hello, world!"
+}
+
+def tests :: test.suite = [
+	test.case "hello" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "hello, world!\n"
+	},
+]

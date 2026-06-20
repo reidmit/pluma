@@ -1,0 +1,47 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Direct calls to `result.then`. Chains over result values: `ok v`
+# invokes the continuation; `err e` short-circuits.
+def run = fun {
+	# ok input + continuation that passes the value through
+	let a = result.then (ok 5) ok
+	when a is ok v {
+		print v
+	} is err e {
+		print e
+	}
+
+	# err input -> continuation skipped, err passes through
+	let b = result.then (err "boom") ok
+	when b is ok v {
+		print v
+	} is err e {
+		print e
+	}
+
+	# Chained: ok -> ok -> ok
+	let c = result.then (result.then (ok 1) ok) ok
+	when c is ok v {
+		print v
+	} is err e {
+		print e
+	}
+}
+
+def tests :: test.suite = [
+	test.case "result-then-direct" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			5
+			boom
+			1
+
+			"""
+	},
+]

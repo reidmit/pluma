@@ -1,0 +1,32 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let m = dict.empty ()
+	let m = dict.insert m "alice" 30
+	let m = dict.insert m "bob" 25
+	let m = dict.insert m "carol" 28
+
+	# keys/values/entries iterate in an unspecified (hash) order.
+	print (dict.keys m)
+	print (dict.values m)
+	print (dict.entries m)
+}
+
+def tests :: test.suite = [
+	test.case "core-dict-string-keys" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[bob, alice, carol]
+			[25, 30, 28]
+			[(bob, 25), (alice, 30), (carol, 28)]
+
+			"""
+	},
+]

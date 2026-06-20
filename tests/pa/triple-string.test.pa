@@ -1,0 +1,54 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def name = "Ada"
+
+def html = """
+	<ul>
+		<li>$(name)</li>
+	</ul>
+	"""
+
+def oneline = """
+	no need to escape "quotes" here
+	"""
+
+def with_escapes = """
+	tab	and newline
+	stay literal? no
+	backslash \\ kept
+	"""
+
+def with_blank_line = """
+	first
+
+	third
+	"""
+
+def run = fun {
+	let indented = """
+		margin
+		  is stripped
+		"""
+	print html
+	print "==="
+	print oneline
+	print "==="
+	print with_escapes
+	print "==="
+	print with_blank_line
+	print "==="
+	print indented
+}
+
+def tests :: test.suite = [
+	test.case "triple-string" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "<ul>\n\t<li>Ada</li>\n</ul>\n===\nno need to escape \"quotes\" here\n===\ntab\tand newline\nstay literal? no\nbackslash \\ kept\n===\nfirst\n\nthird\n===\nmargin\n  is stripped\n"
+	},
+]

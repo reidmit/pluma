@@ -1,0 +1,37 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (1.5 + 2.5)
+	print (10.0 - 3.5)
+	print (2.0 * 3.5)
+	print (7.0 / 2.0)
+	print (7.5 % 3.0)
+	print (-3.14)
+
+	# float div by zero -> IEEE inf/nan, not a runtime error
+	print (1.0 / 0.0)
+	print (0.0 / 0.0)
+}
+
+def tests :: test.suite = [
+	test.case "float-arith" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			4.0
+			6.5
+			7.0
+			3.5
+			1.5
+			-3.14
+			inf
+			NaN
+
+			"""
+	},
+]

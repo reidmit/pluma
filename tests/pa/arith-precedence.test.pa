@@ -1,0 +1,29 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (1 + 2 * 3)
+	print ((1 + 2) * 3)
+	print (10 - 3 - 2)
+	print (20 / 4 / 2)
+	print (2 * 3 + 4 * 5)
+}
+
+def tests :: test.suite = [
+	test.case "arith-precedence" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			7
+			9
+			5
+			2
+			26
+
+			"""
+	},
+]

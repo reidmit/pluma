@@ -1,0 +1,33 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	list.each [1, 2, 3] fun n {
+		print (n * 10)
+	}
+
+	# each returns nothing — `print` it to confirm
+	let result = list.each ["a", "b"] print
+	print result
+}
+
+def tests :: test.suite = [
+	test.case "list-each" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			10
+			20
+			30
+			a
+			b
+			()
+
+			"""
+	},
+]

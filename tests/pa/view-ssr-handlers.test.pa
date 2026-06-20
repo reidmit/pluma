@@ -1,0 +1,39 @@
+use std/assert
+use std/task
+use std/test
+use std/view
+use std/sys/io
+
+# A view that uses the full handler surface (on-input/on-change/on-submit
+# reference the relocated `std/event` builtins) and renders to an HTML string.
+# Guards that the server-renderable view path links and renders: handlers are
+# dropped, text/attrs escaped, void elements self-close, properties become attrs.
+
+def field :: fun nothing -> view = fun {
+	using view {
+		.form [.on-submit fun { io.print "submit" }] [
+			.input [
+				.input-type "text",
+				.property "value" "a & b",
+				.placeholder "name <here>",
+				.on-input io.print,
+				.on-change io.print,
+			] [],
+			.button [.on-click fun { io.print "go" }] [.text "Save"],
+		]
+	}
+}
+
+def run = fun {
+	io.print (view.to-string (field ()))
+}
+
+def tests :: test.suite = [
+	test.case "view-ssr-handlers" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "<form><input type=\"text\" value=\"a &amp; b\" placeholder=\"name &lt;here&gt;\"><button>Save</button></form>\n"
+	},
+]

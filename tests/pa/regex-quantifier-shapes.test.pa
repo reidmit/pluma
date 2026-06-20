@@ -1,0 +1,62 @@
+use std/assert
+use std/regex
+use std/task
+use std/test
+use std/sys/io
+
+# `{n}` — exactly n
+def three-a = `"a"{3}`
+
+# `{n,}` — at least n (note the trailing comma)
+def at-least-two-a = `"a"{2,}`
+
+# `{,n}` — at most n
+def up-to-three-a = `"a"{,3}`
+
+# `*` — zero or more
+def any-a = `"a"*`
+
+def run = fun {
+	# Exact: only "aaa" matches when there's nothing else around it.
+	print (regex.matches three-a "aa")
+	print (regex.matches three-a "aaa")
+	print (regex.matches three-a "aaaa")
+
+	# At-least 2.
+	print (regex.matches at-least-two-a "a")
+	print (regex.matches at-least-two-a "aa")
+	print (regex.matches at-least-two-a "aaaaaa")
+
+	# At-most 3. `regex.matches` is a substring search, so anything
+	# matches because the empty-or-short run always exists.
+	print (regex.matches up-to-three-a "")
+	print (regex.matches up-to-three-a "aaaa")
+	print (regex.matches up-to-three-a "zzz")
+
+	# Star always matches (empty run is always present).
+	print (regex.matches any-a "")
+	print (regex.matches any-a "aaaa")
+}
+
+def tests :: test.suite = [
+	test.case "regex-quantifier-shapes" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			false
+			true
+			true
+			false
+			true
+			true
+			true
+			true
+			true
+			true
+			true
+
+			"""
+	},
+]

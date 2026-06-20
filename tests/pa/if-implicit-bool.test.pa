@@ -1,0 +1,71 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `if`/`while` with the `is PATTERN` omitted: the subject is matched against
+# `true`, so a bare boolean condition reads `if cond { ... }`. Explicit `is`
+# (both `is true` and real patterns) still works alongside the sugar.
+
+def classify = fun n {
+	if n < 0 {
+		"negative"
+	} else if n == 0 {
+		"zero"
+	} else {
+		"positive"
+	}
+}
+
+def truthy = fun r {
+	r.flag
+}
+
+def run = fun {
+	print (classify (-4))
+	print (classify 0)
+	print (classify 9)
+
+	# explicit `is true` is equivalent to the bare form
+	let ready = true
+	if ready {
+		print "explicit ready"
+	}
+	if ready {
+		print "bare ready"
+	}
+
+	# a subject that must end in a record is parenthesized so the trailing
+	# `{` opens the body rather than the record
+	if truthy ({flag: true}) {
+		print "paren record subject"
+	}
+
+	# `while` gets the same treatment
+	let r = ref.new 3
+	while ref.get r > 0 {
+		print "tick $(to-string (ref.get r))"
+		ref.set r (ref.get r - 1)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "if-implicit-bool" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			negative
+			zero
+			positive
+			explicit ready
+			bare ready
+			paren record subject
+			tick 3
+			tick 2
+			tick 1
+
+			"""
+	},
+]

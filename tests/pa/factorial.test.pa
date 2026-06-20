@@ -1,0 +1,33 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def fact = fun n {
+	when n is 0 {
+		1
+	} else {
+		n * fact (n - 1)
+	}
+}
+
+def run = fun {
+	print (fact 0)
+	print (fact 5)
+	print (fact 10)
+}
+
+def tests :: test.suite = [
+	test.case "factorial" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			1
+			120
+			3628800
+
+			"""
+	},
+]

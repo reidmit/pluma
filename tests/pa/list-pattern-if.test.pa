@@ -1,0 +1,48 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# List patterns in `if` and `while` — same shape as `when`.
+def run = fun {
+	let xs = [1, 2, 3]
+
+	if xs is [first, ..._rest] {
+		print (to-string first)
+	}
+
+	# `if` with `else`
+	let label = if [] is [_, ...] {
+		"non-empty"
+	} else {
+		"empty"
+	}
+	print label
+
+	# `while`
+	let counter = ref.new 0
+	let items = [10, 20, 30, 40]
+	let cursor = ref.new items
+	while ref.get cursor is [_, ...tail] {
+		ref.update counter fun n {
+			n + 1
+		}
+		ref.set cursor tail
+	}
+	print (to-string (ref.get counter))
+}
+
+def tests :: test.suite = [
+	test.case "list-pattern-if" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			1
+			empty
+			4
+
+			"""
+	},
+]

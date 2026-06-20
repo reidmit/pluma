@@ -1,0 +1,37 @@
+use std/assert
+use std/bytes
+use std/hex
+use std/task
+use std/test
+use std/sys/io
+
+# Byte-substrate + hex stress: hex-encode a byte buffer to a string and decode it
+# back, repeatedly. Exercises the bytes value substrate and the pure-Pluma hex
+# codec (codepoint walks, byte building).
+
+def loop = fun data n acc {
+	when n is 0 {
+		acc
+	} else {
+		let h = hex.encode data
+		let back = hex.decode h ?? data
+		loop data (n - 1) (acc + bytes.length back)
+	}
+}
+
+def run = fun {
+	let data = bytes.build 500 fun i {
+		i % 256
+	}
+	print (to-string (loop data 80 0))
+}
+
+def tests :: test.suite = [
+	test.case "bytes-hex" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "40000\n"
+	},
+]

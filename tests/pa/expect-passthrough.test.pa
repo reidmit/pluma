@@ -1,0 +1,31 @@
+use std/assert
+use std/list
+use std/string
+use std/task
+use std/test
+use std/sys/io
+
+# `expect` hands back the payload untouched on the happy path: `ok` and
+# `some` pass straight through, so a value-bearing carrier never aborts.
+
+def run = fun {
+	# result.expect: ok -> the value
+	print (string.to-int "42" |> result.expect "parsing")
+
+	# option.expect: some -> the value
+	print (list.head [10, 20, 30] |> option.expect "empty list")
+}
+
+def tests :: test.suite = [
+	test.case "expect-passthrough" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			42
+			10
+
+			"""
+	},
+]

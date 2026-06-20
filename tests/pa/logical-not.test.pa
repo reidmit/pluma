@@ -1,0 +1,39 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `!` is the prefix logical-not operator.
+def run = fun {
+	print (to-string (!true))
+	print (to-string (!false))
+
+	# Composes with comparison and in `if` subjects.
+	let x = 5
+	print (to-string (!x == 5))
+	if !x > 10 {
+		print "x is not big"
+	} else {
+		print "x is big"
+	}
+
+	# Double negation.
+	print (to-string (!!true))
+}
+
+def tests :: test.suite = [
+	test.case "logical-not" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			false
+			true
+			false
+			x is not big
+			true
+
+			"""
+	},
+]

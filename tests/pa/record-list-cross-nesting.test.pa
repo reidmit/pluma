@@ -1,0 +1,64 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# Patterns where records contain lists and lists contain records, in
+# both `let` and `when` positions.
+
+def run = fun {
+	# Record with a list field — extract head + tail of inner list.
+	let order = {id: 7, items: [10, 20, 30, 40], note: "ok"}
+	when order is {items: [first, ...rest], ...meta} {
+		print (to-string meta.id)
+		print meta.note
+		print (to-string first)
+		print (to-string (list.length rest))
+	} else {
+		print "no items"
+	}
+
+	# List of records — pull the leading name out of each, recurse on the tail.
+	greet-each [{name: "reid"}, {name: "alice"}, {name: "bob"}]
+
+	# Combined: nested list of records inside a record.
+	let report = {title: "summary", rows: [{user: "u1", n: 1}, {user: "u2", n: 2}]}
+	when report is {title: t, rows: [{user: u, ...}, ...]} {
+		print t
+		print u
+	} else {
+		print "no rows"
+	}
+}
+
+def greet-each = fun xs {
+	when xs is [] {
+		print "(done)"
+	} is [{name: n, ...}, ...rest] {
+		print "hi $(n)"
+		greet-each rest
+	}
+}
+
+def tests :: test.suite = [
+	test.case "record-list-cross-nesting" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			7
+			ok
+			10
+			3
+			hi reid
+			hi alice
+			hi bob
+			(done)
+			summary
+			u1
+
+			"""
+	},
+]

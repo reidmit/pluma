@@ -1,0 +1,88 @@
+use std/assert
+use std/dict
+use std/list
+use std/regex as re
+use std/task
+use std/test
+use std/sys/io
+
+def coord = `"(" <x: digit+> "," <y: digit+> ")"`
+
+def word-re = `letter+`
+
+def show-x-y = fun m {
+	when dict.lookup m.groups "x" is some s {
+		print s
+	} is none {
+		print "no x"
+	}
+	when dict.lookup m.groups "y" is some s {
+		print s
+	} is none {
+		print "no y"
+	}
+}
+
+def run = fun {
+	# find: first match, with start/end offsets and captured groups.
+	when re.find coord "data: (3,7) and more" is some m {
+		print m.text
+		print m.start
+		print m.end
+		show-x-y m
+	} is none {
+		print "no match"
+	}
+
+	# find on a miss.
+	when re.find coord "no coordinates here" is some _m {
+		print "unexpected match"
+	} is none {
+		print "no match"
+	}
+
+	# find-all: every non-overlapping match.
+	let all = re.find-all coord "(1,2) and (3,4) and (5,6)"
+	print (to-string (list.length all))
+	list.each all fun m {
+		print m.text
+	}
+
+	# find-all on a pattern with no captures still returns matches —
+	# `groups` is just empty.
+	let words = re.find-all word-re "one two three"
+	print (to-string (list.length words))
+	list.each words fun m {
+		print m.text
+		print (to-string (dict.size m.groups))
+	}
+}
+
+def tests :: test.suite = [
+	test.case "regex-find" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			(3,7)
+			6
+			11
+			3
+			7
+			no match
+			3
+			(1,2)
+			(3,4)
+			(5,6)
+			3
+			one
+			0
+			two
+			0
+			three
+			0
+
+			"""
+	},
+]

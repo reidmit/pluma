@@ -1,0 +1,64 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# List patterns nesting other patterns: tuples, records, variants.
+
+def first-pair = fun xs {
+	when xs is [] {
+		"empty"
+	} is [(a, b), ...] {
+		"pair $(to-string a),$(to-string b)"
+	}
+}
+
+def head-name = fun xs {
+	when xs is [] {
+		"empty"
+	} is [{name: n, ...}, ...] {
+		n
+	}
+}
+
+# Bare variant pattern inside a list element. Refutable, so we need `else`.
+def first-ok = fun xs {
+	when xs is [ok v, ...] {
+		"ok $(to-string v)"
+	} else {
+		"not-ok"
+	}
+}
+
+def run = fun {
+	print (first-pair [])
+	print (first-pair [(1, 2), (3, 4)])
+
+	print (head-name [])
+	print (head-name [{name: "reid"}, {name: "alice"}])
+	print (head-name [{name: "bob", age: 28}])
+
+	print (first-ok [ok 7, err "boom"])
+	print (first-ok [err "boom", ok 9])
+	print (first-ok [])
+}
+
+def tests :: test.suite = [
+	test.case "list-pattern-nested" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			empty
+			pair 1,2
+			empty
+			reid
+			bob
+			ok 7
+			not-ok
+			not-ok
+
+			"""
+	},
+]

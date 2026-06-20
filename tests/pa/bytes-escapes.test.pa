@@ -1,0 +1,22 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print 'tab:\there'
+	print 'quote: \'in here\''
+	print 'backslash: \\'
+	print 'null: \x00 done'
+	print 'hex: ABC'
+}
+
+def tests :: test.suite = [
+	test.case "bytes-escapes" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "'tab:\\x09here'\n'quote: \\'in here\\''\n'backslash: \\\\'\n'null: \\x00 done'\n'hex: ABC'\n"
+	},
+]

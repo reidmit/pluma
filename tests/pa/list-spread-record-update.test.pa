@@ -1,0 +1,32 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let xs = [2, 3]
+	print [1, ...xs, 4]
+	print [...xs]
+	print [0, ...xs]
+
+	let base = {x: 1, y: 2, z: 3}
+	print {...base, y: 20}
+	print {...base, x: 10, z: 30}
+}
+
+def tests :: test.suite = [
+	test.case "list-spread-record-update" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[1, 2, 3, 4]
+			[2, 3]
+			[0, 2, 3]
+			{x: 1, y: 20, z: 3}
+			{x: 10, y: 2, z: 30}
+
+			"""
+	},
+]

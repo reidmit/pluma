@@ -1,0 +1,31 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Top-level `_` in a `let` evaluates the RHS for its side effect and
+# discards the value. Useful when calling a side-effecting function whose
+# return value isn't needed.
+def run = fun {
+	side-effect ()
+	print "after"
+}
+
+def side-effect = fun {
+	print "during"
+	42
+}
+
+def tests :: test.suite = [
+	test.case "let-destructure-underscore" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			during
+			after
+
+			"""
+	},
+]

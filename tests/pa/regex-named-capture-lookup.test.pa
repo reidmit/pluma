@@ -1,0 +1,45 @@
+use std/assert
+use std/regex as re
+use std/task
+use std/test
+use std/sys/io
+
+# `named-capture` is the shortcut for "first match → group by name".
+# Skips materializing the whole match record.
+
+def pair = `<k: letter+> "=" <v: digit+>`
+
+def show = fun o {
+	when o is some s {
+		print s
+	} is none {
+		print "—"
+	}
+}
+
+def run = fun {
+	show (re.named-capture pair "size=42 height=10" "k")
+	show (re.named-capture pair "size=42 height=10" "v")
+
+	# Missing name — `none`, not an error.
+	show (re.named-capture pair "size=42" "nope")
+
+	# No match — also `none`.
+	show (re.named-capture pair "size = 42" "k")
+}
+
+def tests :: test.suite = [
+	test.case "regex-named-capture-lookup" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			size
+			42
+			—
+			—
+
+			"""
+	},
+]

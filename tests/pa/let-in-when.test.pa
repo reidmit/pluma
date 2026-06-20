@@ -1,0 +1,23 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	when 5 is 5 {
+		let doubled = 5 * 2
+		print (to-string doubled)
+	} else {
+		print "no"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "let-in-when" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "10\n"
+	},
+]

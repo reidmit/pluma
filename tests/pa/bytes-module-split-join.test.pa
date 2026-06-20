@@ -1,0 +1,28 @@
+use std/assert
+use std/bytes
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (bytes.split 'a,b,c' ',')
+	print (bytes.split 'a,b,,c' ',')
+	print (bytes.split 'abc' ',')
+	print (bytes.split '' ',')
+	print (bytes.split 'abc' '')
+
+	print (bytes.join ['a', 'b', 'c'] ',')
+	print (bytes.join ['only'] ',')
+	print (bytes.join [] ',')
+	print (bytes.join ['a', 'b'] '\x00')
+}
+
+def tests :: test.suite = [
+	test.case "bytes-module-split-join" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "['a', 'b', 'c']\n['a', 'b', '', 'c']\n['abc']\n['']\n['a', 'b', 'c']\n'a,b,c'\n'only'\n''\n'a\\x00b'\n"
+	},
+]

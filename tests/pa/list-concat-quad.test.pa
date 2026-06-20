@@ -1,0 +1,31 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# The O(n^2) accumulate-by-concat anti-pattern in isolation: each step copies
+# the whole accumulator. This is what map-filter-fold's `range` does.
+
+def build-up = fun n acc {
+	when n is 0 {
+		acc
+	} else {
+		build-up (n - 1) (list.concat acc [n])
+	}
+}
+
+def run = fun {
+	let xs = build-up 500 []
+	print (to-string (list.length xs))
+}
+
+def tests :: test.suite = [
+	test.case "list-concat-quad" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "500\n"
+	},
+]

@@ -1,0 +1,36 @@
+use std/assert
+use std/string
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (string.split "a,b,c" ",")
+	print (string.split "a,,b" ",")
+	print (string.split "abc" ",")
+	print (string.split "café" "")
+	print (string.join ["a", "b", "c"] ", ")
+	print (string.join ["x", "y", "z"] "")
+	print (string.join ["solo"] ",")
+	print (string.join (string.split "a-b-c-d" "-") "+")
+}
+
+def tests :: test.suite = [
+	test.case "string-module-split-join" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[a, b, c]
+			[a, , b]
+			[abc]
+			[c, a, f, é]
+			a, b, c
+			xyz
+			solo
+			a+b+c+d
+
+			"""
+	},
+]

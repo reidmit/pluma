@@ -1,0 +1,29 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	# write-bytes goes to stdout literally — no newline, no Display
+	# formatting. The Buffer sink (used in tests) captures these raw and
+	# the harness shows them in the stdout section as UTF-8 / lossy text.
+	io.write-bytes 'hello'
+	io.write-bytes ' '
+	io.write-bytes 'world'
+	io.write-bytes '\n'
+	io.write-bytes 'second line\n'
+}
+
+def tests :: test.suite = [
+	test.case "io-write-bytes" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			hello world
+			second line
+
+			"""
+	},
+]

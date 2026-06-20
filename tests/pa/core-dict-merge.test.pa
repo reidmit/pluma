@@ -1,0 +1,36 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let a = dict.from-entries [("x", 1), ("y", 2)]
+	let b = dict.from-entries [("y", 22), ("z", 3)]
+
+	# merge is right-wins on overlapping keys; left keys keep their slot
+	# in insertion order, right-only keys appear after.
+	let m = dict.merge a b
+	print (dict.size m)
+	print (dict.entries m)
+	when dict.lookup m "y" is some n {
+		print n
+	} is none {
+		print (-1)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "core-dict-merge" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			[(z, 3), (x, 1), (y, 22)]
+			22
+
+			"""
+	},
+]

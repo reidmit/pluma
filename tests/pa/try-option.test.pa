@@ -1,0 +1,49 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `try` on option. Each `try` desugars to `option.then expr fun pattern { rest }`.
+# `none` short-circuits past every following expression.
+
+def take-two = fun {
+	try a = some 1
+	try b = some 2
+	some (a + b)
+}
+
+def take-none = fun {
+	try a = some 1
+	try none
+	some a
+}
+
+def run = fun {
+	let r1 = take-two ()
+	when r1 is some v {
+		print v
+	} is none {
+		print (0 - 1)
+	}
+
+	let r2 = take-none ()
+	when r2 is some v {
+		print v
+	} is none {
+		print (0 - 1)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "try-option" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			-1
+
+			"""
+	},
+]

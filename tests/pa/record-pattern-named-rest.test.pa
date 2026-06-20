@@ -1,0 +1,49 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `{name: n, ...rest}` binds `rest` to a record containing whatever fields
+# remain after the named ones are matched. Type-inferred via row variables.
+
+def name-and-rest = fun p {
+	when p is {name: n, ...rest} {
+		(n, rest)
+	}
+}
+
+def run = fun {
+	let (n1, r1) = name-and-rest {name: "reid", age: 28, role: "engineer"}
+	print n1
+	print (to-string r1.age)
+	print r1.role
+
+	# Rest can be empty too.
+	let (n2, _) = name-and-rest {name: "solo"}
+	print n2
+
+	# Works in `let` directly: rest binds in a normal destructure.
+	let {a: av, ...others} = {a: 1, b: 2, c: 3}
+	print (to-string av)
+	print (to-string others.b)
+	print (to-string others.c)
+}
+
+def tests :: test.suite = [
+	test.case "record-pattern-named-rest" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			reid
+			28
+			engineer
+			solo
+			1
+			2
+			3
+
+			"""
+	},
+]

@@ -1,0 +1,35 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def fib = fun n {
+	when n is 0 {
+		0
+	} is 1 {
+		1
+	} else {
+		fib (n - 1) + fib (n - 2)
+	}
+}
+
+def run = fun {
+	print (fib 0)
+	print (fib 1)
+	print (fib 10)
+}
+
+def tests :: test.suite = [
+	test.case "fibonacci" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			0
+			1
+			55
+
+			"""
+	},
+]

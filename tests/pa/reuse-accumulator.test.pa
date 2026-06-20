@@ -1,0 +1,40 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+# A linear `dict.insert` accumulator — the shape `loopify` + the reuse pass rewrite to
+# a transient in-place insert. The in-place mutation must be unobservable: the final
+# dict has exactly the inserted entries with their values (5 entries; i*i values).
+def fill = fun m i {
+	if i == 0 {
+		m
+	} else {
+		fill (dict.insert m (to-string i) (i * i)) (i - 1)
+	}
+}
+
+def run = fun {
+	let m = fill (dict.empty ()) 5
+	print (dict.size m)
+	print (dict.lookup m "3" ?? 0)
+	print (dict.lookup m "5" ?? 0)
+	print (dict.lookup m "1" ?? 0)
+}
+
+def tests :: test.suite = [
+	test.case "reuse-accumulator" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			5
+			9
+			25
+			1
+
+			"""
+	},
+]

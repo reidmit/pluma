@@ -1,0 +1,31 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# Pure O(n) list building: tabulate, map, fold. One allocation each for build
+# and map; no repeated concat. Isolates the steady-state list allocation path.
+
+def run = fun {
+	let xs = list.build 20000 fun i {
+		i * 3
+	}
+	let ys = list.map xs fun x {
+		x + 1
+	}
+	let total = list.fold ys 0 fun acc x {
+		acc + x
+	}
+	print (to-string total)
+}
+
+def tests :: test.suite = [
+	test.case "list-build" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "599990000\n"
+	},
+]

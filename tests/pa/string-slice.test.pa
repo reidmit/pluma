@@ -1,0 +1,61 @@
+use std/assert
+use std/string
+use std/task
+use std/test
+use std/sys/io
+
+# `slice`/`drop`/`char-at` index by character (Unicode scalar value),
+# matching `length`. Indices clamp; `char-at` returns an option.
+
+def show = fun o {
+	when o is some c {
+		print c
+	} is none {
+		print "(none)"
+	}
+}
+
+def run = fun {
+	print (string.slice "hello world" 0 5)
+	print (string.slice "hello world" 6 11)
+	print (string.drop "hello world" 6)
+
+	# clamping, never panics
+	print (string.slice "hi" 0 100)
+	print "[$(string.slice "hi" 5 10)]"
+
+	# char-at
+	show (string.char-at "hello" 0)
+	show (string.char-at "hello" 4)
+	show (string.char-at "hello" 99)
+
+	# character boundaries: "é" is one character, two bytes
+	print (to-string (string.length "héllo"))
+	print (string.slice "héllo" 0 2)
+	show (string.char-at "héllo" 1)
+	print (string.drop "héllo" 1)
+}
+
+def tests :: test.suite = [
+	test.case "string-slice" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			hello
+			world
+			world
+			hi
+			[]
+			h
+			o
+			(none)
+			5
+			hé
+			é
+			éllo
+
+			"""
+	},
+]

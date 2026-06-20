@@ -1,0 +1,28 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let n = 42
+	print "the answer is $(to-string n)"
+	print "$(to-string (1 + 2)) is three"
+	let name = "reid"
+	let age = 28
+	print "$(name) is $(to-string age) years old"
+}
+
+def tests :: test.suite = [
+	test.case "interpolation-complex" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			the answer is 42
+			3 is three
+			reid is 28 years old
+
+			"""
+	},
+]

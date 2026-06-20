@@ -1,0 +1,46 @@
+use std/assert
+use std/math
+use std/task
+use std/test
+use std/sys/io
+
+# Exercises the unary float-math host imports (sin/cos/exp/log) plus the
+# pure-Pluma `tan` that rides on sin/cos. Outputs are reduced to exact values
+# (or rounded ints) so the snapshot is stable.
+def run = fun {
+	# at 0 these are exact
+	print (math.sin 0.0)
+	print (math.cos 0.0)
+	print (math.tan 0.0)
+	print (math.exp 0.0)
+
+	# sin/cos at pi/2, scaled and rounded
+	print (math.round (math.sin (math.pi / 2.0) * 10.0))
+	print (math.round (math.cos (math.pi / 2.0) * 10.0))
+
+	# log/exp are inverses; round to absorb the last ulp
+	print (math.to-int (math.log math.e))
+	print (math.round (math.exp 2.0))
+	print (math.round (math.exp (math.log 5.0)))
+}
+
+def tests :: test.suite = [
+	test.case "wasm-math-trig" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			0.0
+			1.0
+			0.0
+			1.0
+			10
+			0
+			1
+			7
+			5
+
+			"""
+	},
+]

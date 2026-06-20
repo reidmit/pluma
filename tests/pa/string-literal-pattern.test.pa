@@ -1,0 +1,35 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def classify = fun s {
+	when s is "yes" {
+		"affirmative"
+	} is "no" {
+		"negative"
+	} else {
+		"unknown"
+	}
+}
+
+def run = fun {
+	print (classify "yes")
+	print (classify "no")
+	print (classify "maybe")
+}
+
+def tests :: test.suite = [
+	test.case "string-literal-pattern" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			affirmative
+			negative
+			unknown
+
+			"""
+	},
+]

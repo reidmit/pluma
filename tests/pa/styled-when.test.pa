@@ -1,0 +1,36 @@
+use std/assert
+use std/css
+use std/task
+use std/test
+use std/view
+use std/sys/io
+
+# `view.styled-when rule cond` applies a rule's hashed class reactively. Several
+# class contributions on one node (a base `styled` + any `styled-when`s) merge
+# into one `class`; `view.to-string` evaluates each condition once.
+
+def base :: css.ruleset = using css { .rule [.padding (.rem 1.0)] }
+
+def on :: css.ruleset = css.rule [css.opacity 1.0]
+
+def run = fun {
+	# active=true -> both classes; active=false -> only the base class.
+	using view {
+		print (.to-string (.div [.styled base, .styled-when on fun { true }] [.text "a"]))
+		print (.to-string (.div [.styled base, .styled-when on fun { false }] [.text "b"]))
+	}
+}
+
+def tests :: test.suite = [
+	test.case "styled-when" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			<div class="cb30c6231 cd722bd7f">a</div>
+			<div class="cb30c6231">b</div>
+
+			"""
+	},
+]

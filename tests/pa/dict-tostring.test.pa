@@ -1,0 +1,44 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+# to-string / print / interpolation over a `dict` — `{k: v, ...}` in
+# insertion order, keys and values formatted recursively.
+
+def run = fun {
+	let m = dict.from-entries [("a", 1), ("b", 2), ("c", 3)]
+	print m
+	# {a: 1, b: 2, c: 3}
+	print (to-string m)
+	# {a: 1, b: 2, c: 3}
+	print "dict = $(to-string m)"
+	# dict = {a: 1, b: 2, c: 3}
+
+	# empty dict, and compound values
+	let empty :: dict string int = dict.empty ()
+	print empty
+	# {}
+	let nested = dict.from-entries [("xs", [1, 2])]
+	print nested
+}
+
+# {xs: [1, 2]}
+
+def tests :: test.suite = [
+	test.case "dict-tostring" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			{b: 2, c: 3, a: 1}
+			{b: 2, c: 3, a: 1}
+			dict = {b: 2, c: 3, a: 1}
+			{}
+			{xs: [1, 2]}
+
+			"""
+	},
+]

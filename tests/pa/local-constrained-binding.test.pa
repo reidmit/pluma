@@ -1,0 +1,44 @@
+use std/assert
+use std/hex
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# A local `let` bound to a constrained value (a bare trait method, an
+# overloaded-operator lambda, a wire method) used at a single concrete type.
+# Such a binding can't be generalized — a local has no hidden dict parameter to
+# thread the dictionary through — so it binds monomorphically and the dispatch
+# resolves from the use site. Regression test: each of these previously stranded
+# its dispatch and trapped at runtime.
+
+def run = fun {
+	# bare trait method bound to a local, used as a comparator
+	let cmp = compare
+	print (list.sort [3, 1, 2] cmp)
+
+	# a constrained lambda (overloaded `+`) bound to a local, used at int
+	let add = fun x y {
+		x + y
+	}
+	print (add (add 1 2) 3)
+
+	# a bare `wire` method bound to a local, used at int
+	let enc = wire.encode
+	print (hex.encode (enc 7))
+}
+
+def tests :: test.suite = [
+	test.case "local-constrained-binding" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[1, 2, 3]
+			6
+			0e
+
+			"""
+	},
+]

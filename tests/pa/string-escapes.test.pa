@@ -1,0 +1,27 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def x = "world"
+
+def run = fun {
+	print "tab\tend"
+	print "newline\nend"
+	print "literal backslash-n: a\\nb"
+	print "quote: \"hi\""
+	print "backslash: a\\b"
+	print "escaped dollar: \$(name) is literal"
+	print "real interpolation: $(x)"
+	print "bare dollar: 5$ and $5"
+}
+
+def tests :: test.suite = [
+	test.case "string-escapes" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "tab\tend\nnewline\nend\nliteral backslash-n: a\\nb\nquote: \"hi\"\nbackslash: a\\b\nescaped dollar: \$(name) is literal\nreal interpolation: world\nbare dollar: 5$ and $5\n"
+	},
+]

@@ -1,0 +1,52 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# A polymorphic top-level def that uses a trait method (`+`, `compare`)
+# compiles with hidden leading dict params. Referencing it by bare name as
+# a first-class value (passing it to a higher-order function) must still
+# work: codegen wraps it so the resolved dicts are prepended and the runtime
+# arity matches the user-visible type. Regression test for an arity mismatch.
+
+def step = fun acc x {
+	acc + x
+}
+
+def cmp = compare
+
+# A polymorphic wrapper: `step`'s dict here is forwarded from sum-with's own
+# hidden dict param rather than resolved to a concrete instance.
+def sum-with = fun xs init {
+	list.fold xs init step
+}
+
+def run = fun {
+	# bare polymorphic fn as a fold step, at int and at float (each must
+	# capture the matching numeric instance)
+	print (list.fold [1, 2, 3] 0 step)
+	print (list.fold [1.5, 2.5, 3.0] 0.0 step)
+	# bare compare-using fn as a sort comparator
+	print (list.sort [3, 1, 2] cmp)
+	# forwarded dict through a polymorphic wrapper, at both types
+	print (sum-with [10, 20, 30] 0)
+	print (sum-with [1.5, 2.5] 0.0)
+}
+
+def tests :: test.suite = [
+	test.case "trait-fn-as-value" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			6
+			7.0
+			[1, 2, 3]
+			60
+			4.0
+
+			"""
+	},
+]

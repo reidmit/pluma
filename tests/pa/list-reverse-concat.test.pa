@@ -1,0 +1,30 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (list.reverse [1, 2, 3, 4])
+	print (list.reverse [])
+	print (list.concat [1, 2] [3, 4, 5])
+	print (list.concat [] [1, 2])
+	print (list.concat [1, 2] [])
+}
+
+def tests :: test.suite = [
+	test.case "list-reverse-concat" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[4, 3, 2, 1]
+			[]
+			[1, 2, 3, 4, 5]
+			[1, 2]
+			[1, 2]
+
+			"""
+	},
+]

@@ -1,0 +1,40 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `??` on `result`: `ok` yields its payload, `err` yields the default
+# (the error value is discarded). Desugars to `result.or-else`.
+
+def parse = fun ok-it {
+	if ok-it {
+		ok 42
+	} else {
+		err "bad input"
+	}
+}
+
+def run = fun {
+	print (parse true ?? 0)
+	print (parse false ?? 0)
+
+	# the discarded error type can differ from the payload type
+	print (ok "value" ?? "default")
+	print (err 404 ?? "default")
+}
+
+def tests :: test.suite = [
+	test.case "coalesce-result" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			42
+			0
+			value
+			default
+
+			"""
+	},
+]

@@ -1,0 +1,34 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+enum tree {
+	empty
+	node int tree tree
+}
+
+def sum = fun t {
+	when t is tree.empty {
+		0
+	} is tree.node val l r {
+		val + sum l + sum r
+	}
+}
+
+def run = fun {
+	let l = tree.node 1 tree.empty tree.empty
+	let r = tree.node 3 tree.empty tree.empty
+	let t = tree.node 2 l r
+	print (sum t)
+}
+
+def tests :: test.suite = [
+	test.case "recursion" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "6\n"
+	},
+]

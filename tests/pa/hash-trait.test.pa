@@ -1,0 +1,32 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	# Hash deterministic per-type: int hashes to itself, bool to 0/1.
+	print (hash.hash 42)
+	print (hash.hash true)
+	print (hash.hash false)
+
+	# Same input → same hash.
+	let h1 = hash.hash "hello"
+	let h2 = hash.hash "hello"
+	print (h1 == h2)
+}
+
+def tests :: test.suite = [
+	test.case "hash-trait" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			42
+			1
+			0
+			true
+
+			"""
+	},
+]

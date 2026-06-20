@@ -1,0 +1,58 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Anonymous `...` rest: matches any tail but doesn't bind it.
+
+def kind = fun xs {
+	when xs is [] {
+		"none"
+	} is [_] {
+		"one"
+	} is [_, _, ...] {
+		"two-or-more"
+	} else {
+		"shouldn't happen"
+	}
+}
+
+def starts-with-zero = fun xs {
+	when xs is [0, ...] {
+		true
+	} else {
+		false
+	}
+}
+
+def run = fun {
+	print (kind [])
+	print (kind [42])
+	print (kind [1, 2])
+	print (kind [1, 2, 3, 4, 5])
+
+	print (to-string (starts-with-zero [0, 1, 2]))
+	print (to-string (starts-with-zero [1, 2, 3]))
+	print (to-string (starts-with-zero [0]))
+	print (to-string (starts-with-zero []))
+}
+
+def tests :: test.suite = [
+	test.case "list-pattern-anonymous-rest" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			none
+			one
+			two-or-more
+			two-or-more
+			true
+			false
+			true
+			false
+
+			"""
+	},
+]

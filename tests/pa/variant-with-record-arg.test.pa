@@ -1,0 +1,45 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# A constructor-pattern argument that is itself a record pattern needs
+# to be parenthesized (`some ({a: x})`) to disambiguate from the case
+# body's `{`. Exhaustiveness recognizes the all-binding record as a
+# catch-all of the variant.
+
+alias person {name :: string, score :: int}
+
+enum entry {
+	missing
+	found person
+}
+
+def describe = fun e {
+	when e is entry.found ({name: n, score: s}) {
+		"$(n): $(to-string s)"
+	} is entry.missing {
+		"absent"
+	}
+}
+
+def run = fun {
+	print (describe (entry.found {name: "reid", score: 90}))
+	print (describe (entry.found {name: "alice", score: 80}))
+	print (describe entry.missing)
+}
+
+def tests :: test.suite = [
+	test.case "variant-with-record-arg" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			reid: 90
+			alice: 80
+			absent
+
+			"""
+	},
+]

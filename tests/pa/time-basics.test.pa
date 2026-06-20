@@ -1,0 +1,127 @@
+use std/assert
+use std/error
+use std/task
+use std/test
+use std/time
+use std/sys/io
+
+def show-instant = fun label t {
+	io.print "$(label): $(time.to-iso t)"
+}
+
+def run = fun {
+	# Construct an instant and read it back various ways.
+	when time.make 2026 5 25 14 30 0 0 is ok t {
+		io.print (time.to-iso t)
+		io.print (time.format t "%Y-%m-%d %H:%M:%S")
+		io.print (time.format t "%A, %B %d %Y")
+
+		let p = time.to-parts t
+		io.print "$(to-string p.year)/$(to-string p.month)/$(to-string p.day) wd=$(to-string p.weekday)"
+
+		# Duration construction and read-back.
+		io.print "$(to-string (time.as-hours (time.days 2)))h in 2 days"
+		io.print "$(to-string (time.as-millis (time.seconds 3)))ms in 3s"
+
+		# Exact (duration) arithmetic.
+		show-instant "plus 90 min" (time.add t (time.minutes 90))
+		show-instant "minus 1 day" (time.subtract t (time.days 1))
+		io.print "diff: $(to-string (time.as-hours (time.diff (time.add-days t 1) t)))h"
+
+		# Calendar arithmetic clamps day-of-month.
+		when time.make 2024 1 31 0 0 0 0 is ok jan31 {
+			when time.add-months jan31 1 is ok feb {
+				show-instant "jan31 +1mo" feb
+			} is err e {
+				io.print (describe e)
+			}
+			when time.add-years jan31 1 is ok y {
+				show-instant "jan31 +1yr" y
+			} is err e {
+				io.print (describe e)
+			}
+		} is err e {
+			io.print (describe e)
+		}
+
+		# Comparisons.
+		let earlier = time.subtract t (time.hours 1)
+		io.print "before: $(to-string (time.before earlier t))"
+		io.print "after:  $(to-string (time.after earlier t))"
+		io.print "eq:     $(to-string (earlier == earlier))"
+		show-instant "min" (time.min earlier t)
+		show-instant "max" (time.max earlier t)
+		when time.compare earlier t is ordering.lt {
+			io.print "compare: lt"
+		} is ordering.eq {
+			io.print "compare: eq"
+		} is ordering.gt {
+			io.print "compare: gt"
+		}
+
+		# Unix round-trip.
+		io.print "unix: $(to-string (time.to-unix t))"
+		show-instant "from-unix" (time.from-unix (time.to-unix t))
+	} is err e {
+		io.print (describe e)
+	}
+
+	# Parsing: full timestamp, bare date, and a failure.
+	when time.parse-iso "2026-05-25T14:30:00Z" is ok t {
+		show-instant "parsed" t
+	} is err e {
+		io.print (describe e)
+	}
+	when time.parse-iso "2026-05-25" is ok t {
+		show-instant "parsed-date" t
+	} is err e {
+		io.print (describe e)
+	}
+	when time.parse-iso "not a time" is ok t {
+		show-instant "parsed" t
+	} is err e {
+		io.print (describe e)
+	}
+
+	# Invalid components are rejected.
+	when time.make 2026 2 30 0 0 0 0 is ok t {
+		show-instant "bad" t
+	} is err e {
+		io.print (describe e)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "time-basics" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			2026-05-25T14:30:00Z
+			2026-05-25 14:30:00
+			Monday, May 25 2026
+			2026/5/25 wd=1
+			48h in 2 days
+			3000ms in 3s
+			plus 90 min: 2026-05-25T16:00:00Z
+			minus 1 day: 2026-05-24T14:30:00Z
+			diff: 24h
+			jan31 +1mo: 2024-02-29T00:00:00Z
+			jan31 +1yr: 2025-01-31T00:00:00Z
+			before: true
+			after:  false
+			eq:     true
+			min: 2026-05-25T13:30:00Z
+			max: 2026-05-25T14:30:00Z
+			compare: lt
+			unix: 1779719400
+			from-unix: 2026-05-25T14:30:00Z
+			parsed: 2026-05-25T14:30:00Z
+			parsed-date: 2026-05-25T00:00:00Z
+			time: could not parse `not a time`
+			time: invalid date/time: day 30 is out of range 1..=28
+
+			"""
+	},
+]

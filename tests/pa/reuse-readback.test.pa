@@ -1,0 +1,35 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+# Soundness guard: the old dict `m` is read (`dict.size m`) *after* it is consumed by
+# `dict.insert`, so it is not dead-after the insert — reuse must NOT fire. With value
+# semantics, `dict.size m` is the size *before* this iteration's insert; summed over
+# i = 3, 2, 1 that is 0 + 1 + 2 = 3. In-place reuse would read the already-grown dict
+# and inflate the sum.
+def go = fun m i acc {
+	if i == 0 {
+		acc
+	} else {
+		let m2 = dict.insert m (to-string i) i
+		let old-size = dict.size m
+		go m2 (i - 1) (acc + old-size)
+	}
+}
+
+def run = fun {
+	let total = go (dict.empty ()) 3 0
+	print total
+}
+
+def tests :: test.suite = [
+	test.case "reuse-readback" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "3\n"
+	},
+]

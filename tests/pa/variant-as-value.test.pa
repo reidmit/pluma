@@ -1,0 +1,37 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+enum color {
+	red
+	green
+	blue
+}
+
+enum shape {
+	circle int
+	square int
+}
+
+def run = fun {
+	let c = color.red
+	print c
+	let make-square = shape.square
+	let s = make-square 5
+	print s
+}
+
+def tests :: test.suite = [
+	test.case "variant-as-value" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			color.red
+			shape.square 5
+
+			"""
+	},
+]

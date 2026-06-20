@@ -1,0 +1,69 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Trait methods are reachable under their bare names — `hash 42` instead of
+# `hash.hash 42`. The qualified form is still legal as an escape hatch.
+
+def describe = fun ord-result {
+	when ord-result is ordering.lt {
+		"less"
+	} is ordering.eq {
+		"equal"
+	} is ordering.gt {
+		"greater"
+	}
+}
+
+def run = fun {
+	# prelude `hash` trait
+	print (hash 42)
+	print (hash "hello")
+	print (hash true)
+	print (hash 42 == hash 42)
+
+	# prelude `ord` trait
+	print (describe (compare 1 2))
+	print (describe (compare "z" "a"))
+	print (describe (compare 5 5))
+
+	# prelude `numeric` trait — bare method names also work
+	print (add 1 2)
+	print (sub 10 3)
+	print (negate 7)
+
+	# parametric prelude instances resolve through bare calls too
+	print (describe (compare (some 1) (some 2)))
+	print (hash (some 7))
+
+	# qualified form keeps working as an escape hatch
+	print (hash.hash 42)
+	print (ord.compare 1 2)
+}
+
+def tests :: test.suite = [
+	test.case "bare-trait-methods" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			42
+			-6615550055289275125
+			1
+			true
+			less
+			greater
+			equal
+			3
+			7
+			-7
+			less
+			7
+			42
+			ordering.lt
+
+			"""
+	},
+]

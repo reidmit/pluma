@@ -1,0 +1,40 @@
+use std/assert
+use std/json
+use std/task
+use std/test
+use std/sys/io
+
+# Malformed input — error record carries 1-indexed line/col plus a
+# serde-style message from the pure-Pluma parser.
+def run = fun {
+	when json.parse "{bad json" is ok _v {
+		print "should not happen"
+	} is err e {
+		print e.message
+		print e.line
+		print e.col
+	}
+
+	# Trailing garbage past a valid value also errors.
+	when json.parse "42 extra" is ok _v {
+		print "should not happen"
+	} is err e {
+		print e.line
+	}
+}
+
+def tests :: test.suite = [
+	test.case "json-error" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			key must be a string at line 1 column 2
+			1
+			2
+			1
+
+			"""
+	},
+]

@@ -1,0 +1,34 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# no stdin.txt for this fixture, so stdin is empty — first read returns err
+def run = fun {
+	when io.read () is ok _ {
+		print "unexpected ok"
+	} is err msg {
+		print "first read: $(msg)"
+	}
+
+	# still err on subsequent reads
+	when io.read () is ok _ {
+		print "unexpected ok"
+	} is err msg {
+		print "second read: $(msg)"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "io-read-eof" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			first read: EOF
+			second read: EOF
+
+			"""
+	},
+]

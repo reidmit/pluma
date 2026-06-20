@@ -1,0 +1,39 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+# Stdlib pipeline: map → filter → fold over a built list.
+
+def range = fun n {
+	when n is 0 {
+		[]
+	} else {
+		list.concat (range (n - 1)) [n]
+	}
+}
+
+def run = fun {
+	let nums = range 200
+	let squared = list.map nums fun x {
+		x * x
+	}
+	let evens = list.filter squared fun x {
+		x % 2 == 0
+	}
+	let total = list.fold evens 0 fun acc x {
+		acc + x
+	}
+	print (to-string total)
+}
+
+def tests :: test.suite = [
+	test.case "map-filter-fold" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "1353400\n"
+	},
+]

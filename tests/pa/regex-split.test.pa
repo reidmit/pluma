@@ -1,0 +1,39 @@
+use std/assert
+use std/regex as re
+use std/task
+use std/test
+use std/sys/io
+
+def ws = `whitespace+`
+
+def run = fun {
+	# Whitespace-collapsing split.
+	print (re.split ws "  alpha   beta\tgamma\ndelta  ")
+
+	# Empty-string entries at the boundaries when the pattern matches
+	# at the very start/end.
+	print (re.split `","` ",a,b,")
+
+	# No match — single-element list with the whole input.
+	print (re.split `","` "no commas here")
+
+	# Inline regex literal as an argument — the new backtick syntax
+	# means no paren-wrapping or pre-binding needed.
+	print (re.split `digit+` "abc 1 def 22 ghi")
+}
+
+def tests :: test.suite = [
+	test.case "regex-split" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[, alpha, beta, gamma, delta, ]
+			[, a, b, ]
+			[no commas here]
+			[abc ,  def ,  ghi]
+
+			"""
+	},
+]

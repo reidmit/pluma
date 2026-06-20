@@ -1,0 +1,50 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Basic list patterns: empty, exact-length, and rest-capturing.
+
+def head-or-zero = fun xs {
+	when xs is [] {
+		0
+	} is [n, ...] {
+		n
+	}
+}
+
+def length = fun xs {
+	when xs is [] {
+		0
+	} is [_, ...rest] {
+		1 + length rest
+	}
+}
+
+def run = fun {
+	print (to-string (head-or-zero []))
+	print (to-string (head-or-zero [10]))
+	print (to-string (head-or-zero [10, 20, 30]))
+
+	print (to-string (length []))
+	print (to-string (length [1]))
+	print (to-string (length [1, 2, 3, 4, 5]))
+}
+
+def tests :: test.suite = [
+	test.case "list-pattern-basic" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			0
+			10
+			10
+			0
+			1
+			5
+
+			"""
+	},
+]

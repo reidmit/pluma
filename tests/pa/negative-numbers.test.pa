@@ -1,0 +1,27 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (0 - 5)
+	print (-5)
+	print (-5 + 10)
+	print (-5)
+}
+
+def tests :: test.suite = [
+	test.case "negative-numbers" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			-5
+			-5
+			5
+			-5
+
+			"""
+	},
+]

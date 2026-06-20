@@ -1,0 +1,48 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+def double = fun n {
+	n * 2
+}
+
+def run = fun {
+	# bare callee (no extra args): `x |> f` => `f x`
+	5 |> double |> print
+
+	# callee with extra args: pipes LHS as first arg
+	[1, 2, 3, 4, 5] |> list.filter fun n { n > 2 } |> list.map fun n { n * 10 } |> print
+
+	# multi-line pipelines: line breaks before an infix op are allowed
+	[1, 2, 3, 4, 5] |> list.filter fun n { n > 2 } |> list.map fun n { n * 10 } |> print
+
+	# arithmetic split across lines
+	let sum = 1 + 2 + 3
+	print sum
+
+	# single-arg stdlib functions
+	[1, 2, 3] |> list.length |> print
+
+	# chains terminating in print
+	"hello" |> print
+}
+
+def tests :: test.suite = [
+	test.case "pipeline" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			10
+			[30, 40, 50]
+			[30, 40, 50]
+			6
+			3
+			hello
+
+			"""
+	},
+]

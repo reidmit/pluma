@@ -1,0 +1,49 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Exercises the primitive `ord` instances' builtin-wrapper path on every backend.
+# Calling `ord.compare` as a first-class trait method (rather than `<`/`>`, which
+# devirtualize to direct comparison opcodes) is what forces codegen to emit the
+# `int/float/string/bytes-compare` wrappers. Printing the raw `ordering` result
+# also exercises the variant's display-name field — the bug that made the wasm
+# wrappers build a malformed (3-field) `ordering` variant.
+def run = fun {
+	print (ord.compare 1 2)
+	print (ord.compare 5 5)
+	print (ord.compare 9 4)
+	print (ord.compare 1.0 2.0)
+	print (ord.compare 2.5 2.5)
+	print (ord.compare 9.0 4.0)
+	print (ord.compare "a" "b")
+	print (ord.compare "x" "x")
+	print (ord.compare "z" "a")
+	print (ord.compare 'a' 'b')
+	print (ord.compare 'xx' 'xx')
+	print (ord.compare 'z' 'a')
+}
+
+def tests :: test.suite = [
+	test.case "ord-compare-wrappers" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			ordering.lt
+			ordering.eq
+			ordering.gt
+			ordering.lt
+			ordering.eq
+			ordering.gt
+			ordering.lt
+			ordering.eq
+			ordering.gt
+			ordering.lt
+			ordering.eq
+			ordering.gt
+
+			"""
+	},
+]

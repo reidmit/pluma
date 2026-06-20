@@ -1,0 +1,45 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	let m = dict.empty ()
+	let m = dict.insert m "a" 10
+	let m = dict.insert m "b" 20
+	let m = dict.insert m "c" 30
+
+	# fold sums values; iteration order is unspecified, but the sum isn't.
+	let total = dict.fold m 0 fun acc _k v {
+		acc + v
+	}
+	print total
+
+	# dict.map applies a function over values; keys are preserved.
+	let doubled = dict.map m fun n {
+		n * 2
+	}
+	print (dict.entries doubled)
+
+	# filter drops entries whose predicate returns false.
+	let kept = dict.filter m fun _k v {
+		v > 15
+	}
+	print (dict.entries kept)
+}
+
+def tests :: test.suite = [
+	test.case "core-dict-fold" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			60
+			[(b, 40), (c, 60), (a, 20)]
+			[(b, 20), (c, 30)]
+
+			"""
+	},
+]

@@ -1,0 +1,48 @@
+use std/assert
+use std/dict
+use std/task
+use std/test
+use std/sys/io
+
+# The dict operations now written in pure Pluma over the `entries` /
+# `lookup` / `insert` primitives. `contains-key`, `from-entries`, and
+# `merge` each call another `where (hash k)` function and rely on the
+# hash dictionary being forwarded into that nested call.
+
+def run = fun {
+	let m = dict.from-entries [("x", 1), ("y", 2), ("x", 9)]
+	# later pairs win for a repeated key, first-seen position is kept
+	print (dict.keys m)
+	print (dict.values m)
+
+	print (dict.contains-key m "x")
+	print (dict.contains-key m "z")
+
+	print (dict.fold m 0 fun acc _k v {
+		acc + v
+	})
+
+	let other = dict.from-entries [("y", 20), ("z", 30)]
+	let merged = dict.merge m other
+	print (dict.keys merged)
+	print (dict.values merged)
+}
+
+def tests :: test.suite = [
+	test.case "core-dict-derived" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			[x, y]
+			[9, 2]
+			true
+			false
+			11
+			[z, x, y]
+			[30, 9, 20]
+
+			"""
+	},
+]

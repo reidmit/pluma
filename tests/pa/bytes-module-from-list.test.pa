@@ -1,0 +1,32 @@
+use std/assert
+use std/bytes
+use std/task
+use std/test
+use std/sys/io
+
+def show = fun r {
+	when r is ok b {
+		print (to-string b)
+	} is err e {
+		print e
+	}
+}
+
+def run = fun {
+	show (bytes.from-list [65, 66, 67])
+	show (bytes.from-list [137, 80, 78, 71])
+	show (bytes.from-list [0, 255])
+	show (bytes.from-list [])
+	show (bytes.from-list [256])
+	show (bytes.from-list [-1])
+}
+
+def tests :: test.suite = [
+	test.case "bytes-module-from-list" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "'ABC'\n'\\x89PNG'\n'\\x00\\xff'\n''\nbyte out of range (0..256): 256\nbyte out of range (0..256): -1\n"
+	},
+]

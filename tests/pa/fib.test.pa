@@ -1,0 +1,30 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Naive recursive fibonacci. Stresses non-tail recursion.
+
+def fib = fun n {
+	when n is 0 {
+		0
+	} is 1 {
+		1
+	} else {
+		fib (n - 1) + fib (n - 2)
+	}
+}
+
+def run = fun {
+	print (to-string (fib 24))
+}
+
+def tests :: test.suite = [
+	test.case "fib" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "46368\n"
+	},
+]

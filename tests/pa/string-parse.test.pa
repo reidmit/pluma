@@ -1,0 +1,84 @@
+use std/assert
+use std/string
+use std/task
+use std/test
+use std/sys/io
+
+def show-int = fun r {
+	when r is ok n {
+		print (to-string n)
+	} is err _ {
+		print "err"
+	}
+}
+
+def show-float = fun r {
+	when r is ok n {
+		print (to-string n)
+	} is err _ {
+		print "err"
+	}
+}
+
+def run = fun {
+	# int — happy paths
+	show-int (string.to-int "42")
+	show-int (string.to-int "-7")
+	show-int (string.to-int "+5")
+	show-int (string.to-int "0")
+
+	# int — sad paths
+	show-int (string.to-int "")
+	show-int (string.to-int "abc")
+	show-int (string.to-int "42abc")
+	show-int (string.to-int "3.14")
+	# not an int
+	show-int (string.to-int " 42 ")
+
+	# no auto-trim
+
+	# float — happy paths
+	show-float (string.to-float "3.14")
+	show-float (string.to-float "-2.5")
+	show-float (string.to-float "0.0")
+	show-float (string.to-float "1e2")
+	show-float (string.to-float "42")
+
+	# int parses as float
+
+	# float — sad paths
+	show-float (string.to-float "")
+	show-float (string.to-float "abc")
+
+	# common pattern: trim then parse
+	show-int (string.to-int (string.trim "  100  "))
+}
+
+def tests :: test.suite = [
+	test.case "string-parse" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			42
+			-7
+			5
+			0
+			err
+			err
+			err
+			err
+			err
+			3.14
+			-2.5
+			0.0
+			100.0
+			42.0
+			err
+			err
+			100
+
+			"""
+	},
+]

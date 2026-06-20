@@ -1,0 +1,28 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (list.length [1, 2, 3])
+	print (list.length [])
+	print (list.is-empty [])
+	print (list.is-empty [1])
+}
+
+def tests :: test.suite = [
+	test.case "list-length" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			0
+			true
+			false
+
+			"""
+	},
+]

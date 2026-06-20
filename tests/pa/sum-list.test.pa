@@ -1,0 +1,41 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Build a long cons-list and fold-sum it.
+
+enum int-list {
+	empty
+	cons int int-list
+}
+
+def make-list = fun n {
+	when n is 0 {
+		int-list.empty
+	} else {
+		int-list.cons n (make-list (n - 1))
+	}
+}
+
+def sum = fun xs {
+	when xs is int-list.empty {
+		0
+	} is int-list.cons head tail {
+		head + sum tail
+	}
+}
+
+def run = fun {
+	print (to-string (sum (make-list 1000)))
+}
+
+def tests :: test.suite = [
+	test.case "sum-list" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "500500\n"
+	},
+]

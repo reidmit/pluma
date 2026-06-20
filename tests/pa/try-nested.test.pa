@@ -1,0 +1,39 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Nested `try`s in distinct functions. Demonstrates that each carrier's
+# `try` dispatch is independent — the inner function's `try` doesn't
+# leak constraints into the outer's.
+
+def double-ok = fun n {
+	try a = ok n
+	try b = ok (a + 1)
+	ok (b + 1)
+}
+
+def chain = fun x {
+	try v = double-ok x
+	try w = double-ok v
+	ok w
+}
+
+def run = fun {
+	let r = chain 1
+	when r is ok v {
+		print v
+	} is err _ {
+		print (0 - 1)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "try-nested" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "5\n"
+	},
+]

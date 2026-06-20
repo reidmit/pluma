@@ -1,0 +1,47 @@
+use std/assert
+use std/dict
+use std/hex
+use std/task
+use std/test
+use std/sys/io
+
+# `wire` over `dict`. A dict encodes as a length-
+# prefixed sequence of (key, value) pairs, in a canonical key-sorted order so
+# the bytes are deterministic regardless of insertion order. Decode rebuilds
+# the hash buckets via the same primitive-key hashing `dict.lookup` uses, so
+# lookups on the decoded dict work. Compound keys are rejected at compile time.
+
+def run = fun {
+	let scores = dict.from-entries [("ada", 100), ("bob", 50), ("cy", 75)]
+	let encoded = wire.encode scores
+	print "encoded: $(hex.encode encoded)"
+
+	let back :: result (dict string int) wire-error = wire.decode encoded
+	when back is ok d {
+		print "ada = $(to-string (dict.lookup d "ada" ?? 0))"
+		print "size = $(to-string (dict.size d))"
+	} is err _e {
+		print "decode failed"
+	}
+
+	# Deterministic: same entries, different insertion order -> same bytes.
+	let a = wire.encode (dict.from-entries [(1, "x"), (2, "y")])
+	let b = wire.encode (dict.from-entries [(2, "y"), (1, "x")])
+	print "order-independent: $(to-string (a == b))"
+}
+
+def tests :: test.suite = [
+	test.case "wire-dict" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			encoded: 03026379960103616461c80103626f6264
+			ada = 100
+			size = 3
+			order-independent: true
+
+			"""
+	},
+]

@@ -1,0 +1,59 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def describe = fun result {
+	when result is ordering.lt {
+		"less"
+	} is ordering.eq {
+		"equal"
+	} is ordering.gt {
+		"greater"
+	}
+}
+
+def run = fun {
+	# Parametric `ord` on `option a` is declared in the baked-in prelude
+	# (compiler/src/prelude.pa). User modules see it without importing.
+	let a = some 1
+	let b = some 2
+	print (describe (ord.compare a b))
+
+	# less
+	print (describe (ord.compare a a))
+
+	# equal
+
+	# Nested chain — `ord` on `option (option int)` recurses through two
+	# parametric ord-on-option instantiations and bottoms out at the
+	# concrete `ord on int`.
+	let p = some (some 1)
+	let q = some (some 5)
+	print (describe (ord.compare p q))
+
+	# less
+
+	# Parametric `hash` on `option a` is the same shape.
+	let h1 = hash.hash (some 42)
+	let h2 = hash.hash (some 42)
+	print (h1 == h2)
+}
+
+# true
+
+def tests :: test.suite = [
+	test.case "prelude-parametric" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			less
+			equal
+			less
+			true
+
+			"""
+	},
+]

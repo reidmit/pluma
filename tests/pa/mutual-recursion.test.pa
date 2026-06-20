@@ -1,0 +1,43 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def is-even = fun n {
+	when n is 0 {
+		true
+	} else {
+		is-odd (n - 1)
+	}
+}
+
+def is-odd = fun n {
+	when n is 0 {
+		false
+	} else {
+		is-even (n - 1)
+	}
+}
+
+def run = fun {
+	print (is-even 0)
+	print (is-even 4)
+	print (is-even 7)
+	print (is-odd 3)
+}
+
+def tests :: test.suite = [
+	test.case "mutual-recursion" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			true
+			false
+			true
+
+			"""
+	},
+]

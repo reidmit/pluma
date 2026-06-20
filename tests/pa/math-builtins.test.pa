@@ -1,0 +1,41 @@
+use std/assert
+use std/math
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print (math.to-float 5)
+	print (math.to-float 0)
+	print (math.to-int 3.7)
+	print (math.to-int (-3.7))
+	print (math.sqrt 16.0)
+	print (math.sqrt 2.0)
+	print (math.abs (-7))
+	print (math.abs 7)
+
+	# roundtrip
+	let x = math.to-int (math.sqrt (math.to-float 25))
+	print x
+}
+
+def tests :: test.suite = [
+	test.case "math-builtins" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			5.0
+			0.0
+			3
+			-3
+			4.0
+			1.4142135623730951
+			7
+			7
+			5
+
+			"""
+	},
+]

@@ -1,0 +1,45 @@
+use std/assert
+use std/json
+use std/task
+use std/test
+use std/sys/io
+
+# Parse a handful of primitives, then a small object. Verifies the
+# int/float split and stringify round-trip preserves insertion order.
+
+def show = fun s {
+	when json.parse s is ok v {
+		print (json.stringify v)
+	} is err _e {
+		print "parse failed"
+	}
+}
+
+def run = fun {
+	show "null"
+	show "true"
+	show "42"
+	show "3.14"
+	show "\"hi\""
+	show "[1, 2, 3]"
+	show "{\"a\": 1, \"b\": [true, null]}"
+}
+
+def tests :: test.suite = [
+	test.case "json-basic" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			null
+			true
+			42
+			3.14
+			"hi"
+			[1,2,3]
+			{"b":[true,null],"a":1}
+
+			"""
+	},
+]

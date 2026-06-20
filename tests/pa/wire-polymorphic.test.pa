@@ -1,0 +1,50 @@
+use std/assert
+use std/hex
+use std/task
+use std/test
+use std/sys/io
+
+# Polymorphic `wire` use: a function generic over any wire-able type forwards
+# the synthesized schema as a hidden dict parameter.
+# The caller resolves the concrete schema at each call site.
+
+# Constraint inferred from the `encode` use — no explicit `where`.
+def dump = wire.encode
+
+# Explicit `where (wire a)`, round-tripping through the polymorphic boundary.
+def roundtrip :: fun a -> result a wire-error where (wire a) = fun x {
+	wire.decode (wire.encode x)
+}
+
+def run = fun {
+	print "int:  $(hex.encode (dump 7))"
+	print "str:  $(hex.encode (dump "hi"))"
+	print "bool: $(hex.encode (dump true))"
+
+	let a :: result int wire-error = roundtrip 99
+	print "rt-int: $(to-string (a ?? 0))"
+
+	let b :: result string wire-error = roundtrip "hello"
+	print "rt-str: $(b ?? "?")"
+
+	let c :: result (option int) wire-error = roundtrip (some 42)
+	print "rt-opt: $(to-string ((c ?? none) ?? 0))"
+}
+
+def tests :: test.suite = [
+	test.case "wire-polymorphic" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			int:  0e
+			str:  026869
+			bool: 01
+			rt-int: 99
+			rt-str: hello
+			rt-opt: 42
+
+			"""
+	},
+]

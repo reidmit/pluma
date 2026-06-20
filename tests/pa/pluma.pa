@@ -1,0 +1,14 @@
+use std/package
+
+# Package root for the migrated `run/` fixtures: each `<name>.test.pa` keeps a
+# fixture's program verbatim and asserts on its captured stdout via `io.capture`,
+# so the whole corpus runs under one V8 boot instead of one OS process per fixture.
+public def package :: package.info = {
+	name: "run-fixtures",
+	version: "0.0.1",
+	authors: [],
+	description: "Migrated run/ fixtures, executed by `pluma test`.",
+	license: "",
+	repository: "",
+	dependencies: [],
+}

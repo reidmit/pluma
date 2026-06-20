@@ -1,0 +1,51 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Wildcard `try` — the bound value isn't named. Useful for chaining a
+# fallible side effect whose ok payload isn't interesting.
+
+def step = fun n {
+	if n > 0 {
+		ok n
+	} else {
+		err "non-positive"
+	}
+}
+
+def chain = fun x {
+	try step x
+	try step (x + 1)
+	ok x
+}
+
+def run = fun {
+	let r1 = chain 3
+	when r1 is ok v {
+		print v
+	} is err _ {
+		print (0 - 1)
+	}
+
+	let r2 = chain (0 - 2)
+	when r2 is ok v {
+		print v
+	} is err _ {
+		print (0 - 1)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "try-wildcard" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			3
+			-1
+
+			"""
+	},
+]

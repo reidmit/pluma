@@ -1,0 +1,43 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `to-string`/print/interpolation over a `ref` — `ref <inner>`, recursively.
+def run = fun {
+	let r = ref.new 5
+	print r
+	# ref 5
+	print (to-string r)
+	# ref 5
+	print "cell = $(to-string r)"
+	# cell = ref 5
+
+	# the inner value is formatted recursively, including compounds
+	let pair = ref.new (1, [2, 3])
+	print pair
+	# ref (1, [2, 3])
+
+	# nested refs
+	let outer = ref.new (ref.new true)
+	print outer
+}
+
+# ref ref true
+
+def tests :: test.suite = [
+	test.case "ref-tostring" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			ref 5
+			ref 5
+			cell = ref 5
+			ref (1, [2, 3])
+			ref ref true
+
+			"""
+	},
+]

@@ -1,0 +1,47 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+enum option {
+	some int
+	none
+}
+
+enum result {
+	ok option
+	err string
+}
+
+def unwrap = fun r {
+	when r is result.ok inner {
+		when inner is option.some x {
+			x
+		} is option.none {
+			0
+		}
+	} is result.err _msg {
+		0 - 1
+	}
+}
+
+def run = fun {
+	print (unwrap (result.ok (option.some 42)))
+	print (unwrap (result.ok option.none))
+	print (unwrap (result.err "oops"))
+}
+
+def tests :: test.suite = [
+	test.case "nested-enum" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			42
+			0
+			-1
+
+			"""
+	},
+]

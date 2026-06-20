@@ -1,0 +1,75 @@
+use std/assert
+use std/regex
+use std/task
+use std/test
+use std/sys/io
+
+def one-digit = `digit`
+
+def two-digits = `digit digit`
+
+def one-letter = `letter`
+
+def one-word-char = `word`
+
+def one-space = `whitespace`
+
+def anything = `any`
+
+def run = fun {
+	# `digit` matches a single ASCII digit
+	print (regex.matches one-digit "5")
+	print (regex.matches one-digit "x")
+	print (regex.matches two-digits "42")
+	print (regex.matches two-digits "4x")
+
+	# `letter` matches ASCII alphabetic
+	print (regex.matches one-letter "z")
+	print (regex.matches one-letter "Z")
+	print (regex.matches one-letter "9")
+
+	# `word` matches letters, digits, and underscore
+	print (regex.matches one-word-char "a")
+	print (regex.matches one-word-char "0")
+	print (regex.matches one-word-char "_")
+	print (regex.matches one-word-char "-")
+
+	# `whitespace` matches space / tab / newline / carriage return
+	print (regex.matches one-space " ")
+	print (regex.matches one-space "\t")
+	print (regex.matches one-space "x")
+
+	# `any` matches any single character
+	print (regex.matches anything "a")
+	print (regex.matches anything "1")
+	print (regex.matches anything "")
+}
+
+def tests :: test.suite = [
+	test.case "regex-character-classes" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			false
+			true
+			false
+			true
+			true
+			false
+			true
+			true
+			true
+			false
+			true
+			true
+			false
+			true
+			true
+			false
+
+			"""
+	},
+]

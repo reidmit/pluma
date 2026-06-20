@@ -1,0 +1,66 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+enum color {
+	red
+	green
+	blue
+}
+
+def run = fun {
+	# primitives
+	print ("hello" == "hello")
+	print ("hello" == "world")
+	print (true == true)
+	print (true == false)
+
+	# nothing
+	print (() == ())
+
+	# tuples (structural)
+	print ((1, "a") == (1, "a"))
+	print ((1, "a") == (1, "b"))
+
+	# records (field order doesn't matter)
+	print ({x: 1, y: 2} == {x: 1, y: 2})
+	print ({y: 2, x: 1} == {x: 1, y: 2})
+	print ({x: 1, y: 2} == {x: 1, y: 3})
+
+	# enum variants
+	print (color.red == color.red)
+	print (color.red == color.blue)
+
+	# lists
+	print ([1, 2, 3] == [1, 2, 3])
+	print ([1, 2, 3] == [1, 2])
+	print ([1, 2, 3] == [1, 2, 4])
+}
+
+def tests :: test.suite = [
+	test.case "equality-structural" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			true
+			false
+			true
+			false
+			true
+			true
+			false
+			true
+			true
+			false
+			true
+			false
+			true
+			false
+			false
+
+			"""
+	},
+]

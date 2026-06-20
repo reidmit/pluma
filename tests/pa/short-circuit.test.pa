@@ -1,0 +1,63 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `and` and `or` short-circuit: the right operand only runs when the left
+# doesn't already decide the result. A trapping right operand (here, division
+# by zero) is therefore safe behind a guarding left.
+
+def loud = fun name result {
+	print "eval $(name)"
+	result
+}
+
+def run = fun {
+	# `and` skips the right operand when the left is false — the trap never runs.
+	if false and 10 / 0 == 0 {
+		print "and-then"
+	} else {
+		print "and short-circuited"
+	}
+
+	# `or` skips the right operand when the left is true.
+	if true or 10 / 0 == 0 {
+		print "or short-circuited"
+	} else {
+		print "or-else"
+	}
+
+	# Evaluation stops at the operand that decides the result.
+	print (to-string (loud "a1" true and loud "a2" false and loud "a3" true))
+	print (to-string (loud "b1" false or loud "b2" true or loud "b3" true))
+
+	# Truth tables still hold when both operands run.
+	print (to-string (true and true))
+	print (to-string (true and false))
+	print (to-string (false or true))
+	print (to-string (false or false))
+}
+
+def tests :: test.suite = [
+	test.case "short-circuit" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			and short-circuited
+			or short-circuited
+			eval a1
+			eval a2
+			false
+			eval b1
+			eval b2
+			true
+			true
+			false
+			true
+			false
+
+			"""
+	},
+]

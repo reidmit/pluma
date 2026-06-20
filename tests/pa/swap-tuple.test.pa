@@ -1,0 +1,32 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def swap = fun pair {
+	when pair is (a, b) {
+		(b, a)
+	}
+}
+
+def run = fun {
+	let result = swap (1, 2)
+	when result is (a, b) {
+		print a
+		print b
+	}
+}
+
+def tests :: test.suite = [
+	test.case "swap-tuple" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			2
+			1
+
+			"""
+	},
+]

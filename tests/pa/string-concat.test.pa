@@ -1,0 +1,28 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	print ("foo" ++ "bar")
+	let name = "world"
+	print ("hello, " ++ name ++ "!")
+	print ("" ++ "edge" ++ "")
+	print (to-string ("a" ++ "b" == "ab"))
+}
+
+def tests :: test.suite = [
+	test.case "string-concat" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			foobar
+			hello, world!
+			edge
+			true
+
+			"""
+	},
+]
