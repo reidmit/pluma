@@ -75,7 +75,7 @@ public def content-type :: fun string -> string = fun path {
 # revalidated. The `loader.js` entry point is the opposite: it names the hashed wasm, so
 # a stale copy would point at a file a new deploy has already replaced -- it must
 # revalidate every load (a cheap 304 when unchanged). Everything else gets a modest cache.
-def cache-control :: fun string -> string = fun path {
+public def cache-control :: fun string -> string = fun path {
 	if is-fingerprinted path {
 		"public, max-age=31536000, immutable"
 	} else if string.ends-with path "/loader.js" {
@@ -94,7 +94,7 @@ def is-fingerprinted :: fun string -> bool = fun path {
 	if n >= 3 {
 		let digest = list.get segs (n - 2)
 		let cs = string.chars digest
-		list.length cs >= 8 and list.all cs (fun c { string.contains "0123456789abcdef" c })
+		list.length cs >= 8 and list.all cs fun c { string.contains "0123456789abcdef" c }
 	} else {
 		false
 	}
@@ -103,7 +103,7 @@ def is-fingerprinted :: fun string -> bool = fun path {
 # A path is safe to join onto the root if it's anchored at `/` and holds no `..`
 # segment -- so a crafted request can't climb out of the served directory. The
 # HTTP path is attacker-controlled, so this is the boundary that has to check.
-def is-safe :: fun string -> bool = fun path {
+public def is-safe :: fun string -> bool = fun path {
 	if string.contains path ".." {
 		false
 	} else {

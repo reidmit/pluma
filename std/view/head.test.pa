@@ -1,0 +1,65 @@
+use std/assert
+use std/test
+use std/view
+use std/view/head
+
+# `head.to-string` is `view.to-string` over the wrapped element, so these pin the
+# rendered `<head>` markup each builder produces: void tags self-close, `<title>`
+# escapes its text, and the inline `<style>` ships its CSS verbatim.
+
+def tests :: test.suite = [
+	test.case "title renders and escapes its text" fun {
+		renders (head.title "Pluma & co") "<title>Pluma &amp; co</title>"
+	},
+	test.case "meta-charset renders a self-closing meta" fun {
+		renders (head.meta-charset "utf-8") "<meta charset=\"utf-8\">"
+	},
+	test.case "meta-viewport renders a named meta" fun {
+		renders (head.meta-viewport "width=device-width, initial-scale=1") "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+	},
+	test.case "meta-description renders a named meta" fun {
+		renders (head.meta-description "A small functional language.") "<meta name=\"description\" content=\"A small functional language.\">"
+	},
+	test.case "meta renders a generic name/content pair" fun {
+		renders (head.meta "theme-color" "#0b0b0b") "<meta name=\"theme-color\" content=\"#0b0b0b\">"
+	},
+	test.case "meta-property renders a property-keyed meta" fun {
+		renders (head.meta-property "og:title" "Pluma") "<meta property=\"og:title\" content=\"Pluma\">"
+	},
+	test.case "link renders a generic rel/href pair" fun {
+		renders (head.link "manifest" "/app.webmanifest") "<link rel=\"manifest\" href=\"/app.webmanifest\">"
+	},
+	test.case "stylesheet renders a stylesheet link" fun {
+		renders (head.stylesheet "/app.css") "<link rel=\"stylesheet\" href=\"/app.css\">"
+	},
+	test.case "icon renders an icon link" fun {
+		renders (head.icon "/favicon.svg") "<link rel=\"icon\" href=\"/favicon.svg\">"
+	},
+	test.case "preconnect renders a preconnect link" fun {
+		renders (head.preconnect "https://fonts.example") "<link rel=\"preconnect\" href=\"https://fonts.example\">"
+	},
+	test.case "base renders a self-closing base" fun {
+		renders (head.base "/") "<base href=\"/\">"
+	},
+	test.case "style ships its CSS verbatim (raw text, not escaped)" fun {
+		# the `>` child combinator would be escaped if `<style>` were normal text
+		renders (head.style ".a > .b { color: red }") "<style>.a > .b { color: red }</style>"
+	},
+	test.case "script-src renders an external script with a closing tag" fun {
+		renders (head.script-src "/app.js") "<script src=\"/app.js\"></script>"
+	},
+	test.case "element is the escape hatch for extra attributes" fun {
+		let h = head.element "link" [
+			view.attr "rel" "preload",
+			view.attr "href" "/f.woff2",
+			view.attr "as" "font",
+			view.attr "crossorigin" "",
+		] []
+		renders h "<link rel=\"preload\" href=\"/f.woff2\" as=\"font\" crossorigin=\"\">"
+	},
+]
+
+# Render a head entry and check its HTML against `want`.
+def renders :: fun head string -> result nothing string = fun h want {
+	assert.equals (head.to-string h) want
+}

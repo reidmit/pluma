@@ -1,0 +1,63 @@
+use std/assert
+use std/test
+use std/sys/static
+
+# The pure logic behind `static.serve`: extension -> MIME type, path -> cache
+# policy, and the path-safety guard. The effectful `serve`/`serve-file` (they read
+# the filesystem under `task`) are exercised by the fullstack run fixtures, not here
+# -- the test runner is pure.
+
+def tests :: test.suite = [
+	test.case "content-type maps common extensions" fun {
+		assert.all [
+			assert.equals (static.content-type "/index.html") "text/html; charset=utf-8",
+			assert.equals (static.content-type "/app.css") "text/css; charset=utf-8",
+			assert.equals (static.content-type "/logo.svg") "image/svg+xml",
+			assert.equals (static.content-type "/photo.png") "image/png",
+			assert.equals (static.content-type "/body.woff2") "font/woff2",
+			assert.equals (static.content-type "/app.wasm") "application/wasm",
+		]
+	},
+	test.case "content-type is case-insensitive on the extension" fun {
+		assert.equals (static.content-type "/PHOTO.JPG") "image/jpeg"
+	},
+	test.case "content-type honours the last dotted segment" fun {
+		# a versioned filename: only the trailing extension decides the type
+		assert.equals (static.content-type "/app.v2.css") "text/css; charset=utf-8"
+	},
+	test.case "content-type falls back to octet-stream for unknown extensions" fun {
+		assert.equals (static.content-type "/archive.tar.zst") "application/octet-stream"
+	},
+	test.case "content-type falls back for an extension-less path" fun {
+		assert.equals (static.content-type "/README") "application/octet-stream"
+	},
+	test.case "cache-control marks a fingerprinted asset immutable for a year" fun {
+		assert.equals (static.cache-control "/app.9f2c1ab34d5e6f70.wasm") "public, max-age=31536000, immutable"
+	},
+	test.case "cache-control makes loader.js revalidate every load" fun {
+		assert.equals (static.cache-control "/loader.js") "no-cache"
+	},
+	test.case "cache-control gives a plain asset a modest cache" fun {
+		assert.equals (static.cache-control "/logo.svg") "public, max-age=3600"
+	},
+	test.case "cache-control treats a short non-hex segment as not fingerprinted" fun {
+		# `v2` is too short and not a hex digest, so this is a plain versioned name
+		assert.equals (static.cache-control "/app.v2.css") "public, max-age=3600"
+	},
+	test.case "cache-control treats a non-hex inner segment as not fingerprinted" fun {
+		# long enough but holds a `z` -- not a content hash
+		assert.equals (static.cache-control "/app.zzzzzzzzzzzzzzzz.wasm") "public, max-age=3600"
+	},
+	test.case "is-safe accepts an anchored path with no parent segment" fun {
+		assert.is-true (static.is-safe "/fonts/body.woff2")
+	},
+	test.case "is-safe rejects a path that climbs out with .." fun {
+		assert.is-false (static.is-safe "/../etc/passwd")
+	},
+	test.case "is-safe rejects an embedded .. segment" fun {
+		assert.is-false (static.is-safe "/assets/../../secret")
+	},
+	test.case "is-safe rejects a path not anchored at /" fun {
+		assert.is-false (static.is-safe "relative/path")
+	},
+]
