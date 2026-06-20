@@ -71,21 +71,27 @@ public def meta-description :: fun string -> head = fun content {
 
 # A generic `<meta name="..." content="...">`: the catch-all for named metadata
 # (`theme-color`, `robots`, ...).
-public def meta :: fun string string -> head = fun name content {
-	head.tag (view.element "meta" [view.attr "name" name, view.attr "content" content] [])
+public def meta :: fun string string -> head = using view {
+	fun name content {
+		head.tag (.element "meta" [.attr "name" name, .attr "content" content] [])
+	}
 }
 
 # A `<meta property="..." content="...">`: the `property`-keyed form social cards use
 # (Open Graph's `og:title`, `og:image`, ...).
-public def meta-property :: fun string string -> head = fun property content {
-	head.tag (view.element "meta" [view.attr "property" property, view.attr "content" content] [])
+public def meta-property :: fun string string -> head = using view {
+	fun property content {
+		head.tag (.element "meta" [.attr "property" property, .attr "content" content] [])
+	}
 }
 
 # A generic `<link rel="..." href="...">`: the catch-all for linked resources. The
 # common cases have their own builders (`stylesheet`, `icon`, `preconnect`); reach for
 # `element` when the link needs more attributes.
-public def link :: fun string string -> head = fun rel href {
-	head.tag (view.element "link" [view.attr "rel" rel, view.attr "href" href] [])
+public def link :: fun string string -> head = using view {
+	fun rel href {
+		head.tag (.element "link" [.attr "rel" rel, .attr "href" href] [])
+	}
 }
 
 # `<link rel="stylesheet" href="...">`: an external CSS file.

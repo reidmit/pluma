@@ -80,7 +80,11 @@ public def document :: fun {
 	body :: view,
 } -> string = fun page {
 	# Render the body first, so every `view.styled` it uses has registered its rule
-	# before `css.style-tag` collects them below.
+	# before `css.style-tag` collects them below. The body HTML is emitted with no
+	# leading whitespace inside `<body>` (`<body>$(body-html)`, not on its own indented
+	# line): the client hydrates against `body`'s first child, so a pretty-printing
+	# newline there would make that child a stray text node and the hydrator would walk
+	# the wrong tree.
 	let body-html = view.to-string page.body
 	let head-tags = [
 		head.meta-charset "utf-8",
@@ -95,8 +99,7 @@ public def document :: fun {
 			<head>
 				$(head-html)$(css.style-tag ())
 			</head>
-			<body>
-				$(body-html)
+			<body>$(body-html)
 				<script type="module" src="/_built/loader.js"></script>
 			</body>
 		</html>

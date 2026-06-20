@@ -148,15 +148,16 @@ def neighbors :: fun string -> page-nav = fun current {
 
 # --- file loading -----------------------------------------------------------
 
-# The Markdown source for a page. Tried under `website/docs/` first (running from
-# the repo root) and then `docs/` (the app directory the server runs from), so it
-# resolves whether the server was started from the workspace or the bundle. A
+# The Markdown source for a page. These ship as build `data/` (carried into the
+# bundle next to the server). Tried under `website/data/docs/` first (running from
+# the repo root) and then `data/docs/` (the app directory the server runs from), so
+# it resolves whether the server was started from the workspace or the bundle. A
 # missing file degrades to a rendered "not found" rather than failing the page.
 def read-doc :: fun string -> string = fun file {
-	when fs.read-text-sync "website/docs/$(file).md" is ok s {
+	when fs.read-text-sync "website/data/docs/$(file).md" is ok s {
 		s
 	} else {
-		when fs.read-text-sync "docs/$(file).md" is ok s2 {
+		when fs.read-text-sync "data/docs/$(file).md" is ok s2 {
 			s2
 		} else {
 			"# Not available\n\nThis page's source (`$(file).md`) could not be read."

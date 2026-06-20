@@ -7,12 +7,12 @@ surfaces, and they share one voice:
   (`std/*.pa`), surfaced in autocomplete, hovers, and the generated
   stdlib pages.
 - **The docs website**: the in-app Markdown pages served at
-  pluma.fun/docs (`website/docs/**/*.md`): the tour, the reference, the
+  pluma.fun/docs (`website/data/docs/**/*.md`): the tour, the reference, the
   guides, and the standard-library walkthroughs.
 
 One voice across both. The website tour is not "more marketing" than the
 stdlib, and a hover panel is not terser-but-colder than a guide.
-`std/list.pa` is the reference module for comments; `website/docs/tour/`
+`std/list.pa` is the reference module for comments; `website/data/docs/tour/`
 for page prose. When in doubt, match them.
 
 The guide is organized as: who and how we write (the parts that apply
@@ -177,7 +177,7 @@ audience, and a promise we keep correct.
 
 ---
 
-## Part 3: The docs website (`website/docs/**`)
+## Part 3: The docs website (`website/data/docs/**`)
 
 The docs are Markdown files, rendered by Pluma itself: `std/markdown`
 parses the file to an AST and `std/view` renders it, the same renderer
@@ -187,7 +187,7 @@ refreshing shows the change.
 
 ### Anatomy of a page
 
-A page is one `.md` file under `website/docs/<group>/<slug>.md`. Its
+A page is one `.md` file under `website/data/docs/<group>/<slug>.md`. Its
 structure:
 
 - **One `#` H1** at the top: the page title. One per page.
@@ -214,9 +214,9 @@ A page only appears in the nav once it's registered. In
 - `slug` is the path after `/docs` (so this renders at
   `/docs/tour/closures`; `""` is the index).
 - `title` is the sidebar label.
-- `file` is the basename of the `.md` under `website/docs/`.
+- `file` is the basename of the `.md` under `website/data/docs/`.
 
-Then drop `website/docs/tour/closures.md` next to its siblings. A new
+Then drop `website/data/docs/tour/closures.md` next to its siblings. A new
 section in the sidebar is a new `doc-group` record. Order in the file is
 order in the sidebar: put pages in teaching order, not alphabetical.
 

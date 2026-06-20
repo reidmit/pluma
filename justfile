@@ -48,12 +48,12 @@ install dir="$HOME/.cargo/bin": build-release
   @ echo "installed $(target/release/pluma version) -> {{dir}}/pluma"
   @ command -v pluma >/dev/null 2>&1 || echo "note: {{dir}} isn't on your PATH yet — add it to use \`pluma\` directly"
 
-# regenerate the stdlib-docs JSON artifact (`website/stdlib.json`) that the
+# regenerate the stdlib-docs JSON artifact (`website/data/stdlib.json`) that the
 # website's /std pages render — type signatures + doc comments straight from the
 # stdlib source, decoded by the server at startup. Run whenever the stdlib's
 # public surface or doc comments change.
 gen-stdlib-docs:
-  @ cargo run --bin pluma --quiet -- doc std -o website/stdlib.json
+  @ cargo run --bin pluma --quiet -- doc std -o website/data/stdlib.json
 
 # build the pluma.fun website: regenerate the stdlib docs from source, then the
 # fullstack bundle (server.wasm + client bundle, written alongside website/).

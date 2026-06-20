@@ -29,18 +29,18 @@ use theme
 use ui
 
 # The stdlib docs, decoded once at startup from the JSON artifact `pluma doc`
-# emits (`stdlib.json`) rather than compiled into the bundle as a giant
-# literal. Tried as `website/stdlib.json` first (the repo root), then bare
-# `stdlib.json` (the app/bundle directory the server runs from); a missing
-# artifact decodes to an empty list, so the `/std` pages render empty instead of
-# failing to start.
+# emits (`stdlib.json`) rather than compiled into the bundle as a giant literal. It
+# ships as build `data/` (carried into the bundle next to the server). Tried as
+# `website/data/stdlib.json` first (the repo root), then `data/stdlib.json` (the
+# app/bundle directory the server runs from); a missing artifact decodes to an empty
+# list, so the `/std` pages render empty instead of failing to start.
 def stdlib-docs :: list docdata.doc-module = docdata.decode (read-docs-json ())
 
 def read-docs-json :: fun nothing -> string = fun {
-	when fs.read-text-sync "website/stdlib.json" is ok s {
+	when fs.read-text-sync "website/data/stdlib.json" is ok s {
 		s
 	} else {
-		when fs.read-text-sync "stdlib.json" is ok s2 {
+		when fs.read-text-sync "data/stdlib.json" is ok s2 {
 			s2
 		} else {
 			""

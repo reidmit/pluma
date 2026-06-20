@@ -49,9 +49,13 @@ pub(crate) fn build_command(
 		},
 	};
 
-	// Where the generated RPC client stubs point. Default to the server's default
-	// bind; `--server-url` overrides (use "" for same-origin behind a proxy).
-	let server_url = server_url.unwrap_or_else(|| "http://localhost:8080".to_string());
+	// Where the generated RPC client stubs point, with a per-mode default below
+	// (`--server-url` always overrides). A fullstack or server build *self-serves*
+	// `/_rpc/*`, so its client is same-origin with the server by construction — the
+	// default is "" (a relative `/_rpc/...` that follows whatever host:port served the
+	// page, so the build runs unchanged on localhost, 127.0.0.1, or a real domain). A
+	// static site has no server of its own, so its client must point at an absolute API
+	// origin; that mode defaults to the local dev server's bind.
 
 	// The build mode is read from the directory's entry files — there is no mode flag.
 	// `main.pa` → a CLI or standalone server (one wasm); `client.pa` → a static browser
@@ -67,9 +71,27 @@ pub(crate) fn build_command(
 	let has_main = dir.join("main.pa").is_file();
 	let has_client = dir.join("client.pa").is_file();
 	match (has_main, has_client) {
-		(true, true) => build_fullstack(entry_path, out_base, server_url, opt_level, start),
-		(true, false) => build_sys(entry_path, out_base, server_url, opt_level, start),
-		(false, true) => build_static(entry_path, out_base, server_url, opt_level, start),
+		(true, true) => build_fullstack(
+			entry_path,
+			out_base,
+			server_url.unwrap_or_default(),
+			opt_level,
+			start,
+		),
+		(true, false) => build_sys(
+			entry_path,
+			out_base,
+			server_url.unwrap_or_default(),
+			opt_level,
+			start,
+		),
+		(false, true) => build_static(
+			entry_path,
+			out_base,
+			server_url.unwrap_or_else(|| "http://localhost:8080".to_string()),
+			opt_level,
+			start,
+		),
 		(false, false) => {
 			print_error(format!(
 				"`{entry_path}` has no `main.pa` or `client.pa` — `pluma build` needs at \
@@ -119,7 +141,7 @@ fn build_sys(
 	opt_level: Option<wasm::OptLevel>,
 	start: std::time::Instant,
 ) {
-	let mut compiler = match Compiler::from_entry_path(entry_path) {
+	let mut compiler = match Compiler::from_entry_path(entry_path.clone()) {
 		Ok(c) => c
 			.with_target(Some(Target::Sys))
 			.with_rpc_base_url(server_url),
@@ -145,9 +167,13 @@ fn build_sys(
 		print_error(format!("writing {}: {e}", wasm_path.display()));
 		std::process::exit(1);
 	}
+	// Carry `<entry>/data` → `out/data` so a standalone server/CLI reads the same files
+	// from the bundle that it does under `pluma dev` (`pluma run` chdirs into the dir).
+	let mut artifacts = vec![Artifact::file(&wasm_path, None)];
+	artifacts.extend(copy_asset_dir(&entry_path, &out_dir, "data"));
 	print_build_summary(
 		&format!("app → {}/", out_dir.display()),
-		&[Artifact::file(&wasm_path, None)],
+		&artifacts,
 		&[(format!("pluma run {}", wasm_path.display()), "run it")],
 		start.elapsed(),
 	);
@@ -418,15 +444,17 @@ fn build_fullstack(
 		Artifact {
 			path: format!("{}/", dir.join("_built").display()),
 			size: "2 files".to_string(),
-			note: Some("served for hydration".to_string()),
+			note: None,
 			files: 2,
 		},
 	];
 
-	// Carry the app's static assets into the build: `<entry>/public` → `out/public`,
-	// so the running server serves `/logo.svg` and friends from the same `public/` it
-	// reads under `pluma dev` (`pluma run` chdirs into the bundle dir to find it).
-	artifacts.extend(copy_public_assets(&entry_path, &dir));
+	// Carry the app's static assets and runtime data into the build: `<entry>/public`
+	// → `out/public` (served as `/logo.svg` and friends) and `<entry>/data` → `out/data`
+	// (files the app reads from disk at request time). Both sit next to the bundle at the
+	// same relative path the dev server uses, since `pluma run` chdirs into the bundle dir.
+	artifacts.extend(copy_asset_dir(&entry_path, &dir, "public"));
+	artifacts.extend(copy_asset_dir(&entry_path, &dir, "data"));
 
 	print_build_summary(
 		&format!("fullstack app → {}/", dir.display()),
@@ -444,21 +472,27 @@ fn build_fullstack(
 	);
 }
 
-/// Copy `<entry>/public` into the output directory as `public/`, if it exists. The
-/// served files live next to the server artifact so a deployment that runs from the
-/// output directory finds them at the same relative path the dev server does. A
-/// missing `public/` is fine — the app just serves no assets. Returns a summary row
-/// when assets were copied (`None` when there's no `public/` dir).
-fn copy_public_assets(entry_path: &str, out_dir: &std::path::Path) -> Option<Artifact> {
-	let src = std::path::Path::new(entry_path).join("public");
+/// Copy a named asset directory (`<entry>/<name>`) into the output directory as
+/// `<name>/`, if it exists. The two the build carries:
+///   - `public/` — files served to the browser as static assets (`/logo.svg`, fonts).
+///   - `data/`   — files the running app reads from disk at request time (the website's
+///     Markdown sources and `stdlib.json`), which `std/sys/fs` opens relative to the
+///     working directory.
+/// Both land next to the server artifact so a deployment that runs from the output
+/// directory finds them at the same relative path the dev server does (`pluma run`
+/// chdirs into the wasm's own directory). A missing dir is fine — the app just has no
+/// assets/data of that kind. Returns a summary row when files were copied (`None` when
+/// there's no such dir).
+fn copy_asset_dir(entry_path: &str, out_dir: &std::path::Path, name: &str) -> Option<Artifact> {
+	let src = std::path::Path::new(entry_path).join(name);
 	if !src.is_dir() {
 		return None;
 	}
-	let dst = out_dir.join("public");
+	let dst = out_dir.join(name);
 	match copy_dir_all(&src, &dst) {
 		Ok(n) => Some(Artifact {
 			path: format!("{}/", dst.display()),
-			size: format!("{n} asset{}", if n == 1 { "" } else { "s" }),
+			size: format!("{n} file{}", if n == 1 { "" } else { "s" }),
 			note: None,
 			files: n,
 		}),
