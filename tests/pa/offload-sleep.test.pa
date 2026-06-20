@@ -1,0 +1,46 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# The BlockingPool offload subsystem, v0. `offload-sleep` runs a sleep on a
+# host *worker thread* rather than the single scheduler thread, parking the fiber until
+# the worker completes and wakes it through the shared `io-poll` reactor step. This proves
+# the park/wake/settle path end to end — and that the scheduler keeps running other fibers
+# while a blocking call is in flight: two children nap concurrently inside a `scope`, so
+# the scheduler drives both (it never blocks on a worker), and awaiting their handles makes
+# the result deterministic regardless of which worker finishes first.
+
+# A worker-thread sleep — the v0 proving op for the offload subsystem.
+def offload-sleep :: fun duration -> task nothing = built-in "offload-sleep"
+
+def nap = fun label {
+	try offload-sleep 10ms
+	task.return label
+}
+
+def run = fun {
+	scope as s {
+		let h1 = s.spawn (nap "a")
+		let h2 = s.spawn (nap "b")
+		try a = h1
+		try b = h2
+		print a
+		print b
+		task.return 0
+	}
+}
+
+def tests :: test.suite = [
+	test.case "offload-sleep" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			a
+			b
+
+			"""
+	},
+]

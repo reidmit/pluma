@@ -1,0 +1,49 @@
+use std/assert
+use std/local
+use std/task
+use std/test
+use std/sys/io
+
+# Awaited async cleanup on the *cancellation* path. A child is spawned under a
+# `local.with` (so it captures the binding) and parks on a long sleep; the scope
+# then cancels it. The child's deferred cleanup is a `task`, so the runtime drives
+# it to completion — in an isolated drive that the outer cancel can't interrupt —
+# and it still reads the task-local bound when the child was spawned. The child's
+# own body never resumes past the cancelled sleep.
+
+def tag :: local string = local.new "-"
+
+def cleanup :: fun nothing -> task nothing = fun {
+	try task.sleep 1ms
+	print "async cleanup on cancel (tag=$(local.get tag))"
+	task.return ()
+}
+
+def slow :: fun nothing -> task nothing = fun {
+	defer cleanup ()
+	try task.sleep 10s
+	print "slow finished (should NOT print)"
+	task.return ()
+}
+
+def run = fun {
+	scope as s {
+		let h = local.with tag "spawned" fun {
+			task.return (s.spawn (slow ()))
+		}
+		try h
+		try task.sleep 1ms
+		s.cancel ()
+		task.return ()
+	}
+}
+
+def tests :: test.suite = [
+	test.case "defer-await-cancel" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out "async cleanup on cancel (tag=spawned)\n"
+	},
+]

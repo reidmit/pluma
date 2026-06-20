@@ -1,0 +1,53 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Regression: a user enum whose variant name collides with the synthetic
+# `__poll` enum (`ready`/`pending`) at a *different* tag must still match
+# correctly. The program is async, so the CPS pass synthesizes `__poll`
+# (`pending` at tag 1); `status.pending` sits at tag 3. Lowering resolves the
+# tag from the subject's enum type, so the emitter compares discriminants
+# directly and never confuses the two.
+
+enum status {
+	idle
+	busy
+	done
+	pending
+}
+
+def describe = fun s {
+	when s is status.idle {
+		"idle"
+	} is status.busy {
+		"busy"
+	} is status.done {
+		"done"
+	} is status.pending {
+		"pending"
+	}
+}
+
+def run = fun {
+	try task.return 0
+	print (describe status.idle)
+	print (describe status.pending)
+	print (describe status.done)
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "variant-tag-collision" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			idle
+			pending
+			done
+
+			"""
+	},
+]

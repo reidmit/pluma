@@ -1,0 +1,38 @@
+use std/assert
+use std/local
+use std/task
+use std/test
+use std/sys/io
+
+# A binding set by `local.with` survives an arbitrary chain of `try` suspensions
+# inside the body: the value is re-read correctly after each `task.sleep`, since
+# it rides the fiber across every park/resume.
+
+def stage :: local string = local.new "?"
+
+def run = fun {
+	local.with stage "running" fun {
+		try task.sleep 1ms
+		print "1: $(local.get stage)"
+		try task.sleep 1ms
+		print "2: $(local.get stage)"
+		try task.sleep 1ms
+		print "3: $(local.get stage)"
+		task.return ()
+	}
+}
+
+def tests :: test.suite = [
+	test.case "local-across-await" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			1: running
+			2: running
+			3: running
+
+			"""
+	},
+]

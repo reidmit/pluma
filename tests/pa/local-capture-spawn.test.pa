@@ -1,0 +1,51 @@
+use std/assert
+use std/local
+use std/task
+use std/test
+use std/sys/io
+
+# A spawned child captures the binding active at the point of `s.spawn` — and
+# concurrent siblings stay isolated. Two workers are spawned under two different
+# `local.with` bindings; each sees its own value even though both run after the
+# `with` blocks have exited, and the parent still sees the default. This is the
+# property a shared `ref` can't give (siblings would clobber one cell).
+
+def tenant :: local string = local.new "none"
+
+def worker :: fun string -> task nothing = fun name {
+	try task.sleep 1ms
+	print "worker $(name): $(local.get tenant)"
+	task.return ()
+}
+
+def run = fun {
+	scope as s {
+		let a = local.with tenant "acme" fun {
+			task.return (s.spawn (worker "a"))
+		}
+		try ha = a
+		let b = local.with tenant "globex" fun {
+			task.return (s.spawn (worker "b"))
+		}
+		try hb = b
+		try ha
+		try hb
+		print "parent: $(local.get tenant)"
+		task.return ()
+	}
+}
+
+def tests :: test.suite = [
+	test.case "local-capture-spawn" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			worker a: acme
+			worker b: globex
+			parent: none
+
+			"""
+	},
+]

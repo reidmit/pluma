@@ -1,0 +1,105 @@
+use std/assert
+use std/stream
+use std/task
+use std/test
+use std/sys/io
+
+# std/stream's `from-resource` lifecycle: `open` lazily on the first pull, `close`
+# exactly once on EVERY terminus — drained, bounded (the upstream is terminated by
+# `take`), faulted (a producer failure), and cancelled (a `with-timeout` deadline
+# fires mid-consumption). The cancelled close rides the awaited-`defer` shielded
+# teardown; it runs even as the consuming task is being torn down.
+
+# A fake resource over 0..limit-1 with a mutable cursor. It prints open/close so
+# the lifecycle is observable; `fail-at` makes `next` fault at that index.
+def res :: fun string int int -> stream int = fun tag limit fail-at {
+	stream.from-resource {
+		open: fun {
+			print "[$(tag)] open"
+			task.return (ref.new 0)
+		},
+		next: fun cur {
+			let i = ref.get cur
+			ref.set cur (i + 1)
+			if i == fail-at {
+				try task.fail "boom"
+				task.return none
+			} else if i < limit {
+				task.return (some i)
+			} else {
+				task.return none
+			}
+		},
+		close: fun _cur {
+			print "[$(tag)] close"
+			task.return ()
+		},
+	}
+}
+
+def show :: fun int -> task nothing = fun n {
+	print "  $(to-string n)"
+	task.return ()
+}
+
+# A consumer that sleeps before each element, so a deadline can land mid-stream.
+def slowly :: fun int -> task nothing = fun n {
+	try task.sleep 5ms
+	show n
+}
+
+def run = fun {
+	print "drained:"
+	try stream.for-each (res "drain" 3 (-1)) show
+	print "bounded:"
+	try stream.for-each (stream.take (res "bound" 10 (-1)) 2) show
+	print "faulted:"
+	try r = task.attempt (stream.for-each (res "fault" 5 1) show)
+	when r is ok _u {
+		print "  (no error?!)"
+	} is err _e {
+		print "  recovered"
+	}
+	print "cancelled:"
+	try t = task.attempt (task.with-timeout 12ms (stream.for-each (res "cancel" 1000000 (-1)) slowly))
+	when t is ok _u {
+		print "  (completed?!)"
+	} is err _e {
+		print "  cancelled"
+	}
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "stream-resource" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			drained:
+			[drain] open
+			  0
+			  1
+			  2
+			[drain] close
+			bounded:
+			[bound] open
+			  0
+			  1
+			[bound] close
+			faulted:
+			[fault] open
+			  0
+			[fault] close
+			  recovered
+			cancelled:
+			[cancel] open
+			  0
+			  1
+			[cancel] close
+			  cancelled
+
+			"""
+	},
+]

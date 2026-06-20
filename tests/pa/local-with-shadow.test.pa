@@ -1,0 +1,50 @@
+use std/assert
+use std/local
+use std/task
+use std/test
+use std/sys/io
+
+# `local.with` binds a cell for the dynamic extent of its body, and a nested
+# `with` shadows it within its own subtree. Each binding is restored on the way
+# out — by the `defer`'d teardown — so reads before/inside/after see default,
+# bound, shadowed, bound-again, default. Reads survive the `try` suspensions.
+
+def trace :: local string = local.new "-"
+
+def show :: fun string -> task nothing = fun label {
+	try task.sleep 1ms
+	print "$(label): $(local.get trace)"
+	task.return ()
+}
+
+def run = fun {
+	try show "before"
+	try local.with trace "outer" fun {
+		try show "inside"
+		try local.with trace "inner" fun {
+			try show "nested"
+			task.return ()
+		}
+		try show "back"
+		task.return ()
+	}
+	try show "after"
+	task.return ()
+}
+
+def tests :: test.suite = [
+	test.case "local-with-shadow" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			before: -
+			inside: outer
+			nested: inner
+			back: outer
+			after: -
+
+			"""
+	},
+]

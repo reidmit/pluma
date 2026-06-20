@@ -1,0 +1,121 @@
+use std/assert
+use std/stream
+use std/task
+use std/test
+use std/sys/io
+
+# std/stream edge cases the basics fixture doesn't reach: the async `map-task`
+# transformer (order preservation + a fault inside it still releasing the
+# resource), `take 0` (must not open a resource at all), `take-while` rejecting
+# the very first element (one pull, release, nothing emitted), and a fold over
+# an empty stream.
+
+def counter :: fun int -> stream int = fun limit {
+	stream.from-seed 0 fun n {
+		if n < limit {
+			task.return (some (n, n + 1))
+		} else {
+			task.return none
+		}
+	}
+}
+
+# A resource that announces open/close so the lifecycle is observable.
+def res :: fun string int -> stream int = fun tag limit {
+	stream.from-resource {
+		open: fun {
+			print "[$(tag)] open"
+			task.return (ref.new 0)
+		},
+		next: fun cur {
+			let i = ref.get cur
+			ref.set cur (i + 1)
+			if i < limit {
+				task.return (some i)
+			} else {
+				task.return none
+			}
+		},
+		close: fun _cur {
+			print "[$(tag)] close"
+			task.return ()
+		},
+	}
+}
+
+def show :: fun int -> task nothing = fun n {
+	print "  $(to-string n)"
+	task.return ()
+}
+
+def run = fun {
+	# map-task awaits real async work per element and preserves source order.
+	print "map-task order:"
+	let doubled = stream.map-task (counter 4) fun n {
+		try task.yield ()
+		task.return (n * 10)
+	}
+	try stream.for-each doubled show
+	# A fault inside map-task must still release the upstream resource.
+	print "map-task fault releases:"
+	let faulting = stream.map-task (res "B" 10) fun n {
+		if n == 2 {
+			try task.fail "boom"
+			task.return n
+		} else {
+			task.return n
+		}
+	}
+	try r = task.attempt (stream.for-each faulting show)
+	when r is ok _u {
+		print "  (no error?!)"
+	} is err _e {
+		print "  recovered"
+	}
+	# `take 0` never pulls, so the lazy resource is never even opened.
+	print "take 0 (no open/close expected):"
+	try stream.for-each (stream.take (res "C" 10) 0) show
+	print "  done"
+	# take-while rejecting element 0: opens, pulls one, releases, emits nothing.
+	print "take-while reject-first:"
+	try stream.for-each (stream.take-while (res "D" 10) fun n { n > 5 }) show
+	print "  done"
+	# fold over an empty (take 0) stream returns the initial accumulator.
+	print "empty fold:"
+	try total = stream.fold (stream.take (counter 99) 0) 7 fun acc n {
+		task.return (acc + n)
+	}
+	print "  total = $(to-string total)"
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "stream-edges" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			map-task order:
+			  0
+			  10
+			  20
+			  30
+			map-task fault releases:
+			[B] open
+			  0
+			  1
+			[B] close
+			  recovered
+			take 0 (no open/close expected):
+			  done
+			take-while reject-first:
+			[D] open
+			[D] close
+			  done
+			empty fold:
+			  total = 7
+
+			"""
+	},
+]

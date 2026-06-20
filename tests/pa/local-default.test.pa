@@ -1,0 +1,31 @@
+use std/assert
+use std/local
+use std/task
+use std/test
+use std/sys/io
+
+# `local.get` outside any `local.with` returns the cell's default — including for
+# a freshly-made cell and before the scheduler has bound anything. (The read runs
+# in `main`'s body before any task is driven, so it exercises the no-binding path.)
+
+def color :: local string = local.new "blue"
+
+def run = fun {
+	print (local.get color)
+	print (to-string (local.get (local.new 7)))
+	task.return ()
+}
+
+def tests :: test.suite = [
+	test.case "local-default" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			blue
+			7
+
+			"""
+	},
+]

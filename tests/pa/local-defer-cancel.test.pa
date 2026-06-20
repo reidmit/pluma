@@ -1,0 +1,41 @@
+use std/assert
+use std/local
+use std/task
+use std/test
+use std/sys/io
+
+# The binding is still readable during cancellation cleanup. A child spawned
+# under `local.with` parks on a long sleep; the scope cancels it, and the child's
+# `defer` — which runs on the cancellation path — reads `local.get` and still sees
+# the value bound when it was spawned. The child's own work never completes.
+
+def label :: local string = local.new "?"
+
+def slow :: fun nothing -> task nothing = fun {
+	defer print "cleanup sees label=$(local.get label)"
+	try task.sleep 10s
+	print "slow finished (should NOT print)"
+	task.return ()
+}
+
+def run = fun {
+	scope as s {
+		let h = local.with label "tagged" fun {
+			task.return (s.spawn (slow ()))
+		}
+		try h
+		try task.sleep 1ms
+		s.cancel ()
+		task.return ()
+	}
+}
+
+def tests :: test.suite = [
+	test.case "local-defer-cancel" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out "cleanup sees label=tagged\n"
+	},
+]

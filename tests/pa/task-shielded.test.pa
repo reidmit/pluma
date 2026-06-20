@@ -1,0 +1,79 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `task.shielded` runs a region uninterruptibly: the scheduler drives it to
+# completion atomically, so it can't be torn apart by a concurrent
+# cancellation, and a sibling can't interleave partway through it.
+
+# A critical section with an internal suspension point (`yield`). Shielded, the
+# two prints stay adjacent — the `yield` doesn't hand control to the sibling.
+def critical = fun {
+	print "A"
+	try task.yield ()
+	print "B"
+	task.return 7
+}
+
+def sibling = fun {
+	print "X"
+	task.return 0
+}
+
+# Run the shielded critical section concurrently with a sibling. Whatever order
+# the two children are scheduled in, "A" and "B" stay adjacent — the shield is
+# atomic, so the sibling never interleaves between them (never "A" "X" "B").
+def both-test = fun {
+	try pair = task.both (task.shielded (critical ())) (sibling ())
+	when pair is (a, b) {
+		task.return (a + b)
+	}
+}
+
+# A scope that arms a short deadline, then runs a shielded section that takes
+# longer than the deadline. The deadline can't interrupt the shield: it runs to
+# completion (both prints appear) and the scope produces its value, 99. (The
+# `??` fallback is here only to type the recovery; it isn't reached.)
+def guarded = fun {
+	scope as s {
+		s.cancel-after 1ms
+		let h = s.spawn (task.shielded (slow-critical ()))
+		try v = h
+		task.return v
+	}
+}
+
+def slow-critical = fun {
+	print "slow-start"
+	try task.sleep 5ms
+	print "guarded-done"
+	task.return 99
+}
+
+def run = fun {
+	try total = both-test ()
+	print "both $(to-string total)"
+	try g = guarded () ?? task.return (0 - 1)
+	print "guarded $(to-string g)"
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "task-shielded" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			X
+			A
+			B
+			both 7
+			slow-start
+			guarded-done
+			guarded 99
+
+			"""
+	},
+]

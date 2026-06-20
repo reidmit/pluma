@@ -1,0 +1,31 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `task.fire t f` = `spawn (map t f)`: run `t` detached, hand its result to `f`.
+# Fire two tasks into a ref, yield so the detached fibers settle, then read it.
+
+def run = fun {
+	let log = ref.new []
+	task.fire (task.return 42) fun n {
+		ref.set log [...ref.get log, n]
+	}
+	task.fire (task.return 7) fun n {
+		ref.set log [...ref.get log, n]
+	}
+	# Let the spawned fibers run before we read the result.
+	try task.yield ()
+	print (to-string (ref.get log))
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "task-fire" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.return ()
+		}
+		assert.matches cap.out "[42, 7]\n"
+	},
+]
