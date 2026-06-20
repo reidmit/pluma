@@ -97,7 +97,12 @@ test-grammar:
 # Reload the VS Code window afterward to pick up the new build. Note: VS Code
 # must be able to see `pluma` on PATH — launch it from a shell (`code .`), or
 # `just install /usr/local/bin` if you start it from the Dock/Spotlight.
+#
+# Also clears the LSP's on-disk stdlib cache: it's versioned by crate version
+# (not git SHA), so a same-version rebuild won't refresh it on its own and
+# go-to-def would open a stale copy of an edited stdlib file.
 vs-install: install
+  rm -rf "${XDG_CACHE_HOME:-$HOME/Library/Caches}/pluma"
   cp LICENSE vsix/LICENSE
   cd vsix && npm install --silent \
     && rm -rf dist \
