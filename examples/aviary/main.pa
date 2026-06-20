@@ -10,13 +10,14 @@
 # `pluma build` emits this to `main.wasm` (which serves the client bundle too);
 # `pluma dev` runs it as a subprocess, proxying `/_rpc/*` and forwarding page requests.
 
-use std/sys/app
 use std/css
 use std/hex
 use std/signal
 use std/task
 use std/view
+use std/sys/app
 use std/sys/http
+use std/view/head
 use model
 use route
 use ui
@@ -56,11 +57,12 @@ def document :: fun route model.page-data -> string = fun r data {
 	# decodes to hydrate without a refetch (it sits in `<head>`, outside the hydrated
 	# body root, so it doesn't perturb the view/DOM index alignment).
 	app.document {
+		lang: "en",
 		title: "Aviary · Field Logbook",
 		head: [
-			view.element "base" [view.attr "href" "/"] [],
-			view.element "style" [] [view.text reset-css],
-			view.element "script" [
+			head.base "/",
+			head.style reset-css,
+			head.element "script" [
 				view.attr "id" "pluma-boot",
 				view.attr "type" "application/pluma",
 			] [view.text boot],

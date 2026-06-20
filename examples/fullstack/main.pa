@@ -17,14 +17,15 @@
 # `view.to-string (page ())` could even fetch data in-process — here the page is a
 # pure shell, so SSR just renders the initial markup.
 
-use std/sys/app
 use std/task
+use std/sys/app
 use std/sys/http
 use ui
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		task.return (http.html 200 (app.document {
+			lang: "en",
 			title: "Pluma SSR",
 			head: [],
 			body: ui.page (),

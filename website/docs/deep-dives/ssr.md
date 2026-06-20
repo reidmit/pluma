@@ -23,7 +23,7 @@ HTML string, which the server sends as the page body:
 
 ```pluma
 # server: wrap the page's view in the full HTML document for this route
-task.return (http.html 200 (app.document { title: "Title", head: [], body: page () }))
+task.return (http.html 200 (app.document { lang: "en", title: "Title", head: [], body: page () }))
 ```
 
 The browser receives finished, styled markup and paints it immediately, with no

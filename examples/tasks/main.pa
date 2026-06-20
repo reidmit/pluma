@@ -5,14 +5,15 @@
 #   - GET `/` → the server-side-rendered page (`ui.document`).
 #   - anything else → this app has no other page, so a 404.
 
-use std/sys/app
 use std/task
+use std/sys/app
 use std/sys/http
 use ui
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		task.return (http.html 200 (app.document {
+			lang: "en",
 			title: "Pluma Tasks",
 			head: [],
 			body: ui.page (),

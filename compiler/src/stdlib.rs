@@ -40,6 +40,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std/sql", include_str!("../../std/sql.pa")),
 		("std/stream", include_str!("../../std/stream.pa")),
 		("std/view", include_str!("../../std/view.pa")),
+		("std/view/head", include_str!("../../std/view/head.pa")),
 		("std/string", include_str!("../../std/string.pa")),
 		("std/syntax", include_str!("../../std/syntax.pa")),
 		("std/task", include_str!("../../std/task.pa")),

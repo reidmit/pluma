@@ -49,9 +49,11 @@ use ui
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
 		# app.document builds the HTML shell: it injects charset/viewport, the
-		# collected CSS, and the client hydration script. You give it the page body
-		# (and a title, and any extra <head> tags) -- no hand-written HTML.
+		# collected CSS, and the client hydration script. You give it the document
+		# lang, a title, the page body, and any extra <head> tags (std/view/head) --
+		# no hand-written HTML.
 		task.return (http.html 200 (app.document {
+			lang: "en",
 			title: "Sum",
 			head: [],
 			body: ui.page (),

@@ -11,10 +11,10 @@
 # when set (so `pluma dev` and a real host can hand it a port) and the address below
 # otherwise.
 
-use std/sys/app
 use std/string
-use std/view
 use std/task
+use std/view
+use std/sys/app
 use std/sys/fs
 use std/sys/http
 use std/sys/static
@@ -49,11 +49,7 @@ def read-docs-json :: fun nothing -> string = fun {
 # the collected CSS, and the hydration script; we add the site's shared `<head>` extras
 # (`theme.head-tags`). Server-only — the client never builds the document shell.
 def document :: fun string view -> string = fun title body {
-	app.document {
-		title: title,
-		head: theme.head-tags,
-		body: body,
-	}
+	app.document {lang: "en", title, head: theme.head-tags, body}
 }
 
 def handler :: fun http.request -> task http.response = fun req {

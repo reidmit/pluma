@@ -36,6 +36,7 @@ use std/view
 use std/sys/http
 use std/sys/rpc
 use std/sys/static
+use std/view/head
 
 # Serve a fullstack app on `address`. The framework answers `/_rpc/*` and
 # `/_built/*`; every other request is handed to `handler`. `$PORT` overrides the
@@ -59,47 +60,45 @@ public def serve :: fun string (fun http.request -> task http.response) -> task 
 # skeleton so you never hand-write one: it injects `<meta charset>` + viewport, the
 # `<title>`, the collected CSS (`css.style-tag`, emitted *after* the body renders so it
 # captures every `view.styled` rule the page used), and the client hydration `<script>`
-# that loads the `/_built/` bundle. You supply only what's yours -- the page `title`,
-# any extra `<head>` content (`meta`/`link` tags, font preloads, a boot-data `<script>`),
-# and the `body` view, which the server renders and the browser then hydrates.
+# that loads the `/_built/` bundle. You supply only what's yours -- the document `lang`,
+# the page `title`, any extra `<head>` entries (`std/view/head`: `meta`/`link` tags, font
+# preloads, a boot-data `<script>`), and the `body` view, which the server renders and
+# the browser then hydrates.
 #
 #     handler = fun req {
 #         task.return (http.html 200 (app.document {
+#             lang: "en",
 #             title: "Home",
 #             head: [],
 #             body: page (),
 #         }))
 #     }
 public def document :: fun {
+	lang :: string,
 	title :: string,
-	head :: list view,
+	head :: list head,
 	body :: view,
-} -> string = using view {
-	fun page {
-		# Render the body first, so every `view.styled` it uses has registered its rule
-		# before `css.style-tag` collects them below.
-		let body-html = .to-string page.body
-		let head-tags = [
-			.element "meta" [.attr "charset" "utf-8"] [],
-			.element "meta" [
-				.attr "name" "viewport",
-				.attr "content" "width=device-width, initial-scale=1",
-			] [],
-			.element "title" [] [.text page.title],
-			...page.head,
-		]
-		let head-html = string.join (list.map head-tags .to-string) ""
+} -> string = fun page {
+	# Render the body first, so every `view.styled` it uses has registered its rule
+	# before `css.style-tag` collects them below.
+	let body-html = view.to-string page.body
+	let head-tags = [
+		head.meta-charset "utf-8",
+		head.meta-viewport "width=device-width, initial-scale=1",
+		head.title page.title,
+		...page.head,
+	]
+	let head-html = string.join (list.map head-tags head.to-string) ""
+	"""
+		<!doctype html>
+		<html lang="$(page.lang)">
+			<head>
+				$(head-html)$(css.style-tag ())
+			</head>
+			<body>
+				$(body-html)
+				<script type="module" src="/_built/loader.js"></script>
+			</body>
+		</html>
 		"""
-			<!doctype html>
-			<html lang="en">
-				<head>
-					$(head-html)$(css.style-tag ())
-				</head>
-				<body>
-					$(body-html)
-					<script type="module" src="/_built/loader.js"></script>
-				</body>
-			</html>
-			"""
-	}
 }

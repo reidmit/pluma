@@ -1,0 +1,124 @@
+# std/view/head -- typed entries for the document `<head>`.
+#
+# A `head` is one element that belongs in the `<head>`: a `<title>`, a `<meta>`, a
+# `<link>`, an inline `<style>`, and so on. `app.document` takes a `list head` for a
+# page's head extras and renders them into the shell. The type is distinct from
+# `view` on purpose -- it keeps `<head>`-only tags (and the body) on their own side
+# of the boundary -- but it's a thin wrapper over `view`, so rendering reuses
+# `view.to-string` (HTML escaping, void-element self-closing, raw-text `<style>`).
+#
+#     using head {
+#         [
+#             .meta-description "A small functional language.",
+#             .stylesheet "/app.css",
+#             .icon "/favicon.svg",
+#         ]
+#     }
+#
+# Most tags have a named builder below; `element` is the escape hatch for anything
+# with extra attributes (a `<link>` carrying `as`/`crossorigin`, say), built from the
+# same `view.attr`/`view.text` pieces as a body element.
+
+use std/view
+
+# One element destined for the document `<head>`. Opaque: build it with the helpers
+# below and hand the list to `app.document`; the wrapped `view` is an implementation
+# detail.
+opaque enum head {
+	tag view
+}
+
+# Render a head entry to its HTML string -- `view.to-string` on the wrapped element.
+# `app.document` calls this over the page's head list.
+public def to-string :: fun head -> string = fun h {
+	when h is head.tag v {
+		view.to-string v
+	}
+}
+
+# The escape hatch: any head element from a tag, its attributes, and its children --
+# the `head` analog of `view.element`, so a tag without a named builder (or one
+# needing extra attributes) is still one call away.
+#
+#     head.element "link" [view.attr "rel" "preload", view.attr "href" "/f.woff2",
+#         view.attr "as" "font", view.attr "crossorigin" ""] []
+public def element :: fun string (list view.attribute) (list view) -> head = fun tag attrs kids {
+	head.tag (view.element tag attrs kids)
+}
+
+# --- named builders ---------------------------------------------------------
+
+# The `<title>`: the page title shown in the tab and bookmarks.
+public def title :: fun string -> head = fun text {
+	head.tag (view.element "title" [] [view.text text])
+}
+
+# `<meta charset>`: the document's character encoding (almost always `"utf-8"`).
+public def meta-charset :: fun string -> head = fun charset {
+	head.tag (view.element "meta" [view.attr "charset" charset] [])
+}
+
+# `<meta name="viewport">`: how the page maps to the device viewport
+# (`"width=device-width, initial-scale=1"` for a responsive layout).
+public def meta-viewport :: fun string -> head = fun content {
+	meta "viewport" content
+}
+
+# `<meta name="description">`: the page summary search engines and link previews show.
+public def meta-description :: fun string -> head = fun content {
+	meta "description" content
+}
+
+# A generic `<meta name="..." content="...">`: the catch-all for named metadata
+# (`theme-color`, `robots`, ...).
+public def meta :: fun string string -> head = fun name content {
+	head.tag (view.element "meta" [view.attr "name" name, view.attr "content" content] [])
+}
+
+# A `<meta property="..." content="...">`: the `property`-keyed form social cards use
+# (Open Graph's `og:title`, `og:image`, ...).
+public def meta-property :: fun string string -> head = fun property content {
+	head.tag (view.element "meta" [view.attr "property" property, view.attr "content" content] [])
+}
+
+# A generic `<link rel="..." href="...">`: the catch-all for linked resources. The
+# common cases have their own builders (`stylesheet`, `icon`, `preconnect`); reach for
+# `element` when the link needs more attributes.
+public def link :: fun string string -> head = fun rel href {
+	head.tag (view.element "link" [view.attr "rel" rel, view.attr "href" href] [])
+}
+
+# `<link rel="stylesheet" href="...">`: an external CSS file.
+public def stylesheet :: fun string -> head = fun href {
+	link "stylesheet" href
+}
+
+# `<link rel="icon" href="...">`: the favicon. For a typed icon add the `type`
+# attribute via `element`.
+public def icon :: fun string -> head = fun href {
+	link "icon" href
+}
+
+# `<link rel="preconnect" href="...">`: a hint to open a connection to an origin early
+# (a font or asset CDN).
+public def preconnect :: fun string -> head = fun href {
+	link "preconnect" href
+}
+
+# `<base href="...">`: the base URL root-relative links resolve against -- a `/` so a
+# page served from a nested route still resolves its links from the site root.
+public def base :: fun string -> head = fun href {
+	head.tag (view.element "base" [view.attr "href" href] [])
+}
+
+# An inline `<style>` block: verbatim CSS (not escaped), for critical or `@font-face`
+# rules that should ship in the head rather than the collected stylesheet.
+public def style :: fun string -> head = fun css {
+	head.tag (view.element "style" [] [view.text css])
+}
+
+# An external `<script src="...">`: a script the head loads. Defaults to nothing
+# fancy -- add `defer`/`async`/`type` via `element` when you need them.
+public def script-src :: fun string -> head = fun src {
+	head.tag (view.element "script" [view.attr "src" src] [])
+}
