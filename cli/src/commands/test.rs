@@ -187,6 +187,18 @@ fn run_suite(filters: &[String], root_dir: &Path) -> i32 {
 	// The runner streams the report to stdout; the exit code reflects pass/fail.
 	let code = host::run_test_v8(&bytes);
 
+	// Wall-clock for the whole command (discover + compile + run), printed under
+	// the Pluma-rendered summary line so every `pluma test` ends with how long it
+	// took. `PLUMA_TIMING` breaks this down per phase; this is the at-a-glance number.
+	let style = crate::colors::Style::detect();
+	println!(
+		"{}",
+		style.dim(&format!(
+			"finished in {:.2}s",
+			t_start.elapsed().as_secs_f64()
+		))
+	);
+
 	if timing {
 		let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
 		let t_end = std::time::Instant::now();

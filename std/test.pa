@@ -61,10 +61,6 @@ def bold-green :: fun string -> string = fun s {
 	styled [1, 32] s
 }
 
-def bold-yellow :: fun string -> string = fun s {
-	styled [1, 33] s
-}
-
 def bold-dim :: fun string -> string = fun s {
 	styled [2, 1] s
 }
@@ -157,12 +153,11 @@ def is-focused :: fun run-status -> bool = fun s {
 
 # --- the runner --------------------------------------------------------------
 
-# Running totals across every module's cases, plus the group path already
-# printed (so we emit each group header once).
-alias acc {passed :: int, failed :: int, skipped :: int, todo :: int, printed :: list string}
+# Running totals across every module's cases.
+alias acc {passed :: int, failed :: int, skipped :: int, todo :: int}
 
 def zero-acc :: fun nothing -> acc = fun {
-	{passed: 0, failed: 0, skipped: 0, todo: 0, printed: []}
+	{passed: 0, failed: 0, skipped: 0, todo: 0}
 }
 
 # Apply `f` to `s` only when color is on; otherwise leave it bare.
@@ -217,43 +212,152 @@ def task-fold :: fun (list b) a (fun a b -> task a e) -> task a e = fun items ac
 	}
 }
 
-# Run one case body to completion and print its pass/fail line; return the updated
-# totals. The body is a task; `attempt` reifies its outcome so a failing case (or a
-# trapping assertion) is reported, not propagated.
-def run-case :: fun bool string entry acc -> task acc e = fun color indent e a {
-	try outcome = task.attempt (e.body ())
-	when outcome is ok _u {
-		print (indent ++ paint color bold-green "✓" ++ " " ++ e.name)
-		task.return {...a, passed: a.passed + 1}
+# What running (or declining to run) one case produced. Distinct from
+# `run-status`: that's how the tree *marked* a case; this is what *happened*.
+enum outcome {
+	ok-case
+	failed string
+	did-skip
+	is-todo
+}
+
+# One case paired with its outcome — the unit the reporter prints from.
+alias case-result {path :: list string, name :: string, kind :: outcome}
+
+# Run one case body to completion. The body is a task; `attempt` reifies its
+# outcome so a failing case (or a trapping assertion) is reported, not propagated.
+def run-body :: fun entry -> task outcome e = fun e {
+	try res = task.attempt (e.body ())
+	when res is ok _u {
+		task.return outcome.ok-case
 	} is err msg {
-		print (indent ++ paint color bold-red "✗" ++ " " ++ e.name)
-		print-msg indent msg
-		task.return {...a, failed: a.failed + 1}
+		task.return (outcome.failed msg)
 	}
 }
 
-# Walk one module's flattened entries, printing the tree and running each case
-# that should run (respecting skip/todo and, if any case is focused, focus).
-def run-entries :: fun bool bool (list entry) acc -> task acc e = fun color any-focused entries a0 {
-	task-fold entries a0 fun a e {
-		let a1 = {...a, printed: emit-headers color a.printed e.path}
-		let indent = spaces (list.length e.path + 1)
-		when e.status is run-status.pending {
-			print (indent ++ paint color bold-yellow "○" ++ " " ++ e.name ++ " " ++ paint color dim "(todo)")
-			task.return {...a1, todo: a1.todo + 1}
-		} is run-status.skipped {
-			print (indent ++ paint color dim "-" ++ " " ++ e.name ++ " " ++ paint color dim "(skipped)")
-			task.return {...a1, skipped: a1.skipped + 1}
-		} is run-status.focused {
-			run-case color indent e a1
-		} is run-status.normal {
-			if any-focused {
-				print (indent ++ paint color dim "-" ++ " " ++ e.name ++ " " ++ paint color dim "(not focused)")
-				task.return {...a1, skipped: a1.skipped + 1}
-			} else {
-				run-case color indent e a1
-			}
+# Decide and run one entry: todo/skip short-circuit, a focused case always runs,
+# and a normal case runs unless something else in the module is focused.
+def run-entry :: fun bool entry -> task outcome e = fun any-focused e {
+	when e.status is run-status.pending {
+		task.return outcome.is-todo
+	} is run-status.skipped {
+		task.return outcome.did-skip
+	} is run-status.focused {
+		run-body e
+	} is run-status.normal {
+		if any-focused {
+			task.return outcome.did-skip
+		} else {
+			run-body e
 		}
+	}
+}
+
+# Run one module's flattened entries, collecting (but not printing) each result.
+# The reporter decides what to show — a clean module collapses to a single line,
+# a failing one expands. Cases still run one at a time (see `task-fold`).
+def run-entries :: fun bool (list entry) -> task (list case-result) e = fun any-focused entries {
+	task-fold entries [] fun results e {
+		try kind = run-entry any-focused e
+		task.return [...results, {path: e.path, name: e.name, kind}]
+	}
+}
+
+# --- reporting ---------------------------------------------------------------
+
+def kind-is-pass :: fun outcome -> bool = fun o {
+	if o is outcome.ok-case {
+		true
+	} else {
+		false
+	}
+}
+
+def kind-is-fail :: fun outcome -> bool = fun o {
+	if o is outcome.failed _m {
+		true
+	} else {
+		false
+	}
+}
+
+def kind-is-skip :: fun outcome -> bool = fun o {
+	if o is outcome.did-skip {
+		true
+	} else {
+		false
+	}
+}
+
+def kind-is-todo :: fun outcome -> bool = fun o {
+	if o is outcome.is-todo {
+		true
+	} else {
+		false
+	}
+}
+
+def count-kind :: fun (list case-result) (fun outcome -> bool) -> int = fun results pred {
+	list.length (list.filter results fun r {
+		pred r.kind
+	})
+}
+
+# "N passed" with any non-zero failed/skipped/todo counts appended, comma-joined —
+# the parenthetical that trails a module's one-line report.
+def counts-text :: fun int int int int -> string = fun passed failed skipped todo {
+	let p0 = if failed > 0 {
+		["$(to-string failed) failed"]
+	} else {
+		[]
+	}
+	let p1 = [...p0, "$(to-string passed) passed"]
+	let p2 = if skipped > 0 {
+		[...p1, "$(to-string skipped) skipped"]
+	} else {
+		p1
+	}
+	let p3 = if todo > 0 {
+		[...p2, "$(to-string todo) todo"]
+	} else {
+		p2
+	}
+	string.join p3 ", "
+}
+
+# Print only the failing cases of a module, each under its group path with the
+# failure message — the detail that matters when a module isn't clean.
+def print-failures :: fun bool (list case-result) -> nothing = fun color results {
+	let failures = list.filter results fun r {
+		kind-is-fail r.kind
+	}
+	let _printed = list.fold failures [] fun printed r {
+		let printed2 = emit-headers color printed r.path
+		let indent = spaces (list.length r.path + 1)
+		print (indent ++ paint color bold-red "✗" ++ " " ++ r.name)
+		if r.kind is outcome.failed msg {
+			print-msg indent msg
+		} else {
+			()
+		}
+		printed2
+	}
+	()
+}
+
+# Report one module: a clean module is a single green line; a failing one leads
+# with a red line, then expands its failing cases.
+def report-module :: fun bool string (list case-result) -> nothing = fun color name results {
+	let passed = count-kind results kind-is-pass
+	let failed = count-kind results kind-is-fail
+	let skipped = count-kind results kind-is-skip
+	let todo = count-kind results kind-is-todo
+	let detail = paint color dim "($(counts-text passed failed skipped todo))"
+	if failed == 0 {
+		print (paint color bold-green "✓" ++ "  " ++ paint color bold name ++ " " ++ detail)
+	} else {
+		print (paint color bold-red "✗" ++ "  " ++ paint color bold name ++ " " ++ detail)
+		print-failures color results
 	}
 }
 
@@ -287,19 +391,19 @@ public def run-all :: fun bool (list {
 	name :: string,
 	tests :: list test,
 }) -> task (result nothing string) e = fun color suites {
-	try final = task-fold (list.enumerate suites) (zero-acc ()) fun a indexed {
-		# Blank line between modules (not before the first).
-		let lead = if indexed.0 > 0 {
-			"\n"
-		} else {
-			""
-		}
-		print (lead ++ paint color bold indexed.1.name)
-		let entries = flatten indexed.1.tests
+	try final = task-fold suites (zero-acc ()) fun a suite {
+		let entries = flatten suite.tests
 		let any-focused = list.any entries fun e {
 			is-focused e.status
 		}
-		run-entries color any-focused entries {...a, printed: []}
+		try results = run-entries any-focused entries
+		report-module color suite.name results
+		task.return {
+			passed: a.passed + count-kind results kind-is-pass,
+			failed: a.failed + count-kind results kind-is-fail,
+			skipped: a.skipped + count-kind results kind-is-skip,
+			todo: a.todo + count-kind results kind-is-todo,
+		}
 	}
 	print ""
 	print (summary-line color final)

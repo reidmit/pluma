@@ -23,24 +23,43 @@ def run = fun {
 	test.run-all false [{name: "demo", tests: demo-suite}]
 }
 
+# A suite with a failure, to pin the expanded failure report (the part that
+# matters most): a clean module collapses to one line, but a failing one names
+# its failing cases under their group path with the message.
+def fail-suite :: test.suite = [
+	test.case "passes" fun { assert.is-true true },
+	test.group "math" [test.case "bad" fun { task.fail "boom" }],
+]
+
+def run-failing = fun {
+	test.run-all false [{name: "feature", tests: fail-suite}]
+}
+
 def tests :: test.suite = [
-	test.case "test-runner" fun {
+	test.case "clean module collapses to one line" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
 			task.return ()
 		}
 		assert.matches cap.out """
-			demo
-			  ✓ adds
-			  ✓ concats
-			  nested
-			    ✓ zero
-			    deeper
-			      ✓ true holds
-			    - intentionally skipped (skipped)
-			  ○ later (todo)
+			✓  demo (4 passed, 1 skipped, 1 todo)
 
 			4 of 4 passed, 1 skipped, 1 todo
+
+			"""
+	},
+	test.case "failing module expands its failures" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run-failing ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			✗  feature (1 failed, 1 passed)
+			  math
+			    ✗ bad
+			        boom
+
+			1 of 2 passed
 
 			"""
 	},

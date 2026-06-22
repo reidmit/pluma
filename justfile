@@ -87,6 +87,11 @@ test-write:
 test-run:
   @ cargo run --bin pluma --quiet -- test tests/pa
 
+# run every Pluma-authored suite through `pluma test`: the stdlib's own suites
+# (std/*.test.pa) and the migrated run-fixtures (tests/pa/*.test.pa). Skips the
+# Rust-side snapshot tests — just the .pa suites under V8.
+test-pluma: test-stdlib test-run
+
 # run the stdlib's own Pluma test suite (std/*.test.pa)
 # through `pluma test` — exercises the stdlib and the `std.test` runner under V8.
 test-stdlib:
