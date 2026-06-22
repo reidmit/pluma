@@ -49,13 +49,15 @@ def tests :: test.suite = [
 		renders (head.script-src "/app.js") "<script src=\"/app.js\"></script>"
 	},
 	test.case "element is the escape hatch for extra attributes" fun {
-		let h = head.element "link" [
-			view.attr "rel" "preload",
-			view.attr "href" "/f.woff2",
-			view.attr "as" "font",
-			view.attr "crossorigin" "",
-		] []
-		renders h "<link rel=\"preload\" href=\"/f.woff2\" as=\"font\" crossorigin=\"\">"
+		using view {
+			let h = head.element "link" [
+				.attr "rel" "preload",
+				.attr "href" "/f.woff2",
+				.attr "as" "font",
+				.attr "crossorigin" "",
+			] []
+			renders h "<link rel=\"preload\" href=\"/f.woff2\" as=\"font\" crossorigin=\"\">"
+		}
 	},
 ]
 

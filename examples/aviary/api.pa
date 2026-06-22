@@ -11,16 +11,12 @@ use model
 
 # The Logbook feed.
 public remote def list-sightings :: fun nothing -> task (list model.sighting) = fun {
-	db.with-db fun conn {
-		db.recent conn
-	}
+	db.with-db db.recent
 }
 
 # The Field Guide tally (server-side GROUP BY).
 public remote def tally :: fun nothing -> task (list model.species-stat) = fun {
-	db.with-db fun conn {
-		db.tally conn
-	}
+	db.with-db db.tally
 }
 
 # One sighting and its notes.

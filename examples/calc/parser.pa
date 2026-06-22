@@ -71,7 +71,7 @@ public def parse-stmt = fun toks {
 }
 
 public def finish-bare = fun toks {
-	finish fun e { stmt.bare e } (parse-expr toks)
+	finish stmt.bare (parse-expr toks)
 }
 
 # Wrap a parsed expression in `build`, but only if it consumed every

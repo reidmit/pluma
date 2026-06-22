@@ -4,7 +4,7 @@
 use std/math
 
 def in-set = fun zr zi cr ci n {
-	when n is 0 {
+	if n is 0 {
 		1
 	} else {
 		let zr2 = zr * zr

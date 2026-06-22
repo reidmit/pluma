@@ -14,17 +14,19 @@ use std/web/dom
 use std/web/render
 
 public def page :: fun nothing -> view = fun {
-	let n = signal.new 0
-	view.div [view.id "app"] [
-		view.button [
-			view.on-click fun {
-				signal.update n fun x {
-					x + 1
-				}
-			},
-		] [view.text "+"],
-		view.span [view.id "count"] [view.text-of fun { to-string (signal.get n) }],
-	]
+	using view {
+		let n = signal.new 0
+		.div [.id "app"] [
+			.button [
+				.on-click fun {
+					signal.update n fun x {
+						x + 1
+					}
+				},
+			] [.text "+"],
+			.span [.id "count"] [.text-of fun { to-string (signal.get n) }],
+		]
+	}
 }
 
 def main = fun {

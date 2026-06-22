@@ -9,45 +9,51 @@ use std/web/dom
 use std/web/render
 
 public def page :: fun nothing -> view = fun {
-	let items = signal.new ["a", "b", "c"]
-	let shown = signal.new true
-	view.div [view.id "app"] [
-		view.button [
-			view.id "toggle",
-			view.on-click fun {
-				signal.update shown fun b {
-					if b {
-						false
-					} else {
-						true
+	using view {
+		let items = signal.new ["a", "b", "c"]
+		let shown = signal.new true
+		.div [.id "app"] [
+			.button [
+				.id "toggle",
+				.on-click fun {
+					signal.update shown fun b {
+						if b {
+							false
+						} else {
+							true
+						}
 					}
-				}
+				},
+			] [.text "toggle"],
+			.button [
+				.id "add",
+				.on-click fun {
+					signal.update items fun xs {
+						[...xs, "d"]
+					}
+				},
+			] [.text "add"],
+			.show fun { signal.get shown } fun {
+				using view { .span [.id "msg"] [.text "visible"] }
 			},
-		] [view.text "toggle"],
-		view.button [
-			view.id "add",
-			view.on-click fun {
-				signal.update items fun xs {
-					[...xs, "d"]
-				}
-			},
-		] [view.text "add"],
-		view.show fun { signal.get shown } fun { view.span [view.id "msg"] [view.text "visible"] },
-		view.ul [view.id "list"] [
-			view.each fun { signal.get items } fun s { s } fun s {
-				let c = signal.new 0
-				view.li [view.class "row"] [
-					view.button [
-						view.on-click fun {
-							signal.update c fun x {
-								x + 1
-							}
-						},
-					] [view.text-of fun { "$(s)=$(to-string (signal.get c))" }],
-				]
-			},
-		],
-	]
+			.ul [.id "list"] [
+				.each fun { signal.get items } fun s { s } fun s {
+					using view {
+						let c = signal.new 0
+						.li [.class "row"] [
+							.button [
+								.on-click fun {
+									signal.update c fun x {
+										x + 1
+									}
+								},
+							] [.text-of fun { "$(s)=$(to-string (signal.get c))" }],
+						]
+					}
+				},
+			],
+		]
+	}
 }
 
 def main = fun {

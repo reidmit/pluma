@@ -24,7 +24,7 @@ def build-input = fun n {
 }
 
 def field-int = fun obj name {
-	when json.get-field obj name is some f {
+	if json.get-field obj name is some f {
 		json.get-int f ?? 0
 	} else {
 		0
@@ -32,7 +32,7 @@ def field-int = fun obj name {
 }
 
 def field-bool = fun obj name {
-	when json.get-field obj name is some f {
+	if json.get-field obj name is some f {
 		json.get-bool f ?? false
 	} else {
 		false
@@ -57,11 +57,11 @@ def aggregate = fun v {
 def main = fun {
 	let n = 20000
 	let input = build-input n
-	when json.parse input is ok v {
+	if json.parse input is ok v {
 		let (sum, trues) = aggregate v
 		# Re-serialize, then parse the serializer's own output back.
 		let round = json.stringify v
-		when json.parse round is ok v2 {
+		if json.parse round is ok v2 {
 			let (sum2, _trues2) = aggregate v2
 			print (to-string (list.length (json.get-array v ?? [])))
 			print (to-string sum)

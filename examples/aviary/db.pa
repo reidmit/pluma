@@ -34,10 +34,10 @@ def seed-sql :: string = "INSERT INTO sightings (species, place, seen, observed)
 # (the pinned SQLite worker serialises them, so there's no lock contention).
 public def with-db :: fun (fun db.connection -> task a string) -> task a string = fun body {
 	try conn = db.open db-path
-	try _ = db.migrate conn schema
-	try _ = seed-if-empty conn
+	try db.migrate conn schema
+	try seed-if-empty conn
 	try out = body conn
-	try _ = db.close conn
+	try db.close conn
 	task.return out
 }
 

@@ -40,9 +40,7 @@ def step = fun bodies {
 	let kicked = list.map bodies fun b {
 		kick bodies b
 	}
-	list.map kicked fun b {
-		drift b
-	}
+	list.map kicked drift
 }
 
 def run = fun bodies i steps {

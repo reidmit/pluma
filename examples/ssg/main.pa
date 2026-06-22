@@ -76,10 +76,10 @@ public def main = fun {
 		let md-files = list.filter entries fun n {
 			string.ends-with n ".md"
 		}
-		let _ = list.each md-files fun name {
+		list.each md-files fun name {
 			build-page content-dir out-dir name
 		}
-		let _ = build-index out-dir md-files
+		build-index out-dir md-files
 		print "done: $(to-string (list.length md-files)) page(s)"
 	} is err msg {
 		print "error: cannot read $(content-dir): $(msg)"

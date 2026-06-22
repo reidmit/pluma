@@ -22,203 +22,221 @@ use route
 
 # --- styling: a field-notebook palette, extracted to content-hashed classes ------
 
-def page-css :: css.ruleset = css.rule [
-	css.property "min-height" "100vh",
-	css.background (css.hex "#f3eee1"),
-	css.color (css.hex "#1d1b16"),
-	css.property "font-family" "Georgia, 'Iowan Old Style', 'Times New Roman', serif",
-]
+def page-css :: css.ruleset = using css {
+	.rule [
+		.property "min-height" "100vh",
+		.background (.hex "#f3eee1"),
+		.color (.hex "#1d1b16"),
+		.property "font-family" "Georgia, 'Iowan Old Style', 'Times New Roman', serif",
+	]
+}
 
-def nav-css :: css.ruleset = css.rule [
-	css.display "flex",
-	css.align-items "center",
-	css.gap (css.rem 1.4),
-	css.property "padding" "0.9rem 1.5rem",
-	css.background (css.hex "#fffdf6"),
-	css.property "border-bottom" "1px solid #e6ddc8",
-	css.property "position" "sticky",
-	css.top (css.px 0.0),
-]
+def nav-css :: css.ruleset = using css {
+	.rule [
+		.display "flex",
+		.align-items "center",
+		.gap (.rem 1.4),
+		.property "padding" "0.9rem 1.5rem",
+		.background (.hex "#fffdf6"),
+		.property "border-bottom" "1px solid #e6ddc8",
+		.property "position" "sticky",
+		.top (.px 0.0),
+	]
+}
 
-def brand-css :: css.ruleset = css.rule [
-	css.font-weight "700",
-	css.font-size (css.rem 1.15),
-	css.color (css.hex "#234f3b"),
-	css.property "margin-right" "auto",
-	css.property "letter-spacing" "0.01em",
-]
+def brand-css :: css.ruleset = using css {
+	.rule [
+		.font-weight "700",
+		.font-size (.rem 1.15),
+		.color (.hex "#234f3b"),
+		.property "margin-right" "auto",
+		.property "letter-spacing" "0.01em",
+	]
+}
 
-def nav-link-css :: css.ruleset = css.rule [
-	css.text-decoration "none",
-	css.color (css.hex "#5b5547"),
-	css.font-size (css.rem 1.0),
-	css.property "padding" "0.3rem 0.1rem",
-	css.property "border-bottom" "2px solid transparent",
-	css.cursor "pointer",
-	css.on "hover" [css.color (css.hex "#234f3b")],
-]
+def nav-link-css :: css.ruleset = using css {
+	.rule [
+		.text-decoration "none",
+		.color (.hex "#5b5547"),
+		.font-size (.rem 1.0),
+		.property "padding" "0.3rem 0.1rem",
+		.property "border-bottom" "2px solid transparent",
+		.cursor "pointer",
+		.on "hover" [.color (.hex "#234f3b")],
+	]
+}
 
-def nav-link-active-css :: css.ruleset = css.rule [
-	css.color (css.hex "#234f3b"),
-	css.font-weight "700",
-	css.property "border-bottom" "2px solid #2f6b4f",
-]
+def nav-link-active-css :: css.ruleset = using css {
+	.rule [
+		.color (.hex "#234f3b"),
+		.font-weight "700",
+		.property "border-bottom" "2px solid #2f6b4f",
+	]
+}
 
-def main-css :: css.ruleset = css.rule [
-	css.max-width (css.px 720.0),
-	css.property "margin" "0 auto",
-	css.property "padding" "2rem 1.5rem 4rem",
-]
+def main-css :: css.ruleset = using css {
+	.rule [
+		.max-width (.px 720.0),
+		.property "margin" "0 auto",
+		.property "padding" "2rem 1.5rem 4rem",
+	]
+}
 
-def h1-css :: css.ruleset = css.rule [
-	css.font-size (css.rem 1.9),
-	css.property "margin" "0 0 0.25rem",
-]
+def h1-css :: css.ruleset = using css {
+	.rule [.font-size (.rem 1.9), .property "margin" "0 0 0.25rem"]
+}
 
-def muted-css :: css.ruleset = css.rule [
-	css.color (css.hex "#8a8270"),
-	css.property "margin" "0 0 1.5rem",
-]
+def muted-css :: css.ruleset = using css {
+	.rule [.color (.hex "#8a8270"), .property "margin" "0 0 1.5rem"]
+}
 
-def form-css :: css.ruleset = css.rule [
-	css.display "flex",
-	css.property "flex-wrap" "wrap",
-	css.gap (css.rem 0.6),
-	css.property "margin" "0 0 1.5rem",
-	css.property "padding" "1rem",
-	css.background (css.hex "#fffdf6"),
-	css.property "border" "1px solid #e6ddc8",
-	css.border-radius (css.px 10.0),
-]
+def form-css :: css.ruleset = using css {
+	.rule [
+		.display "flex",
+		.property "flex-wrap" "wrap",
+		.gap (.rem 0.6),
+		.property "margin" "0 0 1.5rem",
+		.property "padding" "1rem",
+		.background (.hex "#fffdf6"),
+		.property "border" "1px solid #e6ddc8",
+		.border-radius (.px 10.0),
+	]
+}
 
-def input-css :: css.ruleset = css.rule [
-	css.property "flex" "1 1 12rem",
-	css.property "padding" "0.55rem 0.7rem",
-	css.property "border" "1px solid #d8cfb8",
-	css.border-radius (css.px 8.0),
-	css.font-size (css.rem 1.0),
-	css.background (css.hex "#fffefb"),
-	css.property "font-family" "inherit",
-]
+def input-css :: css.ruleset = using css {
+	.rule [
+		.property "flex" "1 1 12rem",
+		.property "padding" "0.55rem 0.7rem",
+		.property "border" "1px solid #d8cfb8",
+		.border-radius (.px 8.0),
+		.font-size (.rem 1.0),
+		.background (.hex "#fffefb"),
+		.property "font-family" "inherit",
+	]
+}
 
-def input-num-css :: css.ruleset = css.compose [
-	input-css,
-	css.rule [css.property "flex" "0 0 5rem"],
-]
+def input-num-css :: css.ruleset = using css {
+	.compose [input-css, .rule [.property "flex" "0 0 5rem"]]
+}
 
-def button-css :: css.ruleset = css.rule [
-	css.background (css.hex "#2f6b4f"),
-	css.color (css.hex "#ffffff"),
-	css.property "border" "none",
-	css.property "padding" "0.55rem 1.1rem",
-	css.border-radius (css.px 8.0),
-	css.cursor "pointer",
-	css.font-size (css.rem 1.0),
-	css.font-weight "700",
-	css.property "font-family" "inherit",
-	css.on "hover" [css.background (css.hex "#234f3b")],
-]
+def button-css :: css.ruleset = using css {
+	.rule [
+		.background (.hex "#2f6b4f"),
+		.color (.hex "#ffffff"),
+		.property "border" "none",
+		.property "padding" "0.55rem 1.1rem",
+		.border-radius (.px 8.0),
+		.cursor "pointer",
+		.font-size (.rem 1.0),
+		.font-weight "700",
+		.property "font-family" "inherit",
+		.on "hover" [.background (.hex "#234f3b")],
+	]
+}
 
-def list-css :: css.ruleset = css.rule [
-	css.display "flex",
-	css.flex-direction "column",
-	css.gap (css.rem 0.7),
-]
+def list-css :: css.ruleset = using css {
+	.rule [.display "flex", .flex-direction "column", .gap (.rem 0.7)]
+}
 
-def card-css :: css.ruleset = css.rule [
-	css.property "padding" "1rem 1.1rem",
-	css.background (css.hex "#fffdf6"),
-	css.property "border" "1px solid #e6ddc8",
-	css.border-radius (css.px 10.0),
-	css.text-decoration "none",
-	css.color (css.hex "#1d1b16"),
-	css.display "block",
-	css.on "hover" [
-		css.property "border-color" "#2f6b4f",
-		css.property "box-shadow" "0 2px 12px rgba(47,107,79,0.10)",
-	],
-]
+def card-css :: css.ruleset = using css {
+	.rule [
+		.property "padding" "1rem 1.1rem",
+		.background (.hex "#fffdf6"),
+		.property "border" "1px solid #e6ddc8",
+		.border-radius (.px 10.0),
+		.text-decoration "none",
+		.color (.hex "#1d1b16"),
+		.display "block",
+		.on "hover" [
+			.property "border-color" "#2f6b4f",
+			.property "box-shadow" "0 2px 12px rgba(47,107,79,0.10)",
+		],
+	]
+}
 
-def card-title-css :: css.ruleset = css.rule [css.font-weight "700", css.font-size (css.rem 1.15)]
+def card-title-css :: css.ruleset = using css { .rule [.font-weight "700", .font-size (.rem 1.15)] }
 
-def card-meta-css :: css.ruleset = css.rule [
-	css.color (css.hex "#8a8270"),
-	css.font-size (css.rem 0.92),
-	css.property "margin-top" "0.15rem",
-]
+def card-meta-css :: css.ruleset = using css {
+	.rule [.color (.hex "#8a8270"), .font-size (.rem 0.92), .property "margin-top" "0.15rem"]
+}
 
-def pill-css :: css.ruleset = css.rule [
-	css.property "float" "right",
-	css.background (css.hex "#eef4ec"),
-	css.color (css.hex "#2f6b4f"),
-	css.property "padding" "0.1rem 0.6rem",
-	css.border-radius (css.px 999.0),
-	css.font-size (css.rem 0.85),
-	css.font-weight "700",
-]
+def pill-css :: css.ruleset = using css {
+	.rule [
+		.property "float" "right",
+		.background (.hex "#eef4ec"),
+		.color (.hex "#2f6b4f"),
+		.property "padding" "0.1rem 0.6rem",
+		.border-radius (.px 999.0),
+		.font-size (.rem 0.85),
+		.font-weight "700",
+	]
+}
 
-def chart-css :: css.ruleset = css.rule [
-	css.display "flex",
-	css.flex-direction "column",
-	css.gap (css.rem 0.5),
-]
+def chart-css :: css.ruleset = using css {
+	.rule [.display "flex", .flex-direction "column", .gap (.rem 0.5)]
+}
 
-def bar-row-css :: css.ruleset = css.rule [
-	css.display "flex",
-	css.align-items "center",
-	css.gap (css.rem 0.6),
-]
+def bar-row-css :: css.ruleset = using css {
+	.rule [.display "flex", .align-items "center", .gap (.rem 0.6)]
+}
 
-def bar-label-css :: css.ruleset = css.rule [
-	css.property "flex" "0 0 9.5rem",
-	css.font-size (css.rem 0.95),
-]
+def bar-label-css :: css.ruleset = using css {
+	.rule [.property "flex" "0 0 9.5rem", .font-size (.rem 0.95)]
+}
 
-def bar-track-css :: css.ruleset = css.rule [
-	css.property "flex" "1 1 auto",
-	css.background (css.hex "#e6ddc8"),
-	css.border-radius (css.px 999.0),
-	css.property "height" "0.85rem",
-	css.overflow "hidden",
-]
+def bar-track-css :: css.ruleset = using css {
+	.rule [
+		.property "flex" "1 1 auto",
+		.background (.hex "#e6ddc8"),
+		.border-radius (.px 999.0),
+		.property "height" "0.85rem",
+		.overflow "hidden",
+	]
+}
 
-def bar-fill-css :: css.ruleset = css.rule [
-	css.background (css.hex "#2f6b4f"),
-	css.property "height" "100%",
-	css.border-radius (css.px 999.0),
-]
+def bar-fill-css :: css.ruleset = using css {
+	.rule [.background (.hex "#2f6b4f"), .property "height" "100%", .border-radius (.px 999.0)]
+}
 
-def bar-value-css :: css.ruleset = css.rule [
-	css.property "flex" "0 0 3.5rem",
-	css.text-align "right",
-	css.font-weight "700",
-	css.color (css.hex "#234f3b"),
-]
+def bar-value-css :: css.ruleset = using css {
+	.rule [
+		.property "flex" "0 0 3.5rem",
+		.text-align "right",
+		.font-weight "700",
+		.color (.hex "#234f3b"),
+	]
+}
 
-def back-css :: css.ruleset = css.rule [
-	css.text-decoration "none",
-	css.color (css.hex "#2f6b4f"),
-	css.cursor "pointer",
-	css.property "display" "inline-block",
-	css.property "margin-bottom" "1rem",
-	css.on "hover" [css.text-decoration "underline"],
-]
+def back-css :: css.ruleset = using css {
+	.rule [
+		.text-decoration "none",
+		.color (.hex "#2f6b4f"),
+		.cursor "pointer",
+		.property "display" "inline-block",
+		.property "margin-bottom" "1rem",
+		.on "hover" [.text-decoration "underline"],
+	]
+}
 
-def notes-css :: css.ruleset = css.rule [
-	css.property "padding-left" "1.1rem",
-	css.property "margin" "0.5rem 0 1.5rem",
-	css.display "flex",
-	css.flex-direction "column",
-	css.gap (css.rem 0.35),
-]
+def notes-css :: css.ruleset = using css {
+	.rule [
+		.property "padding-left" "1.1rem",
+		.property "margin" "0.5rem 0 1.5rem",
+		.display "flex",
+		.flex-direction "column",
+		.gap (.rem 0.35),
+	]
+}
 
-def empty-css :: css.ruleset = css.rule [
-	css.color (css.hex "#8a8270"),
-	css.property "padding" "1.5rem",
-	css.text-align "center",
-	css.property "border" "1px dashed #d8cfb8",
-	css.border-radius (css.px 10.0),
-]
+def empty-css :: css.ruleset = using css {
+	.rule [
+		.color (.hex "#8a8270"),
+		.property "padding" "1.5rem",
+		.text-align "center",
+		.property "border" "1px dashed #d8cfb8",
+		.border-radius (.px 10.0),
+	]
+}
 
 # --- the app shell: nav + a route-driven page region ------------------------------
 
@@ -226,34 +244,40 @@ def empty-css :: css.ruleset = css.rule [
 # The page region is a `view.dyn` keyed on the route, so it rebuilds on navigation;
 # the data signal drives the contents inside each page fine-grained.
 public def app :: fun (signal route) (signal model.page-data) (fun route -> nothing) -> view = fun route-sig data-sig navigate {
-	view.div [view.styled page-css] [
-		nav route-sig navigate,
-		view.main [view.styled main-css] [
-			view.dyn fun { render-page (signal.get route-sig) data-sig navigate },
-		],
-	]
+	using view {
+		.div [.styled page-css] [
+			nav route-sig navigate,
+			.main [.styled main-css] [
+				.dyn fun { render-page (signal.get route-sig) data-sig navigate },
+			],
+		]
+	}
 }
 
 def nav :: fun (signal route) (fun route -> nothing) -> view = fun route-sig navigate {
-	view.nav [view.styled nav-css] [
-		view.span [view.styled brand-css] [view.text "Aviary"],
-		nav-link route-sig route.logbook navigate "Logbook",
-		nav-link route-sig route.field-guide navigate "Field Guide",
-	]
+	using view {
+		.nav [.styled nav-css] [
+			.span [.styled brand-css] [.text "Aviary"],
+			nav-link route-sig route.logbook navigate "Logbook",
+			nav-link route-sig route.field-guide navigate "Field Guide",
+		]
+	}
 }
 
 def nav-link :: fun (signal route) route (fun route -> nothing) string -> view = fun route-sig target navigate label {
-	view.a [
-		view.styled nav-link-css,
-		view.styled-when nav-link-active-css fun {
-			route.same-section (signal.get route-sig) target
-		},
-		view.href (route.to-path target),
-		view.on "click" fun e {
-			event.prevent-default e
-			navigate target
-		},
-	] [view.text label]
+	using view {
+		.a [
+			.styled nav-link-css,
+			.styled-when nav-link-active-css fun {
+				route.same-section (signal.get route-sig) target
+			},
+			.href (route.to-path target),
+			.on "click" fun e {
+				event.prevent-default e
+				navigate target
+			},
+		] [.text label]
+	}
 }
 
 def render-page :: fun route (signal model.page-data) (fun route -> nothing) -> view = fun r data-sig navigate {
@@ -271,82 +295,80 @@ def render-page :: fun route (signal model.page-data) (fun route -> nothing) -> 
 # --- Logbook page -----------------------------------------------------------------
 
 def logbook-view :: fun (signal model.page-data) (fun route -> nothing) -> view = fun data-sig navigate {
-	let species = signal.new ""
-	let place = signal.new ""
-	let count = signal.new "1"
-	view.section [] [
-		view.h1 [view.styled h1-css] [view.text "Field Logbook"],
-		view.p [view.styled muted-css] [view.text "Every bird logged, freshest first."],
-		add-form species place count data-sig,
-		view.show fun { list.is-empty (sightings-of (signal.get data-sig)) } fun {
-			view.div [view.styled empty-css] [view.text "No sightings yet — log your first above."]
-		},
-		view.div [view.styled list-css] [
-			view.each fun { sightings-of (signal.get data-sig) } fun s { to-string s.id } fun s {
-				sighting-card s navigate
+	using view {
+		let species = signal.new ""
+		let place = signal.new ""
+		let count = signal.new "1"
+		.section [] [
+			.h1 [.styled h1-css] [.text "Field Logbook"],
+			.p [.styled muted-css] [.text "Every bird logged, freshest first."],
+			add-form species place count data-sig,
+			.show fun { list.is-empty (sightings-of (signal.get data-sig)) } fun {
+				using view {
+					.div [.styled empty-css] [.text "No sightings yet — log your first above."]
+				}
 			},
-		],
-	]
+			.div [.styled list-css] [
+				.each fun { sightings-of (signal.get data-sig) } fun s { to-string s.id } fun s {
+					sighting-card s navigate
+				},
+			],
+		]
+	}
 }
 
 def add-form :: fun (signal string) (signal string) (signal string) (signal model.page-data) -> view = fun species place count data-sig {
-	view.form [
-		view.styled form-css,
-		view.on-submit fun {
-			let sp = string.trim (signal.get species)
-			let pl = string.trim (signal.get place)
-			let n = string.to-int (signal.get count) ?? 1
-			if string.is-empty sp {
-				()
-			} else {
-				let entry = {species: sp, place: pl, count: n}
-				task.spawn (task.map (api.add-sighting entry) fun s {
-					signal.set data-sig (model.page-data.logbook-data (list.concat [
-						s,
-					] (sightings-of (signal.get data-sig))))
-					signal.set species ""
-					signal.set place ""
-					signal.set count "1"
-				})
-			}
-		},
-	] [
-		view.input [
-			view.styled input-css,
-			view.name "species",
-			view.placeholder "Species",
-			view.value species,
-		] [],
-		view.input [
-			view.styled input-css,
-			view.name "place",
-			view.placeholder "Place",
-			view.value place,
-		] [],
-		view.input [
-			view.styled input-num-css,
-			view.name "count",
-			view.input-type "number",
-			view.min "1",
-			view.value count,
-		] [],
-		view.button [view.styled button-css, view.attr "type" "submit"] [view.text "Log it"],
-	]
+	using view {
+		.form [
+			.styled form-css,
+			.on-submit fun {
+				let sp = string.trim (signal.get species)
+				let pl = string.trim (signal.get place)
+				let n = string.to-int (signal.get count) ?? 1
+				if string.is-empty sp {
+					()
+				} else {
+					let entry = {species: sp, place: pl, count: n}
+					task.spawn (task.map (api.add-sighting entry) fun s {
+						signal.set data-sig (model.page-data.logbook-data (list.concat [
+							s,
+						] (sightings-of (signal.get data-sig))))
+						signal.set species ""
+						signal.set place ""
+						signal.set count "1"
+					})
+				}
+			},
+		] [
+			.input [.styled input-css, .name "species", .placeholder "Species", .value species] [],
+			.input [.styled input-css, .name "place", .placeholder "Place", .value place] [],
+			.input [
+				.styled input-num-css,
+				.name "count",
+				.input-type "number",
+				.min "1",
+				.value count,
+			] [],
+			.button [.styled button-css, .attr "type" "submit"] [.text "Log it"],
+		]
+	}
 }
 
 def sighting-card :: fun model.sighting (fun route -> nothing) -> view = fun s navigate {
-	view.a [
-		view.styled card-css,
-		view.href (route.to-path (route.sighting s.id)),
-		view.on "click" fun e {
-			event.prevent-default e
-			navigate (route.sighting s.id)
-		},
-	] [
-		view.span [view.styled pill-css] [view.text "$(to-string s.count) seen"],
-		view.div [view.styled card-title-css] [view.text s.species],
-		view.div [view.styled card-meta-css] [view.text "$(s.place) · $(s.date)"],
-	]
+	using view {
+		.a [
+			.styled card-css,
+			.href (route.to-path (route.sighting s.id)),
+			.on "click" fun e {
+				event.prevent-default e
+				navigate (route.sighting s.id)
+			},
+		] [
+			.span [.styled pill-css] [.text "$(to-string s.count) seen"],
+			.div [.styled card-title-css] [.text s.species],
+			.div [.styled card-meta-css] [.text "$(s.place) · $(s.date)"],
+		]
+	}
 }
 
 def sightings-of :: fun model.page-data -> list model.sighting = fun d {
@@ -360,18 +382,20 @@ def sightings-of :: fun model.page-data -> list model.sighting = fun d {
 # --- Field Guide page -------------------------------------------------------------
 
 def guide-view :: fun (signal model.page-data) -> view = fun data-sig {
-	view.section [] [
-		view.h1 [view.styled h1-css] [view.text "Field Guide"],
-		view.p [view.styled muted-css] [view.text "Species ranked by total birds counted."],
-		view.show fun { list.is-empty (stats-of (signal.get data-sig)) } fun {
-			view.div [view.styled empty-css] [view.text "No species tallied yet."]
-		},
-		view.div [view.styled chart-css] [
-			view.each fun { stats-of (signal.get data-sig) } fun st { st.species } fun st {
-				bar-row st (top-birds (stats-of (signal.peek data-sig)))
+	using view {
+		.section [] [
+			.h1 [.styled h1-css] [.text "Field Guide"],
+			.p [.styled muted-css] [.text "Species ranked by total birds counted."],
+			.show fun { list.is-empty (stats-of (signal.get data-sig)) } fun {
+				using view { .div [.styled empty-css] [.text "No species tallied yet."] }
 			},
-		],
-	]
+			.div [.styled chart-css] [
+				.each fun { stats-of (signal.get data-sig) } fun st { st.species } fun st {
+					bar-row st (top-birds (stats-of (signal.peek data-sig)))
+				},
+			],
+		]
+	}
 }
 
 def stats-of :: fun model.page-data -> list model.species-stat = fun d {
@@ -393,112 +417,124 @@ def top-birds :: fun (list model.species-stat) -> int = fun stats {
 }
 
 def bar-row :: fun model.species-stat int -> view = fun st maxb {
-	let pct = if maxb > 0 {
-		st.birds * 100 / maxb
-	} else {
-		0
+	using view {
+		let pct = if maxb > 0 {
+			st.birds * 100 / maxb
+		} else {
+			0
+		}
+		.div [.styled bar-row-css] [
+			.div [.styled bar-label-css] [.text st.species],
+			.div [.styled bar-track-css] [
+				.div [
+					.styled bar-fill-css,
+					.style-of [css.property "width" "$(to-string pct)%"],
+				] [],
+			],
+			.div [.styled bar-value-css] [.text (to-string st.birds)],
+		]
 	}
-	view.div [view.styled bar-row-css] [
-		view.div [view.styled bar-label-css] [view.text st.species],
-		view.div [view.styled bar-track-css] [
-			view.div [
-				view.styled bar-fill-css,
-				view.style-of [css.property "width" "$(to-string pct)%"],
-			] [],
-		],
-		view.div [view.styled bar-value-css] [view.text (to-string st.birds)],
-	]
 }
 
 # --- Sighting detail page ---------------------------------------------------------
 
 def detail-view :: fun int (signal model.page-data) (fun route -> nothing) -> view = fun id data-sig navigate {
-	let draft = signal.new ""
-	view.section [] [
-		view.a [
-			view.styled back-css,
-			view.href "/",
-			view.on "click" fun e {
-				event.prevent-default e
-				navigate route.logbook
-			},
-		] [view.text "← Back to logbook"],
-		view.dyn fun { detail-body id data-sig draft },
-	]
+	using view {
+		let draft = signal.new ""
+		.section [] [
+			.a [
+				.styled back-css,
+				.href "/",
+				.on "click" fun e {
+					event.prevent-default e
+					navigate route.logbook
+				},
+			] [.text "← Back to logbook"],
+			.dyn fun { detail-body id data-sig draft },
+		]
+	}
 }
 
 def detail-body :: fun int (signal model.page-data) (signal string) -> view = fun _id data-sig draft {
-	when signal.get data-sig is model.page-data.detail-data d {
-		detail-card d data-sig draft
-	} is model.page-data.missing {
-		view.p [view.styled muted-css] [view.text "That sighting doesn't exist."]
-	} else {
-		view.p [view.styled muted-css] [view.text "Loading sighting…"]
+	using view {
+		when signal.get data-sig is model.page-data.detail-data d {
+			detail-card d data-sig draft
+		} is model.page-data.missing {
+			.p [.styled muted-css] [.text "That sighting doesn't exist."]
+		} else {
+			.p [.styled muted-css] [.text "Loading sighting…"]
+		}
 	}
 }
 
 def detail-card :: fun model.detail (signal model.page-data) (signal string) -> view = fun d data-sig draft {
-	view.div [] [
-		view.h1 [view.styled h1-css] [view.text d.sighting.species],
-		view.p [view.styled muted-css] [
-			view.text "$(d.sighting.place) · $(d.sighting.date) · $(to-string d.sighting.count) seen",
-		],
-		view.h3 [] [view.text "Field notes"],
-		notes-list d,
-		note-form d.sighting.id data-sig draft,
-	]
+	using view {
+		.div [] [
+			.h1 [.styled h1-css] [.text d.sighting.species],
+			.p [.styled muted-css] [
+				.text "$(d.sighting.place) · $(d.sighting.date) · $(to-string d.sighting.count) seen",
+			],
+			.h3 [] [.text "Field notes"],
+			notes-list d,
+			note-form d.sighting.id data-sig draft,
+		]
+	}
 }
 
 def notes-list :: fun model.detail -> view = fun d {
-	if list.is-empty d.notes {
-		view.p [view.styled muted-css] [view.text "No notes yet."]
-	} else {
-		view.ul [view.styled notes-css] (list.map d.notes fun n {
-			view.li [] [view.text n.body]
-		})
+	using view {
+		if list.is-empty d.notes {
+			.p [.styled muted-css] [.text "No notes yet."]
+		} else {
+			.ul [.styled notes-css] (list.map d.notes fun n {
+				view.li [] [view.text n.body]
+			})
+		}
 	}
 }
 
 def note-form :: fun int (signal model.page-data) (signal string) -> view = fun id data-sig draft {
-	view.form [
-		view.styled form-css,
-		view.on-submit fun {
-			let body = string.trim (signal.get draft)
-			if string.is-empty body {
-				()
-			} else {
-				task.spawn (task.map (api.add-note id body) fun maybe {
-					when maybe is some n {
-						signal.update data-sig fun cur {
-							if cur is model.page-data.detail-data d {
-								model.page-data.detail-data {...d, notes: list.concat d.notes [n]}
-							} else {
-								cur
+	using view {
+		.form [
+			.styled form-css,
+			.on-submit fun {
+				let body = string.trim (signal.get draft)
+				if string.is-empty body {
+					()
+				} else {
+					task.spawn (task.map (api.add-note id body) fun maybe {
+						when maybe is some n {
+							signal.update data-sig fun cur {
+								if cur is model.page-data.detail-data d {
+									model.page-data.detail-data {
+										...d,
+										notes: list.concat d.notes [n],
+									}
+								} else {
+									cur
+								}
 							}
+							signal.set draft ""
+						} is none {
+							()
 						}
-						signal.set draft ""
-					} is none {
-						()
-					}
-				})
-			}
-		},
-	] [
-		view.input [
-			view.styled input-css,
-			view.name "note",
-			view.placeholder "Add a note…",
-			view.value draft,
-		] [],
-		view.button [view.styled button-css, view.attr "type" "submit"] [view.text "Add"],
-	]
+					})
+				}
+			},
+		] [
+			.input [.styled input-css, .name "note", .placeholder "Add a note…", .value draft] [],
+			.button [.styled button-css, .attr "type" "submit"] [.text "Add"],
+		]
+	}
 }
 
 def missing-view :: fun nothing -> view = fun {
-	view.section [] [
-		view.h1 [view.styled h1-css] [view.text "Not found"],
-		view.p [view.styled muted-css] [view.text "That page or sighting doesn't exist."],
-	]
+	using view {
+		.section [] [
+			.h1 [.styled h1-css] [.text "Not found"],
+			.p [.styled muted-css] [.text "That page or sighting doesn't exist."],
+		]
+	}
 }
 
 # --- data loading: one fetch per route, shared by server SSR and client hydrate ---
@@ -508,13 +544,9 @@ def missing-view :: fun nothing -> view = fun {
 # and the client's initial hydrate (and every soft navigation).
 public def load-data :: fun route -> task model.page-data = fun r {
 	when r is route.logbook {
-		task.map (api.list-sightings ()) fun xs {
-			model.page-data.logbook-data xs
-		}
+		task.map (api.list-sightings ()) model.page-data.logbook-data
 	} is route.field-guide {
-		task.map (api.tally ()) fun xs {
-			model.page-data.guide-data xs
-		}
+		task.map (api.tally ()) model.page-data.guide-data
 	} is route.sighting id {
 		task.map (api.get-detail id) fun od {
 			when od is some d {

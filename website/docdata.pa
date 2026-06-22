@@ -22,8 +22,8 @@ public alias doc-module {
 
 # A string field of a JSON object, or `""` if absent or not a string.
 def str-field :: fun json.value string -> string = fun v k {
-	when json.get-field v k is some fv {
-		when json.get-string fv is some s {
+	if json.get-field v k is some fv {
+		if json.get-string fv is some s {
 			s
 		} else {
 			""
@@ -35,8 +35,8 @@ def str-field :: fun json.value string -> string = fun v k {
 
 # An array field of a JSON object, or `[]` if absent or not an array.
 def arr-field :: fun json.value string -> list json.value = fun v k {
-	when json.get-field v k is some fv {
-		when json.get-array fv is some xs {
+	if json.get-field v k is some fv {
+		if json.get-array fv is some xs {
 			xs
 		} else {
 			[]
@@ -79,8 +79,8 @@ def decode-module :: fun json.value -> doc-module = fun v {
 # or unexpected JSON yields an empty list rather than failing — a docs page with no
 # data renders empty, which is the right degradation for a missing artifact.
 public def decode :: fun string -> list doc-module = fun text {
-	when json.parse text is ok v {
-		when json.get-array v is some xs {
+	if json.parse text is ok v {
+		if json.get-array v is some xs {
 			list.map xs decode-module
 		} else {
 			[]

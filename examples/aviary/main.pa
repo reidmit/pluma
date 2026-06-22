@@ -48,26 +48,27 @@ def status-for :: fun route -> int = fun r {
 # from it directly — no refetch over RPC. It sits in <head>, outside the hydrated body
 # root, so it doesn't perturb the view/DOM index alignment.
 def document :: fun route model.page-data -> string = fun r data {
-	let route-sig = signal.new r
-	let data-sig = signal.new data
-	let boot = hex.encode (wire.encode data)
-	# `app.document` injects charset/viewport, the collected CSS, and the hydration
-	# script. Our `<head>` extras: a `<base>` so root-relative URLs resolve from `/` on
-	# nested routes, the reset stylesheet, and the `pluma-boot` data script the client
-	# decodes to hydrate without a refetch (it sits in `<head>`, outside the hydrated
-	# body root, so it doesn't perturb the view/DOM index alignment).
-	app.document {
-		lang: "en",
-		title: "Aviary · Field Logbook",
-		head: [
-			head.base "/",
-			head.style reset-css,
-			head.element "script" [
-				view.attr "id" "pluma-boot",
-				view.attr "type" "application/pluma",
-			] [view.text boot],
-		],
-		body: ui.app route-sig data-sig no-nav,
+	using view {
+		let route-sig = signal.new r
+		let data-sig = signal.new data
+		let boot = hex.encode (wire.encode data)
+		# `app.document` injects charset/viewport, the collected CSS, and the hydration
+		# script. Our `<head>` extras: a `<base>` so root-relative URLs resolve from `/` on
+		# nested routes, the reset stylesheet, and the `pluma-boot` data script the client
+		# decodes to hydrate without a refetch (it sits in `<head>`, outside the hydrated
+		# body root, so it doesn't perturb the view/DOM index alignment).
+		app.document {
+			lang: "en",
+			title: "Aviary · Field Logbook",
+			head: [
+				head.base "/",
+				head.style reset-css,
+				head.element "script" [.attr "id" "pluma-boot", .attr "type" "application/pluma"] [
+					.text boot,
+				],
+			],
+			body: ui.app route-sig data-sig no-nav,
+		}
 	}
 }
 

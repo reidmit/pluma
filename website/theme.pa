@@ -231,26 +231,28 @@ public def site-footer :: fun nothing -> view = using view {
 # server's `app.document` call (which owns the rest of the skeleton: charset/viewport,
 # the `<title>`, the collected CSS, and the hydration script). The server (`main.pa`)
 # hands this list to `app.document`.
-public def head-tags :: list head = [
-	head.meta-description "Pluma is a small, statically-typed functional language with full type inference and a fullstack framework that compiles to WebAssembly.",
-	head.element "link" [
-		view.attr "rel" "icon",
-		view.attr "href" "/logo.svg",
-		view.attr "type" "image/svg+xml",
-	] [],
-	head.element "link" [
-		view.attr "rel" "preload",
-		view.attr "href" "/fonts/lexend.woff2",
-		view.attr "as" "font",
-		view.attr "type" "font/woff2",
-		view.attr "crossorigin" "",
-	] [],
-	head.style "@font-face{font-family:'Lexend';font-style:normal;font-weight:100 900;font-display:swap;src:url('/fonts/lexend.woff2') format('woff2')}",
-	head.preconnect "https://fonts.googleapis.com",
-	head.element "link" [
-		view.attr "rel" "preconnect",
-		view.attr "href" "https://fonts.gstatic.com",
-		view.attr "crossorigin" "",
-	] [],
-	head.stylesheet "https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&display=swap",
-]
+public def head-tags :: list head = using view {
+	[
+		head.meta-description "Pluma is a small, statically-typed functional language with full type inference and a fullstack framework that compiles to WebAssembly.",
+		head.element "link" [
+			.attr "rel" "icon",
+			.attr "href" "/logo.svg",
+			.attr "type" "image/svg+xml",
+		] [],
+		head.element "link" [
+			.attr "rel" "preload",
+			.attr "href" "/fonts/lexend.woff2",
+			.attr "as" "font",
+			.attr "type" "font/woff2",
+			.attr "crossorigin" "",
+		] [],
+		head.style "@font-face{font-family:'Lexend';font-style:normal;font-weight:100 900;font-display:swap;src:url('/fonts/lexend.woff2') format('woff2')}",
+		head.preconnect "https://fonts.googleapis.com",
+		head.element "link" [
+			.attr "rel" "preconnect",
+			.attr "href" "https://fonts.gstatic.com",
+			.attr "crossorigin" "",
+		] [],
+		head.stylesheet "https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&display=swap",
+	]
+}

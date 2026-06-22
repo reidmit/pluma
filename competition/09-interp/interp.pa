@@ -28,7 +28,7 @@ def eval = fun e {
 
 # Build a deterministic balanced expression tree.
 def build = fun depth seed {
-	when depth is 0 {
+	if depth is 0 {
 		expr.lit (seed % 7)
 	} else {
 		let l = build (depth - 1) (seed * 2 + 1)

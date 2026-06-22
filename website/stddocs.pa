@@ -132,14 +132,12 @@ def empty-module :: docdata.doc-module = {name: "", namespace: "", blocks: [], i
 # The module a path selects (by its full name, e.g. `std/list`), falling back to
 # the first when the name is empty (`/std`) or unknown.
 def current-module :: fun (list docdata.doc-module) string -> docdata.doc-module = fun mods name {
-	when list.find mods fun m { m.name == name } is some m {
+	if list.find mods fun m { m.name == name } is some m {
+		m
+	} else if list.head mods is some m {
 		m
 	} else {
-		when list.head mods is some m {
-			m
-		} else {
-			empty-module
-		}
+		empty-module
 	}
 }
 

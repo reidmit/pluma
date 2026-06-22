@@ -9,7 +9,7 @@ def mark = fun sieve p j n {
 	if j > n {
 		()
 	} else {
-		let _ = list.set sieve j 1
+		list.set sieve j 1
 		mark sieve p (j + p) n
 	}
 }
@@ -19,7 +19,7 @@ def sift = fun sieve p n {
 	if p * p > n {
 		()
 	} else {
-		let _ = if list.get sieve p == 0 {
+		if list.get sieve p == 0 {
 			mark sieve p (p * p) n
 		} else {
 			()
@@ -44,9 +44,9 @@ def main = fun {
 	let sieve = list.build (n + 1) fun _i {
 		0
 	}
-	let _ = list.set sieve 0 1
-	let _ = list.set sieve 1 1
-	let _ = sift sieve 2 n
+	list.set sieve 0 1
+	list.set sieve 1 1
+	sift sieve 2 n
 	let (count, sum) = tally sieve 2 n 0 0
 	print (to-string count)
 	print (to-string sum)

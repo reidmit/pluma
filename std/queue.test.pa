@@ -34,7 +34,7 @@ def tests :: test.suite = [
 		queue.enqueue q 1
 		queue.enqueue q 2
 		let after-two = queue.size q
-		let _ = queue.dequeue q
+		queue.dequeue q
 		assert.all [assert.equals after-two 2, assert.equals (queue.size q) 1]
 	},
 	test.case "peek shows the oldest without removing it" fun {
@@ -65,9 +65,9 @@ def tests :: test.suite = [
 		let out = []
 		queue.enqueue q 1
 		queue.enqueue q 2
-		let _ = queue.dequeue q
+		queue.dequeue q
 		queue.enqueue q 3
-		let _ = queue.dequeue q
+		queue.dequeue q
 		queue.enqueue q 4
 		queue.enqueue q 5
 		while queue.dequeue q is some v { list.push out v }
@@ -76,15 +76,15 @@ def tests :: test.suite = [
 	test.case "to-list reflects elements split across front and back" fun {
 		let q = queue.from-list [1, 2, 3]
 		# dequeue forces a rebalance, leaving elements in `front`...
-		let _ = queue.dequeue q
+		queue.dequeue q
 		# ...then enqueue adds to `back`, so to-list spans both halves.
 		queue.enqueue q 4
 		assert.equals (queue.to-list q) [2, 3, 4]
 	},
 	test.case "reuse after draining to empty" fun {
 		let q = queue.from-list [1, 2]
-		let _ = queue.dequeue q
-		let _ = queue.dequeue q
+		queue.dequeue q
+		queue.dequeue q
 		assert.is-true (queue.is-empty q)
 		queue.enqueue q 9
 		assert.all [assert.is-false (queue.is-empty q), assert.equals (queue.dequeue q) (some 9)]

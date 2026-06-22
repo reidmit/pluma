@@ -13,24 +13,26 @@ use std/web/dom
 use std/web/render
 
 def counter :: fun int -> view = fun start {
-	let n = signal.new start
-	view.div [] [
-		view.button [
-			view.on-click fun {
-				signal.update n fun x {
-					x - 1
-				}
-			},
-		] [view.text "-"],
-		view.span [view.style "padding: 0 1rem"] [view.text-of fun { to-string (signal.get n) }],
-		view.button [
-			view.on-click fun {
-				signal.update n fun x {
-					x + 1
-				}
-			},
-		] [view.text "+"],
-	]
+	using view {
+		let n = signal.new start
+		.div [] [
+			.button [
+				.on-click fun {
+					signal.update n fun x {
+						x - 1
+					}
+				},
+			] [.text "-"],
+			.span [.style "padding: 0 1rem"] [.text-of fun { to-string (signal.get n) }],
+			.button [
+				.on-click fun {
+					signal.update n fun x {
+						x + 1
+					}
+				},
+			] [.text "+"],
+		]
+	}
 }
 
 def main = fun {

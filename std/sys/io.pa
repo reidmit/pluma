@@ -118,7 +118,7 @@ public def with-stdin :: fun string (fun nothing -> task a e) -> task a e = fun 
 	with-stdin-start input
 	# `attempt` so the frame is torn down whether the thunk succeeds or fails.
 	try outcome = task.attempt (thunk ())
-	let _ = with-stdin-end () ?? ""
+	with-stdin-end () ?? ""
 	when outcome is ok v {
 		task.return v
 	} is err e {

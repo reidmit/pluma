@@ -140,7 +140,7 @@ def report :: fun (list (string, outcome)) -> nothing = fun results {
 
 def demo-handler :: fun http.request -> task http.response = fun req {
 	if string.contains req.path "slow" {
-		try _ = task.sleep 1s
+		try task.sleep 1s
 		task.return (http.text 200 "eventually")
 	} else if string.contains req.path "redirect" {
 		task.return (http.text 301 "moved")
@@ -163,11 +163,11 @@ def run-demo :: fun nothing -> task int string = fun {
 				base ++ p
 			}
 			scope as s {
-				let _ = s.spawn (http.serve-on server demo-handler)
+				s.spawn (http.serve-on server demo-handler)
 				# Short timeout so the 1s `/slow` route deterministically trips it.
 				try results = run-checks 3 250ms urls
 				s.cancel ()
-				let _ = report results
+				report results
 				task.return 0
 			}
 		} else {
@@ -188,7 +188,7 @@ def main = fun {
 		run-demo ()
 	} else {
 		try results = run-checks 8 5s urls
-		let _ = report results
+		report results
 		task.return 0
 	}
 }

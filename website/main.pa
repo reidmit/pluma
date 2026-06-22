@@ -37,14 +37,12 @@ use ui
 def stdlib-docs :: list docdata.doc-module = docdata.decode (read-docs-json ())
 
 def read-docs-json :: fun nothing -> string = fun {
-	when fs.read-text-sync "website/data/stdlib.json" is ok s {
+	if fs.read-text-sync "website/data/stdlib.json" is ok s {
 		s
+	} else if fs.read-text-sync "data/stdlib.json" is ok s2 {
+		s2
 	} else {
-		when fs.read-text-sync "data/stdlib.json" is ok s2 {
-			s2
-		} else {
-			""
-		}
+		""
 	}
 }
 

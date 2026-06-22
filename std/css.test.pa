@@ -46,7 +46,7 @@ def tests :: test.suite = using css {
 			assert.equals (.inline [.z-index 10]) "z-index: 10"
 		},
 		test.case "tab-size renders an int" fun {
-			assert.equals (.inline [css.tab-size 2]) "tab-size: 2"
+			assert.equals (.inline [.tab-size 2]) "tab-size: 2"
 		},
 		test.case "directional padding and margin name their edge" fun {
 			assert.equals (.inline [

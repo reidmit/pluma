@@ -139,7 +139,7 @@ def page-at :: fun int -> option doc-page = fun i {
 # The reading-order neighbors of the page with slug `current`. If the slug isn't
 # found (a "not found" address), there are no neighbors.
 def neighbors :: fun string -> page-nav = fun current {
-	when list.find-index all-pages fun pg { pg.slug == current } is some i {
+	if list.find-index all-pages fun pg { pg.slug == current } is some i {
 		{prev: page-at (i - 1), next: page-at (i + 1)}
 	} else {
 		{prev: none, next: none}
@@ -154,14 +154,12 @@ def neighbors :: fun string -> page-nav = fun current {
 # it resolves whether the server was started from the workspace or the bundle. A
 # missing file degrades to a rendered "not found" rather than failing the page.
 def read-doc :: fun string -> string = fun file {
-	when fs.read-text-sync "website/data/docs/$(file).md" is ok s {
+	if fs.read-text-sync "website/data/docs/$(file).md" is ok s {
 		s
+	} else if fs.read-text-sync "data/docs/$(file).md" is ok s2 {
+		s2
 	} else {
-		when fs.read-text-sync "data/docs/$(file).md" is ok s2 {
-			s2
-		} else {
-			"# Not available\n\nThis page's source (`$(file).md`) could not be read."
-		}
+		"# Not available\n\nThis page's source (`$(file).md`) could not be read."
 	}
 }
 
@@ -509,7 +507,7 @@ def page-nav-view :: fun string -> view = using view {
 	fun current {
 		let nav = neighbors current
 		.nav [.styled page-nav-row] [
-			when nav.prev is some pg {
+			if nav.prev is some pg {
 				.a [.styled page-nav-link, .href (doc-href pg)] [
 					.span [.styled page-nav-label] [.text "← Previous"],
 					.span [.styled page-nav-title] [.text pg.title],
@@ -517,7 +515,7 @@ def page-nav-view :: fun string -> view = using view {
 			} else {
 				.div [] []
 			},
-			when nav.next is some pg {
+			if nav.next is some pg {
 				.a [.styled page-nav-link-next, .href (doc-href pg)] [
 					.span [.styled page-nav-label] [.text "Next →"],
 					.span [.styled page-nav-title] [.text pg.title],
@@ -538,7 +536,7 @@ public def page :: fun string -> view = using view {
 		doc-styles ()
 
 		let current = slug-of path
-		let source = when list.find all-pages fun pg { pg.slug == current } is some pg {
+		let source = if list.find all-pages fun pg { pg.slug == current } is some pg {
 			read-doc pg.file
 		} else {
 			"# Page not found\n\nNo documentation page matches this address."

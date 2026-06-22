@@ -9,36 +9,50 @@ use std/view
 
 def tests :: test.suite = [
 	test.case "renders a simple element with text" fun {
-		let v = view.div [] [view.text "hi"]
-		assert.equals (view.to-string v) "<div>hi</div>"
+		using view {
+			let v = .div [] [.text "hi"]
+			assert.equals (.to-string v) "<div>hi</div>"
+		}
 	},
 	test.case "renders static attributes in order" fun {
-		let v = view.span [view.class "x", view.id "y"] [view.text "z"]
-		assert.equals (view.to-string v) "<span class=\"x\" id=\"y\">z</span>"
+		using view {
+			let v = .span [.class "x", .id "y"] [.text "z"]
+			assert.equals (.to-string v) "<span class=\"x\" id=\"y\">z</span>"
+		}
 	},
 	test.case "escapes text content" fun {
-		let v = view.p [] [view.text "<b> & </b>"]
-		assert.equals (view.to-string v) "<p>&lt;b&gt; &amp; &lt;/b&gt;</p>"
+		using view {
+			let v = .p [] [.text "<b> & </b>"]
+			assert.equals (.to-string v) "<p>&lt;b&gt; &amp; &lt;/b&gt;</p>"
+		}
 	},
 	test.case "escapes attribute values incl quotes" fun {
-		let v = view.div [view.title "a\"b<c"] []
-		assert.equals (view.to-string v) "<div title=\"a&quot;b&lt;c\"></div>"
+		using view {
+			let v = .div [.title "a\"b<c"] []
+			assert.equals (.to-string v) "<div title=\"a&quot;b&lt;c\"></div>"
+		}
 	},
 	test.case "void elements self-close with no children" fun {
 		let v = view.br [] []
 		assert.equals (view.to-string v) "<br>"
 	},
 	test.case "string properties render as attributes" fun {
-		let v = view.input [view.property "value" "hi"] []
-		assert.equals (view.to-string v) "<input value=\"hi\">"
+		using view {
+			let v = .input [.property "value" "hi"] []
+			assert.equals (.to-string v) "<input value=\"hi\">"
+		}
 	},
 	test.case "boolean properties render bare when true" fun {
-		let v = view.input [view.disabled true] []
-		assert.equals (view.to-string v) "<input disabled>"
+		using view {
+			let v = .input [.disabled true] []
+			assert.equals (.to-string v) "<input disabled>"
+		}
 	},
 	test.case "boolean properties are omitted when false" fun {
-		let v = view.input [view.disabled false] []
-		assert.equals (view.to-string v) "<input>"
+		using view {
+			let v = .input [.disabled false] []
+			assert.equals (.to-string v) "<input>"
+		}
 	},
 	test.case "reactive text is evaluated once" fun {
 		let s = signal.new 5
@@ -48,39 +62,51 @@ def tests :: test.suite = [
 		assert.equals (view.to-string v) "5"
 	},
 	test.case "reactive attribute is evaluated once" fun {
-		let active = signal.new true
-		let v = view.div [
-			view.bind-attr "class" fun {
-				if signal.get active {
-					"on"
-				} else {
-					"off"
-				}
-			},
-		] []
-		assert.equals (view.to-string v) "<div class=\"on\"></div>"
+		using view {
+			let active = signal.new true
+			let v = .div [
+				.bind-attr "class" fun {
+					if signal.get active {
+						"on"
+					} else {
+						"off"
+					}
+				},
+			] []
+			assert.equals (.to-string v) "<div class=\"on\"></div>"
+		}
 	},
 	test.case "two-way value bind renders the signal as the initial attribute" fun {
-		let draft = signal.new "hi"
-		let v = view.input [view.value draft] []
-		assert.equals (view.to-string v) "<input value=\"hi\">"
+		using view {
+			let draft = signal.new "hi"
+			let v = .input [.value draft] []
+			assert.equals (.to-string v) "<input value=\"hi\">"
+		}
 	},
 	test.case "two-way checked bind renders bare when the signal is true" fun {
-		let on = signal.new true
-		let v = view.input [view.checked on] []
-		assert.equals (view.to-string v) "<input checked>"
+		using view {
+			let on = signal.new true
+			let v = .input [.checked on] []
+			assert.equals (.to-string v) "<input checked>"
+		}
 	},
 	test.case "event handlers are dropped" fun {
-		let v = view.button [view.on-click fun { () }] [view.text "ok"]
-		assert.equals (view.to-string v) "<button>ok</button>"
+		using view {
+			let v = .button [.on-click fun { () }] [.text "ok"]
+			assert.equals (.to-string v) "<button>ok</button>"
+		}
 	},
 	test.case "on-mount is server-skipped (no markup, action not run)" fun {
-		let v = view.div [view.id "app", view.on-mount fun { () }] [view.text "x"]
-		assert.equals (view.to-string v) "<div id=\"app\">x</div>"
+		using view {
+			let v = .div [.id "app", .on-mount fun { () }] [.text "x"]
+			assert.equals (.to-string v) "<div id=\"app\">x</div>"
+		}
 	},
 	test.case "nested children render in document order" fun {
-		let v = view.ul [] [view.li [] [view.text "a"], view.li [] [view.text "b"]]
-		assert.equals (view.to-string v) "<ul><li>a</li><li>b</li></ul>"
+		using view {
+			let v = .ul [] [.li [] [.text "a"], .li [] [.text "b"]]
+			assert.equals (.to-string v) "<ul><li>a</li><li>b</li></ul>"
+		}
 	},
 	test.case "show renders its child when the condition is true" fun {
 		let v = view.show fun { true } fun {
@@ -97,10 +123,12 @@ def tests :: test.suite = [
 	test.case "dyn renders the branch its thunk chooses" fun {
 		let n = signal.new 0
 		let v = view.dyn fun {
-			if signal.get n > 0 {
-				view.span [] [view.text "pos"]
-			} else {
-				view.empty
+			using view {
+				if signal.get n > 0 {
+					.span [] [.text "pos"]
+				} else {
+					.empty
+				}
 			}
 		}
 		assert.equals (view.to-string v) "<span style=\"display: contents\"></span>"

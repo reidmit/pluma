@@ -29,7 +29,7 @@ use value
 
 public def main = fun {
 	let env = ref.new (seed-env ())
-	let _ = io.print "calc — type an expression, or :help. Ctrl-D to quit."
+	io.print "calc — type an expression, or :help. Ctrl-D to quit."
 	repl env
 }
 
@@ -46,11 +46,11 @@ public def seed-env = fun {
 # flushes, since it has no newline); `io.read` yields `err` at end of
 # input, where we close the dangling prompt with a newline and stop.
 public def repl = fun env {
-	let _ = io.write "> "
+	io.write "> "
 	when io.read () is err _e {
 		io.print ""
 	} is ok line {
-		let _ = handle env (string.trim line)
+		handle env (string.trim line)
 		repl env
 	}
 }
@@ -82,10 +82,10 @@ public def run-command = fun env cmd {
 }
 
 public def print-help = fun {
-	let _ = io.print "operators:  + - * / %  ^ (power)   ( ) for grouping"
-	let _ = io.print "unary:      sqrt sin cos tan ln log log2 exp abs floor ceil round int float"
-	let _ = io.print "binary:     pow(b,e)  max(a,b)  min(a,b)  log(x,base)"
-	let _ = io.print "assign:     name = expr      (constants pi, e are predefined)"
+	io.print "operators:  + - * / %  ^ (power)   ( ) for grouping"
+	io.print "unary:      sqrt sin cos tan ln log log2 exp abs floor ceil round int float"
+	io.print "binary:     pow(b,e)  max(a,b)  min(a,b)  log(x,base)"
+	io.print "assign:     name = expr      (constants pi, e are predefined)"
 	io.print "commands:   :vars  :help  :q"
 }
 
@@ -125,7 +125,7 @@ public def run-line = fun env line {
 
 public def run-assign = fun env name e {
 	when eval.eval env e is ok v {
-		let _ = ref.set env (dict.insert (ref.get env) name v)
+		ref.set env (dict.insert (ref.get env) name v)
 		io.print "= $(value.num-to-string v)"
 	} is err m {
 		io.print "error: $(m)"

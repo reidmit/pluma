@@ -64,7 +64,7 @@ def tests :: test.suite = [
 	},
 	test.case "pop then push reuses the list" fun {
 		let xs = [1, 2]
-		let _ = list.pop xs
+		list.pop xs
 		list.push xs 9
 		assert.equals xs [1, 9]
 	},
