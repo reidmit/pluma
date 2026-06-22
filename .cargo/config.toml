@@ -1,0 +1,6 @@
+# Link with LLVM lld instead of Apple's default ld. lld is dramatically faster at
+# the link step, which dominates incremental rebuilds of this workspace (the test
+# binaries link the full compiler + wasm + host + V8). Installed via Homebrew's
+# llvm; if you remove that formula, delete this file to fall back to system ld.
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/opt/llvm/bin/ld64.lld"]

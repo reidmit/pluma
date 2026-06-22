@@ -15,3 +15,14 @@ members = [
 [workspace.package]
 version = "0.1.0"
 license = "MIT"
+
+# Dev builds don't need full DWARF — line tables keep file:line in backtraces and
+# panics while cutting debuginfo generation and (especially) link-time I/O. The
+# unpacked split keeps debug info out of the linked binary so the linker copies
+# far less. Together these are the dominant lever on incremental build time here.
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+debug = "line-tables-only"
