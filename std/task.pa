@@ -361,11 +361,11 @@ def gather :: fun (manual-scope-handle a) (list (task a)) (ref int) (list a) -> 
 		try x = lift r
 		list.push acc x
 		let i = ref.get next
-		when i < list.length ts is true {
+		if i < list.length ts {
 			ref.set next (i + 1)
 			s.spawn (list.get ts i)
 			()
-		} is false {
+		} else {
 			()
 		}
 		gather s ts next acc

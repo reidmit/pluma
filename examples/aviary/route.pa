@@ -62,19 +62,19 @@ public def to-path :: fun route -> string = fun r {
 # A sighting-detail page matches neither top-level link, so nothing lights up there.
 public def same-section :: fun route route -> bool = fun a b {
 	when a is route.logbook {
-		when b is route.logbook {
+		if b is route.logbook {
 			true
 		} else {
 			false
 		}
 	} is route.field-guide {
-		when b is route.field-guide {
+		if b is route.field-guide {
 			true
 		} else {
 			false
 		}
 	} is route.sighting _ai {
-		when b is route.sighting _bi {
+		if b is route.sighting _bi {
 			true
 		} else {
 			false

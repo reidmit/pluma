@@ -423,7 +423,7 @@ def style-fragment :: fun attribute -> option string = fun a {
 def fragments :: fun (list attribute) (fun attribute -> option string) -> list string = fun attrs frag {
 	let out :: list string = []
 	list.each attrs fun a {
-		when frag a is some s {
+		if frag a is some s {
 			list.push out s
 		} else {
 			()
@@ -473,21 +473,19 @@ def render-attrs-nonempty :: fun (list attribute) -> string = fun attrs {
 # path, where there's at most one of each so no merging applies). A non-class/style
 # attribute falls through to `render-attr`.
 def render-attr-solo :: fun attribute -> string = fun a {
-	when class-fragment a is some v {
+	if class-fragment a is some v {
 		" class=\"$(escape-attr v)\""
+	} else if style-fragment a is some s {
+		" style=\"$(escape-attr s)\""
 	} else {
-		when style-fragment a is some s {
-			" style=\"$(escape-attr s)\""
-		} else {
-			render-attr a
-		}
+		render-attr a
 	}
 }
 
 # The index of the first attribute that contributes a `class`/`style` fragment, if any.
 def first-contributor :: fun (list attribute) (fun attribute -> option string) -> option int = fun attrs frag {
 	list.find-index attrs fun a {
-		when frag a is some _ {
+		if frag a is some _ {
 			true
 		} else {
 			false
@@ -496,7 +494,7 @@ def first-contributor :: fun (list attribute) (fun attribute -> option string) -
 }
 
 def at-index :: fun (option int) int -> bool = fun oi i {
-	when oi is some j {
+	if oi is some j {
 		j == i
 	} else {
 		false

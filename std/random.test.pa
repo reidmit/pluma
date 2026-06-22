@@ -77,10 +77,8 @@ def tests :: test.suite = [
 		# --- bool ---
 
 		let b = random.bool ()
-		# Confirms the call resolves to a bool — both arms succeed.
-		when b is true {
-			assert.is-true true
-		} is false {
+		# Confirms the call resolves to a bool — usable as a condition.
+		if b {
 			assert.is-true true
 		}
 	},

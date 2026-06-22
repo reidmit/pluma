@@ -45,7 +45,7 @@ public def parse-meta = fun lines {
 # Parse one `key: value` line into the dict. Lines without a colon are
 # ignored. The value may itself contain colons (e.g. a URL or time).
 public def add-meta-line = fun m line {
-	when string.split line ":" is [k, v, ...rest] {
+	if string.split line ":" is [k, v, ...rest] {
 		dict.insert m (string.trim k) (string.trim (string.join [v, ...rest] ":"))
 	} else {
 		m

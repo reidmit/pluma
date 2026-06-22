@@ -97,7 +97,7 @@ def list-reset :: css.ruleset = using css {
 # --- helpers ----------------------------------------------------------------
 
 def done-of :: fun (list api.todo) int -> bool = fun all id {
-	when list.find all fun t { t.id == id } is some t {
+	if list.find all fun t { t.id == id } is some t {
 		t.done
 	} else {
 		false

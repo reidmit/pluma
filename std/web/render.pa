@@ -530,7 +530,7 @@ def is-text :: fun view -> bool = fun v {
 }
 
 def is-dynamic-text :: fun view -> bool = fun v {
-	when v is view.dynamic-text _f {
+	if v is view.dynamic-text _f {
 		true
 	} else {
 		false

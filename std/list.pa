@@ -722,7 +722,7 @@ public def min-by :: fun (list a) (fun a -> b) -> option a where (ord b) = fun x
 		none
 	} else {
 		some (fold xs (get xs 0) fun best x {
-			when ord.compare (key x) (key best) is ordering.lt {
+			if ord.compare (key x) (key best) is ordering.lt {
 				x
 			} else {
 				best
@@ -741,7 +741,7 @@ public def max-by :: fun (list a) (fun a -> b) -> option a where (ord b) = fun x
 		none
 	} else {
 		some (fold xs (get xs 0) fun best x {
-			when ord.compare (key x) (key best) is ordering.gt {
+			if ord.compare (key x) (key best) is ordering.gt {
 				x
 			} else {
 				best
@@ -761,7 +761,7 @@ public def max-by :: fun (list a) (fun a -> b) -> option a where (ord b) = fun x
 public def min :: fun (list a) -> option a where (ord a) = fun xs {
 	fold xs none fun acc x {
 		when acc is some best {
-			when ord.compare x best is ordering.lt {
+			if ord.compare x best is ordering.lt {
 				some x
 			} else {
 				some best
@@ -780,7 +780,7 @@ public def min :: fun (list a) -> option a where (ord a) = fun xs {
 public def max :: fun (list a) -> option a where (ord a) = fun xs {
 	fold xs none fun acc x {
 		when acc is some best {
-			when ord.compare x best is ordering.gt {
+			if ord.compare x best is ordering.gt {
 				some x
 			} else {
 				some best
@@ -856,7 +856,7 @@ def merge-into :: fun (list a) (list a) int int int int int (fun a a -> ordering
 	} else {
 		let l = get src i
 		let r = get src j
-		when cmp l r is ordering.gt {
+		if cmp l r is ordering.gt {
 			set aux k r
 			merge-into src aux i mid (j + 1) hi (k + 1) cmp
 		} else {

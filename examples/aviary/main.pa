@@ -30,7 +30,7 @@ def handler :: fun http.request -> task http.response = fun req {
 }
 
 def status-for :: fun route -> int = fun r {
-	when r is route.unknown {
+	if r is route.unknown {
 		404
 	} else {
 		200

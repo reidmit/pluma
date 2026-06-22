@@ -103,7 +103,7 @@ public def break2 = fun bs d1 d2 {
 
 # Emit the pending text run (if any) ahead of `more`.
 public def flush-text = fun acc more {
-	when acc is [] {
+	if acc is [] {
 		more
 	} else {
 		[inline.text (decode (list.reverse acc)), ...more]

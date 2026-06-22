@@ -350,7 +350,7 @@ def sighting-card :: fun model.sighting (fun route -> nothing) -> view = fun s n
 }
 
 def sightings-of :: fun model.page-data -> list model.sighting = fun d {
-	when d is model.page-data.logbook-data xs {
+	if d is model.page-data.logbook-data xs {
 		xs
 	} else {
 		[]
@@ -375,7 +375,7 @@ def guide-view :: fun (signal model.page-data) -> view = fun data-sig {
 }
 
 def stats-of :: fun model.page-data -> list model.species-stat = fun d {
-	when d is model.page-data.guide-data xs {
+	if d is model.page-data.guide-data xs {
 		xs
 	} else {
 		[]
@@ -385,7 +385,7 @@ def stats-of :: fun model.page-data -> list model.species-stat = fun d {
 # The tally is ordered birds-descending, so the head holds the maximum — the scale
 # every bar is drawn relative to.
 def top-birds :: fun (list model.species-stat) -> int = fun stats {
-	when list.head stats is some s {
+	if list.head stats is some s {
 		s.birds
 	} else {
 		1
@@ -470,7 +470,7 @@ def note-form :: fun int (signal model.page-data) (signal string) -> view = fun 
 				task.spawn (task.map (api.add-note id body) fun maybe {
 					when maybe is some n {
 						signal.update data-sig fun cur {
-							when cur is model.page-data.detail-data d {
+							if cur is model.page-data.detail-data d {
 								model.page-data.detail-data {...d, notes: list.concat d.notes [n]}
 							} else {
 								cur

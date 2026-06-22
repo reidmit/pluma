@@ -1062,7 +1062,7 @@ def item-view :: fun (list block) -> view = using view {
 	fun blocks {
 		if list.length blocks == 1 {
 			when list.head blocks is some b {
-				when b is block.paragraph content {
+				if b is block.paragraph content {
 					.li [] (inlines-view content)
 				} else {
 					.li [] [block-view b]

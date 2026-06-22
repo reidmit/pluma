@@ -99,7 +99,7 @@ public def configure :: fun config -> nothing = fun c {
 # `error`, defaulting to `info`). Lets one binary log readable text locally and
 # structured JSON wherever the host sets `LOG_FORMAT=json`.
 public def configure-from-env :: fun nothing -> nothing = fun {
-	let fmt = when process.env "LOG_FORMAT" is some s {
+	let fmt = if process.env "LOG_FORMAT" is some s {
 		if s == "json" {
 			format.json
 		} else {
@@ -112,7 +112,7 @@ public def configure-from-env :: fun nothing -> nothing = fun {
 }
 
 def level-from-env :: fun nothing -> level = fun {
-	when process.env "LOG_LEVEL" is some s {
+	if process.env "LOG_LEVEL" is some s {
 		if s == "debug" {
 			level.debug
 		} else if s == "warn" {

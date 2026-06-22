@@ -109,7 +109,7 @@ public def stringify-pretty :: fun value -> string = fun v {
 #     json.is-null json.value.null      # => true
 #     json.is-null (json.value.int 0)   # => false
 public def is-null :: fun value -> bool = fun v {
-	when v is value.null {
+	if v is value.null {
 		true
 	} else {
 		false
@@ -123,7 +123,7 @@ public def is-null :: fun value -> bool = fun v {
 #     json.get-field doc "name"   # => some (value.string "Ada")
 #     json.get-field doc "age"    # => none
 public def get-field :: fun value string -> option value = fun v key {
-	when v is value.object o {
+	if v is value.object o {
 		dict.lookup o key
 	} else {
 		none
@@ -136,7 +136,7 @@ public def get-field :: fun value string -> option value = fun v key {
 #     json.get-int (json.value.int 42)       # => some 42
 #     json.get-int (json.value.string "x")   # => none
 public def get-int :: fun value -> option int = fun v {
-	when v is value.int n {
+	if v is value.int n {
 		some n
 	} else {
 		none
@@ -149,7 +149,7 @@ public def get-int :: fun value -> option int = fun v {
 #     json.get-float (json.value.float 3.5)   # => some 3.5
 #     json.get-float (json.value.int 3)        # => none
 public def get-float :: fun value -> option float = fun v {
-	when v is value.float x {
+	if v is value.float x {
 		some x
 	} else {
 		none
@@ -177,7 +177,7 @@ public def get-number :: fun value -> option float = fun v {
 #     json.get-bool (json.value.bool true)   # => some true
 #     json.get-bool (json.value.int 1)        # => none
 public def get-bool :: fun value -> option bool = fun v {
-	when v is value.bool b {
+	if v is value.bool b {
 		some b
 	} else {
 		none
@@ -189,7 +189,7 @@ public def get-bool :: fun value -> option bool = fun v {
 #     json.get-string (json.value.string "hi")   # => some "hi"
 #     json.get-string (json.value.int 1)           # => none
 public def get-string :: fun value -> option string = fun v {
-	when v is value.string s {
+	if v is value.string s {
 		some s
 	} else {
 		none
@@ -202,7 +202,7 @@ public def get-string :: fun value -> option string = fun v {
 #     json.get-array (json.value.array [json.value.int 1, json.value.int 2])
 #     # => some [value.int 1, value.int 2]
 public def get-array :: fun value -> option (list value) = fun v {
-	when v is value.array xs {
+	if v is value.array xs {
 		some xs
 	} else {
 		none
@@ -216,7 +216,7 @@ public def get-array :: fun value -> option (list value) = fun v {
 #     try doc = json.parse "{\"a\": 1}"
 #     json.get-object doc   # => some {a: value.int 1}
 public def get-object :: fun value -> option (dict string value) = fun v {
-	when v is value.object o {
+	if v is value.object o {
 		some o
 	} else {
 		none
