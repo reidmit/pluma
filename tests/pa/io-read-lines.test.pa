@@ -1,0 +1,30 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# read every line from stdin until EOF, prefixing each with its index
+def loop = fun i {
+	when io.read () is ok line {
+		print "$(to-string i): $(line)"
+		loop (i + 1)
+	} is err _ {
+		print "done"
+	}
+}
+
+def run = fun {
+	loop 1
+}
+
+def tests :: test.suite = [
+	test.case "io-read-lines" fun {
+		try cap = io.capture fun {
+			io.with-stdin "apple\nbanana\ncherry\n" fun {
+				run ()
+				task.return ()
+			}
+		}
+		assert.matches cap.out "1: apple\n2: banana\n3: cherry\ndone\n"
+	},
+]

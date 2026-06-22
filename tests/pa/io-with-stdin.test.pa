@@ -1,0 +1,56 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `io.with-stdin` feeds canned input to the stdin readers for the duration of a
+# thunk — the reader-side dual of `io.capture`. These pin the behaviour the two
+# migrated io-read fixtures rely on: input is drawn line by line, the frame ends at
+# EOF, the ambient stdin is restored afterward, and frames nest.
+
+# Read one line, reporting EOF distinctly.
+def read1 :: fun nothing -> string = fun {
+	when io.read () is ok l {
+		l
+	} is err _ {
+		"<eof>"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "feeds input, drains to EOF, restores" fun {
+		# Reads draw from the input; once it's drained the readers see EOF; and after the
+		# frame the ambient stdin (EOF under `pluma test`) is back — the frame was popped.
+
+		try inside = io.capture fun {
+			io.with-stdin "a\nb\n" fun {
+				print (read1 ())
+				print (read1 ())
+				print (read1 ())
+				task.return ()
+			}
+		}
+		try outside = io.capture fun {
+			print (read1 ())
+			task.return ()
+		}
+		assert.matches inside.out "a\nb\n<eof>\n"
+		assert.matches outside.out "<eof>\n"
+	},
+	test.case "nests, inner shadows outer" fun {
+		# An inner frame shadows the outer for its thunk; popping it restores the outer,
+		# whose own read cursor is untouched.
+
+		try cap = io.capture fun {
+			io.with-stdin "outer\n" fun {
+				try _ = io.with-stdin "inner\n" fun {
+					print (read1 ())
+					task.return ()
+				}
+				print (read1 ())
+				task.return ()
+			}
+		}
+		assert.matches cap.out "inner\nouter\n"
+	},
+]

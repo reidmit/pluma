@@ -1,0 +1,29 @@
+use std/assert
+use std/string
+use std/task
+use std/test
+use std/sys/io
+
+def run = fun {
+	when io.read-all () is ok contents {
+		# write so we don't append our own newline — we want to see
+		# exactly what was on stdin
+		io.write contents
+		io.print ""
+		print (to-string (string.length contents))
+	} is err msg {
+		print "err: $(msg)"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "io-read-all" fun {
+		try cap = io.capture fun {
+			io.with-stdin "line one\nline two\nno trailing newline" fun {
+				run ()
+				task.return ()
+			}
+		}
+		assert.matches cap.out "line one\nline two\nno trailing newline\n37\n"
+	},
+]
