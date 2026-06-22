@@ -284,6 +284,14 @@ struct CaptureFrame {
 	err: Vec<u8>,
 }
 
+/// One `io.with-stdin` frame: a fixed byte buffer the stdin reads draw from while
+/// the block is live, with a running read cursor. Symmetric to `CaptureFrame` —
+/// the reader's counterpart to capture's diverted writers.
+struct StdinFrame {
+	bytes: Vec<u8>,
+	pos: usize,
+}
+
 struct HostState {
 	io: Box<dyn HostIo>,
 	/// The program's command-line arguments (interpreter + script path already
@@ -309,6 +317,11 @@ struct HostState {
 	/// `io-capture-end` (pops the frame, returns its stdout) and `io-capture-err`
 	/// (returns this) calls that `io.capture` makes back-to-back.
 	capture_err: Vec<u8>,
+	/// Active `io.with-stdin` frames (the `io-with-stdin-*` imports). While the stack
+	/// is non-empty, the stdin readers draw from the top frame instead of the real
+	/// stdin sink, so a test can feed a program canned input. A stack so it nests;
+	/// empty in normal runs.
+	stdin_stack: Vec<StdinFrame>,
 	/// `std/sys/net` runtime state: the socket table.
 	net: HostNet,
 	/// The shared readiness + completion reactor (poller + worker pool) that socket reads
@@ -317,4 +330,29 @@ struct HostState {
 	/// `std/sys/db` runtime state: the pinned SQLite worker (spawned on first use). Reports
 	/// completions through `reactor`'s shared queue via a `CompletionSink`.
 	db: HostDb,
+}
+
+impl HostState {
+	/// Read one line of stdin: from the active `io.with-stdin` frame if any (draining
+	/// it, then EOF), otherwise from the real stdin sink. The `io-read` counterpart to
+	/// capture diverting the writers.
+	fn read_line(&mut self) -> Option<String> {
+		match self.stdin_stack.last_mut() {
+			Some(frame) => read_line_from(&frame.bytes, &mut frame.pos),
+			None => self.io.read_line(),
+		}
+	}
+
+	/// Drain the rest of stdin: from the active `io.with-stdin` frame if any, otherwise
+	/// the real sink. Backs `io-read-all`/`io-read-all-bytes`.
+	fn read_rest(&mut self) -> Vec<u8> {
+		match self.stdin_stack.last_mut() {
+			Some(frame) => {
+				let rest = frame.bytes[frame.pos..].to_vec();
+				frame.pos = frame.bytes.len();
+				rest
+			}
+			None => self.io.read_rest(),
+		}
+	}
 }

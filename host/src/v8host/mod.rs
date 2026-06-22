@@ -141,6 +141,7 @@ fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunCapture {
 			read_stash: Vec::new(),
 			capture: Vec::new(),
 			capture_err: Vec::new(),
+			stdin_stack: Vec::new(),
 			net: HostNet::default(),
 			reactor: Reactor::default(),
 			db: HostDb::default(),
@@ -195,6 +196,16 @@ fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) 
 	register(scope, pluma, data, "io-capture-start", cb_capture_start);
 	register(scope, pluma, data, "io-capture-out", cb_capture_out);
 	register(scope, pluma, data, "io-capture-err", cb_capture_err);
+	// `io.with-stdin` (std/sys/io): feed canned stdin to a thunk (the reader-side dual
+	// of `io.capture`).
+	register(
+		scope,
+		pluma,
+		data,
+		"io-with-stdin-start",
+		cb_with_stdin_start,
+	);
+	register(scope, pluma, data, "io-with-stdin-end", cb_with_stdin_end);
 	// std/sys/io reads / fs.
 	register(scope, pluma, data, "io-read", cb_io_read);
 	register(scope, pluma, data, "io-read-all", cb_io_read_all);

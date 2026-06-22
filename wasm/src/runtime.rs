@@ -1141,6 +1141,9 @@ pub(crate) fn is_byte_writer(tag: &str) -> bool {
 			| "io-write-bytes"
 			| "io-write-err-bytes"
 			| "io-fail"
+			// `io.with-stdin` (std/sys/io): one string (the canned input) in, nothing out —
+			// pushes a stdin frame the readers draw from. The byte-writer shape.
+			| "io-with-stdin-start"
 			// `std/web/sandbox` share-link: takes one string (the encoded snippet), writes
 			// it into the URL fragment + clipboard, returns nothing — the byte-writer shape.
 			| "share-link"
@@ -1169,6 +1172,8 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		// boxed arg and return nothing (`io.fail` diverges — the host traps).
 		"print" | "io-print" | "io-print-err" | "io-write" | "io-write-err" | "io-write-bytes"
 		| "io-write-err-bytes" | "io-fail"
+		// `io.with-stdin` start: one-string-in, nothing-out (pushes a stdin frame).
+		| "io-with-stdin-start"
 		// `share-link` (std/web/sandbox) rides the same one-string-in, nothing-out shape.
 		| "share-link" => Some(HostSig {
 			arity: 1,
@@ -1185,6 +1190,9 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 		// `io.capture` (std/sys/io): stdout/stderr diversion around a thunk. Same
 		// `(dst,cap) -> len` read shape; each returns captured text as `result string string`.
 		| "io-capture-start" | "io-capture-out" | "io-capture-err"
+		// `io.with-stdin` end: pops the stdin frame, rides the same `(dst,cap) -> len`
+		// read shape (returns the empty string, which the wrapper ignores).
+		| "io-with-stdin-end"
 		// `io.args` rides the same marshalled-read path (`(dst,cap) -> len`, a blob in
 		// scratch) but returns a bare `list string`, not a `result` (`IoKind::Args`).
 		| "io-args"
@@ -1571,7 +1579,9 @@ pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 		"io-read" | "io-read-all" | "io-last-error" | "io-cwd" => IoKind::ReadStr,
 		// `io.capture` (std/sys/io) — push/pop a capture frame and return its stdout/stderr
 		// text as a `result string string`, shaped exactly like a stdin read.
-		"io-capture-start" | "io-capture-out" | "io-capture-err" => IoKind::ReadStr,
+		"io-capture-start" | "io-capture-out" | "io-capture-err" | "io-with-stdin-end" => {
+			IoKind::ReadStr
+		}
 		"io-read-all-bytes" => IoKind::ReadBytes,
 		// `uuid-parse` isn't io, but it has the same shape — a string in, a `result
 		// string` out — so it reuses the `(path, plen, dst, cap)` read marshalling.
@@ -1630,6 +1640,9 @@ pub(crate) fn is_io_result(tag: &str) -> bool {
 			| "io-capture-start"
 			| "io-capture-out"
 			| "io-capture-err"
+			// `io.with-stdin` end — rides the same read path; its empty `result` is shaped
+			// by `__io_result` and discarded by the wrapper.
+			| "io-with-stdin-end"
 			// rides the io read path; its `result string` is shaped by `__io_result`.
 			| "uuid-parse"
 			// the sync `std/sys/fs` op — its `result bytes` is shaped by `__io_result`.

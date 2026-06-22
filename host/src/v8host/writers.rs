@@ -74,6 +74,37 @@ pub(super) fn cb_capture_err(
 	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, bytes));
 }
 
+/// `io-with-stdin-start(ptr, len)`: read the pre-rendered injection text out of
+/// scratch and push a stdin frame the readers then draw from. The byte-writer shape
+/// (string in, nothing out), the reader-side counterpart to `io-capture-start`.
+pub(super) fn cb_with_stdin_start(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	_rv: v8::ReturnValue,
+) {
+	let (ptr, len) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let bytes = read_mem(scope, mem, ptr.max(0) as usize, len.max(0) as usize);
+	ctx
+		.state
+		.stdin_stack
+		.push(crate::StdinFrame { bytes, pos: 0 });
+}
+
+/// `io-with-stdin-end(dst, cap) -> len`: pop the top stdin frame. Rides the `(dst,
+/// cap)` read shape (always "returns" the empty string) like `io-capture-start`; the
+/// Pluma wrapper ignores the value. An empty stack (unbalanced use) is a no-op.
+pub(super) fn cb_with_stdin_end(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	ctx.state.stdin_stack.pop();
+	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, Vec::new()));
+}
+
 pub(super) fn cb_print(
 	s: &mut v8::HandleScope,
 	a: v8::FunctionCallbackArguments,

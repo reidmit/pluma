@@ -13,7 +13,7 @@ pub(super) fn cb_io_read(
 ) {
 	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
 	let (ctx, mem) = ctx_and_mem(scope, &args);
-	let line = ctx.state.io.read_line();
+	let line = ctx.state.read_line();
 	let n = match line {
 		Some(l) => deliver_read_v8(scope, mem, ctx, dst, cap, l.into_bytes()),
 		None => {
@@ -31,7 +31,7 @@ pub(super) fn cb_io_read_all(
 ) {
 	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
 	let (ctx, mem) = ctx_and_mem(scope, &args);
-	let bytes = ctx.state.io.read_rest();
+	let bytes = ctx.state.read_rest();
 	let s = String::from_utf8_lossy(&bytes).into_owned();
 	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, s.into_bytes()));
 }
@@ -43,7 +43,7 @@ pub(super) fn cb_io_read_all_bytes(
 ) {
 	let (dst, cap) = (argi(scope, &args, 0), argi(scope, &args, 1));
 	let (ctx, mem) = ctx_and_mem(scope, &args);
-	let bytes = ctx.state.io.read_rest();
+	let bytes = ctx.state.read_rest();
 	rv.set_int32(deliver_read_v8(scope, mem, ctx, dst, cap, bytes));
 }
 

@@ -60,7 +60,9 @@ public def write-err-bytes :: fun bytes -> nothing = built-in "io-write-err-byte
 # host never fails these (it always answers `ok <text>`), so `capture` unwraps with
 # `?? ""`. Internal plumbing for `capture`.
 def capture-start :: fun nothing -> result string string = built-in "io-capture-start"
+
 def capture-out :: fun nothing -> result string string = built-in "io-capture-out"
+
 def capture-err :: fun nothing -> result string string = built-in "io-capture-err"
 
 # Runs the task `thunk` with stdout and stderr diverted into buffers, and returns
@@ -77,14 +79,48 @@ def capture-err :: fun nothing -> result string string = built-in "io-capture-er
 # For synchronous code under test, end the thunk with `task.return`. The frame is
 # always torn down, even if `thunk` fails (the failure then propagates). Captures
 # nest -- an inner `capture` collects only its own thunk's output.
-public def capture :: fun (fun nothing -> task a e) -> task {out :: string, err :: string} e = fun thunk {
+public def capture :: fun (fun nothing -> task a e) -> task {
+	out :: string,
+	err :: string,
+} e = fun thunk {
 	capture-start ()
 	# `attempt` so the frame is torn down whether the thunk succeeds or fails.
 	try outcome = task.attempt (thunk ())
-	let out = (capture-out ()) ?? ""
-	let err = (capture-err ()) ?? ""
+	let out = capture-out () ?? ""
+	let err = capture-err () ?? ""
 	when outcome is ok _v {
-		task.return {out: out, err: err}
+		task.return {out, err}
+	} is err e {
+		task.fail e
+	}
+}
+
+# `with-stdin-start` pushes a frame that feeds `input` to the stdin readers
+# (`read`/`read-all`/`read-all-bytes`); `with-stdin-end` pops it. While a frame is
+# active the readers draw from `input` (then see EOF) instead of the real stdin.
+# The reader-side dual of the `capture-*` plumbing. Internal plumbing for `with-stdin`.
+def with-stdin-start :: fun string -> nothing = built-in "io-with-stdin-start"
+
+def with-stdin-end :: fun nothing -> result string string = built-in "io-with-stdin-end"
+
+# Runs the task `thunk` with standard input fed from `input`, so a test can drive a
+# program that reads stdin without an interactive terminal or a piped file:
+#
+#     test.case "echoes" (fun {
+#         try cap = io.capture (fun { io.with-stdin "hi\n" (fun { echo () }) })
+#         assert.equals cap.out "hi\n"
+#     })
+#
+# The readers see `input`'s bytes, then end of input. The frame is always torn down,
+# even if `thunk` fails (the failure then propagates). Nests with `capture` and with
+# itself -- an inner `with-stdin` shadows the outer for its thunk's duration.
+public def with-stdin :: fun string (fun nothing -> task a e) -> task a e = fun input thunk {
+	with-stdin-start input
+	# `attempt` so the frame is torn down whether the thunk succeeds or fails.
+	try outcome = task.attempt (thunk ())
+	let _ = with-stdin-end () ?? ""
+	when outcome is ok v {
+		task.return v
 	} is err e {
 		task.fail e
 	}
