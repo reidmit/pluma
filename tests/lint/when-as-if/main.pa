@@ -1,0 +1,23 @@
+def main = fun {
+	let flag = true
+	let value = some 5
+
+	# Boolean two-arm `when` — this is just an `if`. (fires)
+	let a = when flag is true { 1 } is false { 0 }
+
+	# One real case plus a wildcard catch-all — also an `if`/`else`. (fires)
+	let b = when value is some inner { inner } is _ { 0 }
+
+	# Both arms name real variants: a genuine exhaustive match. Left alone.
+	# A bare last arm like `is none` is indistinguishable from a binding before
+	# name resolution, so only the explicit `_` wildcard counts as a catch-all.
+	let c = when value is some inner { inner } is none { 0 }
+
+	# Three arms: multi-way dispatch, not collapsible to one `if`. Left alone.
+	let d = when value is some 1 { 10 } is some n { n } is none { 0 }
+
+	# `else` is sugar for `is _`, so a two-arm `when … else` collapses too. (fires)
+	let e = when value is some inner { inner } else { 0 }
+
+	[a, b, c, d, e]
+}

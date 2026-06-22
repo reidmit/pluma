@@ -1,0 +1,27 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0011]: This `when` only tests a boolean — that's an `if`/`else`.
+  │
+  ├─𜱶 help: rewrite as `if <subject> { … } else { … }`; reserve `when` for exhaustive matches over a value's variants.
+  │
+6 │  let a = when flag is true { 1 } is false { 0 }
+  │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/when-as-if/main.pa:6:10
+
+warning[L0011]: This `when` has only two arms with a catch-all — that's an `if`/`else`.
+  │
+  ├─𜱶 help: rewrite as `if <subject> is <pattern> { … } else { … }`; reserve `when` for exhaustive matches over a value's variants.
+  │
+9 │  let b = when value is some inner { inner } is _ { 0 }
+  │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/when-as-if/main.pa:9:10
+
+warning[L0011]: This `when` has only two arms with a catch-all — that's an `if`/`else`.
+   │
+   ├─𜱶 help: rewrite as `if <subject> is <pattern> { … } else { … }`; reserve `when` for exhaustive matches over a value's variants.
+   │
+20 │  let e = when value is some inner { inner } else { 0 }
+   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/lint/when-as-if/main.pa:20:10

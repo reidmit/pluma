@@ -184,6 +184,7 @@ fn rules() -> Vec<Box<dyn Rule>> {
 		Box::new(rules::RedundantLambda),
 		Box::new(rules::IdenticalBranches),
 		Box::new(rules::BindThenReturn),
+		Box::new(rules::WhenAsIf),
 	]
 }
 
