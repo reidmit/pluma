@@ -13,6 +13,9 @@ publish = false
 # cannot reflect WasmGC structs — run the artifact (ABI.md Phase 2); V8's generational GC
 # is the deploy engine.
 
+[lib]
+doctest = false
+
 [dependencies]
 # `std/sys/compile` (the playground compile primitive) runs the full frontend → IR →
 # WasmGC pipeline in-process. None of these depend on `host`, so there's no cycle.

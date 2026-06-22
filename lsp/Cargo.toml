@@ -4,6 +4,9 @@ version.workspace = true
 license.workspace = true
 edition = "2024"
 
+[lib]
+doctest = false
+
 [dependencies]
 compiler = { path = "../compiler" }
 formatter = { path = "../formatter" }
