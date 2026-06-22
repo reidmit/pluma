@@ -68,18 +68,14 @@ dev-website: gen-stdlib-docs
 
 # run the snapshot test suite (analyze + run + format fixtures under tests/), then
 # the migrated run-fixture suite (tests/pa). `run` compiles each fixture to WasmGC
-# and runs it under V8 (the deploy engine). Uses cargo-nextest when present — it
-# pools every fixture across all cores instead of running the test binaries one at
-# a time, which is ~13x faster on this V8-heavy corpus (≈190s -> ≈15s). Falls back
-# to the builtin runner with an install hint when nextest isn't installed. (The
-# workspace has no doctests, so nextest skips nothing.)
+# and runs it under V8 (the deploy engine).
 test:
-  @ if command -v cargo-nextest >/dev/null 2>&1; then cargo nextest run -p tests; else echo "tip: 'cargo install cargo-nextest' for a ~13x faster run; using the builtin runner"; cargo test -p tests; fi
+  @ cargo test -p tests
   @ just test-run
 
 # regenerate snapshots for any failing tests (use `cargo insta review` for interactive)
 test-write:
-  @ if command -v cargo-nextest >/dev/null 2>&1; then INSTA_UPDATE=always cargo nextest run -p tests; else INSTA_UPDATE=always cargo test -p tests; fi
+  @ INSTA_UPDATE=always cargo test -p tests
 
 # run the migrated run-fixture suite (tests/pa/*.test.pa) through `pluma test`:
 # happy-path programs that assert on their own captured stdout, all under one V8

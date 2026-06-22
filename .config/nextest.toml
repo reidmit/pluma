@@ -1,8 +1,0 @@
-# Bound runaway fixtures. Most of the `tests/run` suite finishes in well under a
-# second, but the real-loopback RPC/HTTP fixtures (`rpc-stream*`, `rpc-context`,
-# `rpc-skew`) open an in-process localhost server+client on the single wasm
-# thread under the async scheduler — if a fiber ever fails to settle, the
-# captured run has no timeout of its own and hangs with no output. Kill such a
-# test after two slow periods and name it, instead of hanging the whole run.
-[profile.default]
-slow-timeout = { period = "30s", terminate-after = 2 }
