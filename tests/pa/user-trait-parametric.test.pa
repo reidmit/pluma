@@ -1,0 +1,43 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# A parametric instance: `displayable (option a) where (displayable a)`. The
+# trait is named `displayable` (not `showable`) only to stay globally unique
+# within the combined `pluma test` build, where every trait declaration is
+# program-wide; the test itself is the original `showable`-over-`option` one.
+
+trait displayable a {
+	display :: fun a -> string
+}
+
+implement displayable int {
+	def display = to-string
+}
+
+implement displayable (option a) where (displayable a) {
+	def display = fun o {
+		when o is some v {
+			"some $(displayable.display v)"
+		} is none {
+			"none"
+		}
+	}
+}
+
+def run = fun {
+	print (displayable.display 42)
+	print (displayable.display (some 7))
+	print (displayable.display (some (some 99)))
+}
+
+def tests :: test.suite = [
+	test.case "user-trait-parametric" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "42\nsome 7\nsome some 99\n"
+	},
+]

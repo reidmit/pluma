@@ -1,4 +1,8 @@
-use shapes
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+use trait-cross-module/shapes
 
 enum square {
 	square int
@@ -14,7 +18,7 @@ implement drawable square {
 	}
 }
 
-def main = fun {
+def run = fun {
 	# Bare dispatch on an imported trait method, importing-module instance.
 	print (draw (square.square 4))
 	# Bare dispatch, defining-module instance + type.
@@ -24,3 +28,13 @@ def main = fun {
 	# Explicit `module.trait.method` form.
 	print (shapes.drawable.draw (square.square 9))
 }
+
+def tests :: test.suite = [
+	test.case "trait-cross-module" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "square w=4\ncircle r=3\nshape: square w=4\nsquare w=9\n"
+	},
+]

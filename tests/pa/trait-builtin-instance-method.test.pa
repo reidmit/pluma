@@ -1,3 +1,8 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
 # A trait instance whose method bodies are `built-in "tag"` — the shape the
 # prelude's primitive instances (`numeric int`, `ord int`, …) need once they
 # move out of the compiler and into prelude.pa. An all-builtin concrete
@@ -16,8 +21,18 @@ implement arith int {
 	def times = built-in "int-mul"
 }
 
-def main = fun {
+def run = fun {
 	print (neg 42)
 	print (plus 3 4)
 	print (times 6 7)
 }
+
+def tests :: test.suite = [
+	test.case "trait-builtin-instance-method" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "-42\n7\n42\n"
+	},
+]

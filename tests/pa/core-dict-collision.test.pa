@@ -1,4 +1,8 @@
+use std/assert
 use std/dict
+use std/task
+use std/test
+use std/sys/io
 
 # Enum keys with a user `hash` instance — exercises enum keys through
 # insert / lookup / remove (the backend keys on the structural `__hash`).
@@ -14,7 +18,7 @@ implement hash color {
 	}
 }
 
-def main = fun {
+def run = fun {
 	let m = dict.empty ()
 	let m = dict.insert m color.red "r"
 	let m = dict.insert m color.green "g"
@@ -36,7 +40,6 @@ def main = fun {
 		print "?"
 	}
 
-	# Remove the middle entry; the others must still resolve.
 	let m = dict.remove m color.green
 	print (dict.size m)
 	print (dict.contains-key m color.green)
@@ -51,3 +54,13 @@ def main = fun {
 		print "?"
 	}
 }
+
+def tests :: test.suite = [
+	test.case "core-dict-collision" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "3\nr\ng\nb\n2\nfalse\nr\nb\n"
+	},
+]

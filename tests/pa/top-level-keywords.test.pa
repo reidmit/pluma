@@ -1,9 +1,14 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
 # Exercises every top-level keyword shape:
-#   def NAME = EXPR        — value (incl. function values)
-#   enum NAME { ... }      — enum type
-#   alias NAME ...         — alias type (record body uses ::)
+#   def NAME = EXPR          — value (incl. function values)
+#   enum NAME { ... }        — enum type
+#   alias NAME ...           — alias type (record body uses ::)
 #   trait NAME PARAM { ... } — trait declaration (sigs use ::)
-#   for TRAIT on TYPE { ... } — instance declaration
+#   implement TRAIT TYPE     — instance declaration
 
 enum shape {
 	circle int
@@ -34,7 +39,7 @@ implement describable int {
 
 def reid = {name: "reid", age: 30}
 
-def main = fun {
+def run = fun {
 	print reid.name
 
 	print (describe (shape.circle 5))
@@ -45,5 +50,12 @@ def main = fun {
 	print (describable.describe (shape.circle 7))
 }
 
-# qualified form still legal
-
+def tests :: test.suite = [
+	test.case "top-level-keywords" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "reid\ncircle radius 5\nrect 3 x 4\nthe number 42\ncircle radius 7\n"
+	},
+]
