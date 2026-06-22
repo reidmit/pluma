@@ -1,9 +1,13 @@
+use std/assert
+use std/error
+use std/task
+use std/test
+use std/sys/io
+
 # Phase 3: erase-late on the async side. A `try` awaiting a `task` inside a
 # function declared `task _ error` auto-erases the precise async failure into
 # `error` and stamps a per-hop frame -- exactly like the sync `try`, with no
 # manual `task.map-err`. The leaf constructor survives for `error.is-a`.
-use std/error
-use std/task
 
 enum db-error {
 	timeout
@@ -45,7 +49,7 @@ def show :: fun bool -> string = fun b {
 	}
 }
 
-def main = fun {
+def run = fun {
 	try r = task.attempt (serve ())
 	when r is ok v {
 		print "unexpected ok $(to-string v)"
@@ -56,3 +60,13 @@ def main = fun {
 	}
 	task.return 0
 }
+
+def tests :: test.suite = [
+	test.case "error-async-frame" fun {
+		try cap = io.capture fun {
+			try _ = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out "error-async-frame.test:39: error-async-frame.test:33: timed out\nyes\nno\n"
+	},
+]

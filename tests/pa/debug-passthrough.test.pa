@@ -1,3 +1,8 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
 # `debug` returns its argument unchanged after printing a `<module>:<line>`
 # header, so you can drop it into a pipeline without breaking it.
 
@@ -6,7 +11,7 @@ enum color {
 	green
 }
 
-def main = fun {
+def run = fun {
 	# binding via debug
 	let x = debug 42
 	print "doubled: $(to-string (x * 2))"
@@ -23,3 +28,13 @@ def main = fun {
 		print "it was green"
 	}
 }
+
+def tests :: test.suite = [
+	test.case "debug-passthrough" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "[debug-passthrough.test:16] 42\ndoubled: 84\n[debug-passthrough.test:20] 3\n[debug-passthrough.test:20] 4\nsum: 7\n[debug-passthrough.test:24] color.red\nit was red\n"
+	},
+]

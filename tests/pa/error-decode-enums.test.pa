@@ -1,9 +1,14 @@
+use std/assert
+use std/error
+use std/hex
+use std/task
+use std/test
+use std/time
+use std/sys/io
+
 # The payoff of precise stdlib error enums: a caller can branch on *which*
 # failure occurred (not scrape a string), and the same value erases into
 # `std/error` -- with `error.is-a` still recovering the leaf through the framing.
-use std/error
-use std/hex
-use std/time
 
 # Branch on the precise decode failure. The two nested `err` arms combine to
 # cover `err` (no wildcard) -- the exhaustiveness check recurses into the
@@ -32,7 +37,7 @@ def show :: fun bool -> string = fun b {
 	}
 }
 
-def main = fun {
+def run = fun {
 	print (classify-hex "abc")
 	print (classify-hex "zz")
 	print (classify-hex "4142")
@@ -43,3 +48,13 @@ def main = fun {
 		print (show (error.is-a e (time.time-error.field-out-of-range "" 0 0 0)))
 	}
 }
+
+def tests :: test.suite = [
+	test.case "error-decode-enums" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "odd length\nbad digit\nok\nerror-decode-enums.test:27: time: invalid date/time: month 13 is out of range 1..=12\nyes\n"
+	},
+]

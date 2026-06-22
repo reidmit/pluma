@@ -1,11 +1,16 @@
+use std/assert
+use std/error
+use std/rpc
+use std/task
+use std/test
+use std/sys/io
+
 # Phase 4 adoption: types erase into `error` exactly when they have a `describe`
 # instance. `string` has one (Phase 1), so every stdlib API that fails with a
 # string -- fs, db, http, sql -- erases for free; here a plain string-error
 # function stands in for one. `rpc-error` (the one precise error enum in the
 # stdlib) gets a `describe` instance too, so a failed `remote` call erases and
 # stays classifiable with `error.is-a`.
-use std/error
-use std/rpc
 
 # A library-style API that fails with a plain string (like fs/db/http).
 def read-setting :: fun nothing -> result string string = fun {
@@ -36,7 +41,7 @@ def show :: fun bool -> string = fun b {
 	}
 }
 
-def main = fun {
+def run = fun {
 	when from-string () is ok _ {
 		print "unexpected ok"
 	} is err e {
@@ -50,3 +55,13 @@ def main = fun {
 		print (show (error.is-a e rpc.rpc-error.forbidden))
 	}
 }
+
+def tests :: test.suite = [
+	test.case "error-adoption" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "error-adoption.test:26: missing SETTING\nerror-adoption.test:31: unauthorized\nyes\nno\n"
+	},
+]

@@ -1,9 +1,0 @@
----
-source: tests/run.rs
-expression: combined
----
-== status ==
-ok
-== stdout ==
-main:35: main:28: db timed out
-== stderr ==

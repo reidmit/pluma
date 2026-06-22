@@ -1,8 +1,13 @@
+use std/assert
+use std/error
+use std/task
+use std/test
+use std/sys/io
+
 # Erase-late: a function declared `result _ error` propagates a precise leaf
 # error through `try`, which auto-erases it into the `error` carrier (rendered
 # via its `describe` instance) and stamps a frame naming the propagation site.
 # Two `try` hops compose into a cause chain without any manual `error.context`.
-use std/error
 
 enum db-error {
 	timeout
@@ -37,10 +42,20 @@ def serve :: fun nothing -> result int error = fun {
 	ok (c * 10)
 }
 
-def main = fun {
+def run = fun {
 	when serve () is ok v {
 		print "ok $(to-string v)"
 	} is err e {
 		print (error.message e)
 	}
 }
+
+def tests :: test.suite = [
+	test.case "error-erase-at-try" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "error-erase-at-try.test:40: error-erase-at-try.test:33: db timed out\n"
+	},
+]

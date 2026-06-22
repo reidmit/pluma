@@ -1,9 +1,14 @@
+use std/assert
+use std/error
+use std/task
+use std/test
+use std/sys/io
+
 # Phase 2 classification: `error.is-a` recovers *which* leaf constructor a
 # failure was erased from -- through any amount of layered `context` -- by
 # comparing global constructor ids, without ever recovering the payload. It
 # distinguishes variants of the same enum and across enums, and never traps on
 # a non-variant argument.
-use std/error
 
 enum db-error {
 	timeout
@@ -42,7 +47,7 @@ def show :: fun bool -> string = fun b {
 	}
 }
 
-def main = fun {
+def run = fun {
 	when load () is ok _ {
 		print "unexpected ok"
 	} is err e {
@@ -58,3 +63,13 @@ def main = fun {
 		print (show (error.is-a (error.new "empty") db-error.timeout))
 	}
 }
+
+def tests :: test.suite = [
+	test.case "error-classify" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "serving request: error-classify.test:37: timed out\nyes\nno\nno\nno\nno\n"
+	},
+]
