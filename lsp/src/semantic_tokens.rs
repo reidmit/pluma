@@ -208,6 +208,34 @@ mod tests {
 	}
 
 	#[test]
+	fn use_multi_segment_path_is_all_namespace() {
+		// Slash-separated module paths: every segment AND each `/` separator
+		// classify as namespace, so the path reads as one unit and the slash
+		// isn't left as the lexer's stray operator.
+		let src = "use std/sys/io\n";
+		let toks = classify(src);
+		assert!(toks.contains(&(0, 0, 3, KEYWORD)), "use kw");
+		assert!(toks.contains(&(0, 4, 3, NAMESPACE)), "std segment");
+		assert!(toks.contains(&(0, 7, 1, NAMESPACE)), "first slash");
+		assert!(toks.contains(&(0, 8, 3, NAMESPACE)), "sys segment");
+		assert!(toks.contains(&(0, 11, 1, NAMESPACE)), "second slash");
+		assert!(toks.contains(&(0, 12, 2, NAMESPACE)), "io segment");
+		// No operator class leaks onto the slashes.
+		assert!(
+			!toks.iter().any(|t| t.3 == OPERATOR),
+			"no operator in use path: {toks:?}"
+		);
+	}
+
+	#[test]
+	fn use_with_alias_is_namespace() {
+		let src = "use std/sys/io as sysio\n";
+		let toks = classify(src);
+		assert!(toks.contains(&(0, 15, 2, KEYWORD)), "as kw");
+		assert!(toks.contains(&(0, 18, 5, NAMESPACE)), "sysio alias");
+	}
+
+	#[test]
 	fn alias_record_with_typed_fields() {
 		let src = "alias person {\n\tname :: string\n\tage  :: int\n}\n";
 		let toks = classify(src);

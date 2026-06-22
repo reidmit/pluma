@@ -331,8 +331,21 @@ impl AstWalker {
 	}
 
 	fn walk_use(&mut self, u: &UseNode, out: &mut Vec<HlToken>) {
-		for seg in &u.path {
+		for (i, seg) in u.path.iter().enumerate() {
 			emit(out, &seg.range, Class::Namespace, seg.name.len());
+			// Paint the `/` separator to the next segment as namespace too, so the
+			// whole path reads as one unit instead of the lexer's stray operator
+			// classification of the slash. (Same line only — paths never wrap.)
+			if let Some(next) = u.path.get(i + 1) {
+				if seg.range.end.line == next.range.start.line && next.range.start.col > seg.range.end.col {
+					out.push(HlToken {
+						line: seg.range.end.line,
+						col: seg.range.end.col,
+						len: next.range.start.col - seg.range.end.col,
+						class: Class::Namespace,
+					});
+				}
+			}
 		}
 		if let Some(alias) = &u.alias {
 			emit(out, &alias.range, Class::Namespace, alias.name.len());
