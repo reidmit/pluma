@@ -91,6 +91,21 @@ const POLL_ENUM: &str = "__poll";
 const READY_TAG: u32 = 0;
 const PENDING_TAG: u32 = 1;
 
+/// The `__poll` enum's `(name, [(variant, arity)])` entry. Seeded into the enum
+/// table up front by lowering (so every constructor's global ctor id is assigned
+/// with `__poll` already present) and re-inserted by `cps_transform` for programs
+/// lowered without that seed. Single-sourced here because the global ctor id is a
+/// cross-pass contract: a wire schema bakes a variant's id during lowering, and the
+/// `__variant_name` side table recomputes it at emit — if `__poll` joined the table
+/// only at emit (after `cps_transform`), it would shift every later id and the two
+/// would disagree, so a wire-decoded enum would render under the wrong name.
+pub fn poll_enum_entry() -> (String, Vec<(String, usize)>) {
+	(
+		POLL_ENUM.to_string(),
+		vec![("ready".to_string(), 1), ("pending".to_string(), 2)],
+	)
+}
+
 /// Rewrite every supported `is_async` function into poll form, in place. For each
 /// transformed `f`, generates a sibling poll function, appends it to
 /// `program.functions`, and points `f.poll_fn` at it. Idempotent (already-`Poll`
@@ -110,10 +125,8 @@ pub fn cps_transform(program: &mut IrProgram) {
 	}
 	if !new_funcs.is_empty() {
 		program.functions.extend(new_funcs);
-		program
-			.enums
-			.entry(POLL_ENUM.to_string())
-			.or_insert_with(|| vec![("ready".to_string(), 1), ("pending".to_string(), 2)]);
+		let (name, variants) = poll_enum_entry();
+		program.enums.entry(name).or_insert(variants);
 	}
 }
 

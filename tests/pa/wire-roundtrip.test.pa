@@ -1,10 +1,14 @@
+use std/assert
+use std/hex
+use std/list
+use std/task
+use std/test
+use std/sys/io
+
 # The `wire` codec: auto-derived structural
 # encode/decode over a compact, deterministic binary format. Exercises
 # primitives, records, options, lists, tuples, user enums, nesting, and the
 # `wire-error` decode-failure channel.
-
-use std/hex
-use std/list
 
 enum shape {
 	circle float
@@ -12,7 +16,7 @@ enum shape {
 	dot
 }
 
-def main = fun {
+def run = fun {
 	# Primitive round-trip, plus the deterministic byte layout (zigzag varint).
 	let e-int = wire.encode (0 - 1)
 	print "int bytes: $(hex.encode e-int)"
@@ -49,3 +53,13 @@ def main = fun {
 		print "decode err: $(to-string er)"
 	}
 }
+
+def tests :: test.suite = [
+	test.case "wire-roundtrip" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "int bytes: 01\nint: -1\nrec: ada 36\nlist len: 3\nenum: shape.rect 3 4\ndecode err: wire-error.unexpected-end\n"
+	},
+]

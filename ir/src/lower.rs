@@ -3931,6 +3931,13 @@ fn collect_enums(compiler: &Compiler) -> HashMap<String, Vec<(String, usize)>> {
 			}
 		}
 	}
+	// Seed the synthetic `__poll` enum that async lowering (`cps::cps_transform`)
+	// later relies on. Including it here — before any wire schema bakes a variant's
+	// global ctor id — keeps that id space identical to the one the emitter rebuilds
+	// for the `__variant_name` side table, which always sees `__poll`. Without the
+	// seed, an async program's wire-decoded enums render under a shifted name.
+	let (poll_name, poll_variants) = crate::cps::poll_enum_entry();
+	out.entry(poll_name).or_insert(poll_variants);
 	out
 }
 

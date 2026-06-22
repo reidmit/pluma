@@ -1,0 +1,43 @@
+use std/assert
+use std/list
+use std/string
+use std/syntax
+use std/task
+use std/test
+use std/sys/io
+
+# `syntax.highlight` tokenizes Pluma source into class-tagged spans for
+# highlighting. Concatenating the spans' text reproduces the input exactly;
+# unclassified runs come back with an empty class.
+
+def show :: fun syntax.span -> nothing = fun s {
+	print "$(s.class)\t| $(s.text)"
+}
+
+def highlight-one :: fun string -> nothing = fun src {
+	print "--- $(src)"
+	list.each (syntax.highlight src) show
+	# Round-trip: joining the span texts must equal the input.
+	let joined = string.join (list.map (syntax.highlight src) fun s { s.text }) ""
+	print "roundtrip: $(to-string (joined == src))"
+	print ""
+}
+
+def run = fun {
+	highlight-one "def fact = fun n { if n <= 1 { 1 } else { n * fact (n - 1) } }"
+	highlight-one "let xs :: list int = [1, 0xff, 2m20s]"
+	highlight-one "# a comment\nprint \"hi \$(name)\""
+	highlight-one "list.map xs fun x { x + 1 }"
+	highlight-one "def pi :: float = 3.14 and done == false"
+	highlight-one "let s = \"\"\"\nhi \"there\"\n\"\"\""
+}
+
+def tests :: test.suite = [
+	test.case "syntax-highlight" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out "--- def fact = fun n { if n <= 1 { 1 } else { n * fact (n - 1) } }\nkeyword\t| def\n\t|  \n\t| fact\n\t|  \noperator\t| =\n\t|  \nkeyword\t| fun\n\t|  \n\t| n\n\t|  \n\t| {\n\t|  \nkeyword\t| if\n\t|  \n\t| n\n\t|  \noperator\t| <=\n\t|  \nnumber\t| 1\n\t|  \n\t| {\n\t|  \nnumber\t| 1\n\t|  \n\t| }\n\t|  \nkeyword\t| else\n\t|  \n\t| {\n\t|  \n\t| n\n\t|  \noperator\t| *\n\t|  \n\t| fact\n\t|  \n\t| (\n\t| n\n\t|  \noperator\t| -\n\t|  \nnumber\t| 1\n\t| )\n\t|  \n\t| }\n\t|  \n\t| }\nroundtrip: true\n\n--- let xs :: list int = [1, 0xff, 2m20s]\nkeyword\t| let\n\t|  \n\t| xs\n\t|  \noperator\t| ::\n\t|  \n\t| list\n\t|  \n\t| int\n\t|  \noperator\t| =\n\t|  \n\t| [\nnumber\t| 1\n\t| ,\n\t|  \nnumber\t| 0xff\n\t| ,\n\t|  \nnumber\t| 2m20s\n\t| ]\nroundtrip: true\n\n--- # a comment\nprint \"hi \$(name)\"\ncomment\t| # a comment\n\t| \n\n\t| print\n\t|  \nstring\t| \"hi \$(name)\"\nroundtrip: true\n\n--- list.map xs fun x { x + 1 }\nnamespace\t| list\n\t| .\n\t| map\n\t|  \n\t| xs\n\t|  \nkeyword\t| fun\n\t|  \n\t| x\n\t|  \n\t| {\n\t|  \n\t| x\n\t|  \noperator\t| +\n\t|  \nnumber\t| 1\n\t|  \n\t| }\nroundtrip: true\n\n--- def pi :: float = 3.14 and done == false\nkeyword\t| def\n\t|  \n\t| pi\n\t|  \noperator\t| ::\n\t|  \n\t| float\n\t|  \noperator\t| =\n\t|  \nnumber\t| 3.14\n\t|  \nkeyword\t| and\n\t|  \n\t| done\n\t|  \noperator\t| ==\n\t|  \nboolean\t| false\nroundtrip: true\n\n--- let s = \"\"\"\nhi \"there\"\n\"\"\"\nkeyword\t| let\n\t|  \n\t| s\n\t|  \noperator\t| =\n\t|  \nstring\t| \"\"\"\nhi \"there\"\n\"\"\"\nroundtrip: true\n\n"
+	},
+]
