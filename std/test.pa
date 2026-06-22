@@ -391,7 +391,24 @@ public def run-all :: fun bool (list {
 	name :: string,
 	tests :: list test,
 }) -> task (result nothing string) e = fun color suites {
-	try final = task-fold suites (zero-acc ()) fun a suite {
+	try final = run-suites color suites
+	print ""
+	print (summary-line color final)
+	if final.failed == 0 {
+		task.return (ok ())
+	} else {
+		task.return (err "")
+	}
+}
+
+# Run each suite (printing its module tree) and fold the per-module counts into
+# one running total. Shared by `run-all` (which then prints the summary) and the
+# sharded runner (which reports its slice's counts back to the host instead).
+def run-suites :: fun bool (list {
+	name :: string,
+	tests :: list test,
+}) -> task acc e = fun color suites {
+	task-fold suites (zero-acc ()) fun a suite {
 		let entries = flatten suite.tests
 		let any-focused = list.any entries fun e {
 			is-focused e.status
@@ -405,11 +422,75 @@ public def run-all :: fun bool (list {
 			todo: a.todo + count-kind results kind-is-todo,
 		}
 	}
-	print ""
-	print (summary-line color final)
-	if final.failed == 0 {
-		task.return (ok ())
+}
+
+# `run-all`, but shardable across parallel processes. The test entry passes a
+# shard descriptor (`"<id> <count>"`, set by the host when `pluma test` fans out
+# across isolates); this process then runs only the suites whose index is `id`
+# modulo `count` and reports its slice's counts back instead of a summary. Absent
+# a descriptor -- the ordinary single-process run -- it is exactly `run-all` over
+# every suite.
+public def run-all-sharded :: fun bool (option string) (list {
+	name :: string,
+	tests :: list test,
+}) -> task (result nothing string) e = fun color shard suites {
+	if shard-of shard is some sh {
+		try final = run-suites color (every-nth suites sh.id sh.count)
+		# Report this slice's counts to the host (which sums every shard's line
+		# into one summary) rather than printing a per-shard summary.
+		print (shard-counts-line final)
+		if final.failed == 0 {
+			task.return (ok ())
+		} else {
+			task.return (err "")
+		}
 	} else {
-		task.return (err "")
+		run-all color suites
+	}
+}
+
+# A machine-readable `<RS>passed failed skipped todo` line. The RS control byte
+# (0x1e) prefixes it so the parallel host can pick it out of captured output and
+# strip it before printing — test output never contains a bare RS.
+def shard-counts-line :: fun acc -> string = fun a {
+	"$(rs)$(to-string a.passed) $(to-string a.failed) $(to-string a.skipped) $(to-string a.todo)"
+}
+
+# RS (0x1e) as a one-character string, built from its byte like `esc`.
+def rs :: string = bytes.to-string (bytes.build 1 fun _i { 30 }) ?? ""
+
+# Parse an `"<id> <count>"` shard descriptor (the host's `PLUMA_TEST_SHARD` value)
+# into `{id, count}`. A missing descriptor (`none`) or a malformed one is `none`,
+# so the caller runs every suite.
+def shard-of :: fun (option string) -> option {id :: int, count :: int} = fun shard {
+	if shard is some s {
+		let parts = string.split s " "
+		if list.length parts >= 2 {
+			let id = string.to-int (list.get parts 0) ?? 0 - 1
+			let count = string.to-int (list.get parts 1) ?? 0
+			if count > 0 and id >= 0 {
+				some {id, count}
+			} else {
+				none
+			}
+		} else {
+			none
+		}
+	} else {
+		none
+	}
+}
+
+# Every `count`-th element of `xs` starting at index `id` -- the suites this
+# shard owns, in original order.
+def every-nth :: fun (list a) int int -> list a = fun xs id count {
+	every-nth-go xs id count (list.length xs) []
+}
+
+def every-nth-go :: fun (list a) int int int (list a) -> list a = fun xs i count n acc {
+	if i >= n {
+		list.reverse acc
+	} else {
+		every-nth-go xs (i + count) count n [list.get xs i, ...acc]
 	}
 }

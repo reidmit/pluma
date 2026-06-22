@@ -184,8 +184,9 @@ fn run_suite(filters: &[String], root_dir: &Path) -> i32 {
 
 	let t_codegen = std::time::Instant::now();
 
-	// The runner streams the report to stdout; the exit code reflects pass/fail.
-	let code = host::run_test_v8(&bytes);
+	// Run each test module in its own fresh isolate, in parallel over the
+	// once-compiled module. The exit code reflects pass/fail.
+	let code = host::run_test_v8(&bytes, program.test_suites.len(), use_color);
 
 	// Wall-clock for the whole command (discover + compile + run), printed under
 	// the Pluma-rendered summary line so every `pluma test` ends with how long it

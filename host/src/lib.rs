@@ -200,13 +200,6 @@ impl StdioIo {
 			stdin_closed: false,
 		}
 	}
-	/// Stream stdout/stderr live, but treat stdin as already at EOF.
-	fn without_stdin() -> Self {
-		StdioIo {
-			stdin: None,
-			stdin_closed: true,
-		}
-	}
 	fn reader(&mut self) -> &mut std::io::BufReader<std::io::Stdin> {
 		self
 			.stdin
@@ -330,6 +323,10 @@ struct HostState {
 	/// `std/sys/db` runtime state: the pinned SQLite worker (spawned on first use). Reports
 	/// completions through `reactor`'s shared queue via a `CompletionSink`.
 	db: HostDb,
+	/// When this run is one shard of a parallel `pluma test`, its `(id, count)` —
+	/// surfaced only through `io-env`'s reserved `PLUMA_TEST_SHARD` name so the test
+	/// runner can select its slice, while real `io.args`/`io.env` stay untouched.
+	pub shard: Option<(u32, u32)>,
 }
 
 impl HostState {

@@ -285,9 +285,17 @@ pub(super) fn cb_io_env(
 	let (dst, cap) = (argi(scope, &args, 2), argi(scope, &args, 3));
 	let (ctx, mem) = ctx_and_mem(scope, &args);
 	let name = read_str(scope, mem, np, nl);
-	let n = match std::env::var(&name) {
-		Ok(v) => deliver_read_v8(scope, mem, ctx, dst, cap, v.into_bytes()),
-		Err(_) => -1, // unset (or non-UTF-8) -> `none`.
+	// Reserved name: a parallel `pluma test` shard reads its `(id, count)` here
+	// rather than from a real env var or argv, so test code that inspects the real
+	// environment is unaffected. The synthesized test entry is the only caller.
+	let value = if name == "PLUMA_TEST_SHARD" {
+		ctx.state.shard.map(|(id, count)| format!("{id} {count}"))
+	} else {
+		std::env::var(&name).ok()
+	};
+	let n = match value {
+		Some(v) => deliver_read_v8(scope, mem, ctx, dst, cap, v.into_bytes()),
+		None => -1, // unset (or non-UTF-8) -> `none`.
 	};
 	rv.set_int32(n);
 }

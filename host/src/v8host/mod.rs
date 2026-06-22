@@ -104,17 +104,157 @@ pub fn run_streaming_v8(bytes: &[u8], args: &[String]) -> i32 {
 	}
 }
 
-/// Run a `pluma test` artifact under V8, streaming the report to stdout, and map
-/// the outcome to a process exit code. The runner (`std/test.run-all`) prints
-/// everything itself and returns `ok ()` on success or `err ""` on test failures
-/// — so a clean failure (`"runtime error: "` with an empty message) just exits 1
-/// silently, while a genuine trap (a crashing case) still surfaces its message.
-pub fn run_test_v8(bytes: &[u8]) -> i32 {
-	// Stream the report live, but keep stdin at EOF: a case that reads stdin (e.g.
-	// `io.read`) must not block on the terminal — there's no single interactive
-	// stdin to feed a whole suite.
-	let result = run_v8(bytes, Box::new(StdioIo::without_stdin()), Vec::new());
-	match result.status.as_str() {
+/// Run a `pluma test` artifact and map the outcome to a process exit code.
+///
+/// Every test module runs in its OWN fresh V8 isolate — fresh wasm globals,
+/// scheduler, and `HostState` — so no module can observe state another module
+/// left behind; that isolation is the point. The artifact is compiled once and
+/// its `CompiledWasmModule` shared (no recompilation) across the isolates, which
+/// a bounded thread pool runs in parallel. `num_modules` is the suite count
+/// (`program.test_suites.len()`); each isolate is told its index via the host's
+/// reserved `PLUMA_TEST_SHARD` env name and runs just that module. Each isolate
+/// captures its own report; reports print in module order so output is
+/// deterministic regardless of which thread finished first, ending with one
+/// aggregate summary. Exit code: 0 all-pass, 1 on any failure or trap.
+pub fn run_test_v8(bytes: &[u8], num_modules: usize, color: bool) -> i32 {
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::sync::{Arc, Mutex};
+
+	ensure_v8();
+	let num_items = num_modules;
+	if num_items == 0 {
+		return 0;
+	}
+
+	// Compile once on a throwaway isolate, then extract the shareable compiled
+	// module. The native code outlives that isolate (it's held behind a shared
+	// pointer), so every work item rebuilds its module object from it for free.
+	let compiled = match compile_to_shared(bytes) {
+		Some(c) => Arc::new(c),
+		None => {
+			eprintln!("wasm compile failed");
+			return 1;
+		}
+	};
+
+	// A bounded pool of `workers` threads pulls work items off a shared cursor.
+	// Each item runs in its OWN fresh isolate, told its index via the reserved
+	// `PLUMA_TEST_SHARD` host value, which the in-wasm runner (`run-all-sharded`)
+	// turns into "run the suite at this index". The pool is sized to the machine.
+	let workers = std::thread::available_parallelism()
+		.map(|n| n.get())
+		.unwrap_or(4)
+		.clamp(1, num_items);
+	let cursor = Arc::new(AtomicUsize::new(0));
+	let results: Arc<Mutex<Vec<Option<RunCapture>>>> =
+		Arc::new(Mutex::new((0..num_items).map(|_| None).collect()));
+
+	let handles: Vec<_> = (0..workers)
+		.map(|_| {
+			let compiled = Arc::clone(&compiled);
+			let cursor = Arc::clone(&cursor);
+			let results = Arc::clone(&results);
+			std::thread::spawn(move || {
+				loop {
+					let i = cursor.fetch_add(1, Ordering::Relaxed);
+					if i >= num_items {
+						break;
+					}
+					let cap = run_in_fresh_isolate(
+						ModuleSource::Compiled(&compiled),
+						Box::new(CapturingIo::new(&[])),
+						Vec::new(),
+						Some((i as u32, num_items as u32)),
+					);
+					results.lock().unwrap()[i] = Some(cap);
+				}
+			})
+		})
+		.collect();
+
+	let mut code = 0;
+	for handle in handles {
+		if handle.join().is_err() {
+			eprintln!("a test worker thread panicked");
+			code = 1;
+		}
+	}
+
+	// Print in work-item order so the report is deterministic regardless of which
+	// thread finished first. Each shard's output ends with a `<RS>p f s t` counts
+	// line (see `std/test.shard-counts-line`); pick those out, sum them, and print
+	// the module trees without them — then one aggregate summary for the whole run.
+	let results = Arc::try_unwrap(results)
+		.unwrap_or_else(|_| unreachable!("workers joined"))
+		.into_inner()
+		.unwrap();
+	let mut totals = [0i64; 4]; // passed, failed, skipped, todo
+	for cap in results.into_iter().flatten() {
+		for line in cap.stdout.split_inclusive('\n') {
+			match line.strip_prefix('\u{1e}') {
+				Some(counts) => {
+					for (slot, n) in totals.iter_mut().zip(
+						counts
+							.split_whitespace()
+							.filter_map(|tok| tok.parse::<i64>().ok()),
+					) {
+						*slot += n;
+					}
+				}
+				None => print!("{line}"),
+			}
+		}
+		eprint!("{}", cap.stderr);
+		if test_exit_code(&cap.status) != 0 {
+			code = 1;
+		}
+	}
+
+	print_pool_summary(totals, color);
+	if totals[1] > 0 {
+		code = 1;
+	}
+	code
+}
+
+/// Print the one aggregate summary line for a pooled test run, mirroring
+/// `std/test.summary-line`'s wording and color (bold green all-pass, bold red
+/// otherwise) so a sharded run reads identically to a single-process one.
+fn print_pool_summary(totals: [i64; 4], color: bool) {
+	let [passed, failed, skipped, todo] = totals;
+	let mut line = format!("{} of {} passed", passed, passed + failed);
+	if skipped > 0 {
+		line += &format!(", {skipped} skipped");
+	}
+	if todo > 0 {
+		line += &format!(", {todo} todo");
+	}
+	println!();
+	if color {
+		let sgr = if failed == 0 { "1;32" } else { "1;31" };
+		println!("\x1b[{sgr}m{line}\x1b[0m");
+	} else {
+		println!("{line}");
+	}
+}
+
+/// Compile `bytes` to a `CompiledWasmModule` that can be shared across isolates.
+/// The compiling isolate is dropped before returning; the compiled native code
+/// survives behind V8's shared pointer.
+fn compile_to_shared(bytes: &[u8]) -> Option<v8::CompiledWasmModule> {
+	let isolate = &mut v8::Isolate::new(Default::default());
+	let scope = &mut v8::HandleScope::new(isolate);
+	let context = v8::Context::new(scope, Default::default());
+	let scope = &mut v8::ContextScope::new(scope, context);
+	let module = v8::WasmModuleObject::compile(scope, bytes)?;
+	Some(module.get_compiled_module())
+}
+
+/// Map a run's status string to a `pluma test` exit code: `ok` → 0, a clean test
+/// failure (`run-all` returns `err ""`) → 1 silently, and a genuine trap → 1 with
+/// its message on stderr.
+fn test_exit_code(status: &str) -> i32 {
+	match status {
 		"ok" => 0,
 		"runtime error: " => 1,
 		other => {
@@ -131,21 +271,49 @@ pub fn run_test_v8(bytes: &[u8]) -> i32 {
 /// core.
 fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunCapture {
 	ensure_v8();
+	run_in_fresh_isolate(ModuleSource::Bytes(bytes), io, args, None)
+}
 
+/// A fresh `HostState` for one run — every per-run field at its empty default, the
+/// io sink, argv, and optional test-shard supplied. Shared by the single-run and
+/// per-shard drivers.
+fn fresh_state(io: Box<dyn HostIo>, args: Vec<String>, shard: Option<(u32, u32)>) -> HostState {
+	HostState {
+		io,
+		args,
+		fail: None,
+		last_error: String::new(),
+		read_stash: Vec::new(),
+		capture: Vec::new(),
+		capture_err: Vec::new(),
+		stdin_stack: Vec::new(),
+		net: HostNet::default(),
+		reactor: Reactor::default(),
+		db: HostDb::default(),
+		shard,
+	}
+}
+
+/// Where `run_in_context` gets its module: freshly compiled from wire bytes, or
+/// rebuilt — without recompiling — from a `CompiledWasmModule` shared across the
+/// sharded test driver's isolates.
+enum ModuleSource<'a> {
+	Bytes(&'a [u8]),
+	Compiled(&'a v8::CompiledWasmModule),
+}
+
+/// Build a fresh isolate + context, run `_entry` through it from the given module
+/// source, and return its status + captured output. The isolate and all V8 handles
+/// stay confined to this call (only the `Send` `CompiledWasmModule` ever crosses a
+/// thread), so this is safe to call on a worker thread per shard.
+fn run_in_fresh_isolate(
+	src: ModuleSource,
+	io: Box<dyn HostIo>,
+	args: Vec<String>,
+	shard: Option<(u32, u32)>,
+) -> RunCapture {
 	let mut ctx = Ctx {
-		state: HostState {
-			io,
-			args,
-			fail: None,
-			last_error: String::new(),
-			read_stash: Vec::new(),
-			capture: Vec::new(),
-			capture_err: Vec::new(),
-			stdin_stack: Vec::new(),
-			net: HostNet::default(),
-			reactor: Reactor::default(),
-			db: HostDb::default(),
-		},
+		state: fresh_state(io, args, shard),
 		memory: None,
 	};
 	let ctx_ptr = &mut ctx as *mut Ctx;
@@ -155,7 +323,7 @@ fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunCapture {
 	let context = v8::Context::new(scope, Default::default());
 	let scope = &mut v8::ContextScope::new(scope, context);
 
-	let status = run_in_context(scope, bytes, ctx_ptr);
+	let status = run_in_context(scope, src, ctx_ptr);
 	let stdout = ctx.state.io.captured_stdout();
 	let stderr = ctx.state.io.captured_stderr();
 	RunCapture {
@@ -167,11 +335,20 @@ fn run_v8(bytes: &[u8], io: Box<dyn HostIo>, args: Vec<String>) -> RunCapture {
 
 /// The body of a run, inside an entered context: compile the WasmGC module, then
 /// instantiate it and run `_entry`. Returns the program status string.
-fn run_in_context(scope: &mut v8::HandleScope, bytes: &[u8], ctx_ptr: *mut Ctx) -> String {
-	// Compile the WasmGC module.
-	let module = match v8::WasmModuleObject::compile(scope, bytes) {
-		Some(m) => m,
-		None => return "module error: compile failed".to_string(),
+fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut Ctx) -> String {
+	// Get the WasmGC module object — compile from bytes, or rebuild it from a
+	// shared `CompiledWasmModule` (no recompilation; the native code is shared).
+	let module = match src {
+		ModuleSource::Bytes(bytes) => match v8::WasmModuleObject::compile(scope, bytes) {
+			Some(m) => m,
+			None => return "module error: compile failed".to_string(),
+		},
+		ModuleSource::Compiled(compiled) => {
+			match v8::WasmModuleObject::from_compiled_module(scope, compiled) {
+				Some(m) => m,
+				None => return "module error: from_compiled_module failed".to_string(),
+			}
+		}
 	};
 
 	// Build the `{ pluma: { <imports> } }` import object. Each callback's `External`

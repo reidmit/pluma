@@ -35,13 +35,13 @@ Also in the surface (see fixtures/docs): list & record spread (`[1, ...xs]`, `{ 
 ```
 just run <path>         # run a .pa file or dir containing main.pa
 just test               # cargo test -p tests (analyze + run + format), then test-run
-just test-run           # the tests/pa suite alone (pluma test, one V8 boot)
+just test-run           # the tests/pa suite alone (pluma test, isolate per module)
 just test-write         # accept all snapshot changes (or use: cargo insta review)
 ```
 
 Tests are insta snapshots under `tests/<suite>/<name>/`: `analyze/` pins the frontend (parse/type — happy *and* error cases), `run/` + `run-fail/` compile to WasmGC and run on V8 (snapshotting status/stdout/stderr), `format/` pins formatter idempotence. Reject-at-compile-time cases belong in `analyze/`, not `run/`. Don't hand-edit `.snap` files — regenerate with `cargo insta review` or `just test-write`.
 
-Most happy-path `run/` fixtures (programs that just assert on their stdout) have been migrated to **`tests/pa/<name>.test.pa`** — Pluma suites that run the program under `io.capture` and check its output with `assert.matches`, all under one `pluma test` V8 boot instead of one OS process per fixture (`just test-run`, folded into `just test`). What stays a `run/` fixture: anything whose output depends on module name / line numbers (`debug`, erased-error locations), top-level `trait`/`implement` (instances are program-global and collide when many fixtures link into one module), and the `run-fail/` runtime-error cases. Add a new happy-path output test under `tests/pa/`; reach for a `run/` fixture only when it can't live there.
+Most happy-path `run/` fixtures (programs that just assert on their stdout) have been migrated to **`tests/pa/<name>.test.pa`** — Pluma suites that run the program under `io.capture` and check its output with `assert.matches`, all under one `pluma test` invocation — which runs each test module in its own fresh V8 isolate (in parallel, sharing the once-compiled artifact) so no module can pollute another's global state — instead of one OS process per fixture (`just test-run`, folded into `just test`). What stays a `run/` fixture: anything whose output depends on module name / line numbers (`debug`, erased-error locations), top-level `trait`/`implement` (instances are program-global and collide when many fixtures link into one module), and the `run-fail/` runtime-error cases. Add a new happy-path output test under `tests/pa/`; reach for a `run/` fixture only when it can't live there.
 
 ## Conventions
 

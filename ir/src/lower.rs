@@ -3414,10 +3414,29 @@ impl<'a> Lowerer<'a> {
 		test_suites: &[(String, GlobalId)],
 		color: bool,
 	) -> Result<Atom, String> {
-		let run_all = self
-			.globals
-			.lookup("std/test", "run-all")
-			.ok_or("`std/test.run-all` was not compiled — does a `*.test.pa` file `use std/test`?")?;
+		let run_all = self.globals.lookup("std/test", "run-all-sharded").ok_or(
+			"`std/test.run-all-sharded` was not compiled — does a `*.test.pa` file `use std/test`?",
+		)?;
+
+		// Read the reserved `PLUMA_TEST_SHARD` env name so a sharded `pluma test` —
+		// fanned out across parallel isolates, each given an `"<id> <count>"` shard —
+		// runs only its slice of suites. The host serves this name from per-run state
+		// (not the real environment), so test code that inspects argv/env is unaffected;
+		// an ordinary run gets `none` and runs everything.
+		let env_bi = self.globals.add_pre_evaluated(
+			"__test_runner__",
+			"io-env",
+			PreEval::Builtin("io-env".to_string(), Repr::Boxed),
+		);
+		let env_fn = fresh_let(body, next, Rvalue::GlobalRef(env_bi));
+		let shard = fresh_let(
+			body,
+			next,
+			Rvalue::CallClosure(
+				Atom::Var(env_fn),
+				vec![Atom::Const(Const::Str("PLUMA_TEST_SHARD".to_string()))],
+			),
+		);
 
 		// One `{name, tests}` record per suite. Field order is name-sorted to
 		// match the record-shape layout the backends expect from `MakeRecord`.
@@ -3446,7 +3465,11 @@ impl<'a> Lowerer<'a> {
 			next,
 			Rvalue::CallClosure(
 				Atom::Var(runner),
-				vec![Atom::Const(Const::Bool(color)), Atom::Var(list)],
+				vec![
+					Atom::Const(Const::Bool(color)),
+					Atom::Var(shard),
+					Atom::Var(list),
+				],
 			),
 		);
 		Ok(Atom::Var(result))
