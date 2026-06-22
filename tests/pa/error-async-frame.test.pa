@@ -64,7 +64,7 @@ def run = fun {
 def tests :: test.suite = [
 	test.case "error-async-frame" fun {
 		try cap = io.capture fun {
-			try _ = task.attempt (run ())
+			try task.attempt (run ())
 			task.return ()
 		}
 		assert.matches cap.out "error-async-frame.test:39: error-async-frame.test:33: timed out\nyes\nno\n"

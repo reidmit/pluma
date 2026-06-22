@@ -43,9 +43,9 @@ def run = fun {
 	let out = []
 	queue.enqueue s 1
 	queue.enqueue s 2
-	let _ = queue.dequeue s
+	queue.dequeue s
 	queue.enqueue s 3
-	let _ = queue.dequeue s
+	queue.dequeue s
 	queue.enqueue s 4
 	queue.enqueue s 5
 	while queue.dequeue s is some v { list.push out v }

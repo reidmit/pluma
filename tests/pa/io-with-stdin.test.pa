@@ -43,7 +43,7 @@ def tests :: test.suite = [
 
 		try cap = io.capture fun {
 			io.with-stdin "outer\n" fun {
-				try _ = io.with-stdin "inner\n" fun {
+				try io.with-stdin "inner\n" fun {
 					print (read1 ())
 					task.return ()
 				}
