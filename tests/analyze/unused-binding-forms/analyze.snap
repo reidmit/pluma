@@ -1,0 +1,15 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+warning: Name `n` is never used.
+> 11 | 	when b is box.wrap n {
+                           ^
+
+warning: Name `ignored` is never used.
+> 19 | def const-five = fun ignored {
+                            ^^^^^^^
+
+warning: Name `unused` is never used.
+> 24 | 	let unused = 99
+            ^^^^^^

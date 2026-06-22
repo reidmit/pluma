@@ -1,0 +1,27 @@
+# Every binding form that can go unused warns (and only warns — the program
+# still type-checks). Covers the three forms: a `let`, a function parameter,
+# and a payload binding in a match arm (the last was the original regression,
+# where an unused arm binding was promoted to a hard error).
+enum box {
+	wrap int
+}
+
+# An unused payload binding in a match arm. `n` here is never used.
+def kind-of = fun b {
+	when b is box.wrap n {
+		"wrapped"
+	} else {
+		"other"
+	}
+}
+
+# An unused function parameter.
+def const-five = fun ignored {
+	5
+}
+
+def main = fun {
+	let unused = 99
+	print (kind-of (box.wrap 7))
+	print (to-string (const-five "anything"))
+}
