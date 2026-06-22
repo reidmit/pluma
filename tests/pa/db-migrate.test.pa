@@ -1,0 +1,67 @@
+use std/assert
+use std/list
+use std/sql
+use std/task
+use std/test
+use std/sys/db
+use std/sys/io
+
+# Schema migrations (std/sys/db, built on the atomic `batch` primitive). Exercises a fresh
+# apply (two migrations run), an idempotent re-run (already-applied versions skipped -> 0),
+# that the migrated schema is actually usable, and -- the important one -- that a *failing*
+# migration rolls back atomically: a bad v3 that creates a table then hits invalid SQL must
+# leave neither the table nor a recorded version behind, which we prove by re-applying a
+# fixed v3 (it succeeds and creates the table, which would error if the rollback had leaked).
+# In-memory database, one connection, so the tracking table persists across calls.
+
+def migrations :: list migration = [
+	{version: 1, up: "create table users (id integer primary key, name text)"},
+	{version: 2, up: "alter table users add column email text"},
+]
+
+def run = fun {
+	try conn = db.open ":memory:"
+	try n = db.migrate conn migrations
+	print "applied: $(to-string n)"
+	try again = db.migrate conn migrations
+	print "reapplied: $(to-string again)"
+	try _ins = db.execute conn "insert into users (id, name, email) values (?, ?, ?)" [
+		sql.int 1,
+		sql.text "ada",
+		sql.text "ada@x.io",
+	]
+	try rows = db.execute conn "select email from users" []
+	when list.head rows is some r {
+		print "email: $(sql.get-text r "email" ?? "?")"
+	} is none {
+		print "no rows"
+	}
+	try bad = task.attempt (db.migrate conn [
+		{version: 3, up: "create table temp_t (x integer); this is not valid sql"},
+	])
+	when bad is ok _ {
+		print "unexpected ok"
+	} is err _ {
+		print "failed migration: err"
+	}
+	try after = db.migrate conn [{version: 3, up: "create table temp_t (x integer)"}]
+	print "retry applied: $(to-string after)"
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "db-migrate" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			applied: 2
+			reapplied: 0
+			email: ada@x.io
+			failed migration: err
+			retry applied: 1
+
+			"""
+	},
+]

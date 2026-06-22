@@ -1,0 +1,35 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+use std/sys/process
+
+# `process.env` returns `some value` for a set variable, `none` for an unset one.
+# The snapshot must be portable (no machine-specific values), so this fixture only
+# looks up names that are reliably *unset*, exercising the `none` shaping
+# deterministically. (The `some` path is covered end-to-end via
+# `PLUMA_X=… pluma run app.pa`.)
+
+def run = fun {
+	if process.env "PLUMA_DEFINITELY_UNSET_VARIABLE_XYZ" is some v {
+		print "set: $(v)"
+	} else {
+		print "unset -> none"
+	}
+	# `??` over the option also exercises the none branch.
+	print (process.env "ANOTHER_UNSET_PLUMA_VAR_QWERTY" ?? "default")
+}
+
+def tests :: test.suite = [
+	test.case "io-env" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			unset -> none
+			default
+
+			"""
+	},
+]

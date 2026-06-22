@@ -1,0 +1,33 @@
+use std/assert
+use std/list
+use std/task
+use std/test
+use std/sys/io
+use std/sys/process
+
+# `process.args` returns the program's argv as a `list string`. The snapshot harness
+# invokes fixtures with no extra arguments, so argv is empty here — exercising the
+# host-import + NUL-blob-split path on its empty-list boundary. (Non-empty argv
+# is covered end-to-end through `pluma run app.pa a b c`.)
+
+def run = fun {
+	let a = process.args ()
+	print "count: $(to-string (list.length a))"
+	print a
+	print (list.is-empty a)
+}
+
+def tests :: test.suite = [
+	test.case "io-args" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			count: 0
+			[]
+			true
+
+			"""
+	},
+]

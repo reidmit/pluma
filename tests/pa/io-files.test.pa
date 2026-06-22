@@ -1,0 +1,38 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/fs
+use std/sys/io
+
+def run = fun {
+	let path = "target/pluma-io-test-roundtrip.txt"
+
+	when fs.write-text-sync path "hello from pluma" is ok _ {
+		print "wrote"
+	} is err msg {
+		print "write err: $(msg)"
+	}
+
+	print (fs.is-file-sync path)
+
+	when fs.read-text-sync path is ok contents {
+		print contents
+	} is err msg {
+		print "read err: $(msg)"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "io-files" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			wrote
+			true
+			hello from pluma
+
+			"""
+	},
+]

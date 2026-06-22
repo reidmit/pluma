@@ -1,0 +1,91 @@
+use std/assert
+use std/bytes
+use std/list
+use std/sql
+use std/string
+use std/task
+use std/test
+use std/sys/db
+use std/sys/io
+
+# Embedded SQLite end to end (std/sql + std/sys/db). Every query is offloaded to the
+# pinned database worker thread (host/src/db.rs) and awaited with `try`, like the other
+# std/sys async ops. Uses an in-memory database so the fixture is hermetic.
+#
+# Exercises: open, a DDL + parameterized inserts (covering all five storage classes,
+# including NULL and a binary blob), a `|`-built typed query through `db.fetch` + a decoder,
+# the raw `db.execute` escape hatch, and the error path (a bad statement fails the task,
+# reified back to a `result` with `task.attempt`).
+
+alias item {id :: int, name :: string, qty :: option int, price :: float}
+
+def decode-item :: fun row -> result item string = fun r {
+	try id = sql.get-int r "id"
+	try name = sql.get-text r "name"
+	try qty = sql.get-opt r "qty" sql.get-int
+	try price = sql.get-float r "price"
+	ok {id, name, qty, price}
+}
+
+def show :: fun item -> string = fun it {
+	let qty = when it.qty is some q {
+		to-string q
+	} is none {
+		"none"
+	}
+	"#$(to-string it.id) $(it.name) qty=$(qty) price=$(to-string it.price)"
+}
+
+def run = fun {
+	try conn = db.open ":memory:"
+	try _ddl = db.execute conn "create table items (id integer, name text, qty integer, price real, tag blob)" []
+	try _a = db.execute conn "insert into items values (?, ?, ?, ?, ?)" [
+		sql.int 1,
+		sql.text "widget",
+		sql.int 7,
+		sql.float 2.5,
+		sql.blob (bytes.from-list [0, 255, 128] ?? string.to-bytes ""),
+	]
+	try _b = db.execute conn "insert into items values (?, ?, ?, ?, ?)" [
+		sql.int 2,
+		sql.text "gadget",
+		sql.null,
+		sql.float 9.99,
+		sql.null,
+	]
+	try items = sql.from "items" |> sql.filter (sql.ge "price" (sql.float 2.0)) |> sql.order-by (sql.desc "id") |> db.fetch conn decode-item
+	print "found $(to-string (list.length items)):"
+	list.each items fun it {
+		print "  $(show it)"
+	}
+	try raw = db.execute conn "select tag from items where id = ?" [sql.int 1]
+	when list.head raw is some r {
+		print "tag bytes: $(to-string (bytes.length (sql.get-blob r "tag" ?? string.to-bytes "")))"
+	} is none {
+		print "no tag row"
+	}
+	try bad = task.attempt (db.execute conn "select * from does_not_exist" [])
+	when bad is ok _ {
+		print "unexpected ok"
+	} is err _ {
+		print "bad statement: err"
+	}
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "db-sqlite" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			found 2:
+			  #2 gadget qty=none price=9.99
+			  #1 widget qty=7 price=2.5
+			tag bytes: 3
+			bad statement: err
+
+			"""
+	},
+]

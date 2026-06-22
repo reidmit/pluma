@@ -1,0 +1,96 @@
+use std/assert
+use std/bytes
+use std/list
+use std/router
+use std/string
+use std/task
+use std/test
+use std/sys/http
+use std/sys/io
+use std/sys/net
+
+# std/router over a real connection: a router-built handler is mounted on an
+# actual std/sys/http server (via `http.serve-on` on a loopback listener) and a
+# hand-written client sends raw requests to it. This proves the routes dispatch
+# end-to-end over the wire — a matching GET, a matching POST, and a path with no
+# route (the 404 fallback). The in-process matching detail lives in
+# `router-dispatch`; this is the integration check.
+
+# Read from the connection until the server closes it (Connection: close).
+def drain :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+	try r = net.read conn 4096
+	when r is ok chunk {
+		if bytes.is-empty chunk {
+			task.return (ok acc)
+		} else {
+			drain conn (bytes.concat acc chunk)
+		}
+	} is err e {
+		task.return (err e)
+	}
+}
+
+# Send one raw request line (e.g. "GET /health") and return the reply's status
+# line and body, joined as "<status> | <body>".
+def call :: fun string string string -> task string = fun addr verb path {
+	try c = net.connect addr
+	when c is ok conn {
+		let raw-req = verb ++ " " ++ path ++ " HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
+		try net.write conn (string.to-bytes raw-req)
+		try resp = drain conn (string.to-bytes "")
+		net.close conn
+		when resp is ok raw {
+			let text = bytes.to-string raw ?? "<bad utf8>"
+			let status = list.head (string.split text "\r\n") ?? ""
+			let body = list.head (list.drop (string.split text "\r\n\r\n") 1) ?? ""
+			task.return (status ++ " | " ++ body)
+		} is err e {
+			task.fail e
+		}
+	} is err e {
+		task.fail e
+	}
+}
+
+def run = fun {
+	let app = router.handler [
+		router.get "/health" fun _rq { task.return (http.text 200 "ok") },
+		router.post "/echo" fun rq { task.return (http.text 200 ("you posted to " ++ rq.path)) },
+	]
+	if net.listen "127.0.0.1:0" is ok server {
+		if net.local-addr server is ok addr {
+			scope as s {
+				s.spawn (http.serve-on server app)
+				try a = call addr "GET" "/health" # 200, "ok"
+				try b = call addr "POST" "/echo" # 200, posted
+				try c = call addr "GET" "/missing" # 404 fallback
+				print a
+				print b
+				print c
+				s.cancel ()
+				task.return 0
+			}
+		} else {
+			print "local-addr failed"
+			task.return 1
+		}
+	} else {
+		print "listen failed"
+		task.return 1
+	}
+}
+
+def tests :: test.suite = [
+	test.case "router-serve" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			HTTP/1.1 200 OK | ok
+			HTTP/1.1 200 OK | you posted to /echo
+			HTTP/1.1 404 Not Found | Not Found
+
+			"""
+	},
+]

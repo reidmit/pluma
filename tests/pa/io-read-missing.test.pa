@@ -1,0 +1,32 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/fs
+use std/sys/io
+
+def run = fun {
+	let missing = "target/pluma-this-file-does-not-exist.txt"
+
+	# discard the OS-specific error message; just verify the err branch fires
+	when fs.read-text-sync missing is ok _ {
+		print "unexpected ok"
+	} is err _ {
+		print "got err"
+	}
+
+	print (fs.is-file-sync missing)
+}
+
+def tests :: test.suite = [
+	test.case "io-read-missing" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			got err
+			false
+
+			"""
+	},
+]

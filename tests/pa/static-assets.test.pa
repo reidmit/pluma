@@ -1,0 +1,45 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/http
+use std/sys/io
+use std/sys/static
+
+# `static.content-type` maps a path's extension to a MIME type (case-insensitive),
+# and `static.serve-file` answers 404 both when the path escapes the root and when
+# the named file is missing -- the traversal guard never reads outside the root.
+def run = fun {
+	io.print ("/logo.svg -> " ++ static.content-type "/logo.svg")
+	io.print ("/a/b/style.css -> " ++ static.content-type "/a/b/style.css")
+	io.print ("/app.wasm -> " ++ static.content-type "/app.wasm")
+	io.print ("/photo.JPG -> " ++ static.content-type "/photo.JPG")
+	io.print ("/data.json -> " ++ static.content-type "/data.json")
+	io.print ("/noext -> " ++ static.content-type "/noext")
+	io.print ("/weird.xyz -> " ++ static.content-type "/weird.xyz")
+	try escaped = static.serve-file "public" "/../secret.txt"
+	io.print ("escape status = " ++ to-string escaped.status)
+	try missing = static.serve-file "public" "/does-not-exist.svg"
+	io.print ("missing status = " ++ to-string missing.status)
+	task.return ()
+}
+
+def tests :: test.suite = [
+	test.case "static-assets" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			/logo.svg -> image/svg+xml
+			/a/b/style.css -> text/css; charset=utf-8
+			/app.wasm -> application/wasm
+			/photo.JPG -> image/jpeg
+			/data.json -> application/json; charset=utf-8
+			/noext -> application/octet-stream
+			/weird.xyz -> application/octet-stream
+			escape status = 404
+			missing status = 404
+
+			"""
+	},
+]

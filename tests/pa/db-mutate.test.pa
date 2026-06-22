@@ -1,0 +1,86 @@
+use std/assert
+use std/list
+use std/sql
+use std/task
+use std/test
+use std/sys/db
+use std/sys/io
+
+# Typed mutations over a `table a` (std/sql/std/sys/db v2): `db.update` and `db.delete`.
+# Both validate their columns against the schema and return the number of rows affected.
+# Exercises: an update that changes a subset (count + persisted effect), a delete of a subset
+# (count + the rows are gone), and the schema validation rejecting an unknown column before
+# SQLite. In-memory database; reads the results back through the typed pipeline.
+
+alias todo {id :: int, title :: string, done :: bool}
+
+def decode-todo :: fun row -> result todo string = fun r {
+	try id = sql.get-int r "id"
+	try title = sql.get-text r "title"
+	try done = sql.get-bool r "done"
+	ok {id, title, done}
+}
+
+def encode-todo :: fun todo -> list (string, value) = fun t {
+	[("id", sql.int t.id), ("title", sql.text t.title), ("done", sql.bool t.done)]
+}
+
+def todo-cols :: list column = [
+	sql.col "id" sql.col-type.c-int,
+	sql.col "title" sql.col-type.c-text,
+	sql.col "done" sql.col-type.c-bool,
+]
+
+def todos :: table todo = sql.table-of "todos" todo-cols decode-todo encode-todo
+
+def dump :: fun connection string -> task nothing string = fun conn label {
+	try items = db.from todos |> db.order-by (sql.asc "id") |> db.run conn
+	print "$(label): $(to-string (list.length items)) rows"
+	list.each items fun it {
+		print "  #$(to-string it.id) $(it.title) done=$(to-string it.done)"
+	}
+	task.return ()
+}
+
+def run = fun {
+	try conn = db.open ":memory:"
+	try _ddl = db.execute conn (sql.create-table todos) []
+	try _1 = db.insert conn todos {id: 1, title: "wash", done: false}
+	try _2 = db.insert conn todos {id: 2, title: "cook", done: false}
+	try _3 = db.insert conn todos {id: 3, title: "read", done: false}
+	try changed = db.update conn todos [("done", sql.bool true)] [sql.lt "id" (sql.int 3)]
+	print "updated: $(to-string changed)"
+	try _d1 = dump conn "after update"
+	try removed = db.delete conn todos [sql.eq "done" (sql.bool false)]
+	print "deleted: $(to-string removed)"
+	try _d2 = dump conn "after delete"
+	try bad = task.attempt (db.update conn todos [("nope", sql.int 0)] [])
+	when bad is ok _ {
+		print "unexpected ok"
+	} is err e {
+		print "validate: $(e)"
+	}
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "db-mutate" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			updated: 2
+			after update: 3 rows
+			  #1 wash done=true
+			  #2 cook done=true
+			  #3 read done=false
+			deleted: 1
+			after delete: 2 rows
+			  #1 wash done=true
+			  #2 cook done=true
+			validate: no such column 'nope'
+
+			"""
+	},
+]

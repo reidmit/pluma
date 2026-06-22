@@ -1,0 +1,45 @@
+use std/assert
+use std/bytes
+use std/task
+use std/test
+use std/sys/fs
+use std/sys/io
+
+def show-write = fun r {
+	when r is ok _ {
+		print "wrote"
+	} is err msg {
+		print "write err: $(msg)"
+	}
+}
+
+def run = fun {
+	let path = "target/pluma-io-bytes-roundtrip.bin"
+	let payload = '\x89PNG\r\n\x1a\n\x00\x01\x02'
+
+	show-write (fs.write-bytes-sync path payload)
+
+	when fs.read-bytes-sync path is ok b {
+		print (to-string (bytes.length b))
+		print (to-string b)
+		print (to-string (b == payload))
+	} is err msg {
+		print "read err: $(msg)"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "io-bytes-roundtrip" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			wrote
+			11
+			'\\x89PNG\\x0d\\x0a\\x1a\\x0a\\x00\\x01\\x02'
+			true
+
+			"""
+	},
+]

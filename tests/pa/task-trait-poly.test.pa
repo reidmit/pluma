@@ -1,0 +1,49 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# A function that is BOTH async (it awaits via `try`) AND trait-polymorphic
+# (its element type stays free, so `+`/`>` need a numeric/ord dict param). The
+# constrained def must compile to an `AsyncFn` — calling it builds a cold task —
+# not a plain closure that runs eagerly and hits `Await` outside the driver.
+# Regression for the combination missing the async wrapper in
+# `compile_constrained_thunk`. Exercised at int and float (per-call-site dicts)
+# and with an ord dispatch.
+
+def add-tasks :: fun (task a) (task a) -> task a = fun x y {
+	try p = x
+	try q = y
+	task.return (p + q)
+}
+
+def bigger :: fun (task a) (task a) -> task bool = fun x y {
+	try p = x
+	try q = y
+	task.return (p > q)
+}
+
+def run = fun {
+	try i = add-tasks (task.return 100) (task.return 23)
+	try f = add-tasks (task.return 1.5) (task.return 2.25)
+	try b = bigger (task.return 5) (task.return 9)
+	print (to-string i)
+	print (to-string f)
+	print (to-string b)
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "task-trait-poly" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			123
+			3.75
+			false
+
+			"""
+	},
+]

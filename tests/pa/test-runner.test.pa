@@ -1,0 +1,47 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# Exercises the `std/test` runner itself — `flatten` (groups, skip, todo),
+# case execution, the printed tree, and the summary — driven under V8. Color is
+# off (a clean snapshot); every runnable case passes, so `run-all` returns `ok`.
+# The suite under test is `demo-suite`, kept distinct from this file's own
+# `tests` that the harness discovers.
+def demo-suite :: test.suite = [
+	test.case "adds" fun { assert.equals (2 + 3) 5 },
+	test.case "concats" fun { assert.equals ("a" ++ "b") "ab" },
+	test.group "nested" [
+		test.case "zero" fun { assert.equals (0 + 0) 0 },
+		test.group "deeper" [test.case "true holds" fun { assert.is-true true }],
+		test.skip (test.case "intentionally skipped" fun { assert.is-true false }),
+	],
+	test.todo "later",
+]
+
+def run = fun {
+	test.run-all false [{name: "demo", tests: demo-suite}]
+}
+
+def tests :: test.suite = [
+	test.case "test-runner" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			demo
+			  ✓ adds
+			  ✓ concats
+			  nested
+			    ✓ zero
+			    deeper
+			      ✓ true holds
+			    - intentionally skipped (skipped)
+			  ○ later (todo)
+
+			4 of 4 passed, 1 skipped, 1 todo
+
+			"""
+	},
+]

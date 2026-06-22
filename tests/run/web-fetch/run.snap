@@ -1,9 +1,0 @@
----
-source: tests/run.rs
-expression: combined
----
-== status ==
-ok
-== stdout ==
-web-fetch to a closed port failed as expected (err)
-== stderr ==

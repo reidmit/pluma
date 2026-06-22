@@ -1,0 +1,97 @@
+use std/assert
+use std/list
+use std/sql
+use std/task
+use std/test
+use std/sys/db
+use std/sys/io
+
+# The typed `table a` path (std/sql v2): define a table's schema + decode/encode once, then
+# let `std/sys/db` thread the decoder through a whole query. Exercises `sql.create-table`
+# DDL from the schema, `db.insert` (encoder-driven, parameterized), the typed
+# `db.from | db.filter | db.order-by | db.run` pipeline (decoder threaded; SELECT fixed to
+# the schema columns), `db.all`, and the pre-flight schema validation (an unknown column is
+# caught before SQLite sees it). In-memory database so the fixture is hermetic.
+
+alias todo {id :: int, title :: string, done :: bool, priority :: option int}
+
+def decode-todo :: fun row -> result todo string = fun r {
+	try id = sql.get-int r "id"
+	try title = sql.get-text r "title"
+	try done = sql.get-bool r "done"
+	try priority = sql.get-opt r "priority" sql.get-int
+	ok {id, title, done, priority}
+}
+
+def encode-todo :: fun todo -> list (string, value) = fun t {
+	[
+		("id", sql.int t.id),
+		("title", sql.text t.title),
+		("done", sql.bool t.done),
+		(
+			"priority",
+			when t.priority is some p {
+				sql.int p
+			} is none {
+				sql.null
+			},
+		),
+	]
+}
+
+def todo-cols :: list column = [
+	sql.col "id" sql.col-type.c-int,
+	sql.col "title" sql.col-type.c-text,
+	sql.col "done" sql.col-type.c-bool,
+	sql.col "priority" sql.col-type.c-int,
+]
+
+def todos :: table todo = sql.table-of "todos" todo-cols decode-todo encode-todo
+
+def show :: fun todo -> string = fun t {
+	let p = when t.priority is some n {
+		to-string n
+	} is none {
+		"-"
+	}
+	"#$(to-string t.id) $(t.title) done=$(to-string t.done) p=$(p)"
+}
+
+def run = fun {
+	try conn = db.open ":memory:"
+	try _ddl = db.execute conn (sql.create-table todos) []
+	try _1 = db.insert conn todos {id: 1, title: "wash", done: false, priority: some 2}
+	try _2 = db.insert conn todos {id: 2, title: "cook", done: true, priority: none}
+	try _3 = db.insert conn todos {id: 3, title: "read", done: false, priority: some 1}
+	try items = db.from todos |> db.filter (sql.eq "done" (sql.bool false)) |> db.order-by (sql.asc "priority") |> db.run conn
+	print "open todos: $(to-string (list.length items))"
+	list.each items fun it {
+		print "  $(show it)"
+	}
+	try every = db.all conn todos
+	print "all: $(to-string (list.length every))"
+	try bad = task.attempt (db.from todos |> db.filter (sql.gt "nope" (sql.int 0)) |> db.run conn)
+	when bad is ok _ {
+		print "unexpected ok"
+	} is err e {
+		print "validate: $(e)"
+	}
+	task.return 0
+}
+
+def tests :: test.suite = [
+	test.case "db-typed" fun {
+		try cap = io.capture fun {
+			try _outcome = task.attempt (run ())
+			task.return ()
+		}
+		assert.matches cap.out """
+			open todos: 2
+			  #3 read done=false p=1
+			  #1 wash done=false p=2
+			all: 3
+			validate: no such column 'nope'
+
+			"""
+	},
+]

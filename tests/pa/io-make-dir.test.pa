@@ -1,0 +1,57 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/fs
+use std/sys/io
+
+# `make-dir` creates nested parents (mkdir -p), is idempotent, and the
+# created directory is usable for file I/O. Writes live under `target/`
+# (gitignored); the created dirs are harmless to leave between runs.
+
+def run = fun {
+	let d = "target/pluma-mkdir-test/nested/deep"
+
+	when fs.make-dir-sync d is ok _ {
+		print "made"
+	} is err msg {
+		print "err: $(msg)"
+	}
+	print (fs.is-dir-sync d)
+	print (fs.is-dir-sync "target/pluma-mkdir-test")
+
+	# Idempotent: making an existing path again still succeeds.
+	when fs.make-dir-sync d is ok _ {
+		print "again ok"
+	} is err msg {
+		print "again err: $(msg)"
+	}
+
+	# The new directory is usable.
+	let f = d ++ "/hello.txt"
+	fs.write-text-sync f "hi"
+	when fs.read-text-sync f is ok s {
+		print s
+	} is err msg {
+		print "read err: $(msg)"
+	}
+	fs.remove-sync f
+	print "done"
+}
+
+def tests :: test.suite = [
+	test.case "io-make-dir" fun {
+		try cap = io.capture fun {
+			run ()
+			task.return ()
+		}
+		assert.matches cap.out """
+			made
+			true
+			true
+			again ok
+			hi
+			done
+
+			"""
+	},
+]
