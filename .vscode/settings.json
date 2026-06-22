@@ -1,0 +1,7 @@
+{
+	// Build rust-analyzer's check/build artifacts into a separate target subdir
+	// so the editor never contends with terminal `cargo` for the build-directory
+	// lock (which manifests as `cargo test` hanging silently at "Blocking waiting
+	// for file lock") and the two don't thrash each other's fingerprints.
+	"rust-analyzer.cargo.targetDir": true
+}
