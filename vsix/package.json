@@ -85,7 +85,7 @@
 	"devDependencies": {
 		"@types/node": "^20.14.11",
 		"@types/vscode": "1.91.0",
-		"esbuild": "^0.23.0",
+		"esbuild": "^0.28.1",
 		"typescript": "5.5.3",
 		"vscode-oniguruma": "^2.0.1",
 		"vscode-textmate": "^9.1.0"
