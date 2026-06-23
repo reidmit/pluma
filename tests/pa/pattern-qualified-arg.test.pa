@@ -18,9 +18,9 @@ enum box {
 
 # nested qualified nullary variant as a constructor arg, no parens
 def name-color :: fun (result int color) -> string = fun r {
-	if r is err color.red {
+	when r is err color.red {
 		"red"
-	} else if r is err color.green {
+	} is err color.green {
 		"green"
 	} else {
 		"ok"

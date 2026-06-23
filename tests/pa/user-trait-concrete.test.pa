@@ -13,9 +13,9 @@ implement showable int {
 
 implement showable bool {
 	def show = fun b {
-		when b is true {
+		if b {
 			"yes"
-		} is false {
+		} else {
 			"no"
 		}
 	}
