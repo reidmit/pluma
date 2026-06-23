@@ -107,6 +107,9 @@ fn visit_expr(expr: &ExprNode, rules: &[Box<dyn Rule>], ctx: &mut Context, out: 
 	for rule in rules {
 		rule.check_expr(expr, ctx, out);
 	}
+	// The else-if-continuation mark (set by the parent `if` below) applies only to
+	// this node's own rule offer — its sub-expressions are not continuations.
+	ctx.clear_else_if_link();
 
 	match &expr.kind {
 		ExprKind::BinaryOperation { left, right, .. } => {
@@ -169,6 +172,12 @@ fn visit_expr(expr: &ExprNode, rules: &[Box<dyn Rule>], ctx: &mut Context, out: 
 			visit_body(&if_node.body, rules, ctx, out);
 			ctx.pop();
 			if let Some(else_body) = &if_node.else_body {
+				// `else if` parses as an else-body holding a single `if`. Mark that
+				// inner `if` as a chain continuation so a rule reasoning over the whole
+				// chain fires only at its head, not once per link.
+				if matches!(else_body.as_slice(), [cont] if matches!(cont.kind, ExprKind::If(_))) {
+					ctx.mark_else_if_link();
+				}
 				visit_body(else_body, rules, ctx, out);
 			}
 		}

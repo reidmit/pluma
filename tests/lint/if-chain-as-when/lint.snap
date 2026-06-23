@@ -1,0 +1,35 @@
+---
+source: tests/lint.rs
+expression: output
+---
+warning[L0012]: This `if`/`else if` chain dispatches on one value — a `when` would be checked for exhaustiveness.
+  │
+  ├─𜱶 help: rewrite as `when <subject> is <pattern> { … } …` so the compiler verifies every case is handled (open types like `int` still need an `else`).
+  │
+8 │  let a = if r is ok v { v } else if r is err e { 0 }
+  │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ╰─𜱶 tests/lint/if-chain-as-when/main.pa:8:10
+
+warning[L0012]: This `if`/`else if` chain dispatches on one value — a `when` would be checked for exhaustiveness.
+   │
+   ├─𜱶 help: rewrite as `when <subject> is <pattern> { … } …` so the compiler verifies every case is handled (open types like `int` still need an `else`).
+   │
+11 │  let b = if c is color.red { 1 } else if c is color.green { 2 } else if c is color.blue { 3 }
+   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/lint/if-chain-as-when/main.pa:11:10
+
+warning[L0012]: This `if`/`else if` chain dispatches on one value — a `when` would be checked for exhaustiveness.
+   │
+   ├─𜱶 help: rewrite as `when <subject> is <pattern> { … } …` so the compiler verifies every case is handled (open types like `int` still need an `else`).
+   │
+14 │  let d = if n is 0 { "zero" } else if n is 1 { "one" } else { "many" }
+   │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/lint/if-chain-as-when/main.pa:14:10
+
+warning[L0012]: This `if`/`else if` chain dispatches on one value — a `when` would be checked for exhaustiveness.
+   │
+   ├─𜱶 help: rewrite as `when <subject> is <pattern> { … } …` so the compiler verifies every case is handled (open types like `int` still need an `else`).
+   │
+26 │   if c is color.red { 1 } else if c is color.green { 2 }
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/lint/if-chain-as-when/main.pa:26:3

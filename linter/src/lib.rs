@@ -83,6 +83,12 @@ pub struct Context {
 	/// sits inside a `using` block, even across the function boundary the walker
 	/// crosses to visit that closure as its own unit.
 	using: Vec<String>,
+	/// Whether the node currently being offered to rules is an `else if`
+	/// continuation — the inner `if` of an enclosing `if`'s else-body. Set by the
+	/// walker just before that node's rule offer and cleared right after, so it
+	/// scopes to exactly one node. Lets a chain-reasoning rule fire only at the
+	/// chain head instead of once per link.
+	else_if_link: bool,
 }
 
 impl Context {
@@ -91,6 +97,7 @@ impl Context {
 			frames: Vec::new(),
 			imports: HashMap::new(),
 			using: Vec::new(),
+			else_if_link: false,
 		}
 	}
 
@@ -143,6 +150,22 @@ impl Context {
 	pub fn enclosing_using(&self) -> &[String] {
 		&self.using
 	}
+
+	/// Mark the next node offered to rules as an `else if` continuation.
+	fn mark_else_if_link(&mut self) {
+		self.else_if_link = true;
+	}
+
+	/// Clear the else-if-continuation mark; called after each node's rule offer so
+	/// it never leaks into that node's sub-expressions.
+	fn clear_else_if_link(&mut self) {
+		self.else_if_link = false;
+	}
+
+	/// Whether the current node is an `else if` continuation of an enclosing `if`.
+	pub fn is_else_if_link(&self) -> bool {
+		self.else_if_link
+	}
 }
 
 /// Both default to no-ops, so a rule implements only the hook it needs.
@@ -185,6 +208,7 @@ fn rules() -> Vec<Box<dyn Rule>> {
 		Box::new(rules::IdenticalBranches),
 		Box::new(rules::BindThenReturn),
 		Box::new(rules::WhenAsIf),
+		Box::new(rules::IfChainAsWhen),
 	]
 }
 

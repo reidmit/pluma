@@ -3,6 +3,7 @@
 
 mod bind_then_return;
 mod identical_branches;
+mod if_chain_as_when;
 mod if_returns_bool;
 mod prefer_using_block;
 mod redundant_bool_comparison;
@@ -15,6 +16,7 @@ mod when_as_if;
 
 pub use bind_then_return::BindThenReturn;
 pub use identical_branches::IdenticalBranches;
+pub use if_chain_as_when::IfChainAsWhen;
 pub use if_returns_bool::IfReturnsBool;
 pub use prefer_using_block::PreferUsingBlock;
 pub use redundant_bool_comparison::RedundantBoolComparison;
