@@ -22,7 +22,7 @@ def mix = fun a b {
 }
 
 def go = fun n acc {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		let a = inc n

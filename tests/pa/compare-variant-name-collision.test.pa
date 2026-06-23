@@ -57,7 +57,7 @@ def run = fun {
 		print "missing"
 	}
 	# and a `slot.some` value, so the colliding enum isn't dead-code-eliminated
-	when slot.some is slot.some {
+	if slot.some is slot.some {
 		print "slot-some"
 	} else {
 		print "?"

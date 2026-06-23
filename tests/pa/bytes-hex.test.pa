@@ -10,7 +10,7 @@ use std/sys/io
 # codec (codepoint walks, byte building).
 
 def loop = fun data n acc {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		let h = hex.encode data

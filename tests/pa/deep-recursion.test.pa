@@ -7,7 +7,7 @@ use std/sys/io
 # by memory rather than a native call stack.
 
 def count-down = fun n {
-	when n is 0 {
+	if n is 0 {
 		()
 	} else {
 		count-down (n - 1)

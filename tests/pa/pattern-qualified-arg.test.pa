@@ -29,7 +29,7 @@ def name-color :: fun (result int color) -> string = fun r {
 
 # payload variant as an arg still uses parens
 def unwrap :: fun (result box int) -> int = fun r {
-	when r is ok (box.wrap n) {
+	if r is ok (box.wrap n) {
 		n
 	} else {
 		0 - 1

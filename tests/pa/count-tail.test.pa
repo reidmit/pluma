@@ -6,7 +6,7 @@ use std/sys/io
 # Tail-recursive countdown. With TCO, frame count stays bounded.
 
 def count = fun n {
-	when n is 0 {
+	if n is 0 {
 		"done"
 	} else {
 		count (n - 1)

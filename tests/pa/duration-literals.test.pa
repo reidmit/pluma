@@ -22,7 +22,7 @@ def run = fun {
 	print (1m == 1m)
 
 	# Duration literals work in patterns too.
-	when 5s is 5s {
+	if 5s is 5s {
 		print "five"
 	} else {
 		print "nope"

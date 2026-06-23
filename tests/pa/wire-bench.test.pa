@@ -9,7 +9,7 @@ use std/sys/io
 # (varint, length-prefixed lists, tuples).
 
 def loop = fun data n acc {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		let bytes = wire.encode data

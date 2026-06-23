@@ -4,7 +4,7 @@ use std/test
 use std/sys/io
 
 def fact = fun n {
-	when n is 0 {
+	if n is 0 {
 		1
 	} else {
 		n * fact (n - 1)

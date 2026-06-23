@@ -29,7 +29,7 @@ def kept = fun dir {
 
 # Qualified still matches the variant.
 def is-dir = fun k {
-	when k is kind.dir {
+	if k is kind.dir {
 		true
 	} else {
 		false

@@ -7,7 +7,7 @@ use std/sys/io
 # Stdlib pipeline: map → filter → fold over a built list.
 
 def range = fun n {
-	when n is 0 {
+	if n is 0 {
 		[]
 	} else {
 		list.concat (range (n - 1)) [n]

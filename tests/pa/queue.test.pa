@@ -9,7 +9,7 @@ use std/sys/io
 # enqueue/dequeue. This exercises the back->front rebalance, interleaved churn,
 # and the non-destructive snapshot.
 def show :: fun (option int) -> string = fun o {
-	when o is some x {
+	if o is some x {
 		"some $(to-string x)"
 	} else {
 		"none"

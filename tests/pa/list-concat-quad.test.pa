@@ -8,7 +8,7 @@ use std/sys/io
 # the whole accumulator. This is what map-filter-fold's `range` does.
 
 def build-up = fun n acc {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		build-up (n - 1) (list.concat acc [n])

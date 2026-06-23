@@ -12,7 +12,7 @@ def get-x = fun r {
 }
 
 def loop = fun n acc {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		loop (n - 1) (acc + get-x {x: n, y: 99, z: "filler"})

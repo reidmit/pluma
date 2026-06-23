@@ -7,7 +7,7 @@ use std/sys/io
 # float arithmetic (+ - / and int->float) in a tight loop.
 
 def leibniz = fun n acc sign k {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		leibniz (n - 1) (acc + sign / k) (0.0 - sign) (k + 2.0)

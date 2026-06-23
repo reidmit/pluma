@@ -34,7 +34,7 @@ def from-rpc :: fun nothing -> result int error = fun {
 }
 
 def show :: fun bool -> string = fun b {
-	when b is true {
+	if b {
 		"yes"
 	} else {
 		"no"

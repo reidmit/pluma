@@ -10,7 +10,7 @@ use std/sys/io
 def run = fun {
 	# Record with a list field — extract head + tail of inner list.
 	let order = {id: 7, items: [10, 20, 30, 40], note: "ok"}
-	when order is {items: [first, ...rest], ...meta} {
+	if order is {items: [first, ...rest], ...meta} {
 		print (to-string meta.id)
 		print meta.note
 		print (to-string first)
@@ -24,7 +24,7 @@ def run = fun {
 
 	# Combined: nested list of records inside a record.
 	let report = {title: "summary", rows: [{user: "u1", n: 1}, {user: "u2", n: 2}]}
-	when report is {title: t, rows: [{user: u, ...}, ...]} {
+	if report is {title: t, rows: [{user: u, ...}, ...]} {
 		print t
 		print u
 	} else {

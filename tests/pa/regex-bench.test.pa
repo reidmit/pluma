@@ -11,7 +11,7 @@ use std/sys/io
 def word = `<w: letter+>`
 
 def loop = fun n acc {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		let ms = re.find-all word "the quick brown fox jumps over the lazy dog again"

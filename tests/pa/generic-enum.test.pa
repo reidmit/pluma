@@ -30,21 +30,21 @@ def run = fun {
 	}
 
 	let p2 = pair.left 42
-	when p2 is pair.left a {
+	if p2 is pair.left a {
 		print a
 	} else {
 		print 0
 	}
 
 	let p3 = pair.right "right-only"
-	when p3 is pair.right b {
+	if p3 is pair.right b {
 		print b
 	} else {
 		print "fallback"
 	}
 
 	let p4 = pair.neither
-	when p4 is pair.neither {
+	if p4 is pair.neither {
 		print "nothing"
 	} else {
 		print "something"

@@ -7,7 +7,7 @@ def run = fun {
 	let x = 1
 	let y = 2
 	let z = 3
-	when (x, y, z) is (1, _, _) {
+	if (x, y, z) is (1, _, _) {
 		print "first is one"
 	} else {
 		print "other"

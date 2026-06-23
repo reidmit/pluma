@@ -42,7 +42,7 @@ def serve :: fun nothing -> task int error = fun {
 }
 
 def show :: fun bool -> string = fun b {
-	when b is true {
+	if b {
 		"yes"
 	} else {
 		"no"

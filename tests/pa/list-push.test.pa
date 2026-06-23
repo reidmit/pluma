@@ -21,7 +21,7 @@ def run = fun {
 	let more = [0, ...acc, 6]
 	print (to-string more)
 	print (to-string (list.length more))
-	when acc is [h, ...rest] {
+	if acc is [h, ...rest] {
 		print (to-string h)
 		print (to-string (list.length rest))
 	} else {

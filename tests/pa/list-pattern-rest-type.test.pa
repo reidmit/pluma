@@ -13,7 +13,7 @@ def run = fun {
 	print (to-string (list.length all))
 
 	# rest preserves element type — used with list ops downstream
-	when [10, 20, 30, 40] is [first, ...tail] {
+	if [10, 20, 30, 40] is [first, ...tail] {
 		print (to-string first)
 		print (to-string (list.length tail))
 		# tail has the same element type, can be re-summed
@@ -26,14 +26,14 @@ def run = fun {
 	}
 
 	# Multi-element heads with rest
-	when [1, 2, 3, 4, 5] is [a, b, c, ...rest] {
+	if [1, 2, 3, 4, 5] is [a, b, c, ...rest] {
 		print "$(to-string a) $(to-string b) $(to-string c) | $(to-string (list.length rest))"
 	} else {
 		print "unreachable"
 	}
 
 	# An empty rest is the empty list
-	when [99] is [_, ...rest] {
+	if [99] is [_, ...rest] {
 		print "rest len: $(to-string (list.length rest))"
 	} else {
 		print "unreachable"

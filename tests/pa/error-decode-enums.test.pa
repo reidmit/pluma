@@ -30,7 +30,7 @@ def build :: fun nothing -> result instant error = fun {
 }
 
 def show :: fun bool -> string = fun b {
-	when b is true {
+	if b {
 		"yes"
 	} else {
 		"no"

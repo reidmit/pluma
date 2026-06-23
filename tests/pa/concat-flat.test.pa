@@ -8,7 +8,7 @@ use std/sys/io
 # 1000 times. Isolates array.copy throughput from small-allocation churn.
 
 def loop = fun n a b acc {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		loop (n - 1) a b (acc + list.length (list.concat a b))

@@ -9,7 +9,7 @@ use std/sys/io
 # Exercises the std/json recursive-descent parser and serializer.
 
 def loop = fun doc n acc {
-	when n is 0 {
+	if n is 0 {
 		acc
 	} else {
 		let len = when json.parse doc is ok v {
