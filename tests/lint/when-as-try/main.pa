@@ -1,0 +1,79 @@
+use value
+use parser
+
+# The canonical case: unwrap `ok`, re-propagate `err` unchanged. (fires)
+public def a = fun env l {
+	when eval env l is ok lv {
+		ok (value.num-neg lv)
+	} is err m {
+		err m
+	}
+}
+
+# Arms in the other order — `err` passthrough first. Still a `try`. (fires)
+public def b = fun env l {
+	when eval env l is err m {
+		err m
+	} is ok lv {
+		ok lv
+	}
+}
+
+# Nested: both the outer and the inner `when` are tail-position passthroughs,
+# so each is reported on its own.
+public def c = fun env l r {
+	when eval env l is ok lv {
+		when eval env r is ok rv {
+			ok (value.num-add lv rv)
+		} is err m {
+			err m
+		}
+	} is err m {
+		err m
+	}
+}
+
+# The `err` arm does real work (rewrites the message), so it is NOT pure
+# propagation — `try` wouldn't preserve it. Left alone.
+public def d = fun env l {
+	when eval env l is ok lv {
+		ok lv
+	} is err m {
+		err "in d: $(m)"
+	}
+}
+
+# The `err` arm re-wraps a DIFFERENT value, not the bound error. Left alone.
+public def e = fun env l {
+	when eval env l is ok lv {
+		ok lv
+	} is err m {
+		err "boom"
+	}
+}
+
+# Not the block tail — the `when`'s value is bound to a `let`, so `try` (whose
+# continuation is the rest of the block) can't stand in for it. Left alone.
+public def f = fun env l {
+	let x = when eval env l is ok lv {
+		ok lv
+	} is err m {
+		err m
+	}
+	ok x
+}
+
+# A genuine three-way match is exhaustive dispatch, not an unwrap. Left alone.
+public def g = fun n {
+	when n is value.num.int-val i {
+		ok i
+	} is value.num.float-val fl {
+		ok 0
+	} is err m {
+		err m
+	}
+}
+
+def eval = fun env e {
+	ok e
+}

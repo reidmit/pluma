@@ -209,6 +209,7 @@ fn rules() -> Vec<Box<dyn Rule>> {
 		Box::new(rules::BindThenReturn),
 		Box::new(rules::WhenAsIf),
 		Box::new(rules::IfChainAsWhen),
+		Box::new(rules::WhenAsTry),
 	]
 }
 

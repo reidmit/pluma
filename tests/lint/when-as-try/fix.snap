@@ -1,0 +1,6 @@
+---
+source: tests/lint_fix.rs
+assertion_line: 84
+expression: output
+---
+(no autofixes)

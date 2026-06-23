@@ -1,0 +1,36 @@
+---
+source: tests/lint.rs
+assertion_line: 60
+expression: output
+---
+warning[L0013]: This `when` only unwraps `ok` and re-propagates `err` — that's what `try` does.
+   │
+   ├─𜱶 help: rewrite as `try <binding> = <subject>` followed by the success body; `try` short-circuits on `err`, so the error arm goes away.
+   │
+ 6 │  when eval env l is ok lv {
+   │  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/lint/when-as-try/main.pa:6:2
+
+warning[L0013]: This `when` only unwraps `ok` and re-propagates `err` — that's what `try` does.
+   │
+   ├─𜱶 help: rewrite as `try <binding> = <subject>` followed by the success body; `try` short-circuits on `err`, so the error arm goes away.
+   │
+15 │  when eval env l is err m {
+   │  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/lint/when-as-try/main.pa:15:2
+
+warning[L0013]: This `when` only unwraps `ok` and re-propagates `err` — that's what `try` does.
+   │
+   ├─𜱶 help: rewrite as `try <binding> = <subject>` followed by the success body; `try` short-circuits on `err`, so the error arm goes away.
+   │
+25 │  when eval env l is ok lv {
+   │  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/lint/when-as-try/main.pa:25:2
+
+warning[L0013]: This `when` only unwraps `ok` and re-propagates `err` — that's what `try` does.
+   │
+   ├─𜱶 help: rewrite as `try <binding> = <subject>` followed by the success body; `try` short-circuits on `err`, so the error arm goes away.
+   │
+26 │   when eval env r is ok rv {
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╰─𜱶 tests/lint/when-as-try/main.pa:26:3
