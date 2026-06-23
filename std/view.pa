@@ -241,7 +241,7 @@ public def on-submit :: fun (fun nothing -> nothing) -> attribute = fun handler 
 # `signal.on-cleanup` inside `action` to tear down when the element unmounts.
 #
 #     view.div [view.id "app", view.on-mount (fun {
-#         task.spawn (task.map (api.list-todos ()) fun board { signal.set todos board })
+#         task.fire (api.list-todos ()) fun board { signal.set todos board }
 #     })] [...]
 public def on-mount :: fun (fun nothing -> nothing) -> attribute = attribute.on-mount
 

@@ -1,0 +1,39 @@
+use std/assert
+use std/task
+use std/test
+use std/sys/io
+
+# `task.fire-cancelable t f` = `spawn-cancelable (map t f)`: run `t` detached,
+# route its result to `f`, and hand back a `stop` that cancels it mid-flight.
+# (1) left to settle, the result reaches the callback (just like `fire`).
+# (2) stopped before it settles, the callback never runs.
+
+def run = fun {
+	let log = ref.new []
+	# (1) not cancelled: the immediate result flows to the callback.
+	let _keep = task.fire-cancelable (task.ok 42) fun n {
+		ref.set log [...ref.get log, n]
+	}
+	# (2) a task that only settles after sleeping -- stop it first, so its
+	# callback (which would push 99) is cancelled at the suspension point.
+	let stop = task.fire-cancelable (task.then (task.sleep 50ms) fun _done { task.ok 99 }) fun n {
+		ref.set log [...ref.get log, n]
+	}
+	stop ()
+	# Let the detached fibers run, then wait past the cancelled task's deadline
+	# to prove 99 never lands.
+	try task.yield ()
+	try _slept = task.sleep 100ms
+	print (to-string (ref.get log))
+	task.ok 0
+}
+
+def tests :: test.suite = [
+	test.case "task-fire-cancelable" fun {
+		try cap = io.capture fun {
+			try run ()
+			task.ok ()
+		}
+		assert.matches cap.out "[42]\n"
+	},
+]

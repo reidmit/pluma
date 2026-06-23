@@ -391,9 +391,9 @@ def meta-section :: fun (signal int) -> view = using view {
 		.section [
 			.styled strip,
 			.on-mount fun {
-				task.spawn (task.map (api.heart-count ()) fun n {
+				task.fire (api.heart-count ()) fun n {
 					signal.set loved n
-				})
+				}
 			},
 		] [
 			.div [.styled strip-eyebrow] [.text "Yes, really"],
@@ -404,9 +404,9 @@ def meta-section :: fun (signal int) -> view = using view {
 			.button [
 				.styled heart-btn,
 				.on-click fun {
-					task.spawn (task.map (api.cheer ()) fun n {
+					task.fire (api.cheer ()) fun n {
 						signal.set loved n
-					})
+					}
 				},
 			] [.text-of fun { "♥ loved " ++ to-string (signal.get loved) ++ " times" }],
 		]

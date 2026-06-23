@@ -329,14 +329,14 @@ def add-form :: fun (signal string) (signal string) (signal string) (signal mode
 					()
 				} else {
 					let entry = {species: sp, place: pl, count: n}
-					task.spawn (task.map (api.add-sighting entry) fun s {
+					task.fire (api.add-sighting entry) fun s {
 						signal.set data-sig (model.page-data.logbook-data (list.concat [
 							s,
 						] (sightings-of (signal.get data-sig))))
 						signal.set species ""
 						signal.set place ""
 						signal.set count "1"
-					})
+					}
 				}
 			},
 		] [
@@ -502,7 +502,7 @@ def note-form :: fun int (signal model.page-data) (signal string) -> view = fun 
 				if string.is-empty body {
 					()
 				} else {
-					task.spawn (task.map (api.add-note id body) fun maybe {
+					task.fire (api.add-note id body) fun maybe {
 						when maybe is some n {
 							signal.update data-sig fun cur {
 								if cur is model.page-data.detail-data d {
@@ -518,7 +518,7 @@ def note-form :: fun int (signal model.page-data) (signal string) -> view = fun 
 						} is none {
 							()
 						}
-					})
+					}
 				}
 			},
 		] [

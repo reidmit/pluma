@@ -103,18 +103,18 @@ public def page :: fun nothing -> view = using view {
 					# Fire two remote calls at once — both in flight together over the async
 					# transport, no main-thread freeze.
 					signal.set pending 2
-					task.spawn (task.map (api.add 2 3) fun n {
+					task.fire (api.add 2 3) fun n {
 						signal.set sum n
 						signal.update pending fun p {
 							p - 1
 						}
-					})
-					task.spawn (task.map (api.add 20 30) fun n {
+					}
+					task.fire (api.add 20 30) fun n {
 						signal.set sum n
 						signal.update pending fun p {
 							p - 1
 						}
-					})
+					}
 				},
 			] [.text "add on server (×2)"],
 			.div [] [

@@ -103,9 +103,16 @@ public def shielded :: fun (task a e) -> task a e = built-in "task-shielded"
 # `scope` blocks give *structured* concurrency (children awaited at block exit).
 # A reactive UI needs the opposite: an event handler kicks off async work (a
 # remote call, a subscription) and returns immediately, letting the result flow
-# back into a `signal` later. `spawn` is that detached fire-and-forget; it's the
-# signals-era restatement of MVU's "a command is a task". `spawn-cancelable`
-# additionally hands back a function that tears the work down -- pair it with
+# back into a `signal` later -- the signals-era restatement of MVU's "a command
+# is a task". Four variants cover two independent choices: whether a result flows
+# back, and whether you keep a handle to cancel the work.
+#
+#                  no result            result -> callback
+#     forget       spawn                fire
+#     cancelable   spawn-cancelable     fire-cancelable
+#
+# The `-cancelable` forms hand back a `stop` function that tears the work down
+# (running the task's `defer`s / a stream's shielded release) -- pair it with
 # `signal.on-cleanup` to bind a subscription's lifetime to a dynamic subtree.
 
 def spawn-command :: fun (task nothing e) -> nothing = built-in "spawn-command"
@@ -115,8 +122,8 @@ def spawn-sub :: fun (task nothing e) -> int = built-in "spawn-sub"
 def cancel-sub :: fun int -> nothing = built-in "cancel-sub"
 
 # Run `t` detached on the scheduler as a root-scoped fiber, returning at once.
-# The canonical "RPC result flows into a signal" move:
-# `task.spawn (task.map (api.add 2 3) (fun n { signal.set sum n }))`.
+# For a `task nothing` whose side effects need nothing routed back; reach for
+# `fire` when you want to hand the task's result to a callback.
 public def spawn :: fun (task nothing) -> nothing = spawn-command
 
 # Like `spawn`, but in its own cancellable scope; returns a function that cancels it
@@ -141,6 +148,17 @@ public def spawn-cancelable :: fun (task nothing) -> (fun nothing -> nothing) = 
 # to route.)
 public def fire :: fun (task a) (fun a -> nothing) -> nothing = fun t f {
 	spawn (map t f)
+}
+
+# `fire` with a teardown handle: run `t` detached, route its result to `f`, and
+# return a `stop` function that cancels it should it still be in flight. It's
+# exactly `spawn-cancelable (map t f)` -- the cancelable row's result-routing
+# cell. The search-as-you-type move: fire a query, stream its result into a
+# signal, and cancel the outstanding request when the query changes.
+#
+#     let stop = task.fire-cancelable (api.search q) (fun hits { signal.set results hits })
+public def fire-cancelable :: fun (task a) (fun a -> nothing) -> (fun nothing -> nothing) = fun t f {
+	spawn-cancelable (map t f)
 }
 
 # --- structured-concurrency kernel ---------------------------------------

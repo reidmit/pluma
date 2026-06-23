@@ -271,7 +271,7 @@ def hint :: css.ruleset = using css {
 
 def execute :: fun (fun string -> result string string) (signal string) (signal string) -> nothing = fun run src out {
 	signal.set out "Compiling…"
-	task.spawn (task.map (api.compile-snippet (signal.get src)) fun compiled {
+	task.fire (api.compile-snippet (signal.get src)) fun compiled {
 		when compiled is ok hex {
 			when run hex is ok printed {
 				signal.set out if printed == "" {
@@ -285,7 +285,7 @@ def execute :: fun (fun string -> result string string) (signal string) (signal 
 		} is err message {
 			signal.set out message
 		}
-	})
+	}
 }
 
 # --- page -------------------------------------------------------------------

@@ -26,9 +26,9 @@ use ui
 # embedded payload (only the initial server-rendered page does).
 def go :: fun (signal route) (signal model.page-data) route -> nothing = fun route-sig data-sig r {
 	signal.set route-sig r
-	task.spawn (task.map (ui.load-data r) fun data {
+	task.fire (ui.load-data r) fun data {
 		signal.set data-sig data
-	})
+	}
 }
 
 # Wire up the live signals, navigation, and back/forward, then hydrate the server's
