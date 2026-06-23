@@ -107,7 +107,7 @@ def to-text :: fun (result bytes string) -> result string string = fun r {
 
 # A `nothing`-returning op: the payload is empty; keep only ok/err.
 def to-void :: fun (result bytes string) -> result nothing string = fun r {
-	try _ = r
+	try r
 	ok ()
 }
 
