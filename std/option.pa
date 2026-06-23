@@ -57,7 +57,7 @@ public def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
 # dual is `??`, which supplies a fallback instead of quitting.
 #
 #     # some -> the contents; none -> "no home directory" on stderr, then exit
-#     (process.env "HOME") | option.expect "no home directory"
+#     process.env "HOME" |> option.expect "no home directory"
 public def expect :: fun (option a) string -> a = fun o msg {
 	when o is some v {
 		v

@@ -14,7 +14,7 @@
 # (unlike a native one) survives the async boundaries Pluma's scheduler
 # crosses, because it is plain data. Build depth by hand with `context`:
 #
-#     try user = (load-user id) | error.context "handling request $(to-string id)"
+#     try user = load-user id |> error.context "handling request $(to-string id)"
 #
 # Erasing works for `result` and `task` alike, so the same `try` reads the same
 # whether a step is sync or async. A type erases into `error` exactly when it has
