@@ -1,0 +1,67 @@
+use std/assert
+use std/bytes
+use std/dict
+use std/string
+use std/task
+use std/test
+use std/sys/http
+use std/sys/net
+
+# Server-side response compression, in its own module so its connection pool is
+# isolated. (Test modules each run in a fresh isolate, so the module-global
+# `http.fetch` pool here can't leak a connection -- to the server this test
+# cancels -- into another module's fetches.)
+
+# A repetitive (so very compressible) body well over the server's compress
+# threshold: 44 bytes x 8 = 352 bytes.
+def big-body :: string = bytes.to-string (bytes.repeat (string.to-bytes "All work and no play makes Jack a dull boy. ") 8) ?? ""
+
+# A real `http.serve` handler returning that body. The server compresses it
+# because the client (http.fetch) advertises Accept-Encoding.
+def serve-big :: fun net.listener -> task nothing = fun server {
+	http.serve-on server fun _req {
+		task.ok (http.text 200 big-body)
+	}
+}
+
+def run-server-compress :: fun nothing -> task (string, string, string) string = fun {
+	when net.listen "127.0.0.1:0" is ok server {
+		when net.local-addr server is ok addr {
+			scope as s {
+				s.spawn (serve-big server)
+				try resp = http.fetch ("http://" ++ addr ++ "/big") http.method.get (dict.empty ()) (string.to-bytes "")
+				s.cancel ()
+				# The server set Content-Encoding (proving it compressed) and Vary (so a
+				# cache keys on the encoding), and the body round-trips (proving the
+				# client decoded it).
+				task.ok (
+					dict.lookup resp.headers "content-encoding" ?? "(none)",
+					dict.lookup resp.headers "vary" ?? "(none)",
+					bytes.to-string resp.body ?? "<non-utf8>",
+				)
+			}
+		} is err e {
+			task.err ("addr: " ++ e)
+		}
+	} is err e {
+		task.err ("listen: " ++ e)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "server compresses large responses" fun {
+		try settled = task.attempt (run-server-compress ())
+		when settled is ok triple {
+			# Client advertises gzip+br; the server prefers br and compresses, sets
+			# `Vary: Accept-Encoding`, and the client decodes -- so the encoding is
+			# "br", Vary is set, and the body is intact.
+			assert.all [
+				assert.equals triple.0 "br",
+				assert.equals triple.1 "Accept-Encoding",
+				assert.equals triple.2 big-body,
+			]
+		} is err e {
+			assert.equals ("error: " ++ e) "ok"
+		}
+	},
+]

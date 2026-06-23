@@ -292,7 +292,8 @@ def handle-conn :: fun net.connection (fun request -> task response) bytes -> ta
 					finish conn
 				} is none {
 					let alive = wants-keep-alive parsed.headers
-					try write-all conn (serialize resp alive)
+					let encoded = compress-response parsed.headers resp
+					try write-all conn (serialize encoded alive)
 					if alive {
 						handle-conn conn handler rest
 					} else {
@@ -502,6 +503,81 @@ def serialize :: fun response bool -> bytes = fun resp keep-alive {
 	}
 	let head = status-line ++ header-lines ++ length-line ++ conn-line ++ "\r\n"
 	bytes.concat (string.to-bytes head) resp.body
+}
+
+# --- response compression ----------------------------------------------------
+
+# Bodies smaller than this aren't worth compressing (gzip/brotli framing overhead
+# can exceed the savings, and the CPU isn't free).
+def compress-min :: int = 256
+
+# Compress `resp`'s body when the client (`req-headers`) accepts an encoding and
+# the response is a good candidate -- big enough, a text-like content-type, and
+# not already encoded -- adding the matching `Content-Encoding` header (`serialize`
+# then derives the compressed `Content-Length`) plus `Vary: Accept-Encoding` so a
+# shared cache keys on the request's encoding. Otherwise the response is returned
+# unchanged. Streaming responses never reach here.
+def compress-response :: fun (dict string string) response -> response = fun req-headers resp {
+	when chosen-encoding req-headers resp is some enc {
+		{
+			...resp,
+			body: encode-with enc resp.body,
+			headers: dict.insert (dict.insert resp.headers "content-encoding" enc) "vary" "Accept-Encoding",
+		}
+	} is none {
+		resp
+	}
+}
+
+# The encoding to use for this response, or none. Prefers brotli (smaller) over
+# gzip when the client lists both.
+def chosen-encoding :: fun (dict string string) response -> option string = fun req-headers resp {
+	if bytes.length resp.body >= compress-min {
+		if dict.contains-key resp.headers "content-encoding" {
+			none
+		} else if compressible-type resp.headers {
+			accepted-encoding (dict.lookup req-headers "accept-encoding" ?? "")
+		} else {
+			none
+		}
+	} else {
+		none
+	}
+}
+
+# Pick the client's preferred supported encoding from an `Accept-Encoding` value.
+def accepted-encoding :: fun string -> option string = fun accept {
+	let lower = string.to-lower accept
+	if string.contains lower "br" {
+		some "br"
+	} else if string.contains lower "gzip" {
+		some "gzip"
+	} else {
+		none
+	}
+}
+
+# Whether the response's content-type is worth compressing -- text and the
+# text-based application types. Binary types (images, fonts, already-zipped) and
+# an absent content-type are left alone.
+def compressible-type :: fun (dict string string) -> bool = fun headers {
+	when dict.lookup headers "content-type" is some ct {
+		is-text-type (string.to-lower ct)
+	} is none {
+		false
+	}
+}
+
+def is-text-type :: fun string -> bool = fun ct {
+	string.contains ct "text/" or string.contains ct "json" or string.contains ct "javascript" or string.contains ct "xml" or string.contains ct "svg" or string.contains ct "html" or string.contains ct "css"
+}
+
+def encode-with :: fun string bytes -> bytes = fun enc body {
+	if enc == "br" {
+		compress.brotli body
+	} else {
+		compress.gzip body
+	}
 }
 
 # --- streaming a response ----------------------------------------------------
