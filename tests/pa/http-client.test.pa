@@ -1,5 +1,6 @@
 use std/assert
 use std/bytes
+use std/compress
 use std/dict
 use std/string
 use std/task
@@ -134,7 +135,56 @@ def run-keepalive :: fun nothing -> task (int, int) string = fun {
 	}
 }
 
+# --- content-encoding (gzip) decode --------------------------------------
+
+# Serve a gzip-compressed body, labelled `Content-Encoding: gzip`. The payload is
+# produced by `compress.gzip`, so the client must run the codec to recover it.
+def serve-gzip :: fun net.listener -> task nothing = fun server {
+	try conn = task.unwrap (net.accept server)
+	try _req = task.unwrap (read-headers conn (string.to-bytes ""))
+	let payload = compress.gzip (string.to-bytes "compressed hello")
+	let head = "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: " ++ to-string (bytes.length payload) ++ "\r\nConnection: close\r\n\r\n"
+	try _sent = task.unwrap (write-bytes conn (bytes.concat (string.to-bytes head) payload))
+	close-it conn
+	task.ok ()
+}
+
+def run-gzip :: fun nothing -> task string string = fun {
+	when net.listen "127.0.0.1:0" is ok server {
+		when net.local-addr server is ok addr {
+			scope as s {
+				s.spawn (serve-gzip server)
+				try resp = http.fetch ("http://" ++ addr ++ "/g") http.method.get (dict.empty ()) (string.to-bytes "")
+				s.cancel ()
+				task.ok (bytes.to-string resp.body ?? "<non-utf8>")
+			}
+		} is err e {
+			task.err ("addr: " ++ e)
+		}
+	} is err e {
+		task.err ("listen: " ++ e)
+	}
+}
+
 def tests :: test.suite = [
+	test.case "codec round-trips" fun {
+		let original = string.to-bytes "the quick brown fox, the quick brown fox, the quick brown fox"
+		try gz = task.lift (compress.gunzip (compress.gzip original))
+		try br = task.lift (compress.unbrotli (compress.brotli original))
+		assert.all [
+			assert.equals (bytes.to-string gz ?? "g") (bytes.to-string original ?? "o"),
+			assert.equals (bytes.to-string br ?? "b") (bytes.to-string original ?? "o"),
+			assert.is-err (compress.gunzip (string.to-bytes "not gzip at all")),
+		]
+	},
+	test.case "gzip response decoded" fun {
+		try settled = task.attempt (run-gzip ())
+		when settled is ok body {
+			assert.equals body "compressed hello"
+		} is err e {
+			assert.equals ("error: " ++ e) "compressed hello"
+		}
+	},
 	test.case "chunked response decoded" fun {
 		try settled = task.attempt (run-chunked ())
 		when settled is ok body {

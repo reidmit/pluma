@@ -12,6 +12,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 		("std/base64", include_str!("../../std/base64.pa")),
 		("std/bit", include_str!("../../std/bit.pa")),
 		("std/bytes", include_str!("../../std/bytes.pa")),
+		("std/compress", include_str!("../../std/compress.pa")),
 		("std/css", include_str!("../../std/css.pa")),
 		("std/dict", include_str!("../../std/dict.pa")),
 		("std/error", include_str!("../../std/error.pa")),

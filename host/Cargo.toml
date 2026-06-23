@@ -49,3 +49,7 @@ webpki-roots = "0.26"
 # Parse PEM into the DER cert/key types rustls wants — server cert+key for `net.listen-tls`,
 # and a custom CA bundle for `net.connect-tls`'s pinned-trust variant.
 rustls-pemfile = "2"
+# `std/compress` (HTTP Content-Encoding gzip/brotli). `flate2`'s `rust_backend` is the
+# pure-Rust `miniz_oxide` DEFLATE (no C toolchain); `brotli` is pure-Rust too.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+brotli = "7"

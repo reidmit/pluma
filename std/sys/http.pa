@@ -23,6 +23,7 @@
 # not handled yet.
 
 use std/bytes
+use std/compress
 use std/dict
 use std/hex
 use std/list
@@ -602,7 +603,7 @@ def fetch-with :: fun string (option string) method (dict string string) bytes -
 	let path = split.1
 	let secure = url-secure url
 	let key = pool-key secure authority
-	let req = serialize-request verb path authority headers body true
+	let req = serialize-request verb path authority headers body true true
 	# A pooled connection may have been closed by the server since it went idle;
 	# reusing it then fails with no response, so fall back to a fresh connection.
 	let idle = when ca is none {
@@ -780,7 +781,9 @@ def split-url :: fun string -> (string, string) = fun url {
 # Render a request as HTTP/1.1 bytes: request line, Host, the computed
 # Content-Length, then body. With `keep-alive`, no `Connection` header is sent
 # (HTTP/1.1 keeps the connection open by default); otherwise `Connection: close`.
-def serialize-request :: fun method string string (dict string string) bytes bool -> bytes = fun verb path authority headers body keep-alive {
+# With `accept-compressed`, an `Accept-Encoding: gzip, br` header invites the
+# server to compress its response (which the client transparently decodes).
+def serialize-request :: fun method string string (dict string string) bytes bool bool -> bytes = fun verb path authority headers body keep-alive accept-compressed {
 	let request-line = method-name verb ++ " " ++ path ++ " HTTP/1.1\r\n"
 	let host-line = "Host: " ++ authority ++ "\r\n"
 	let custom-lines = string.join (list.map (dict.entries headers) render-header) ""
@@ -790,7 +793,12 @@ def serialize-request :: fun method string string (dict string string) bytes boo
 	} else {
 		"Connection: close\r\n"
 	}
-	let head = request-line ++ host-line ++ custom-lines ++ length-line ++ conn-line ++ "\r\n"
+	let accept-line = if accept-compressed {
+		"Accept-Encoding: gzip, br\r\n"
+	} else {
+		""
+	}
+	let head = request-line ++ host-line ++ custom-lines ++ length-line ++ conn-line ++ accept-line ++ "\r\n"
 	bytes.concat (string.to-bytes head) body
 }
 
@@ -824,18 +832,56 @@ def method-name :: fun method -> string = fun m {
 def read-response-and-reuse :: fun net.connection method -> task (response, bool) string = fun conn verb {
 	try raw = task.unwrap (read-until-headers conn (string.to-bytes ""))
 	let parsed = parse-response-head raw
-	let keep-alive = response-keep-alive parsed.headers
+	# Read the raw (still-encoded) body, framed, then -- once the connection is past
+	# it and reuse is decided -- undo any `Content-Encoding` (gzip / brotli).
+	try framed = read-framed-body conn verb parsed
+	try body = task.lift (decode-body parsed.headers framed.0)
+	task.ok (mk-response parsed body, framed.1)
+}
+
+# Read the response body exactly, and report whether the connection stays reusable.
+# Framing: no body for HEAD / 1xx / 204 / 304; else chunked, else Content-Length,
+# else (last resort) read to connection close -- which spends the connection.
+# (Untyped so `parsed` stays row-polymorphic over the parse record's exact shape.)
+def read-framed-body = fun conn verb parsed {
 	if response-bodyless verb parsed.status {
-		task.ok (mk-response parsed (string.to-bytes ""), keep-alive)
+		task.ok (string.to-bytes "", true)
 	} else if parsed.chunked {
 		try body = task.unwrap (read-chunked conn parsed.body-start (string.to-bytes ""))
-		task.ok (mk-response parsed body, keep-alive)
+		task.ok (body, true)
 	} else if parsed.has-length {
 		try body = task.unwrap (read-body conn parsed.body-start parsed.content-length)
-		task.ok (mk-response parsed body, keep-alive)
+		task.ok (body, true)
 	} else {
 		try body = task.unwrap (read-to-close conn parsed.body-start)
-		task.ok (mk-response parsed body, false)
+		task.ok (body, false)
+	}
+}
+
+# Undo the response's `Content-Encoding`, if any. An empty body is left alone (a
+# bodyless response carries no codec stream to decode).
+def decode-body :: fun (dict string string) bytes -> result bytes string = fun headers body {
+	if bytes.is-empty body {
+		ok body
+	} else {
+		when dict.lookup headers "content-encoding" is some enc {
+			decode-encoding (string.to-lower (string.trim enc)) body
+		} is none {
+			ok body
+		}
+	}
+}
+
+def decode-encoding :: fun string bytes -> result bytes string = fun enc body {
+	if enc == "gzip" or enc == "x-gzip" {
+		compress.gunzip body
+	} else if enc == "br" {
+		compress.unbrotli body
+	} else if enc == "" or enc == "identity" {
+		ok body
+	} else {
+		# Includes multi-codec stacks like "gzip, br", which v1 doesn't unwind.
+		err ("http.fetch: unsupported content-encoding: " ++ enc)
 	}
 }
 
@@ -1039,7 +1085,7 @@ public def fetch-stream :: fun string method (dict string string) bytes -> strea
 			let split = split-url url
 			try c = open-conn (url-secure url) split.0 none
 			when c is ok conn {
-				try write-all conn (serialize-request verb split.1 split.0 headers body false)
+				try write-all conn (serialize-request verb split.1 split.0 headers body false false)
 				try raw-r = read-until-headers conn (string.to-bytes "")
 				when raw-r is ok raw {
 					let parsed = parse-response-head raw

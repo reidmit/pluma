@@ -1,0 +1,30 @@
+# gzip and brotli -- the two compression schemes behind HTTP `Content-Encoding`,
+# and a handy way to shrink any bytes you store or send. `gzip` and `brotli`
+# compress; `gunzip` and `unbrotli` decompress and can fail on malformed input.
+# Brotli usually compresses text a bit smaller than gzip; gzip is understood
+# everywhere. `std/sys/http` uses these to decode compressed responses for you.
+#
+#     let small = compress.gzip (string.to-bytes long-text)
+#     try back = compress.gunzip small   # => the original bytes, or err
+
+# Compress `data` with gzip. Compressing never fails.
+public def gzip :: fun bytes -> bytes = fun data {
+	gzip-raw data ?? data
+}
+
+# Decompress gzip-encoded `data`. `err` if it isn't valid gzip.
+public def gunzip :: fun bytes -> result bytes string = built-in "gzip-decode"
+
+# Compress `data` with brotli. Compressing never fails.
+public def brotli :: fun bytes -> bytes = fun data {
+	brotli-raw data ?? data
+}
+
+# Decompress brotli-encoded `data`. `err` if it isn't valid brotli.
+public def unbrotli :: fun bytes -> result bytes string = built-in "brotli-decode"
+
+# Encoding can't actually fail (the host compresses into memory), so these raw
+# `result`-returning builtins are unwrapped above; the `?? data` is unreachable.
+def gzip-raw :: fun bytes -> result bytes string = built-in "gzip-encode"
+
+def brotli-raw :: fun bytes -> result bytes string = built-in "brotli-encode"

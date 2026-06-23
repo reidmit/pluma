@@ -48,6 +48,10 @@ mod procop;
 // `rusqlite::Connection`s + the value/row wire codec, an offload client of `offload.rs`.
 mod db;
 
+// Engine-independent `std/compress` (gzip/brotli) — thin codec wrappers, used by HTTP
+// `Content-Encoding`.
+mod compress;
+
 // The V8 backend: instantiates the WasmGC artifact under V8 over the
 // marshalling ABI. Reuses this crate's engine-independent core (`HostState`/`HostNet`/
 // `NetRet`/`BufferedIo`/`read_line_from`) — a descendant module sees its ancestors'

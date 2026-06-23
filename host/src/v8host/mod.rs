@@ -21,6 +21,7 @@ use crate::offload::Reactor;
 use crate::{BufferedIo, CapturingIo, HostIo, HostState, RunCapture, RunResult, StdioIo};
 
 mod compile;
+mod compress;
 mod db;
 mod entropy;
 mod fs;
@@ -36,6 +37,7 @@ use marshal::{get_prop, read_mem, register};
 // The native import callbacks, grouped by capability. Glob-imported so the registration
 // table below can name each `cb_*` bare (the table is the canonical `pluma.*` surface).
 use compile::cb_compile_wasm_hex;
+use compress::*;
 use db::*;
 use entropy::*;
 use fs::*;
@@ -463,6 +465,12 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 	// std/sys/db (host/src/db.rs): one generic `db-op` (open/execute/close by op-code),
 	// offloaded to the pinned SQLite worker — async only, no `-sync` twin.
 	register(scope, pluma, data, "db-op", cb_db_op);
+	// std/compress (host/src/compress.rs): gzip/brotli byte transforms, riding the
+	// `io.read-file-bytes` marshalling shape (bytes in scratch, bytes out via `(dst, cap)`).
+	register(scope, pluma, data, "gzip-encode", cb_gzip_encode);
+	register(scope, pluma, data, "gzip-decode", cb_gzip_decode);
+	register(scope, pluma, data, "brotli-encode", cb_brotli_encode);
+	register(scope, pluma, data, "brotli-decode", cb_brotli_decode);
 	// std/web/fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
 	register(scope, pluma, data, "web-fetch", cb_web_fetch);
 	// std/event — SSR stubs (a server build constructs view handlers but never runs
