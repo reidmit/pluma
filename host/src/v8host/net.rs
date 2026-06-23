@@ -99,6 +99,47 @@ pub(super) fn cb_net_connect(
 	}
 }
 
+/// `net-connect-tls(i32 fid, i32 addr_ptr, i32 addr_len) -> (i32 status, i32 conn-id)`:
+/// dial a server and complete the TLS handshake, offloaded to a pool worker (the blocking
+/// DNS + TCP + TLS handshake mustn't stall the scheduler thread — `crate::net::
+/// tls_client_connect`). Submit-or-collect exactly like `cb_net_connect`: the first call
+/// submits the blocking connect+handshake and reports would-block (status 1); the wake's
+/// re-run adopts the handshaked TLS connection into the table and returns its id. From the
+/// Pluma side it's indistinguishable from a plain connection — `read`/`write`/`close` run
+/// the record layer transparently. status: 0 ok, 1 would-block, 2 error.
+pub(super) fn cb_net_connect_tls(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let fid = argi(scope, &args, 0);
+	let (ap, al) = (argi(scope, &args, 1), argi(scope, &args, 2));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	match ctx.state.reactor.collect(fid) {
+		Some(crate::offload::OpResult::Tls(client)) => {
+			let ret = ctx.state.net.adopt_tls_conn(client);
+			let (s, n) = net_scalar_v8(ctx, ret);
+			set_pair(scope, &mut rv, s, n);
+		}
+		Some(crate::offload::OpResult::Err(e)) => {
+			ctx.state.last_error = e;
+			set_pair(scope, &mut rv, 2, 0);
+		}
+		Some(_) => unreachable!("net-connect-tls collected a non-tls result"),
+		None => {
+			let addr = read_str(scope, mem, ap, al);
+			ctx.state.reactor.submit(
+				fid,
+				Box::new(move || match crate::net::tls_client_connect(&addr) {
+					Ok(client) => crate::offload::OpResult::Tls(client),
+					Err(e) => crate::offload::OpResult::Err(e),
+				}),
+			);
+			set_pair(scope, &mut rv, 1, 0);
+		}
+	}
+}
+
 pub(super) fn cb_net_close(
 	scope: &mut v8::HandleScope,
 	args: v8::FunctionCallbackArguments,

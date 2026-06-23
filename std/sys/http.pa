@@ -557,43 +557,65 @@ def status-names :: dict int string = dict.from-entries [
 # --- the client ----------------------------------------------------------
 
 # Makes one HTTP/1.1 request and returns the response. `url` looks like
-# "http://127.0.0.1:8080/path" (the `http://` scheme is optional). Plain TCP
-# only -- no TLS -- and the connection is closed after the single exchange
-# (`Connection: close`). The task *fails* with a message if the host can't be
-# reached or the exchange breaks down.
+# "http://127.0.0.1:8080/path" or "https://example.com/path" (the `http://`
+# scheme is optional and assumed). An `https` URL is fetched over TLS, with the
+# server's certificate verified; everything else goes over plain TCP. The
+# connection is closed after the single exchange (`Connection: close`). The task
+# *fails* with a message if the host can't be reached or the exchange breaks down.
 #
-#     try resp = http.fetch "http://127.0.0.1:8080/echo"
-#         post (dict.empty ()) (string.to-bytes "hi")
+#     try resp = http.fetch "https://example.com/"
+#         get (dict.empty ()) (string.to-bytes "")
 public def fetch :: fun string method (dict string string) bytes -> task response string = fun url verb headers body {
-	if string.starts-with url "https://" {
-		task.err "https is not supported: the net stack is TCP-only, with no TLS"
+	let split = split-url url
+	let authority = split.0
+	let path = split.1
+	try conn = task.unwrap (open-conn url authority)
+	try task.unwrap (write-all conn (serialize-request verb path authority headers body))
+	try resp = read-response conn
+	net.close conn
+	task.ok resp
+}
+
+# Whether `url` calls for a secure (TLS) transport -- i.e. an `https` scheme.
+def url-secure :: fun string -> bool = fun url {
+	string.starts-with url "https://"
+}
+
+# Open a connection to `authority` (a `host:port`), choosing TLS or plain TCP by
+# the scheme of the original `url`. The split between the two lives here so both
+# `fetch` and `fetch-stream` route `https` through `net.connect-tls`.
+def open-conn :: fun string string -> task (result connection string) = fun url authority {
+	if url-secure url {
+		net.connect-tls authority
 	} else {
-		let split = split-url url
-		let authority = split.0
-		let path = split.1
-		try conn = task.unwrap (net.connect authority)
-		try task.unwrap (write-all conn (serialize-request verb path authority headers body))
-		try resp = read-response conn
-		net.close conn
-		task.ok resp
+		net.connect authority
 	}
 }
 
-# Splits "http://host:port/a/b?x" into `("host:port", "/a/b?x")`. The `http://`
-# scheme prefix is stripped if present, a missing path defaults to "/", and a
-# missing port defaults to 80 -- `net.connect` requires an explicit `host:port`.
+# Splits "http://host:port/a/b?x" into `("host:port", "/a/b?x")`. The scheme
+# prefix (`http://` or `https://`) is stripped if present, a missing path
+# defaults to "/", and a missing port defaults to 80 -- or 443 under `https` --
+# since `net.connect`/`net.connect-tls` require an explicit `host:port`.
 def split-url :: fun string -> (string, string) = fun url {
-	let after-scheme = if string.starts-with url "http://" {
+	let secure = url-secure url
+	let after-scheme = if secure {
+		string.drop url 8
+	} else if string.starts-with url "http://" {
 		string.drop url 7
 	} else {
 		url
 	}
 	let segs = string.split after-scheme "/"
 	let raw-authority = list.head segs ?? after-scheme
+	let default-port = if secure {
+		":443"
+	} else {
+		":80"
+	}
 	let authority = if string.contains raw-authority ":" {
 		raw-authority
 	} else {
-		raw-authority ++ ":80"
+		raw-authority ++ default-port
 	}
 	let path = "/" ++ string.join (list.drop segs 1) "/"
 	(authority, path)
@@ -682,7 +704,7 @@ public def fetch-stream :: fun string method (dict string string) bytes -> strea
 	stream.from-resource {
 		open: fun {
 			let split = split-url url
-			try c = net.connect split.0
+			try c = open-conn url split.0
 			when c is ok conn {
 				try write-all conn (serialize-request verb split.1 split.0 headers body)
 				try raw-r = read-until-headers conn (string.to-bytes "")

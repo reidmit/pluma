@@ -39,7 +39,7 @@ fn deliver_db(
 			ctx.state.last_error = e;
 			(2, 0)
 		}
-		OpResult::Conn(_) => unreachable!("db op produced a Conn"),
+		OpResult::Conn(_) | OpResult::Tls(_) => unreachable!("db op produced a socket"),
 	}
 }
 

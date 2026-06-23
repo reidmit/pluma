@@ -68,6 +68,11 @@ pub(crate) mod task_kind {
 	// id + sql/path + the encoded params blob in and bytes out (rows, or a new connection id as
 	// text — `io-copyout` overflow path, payload size unknown). Parks on `wait::IO` like fs.
 	pub(crate) const DB_OP: i32 = 21;
+	// `net.connect-tls`: dial + TLS handshake, offloaded to a pool worker exactly like
+	// `net.connect` (the handshake is blocking, so it can't run on the scheduler thread).
+	// Settles `result conn`; the connection it yields reads/writes through the same
+	// `net-read`/`net-write` ops, with the host running the record layer transparently.
+	pub(crate) const NET_CONNECT_TLS: i32 = 22;
 }
 
 /// The host-fed RPC stream channel (`std/web/stream`): a per-subscription mailbox
@@ -672,6 +677,7 @@ pub(crate) struct NetImports {
 	pub(crate) close: u32,
 	pub(crate) local_addr: u32,
 	pub(crate) connect: u32,
+	pub(crate) connect_tls: u32,
 	pub(crate) accept: u32,
 	pub(crate) read: u32,
 	pub(crate) write: u32,
@@ -724,7 +730,11 @@ pub(crate) struct NetMarshal {
 /// `accept`/`read`/`write` plus the synchronous `listen`/`close`/`local-addr`/
 /// `connect`). Drives net-import registration (`module.rs`).
 pub(crate) fn is_net_builtin(tag: &str) -> bool {
-	is_net_sync(tag) || matches!(tag, "net-accept" | "net-read" | "net-write" | "net-connect")
+	is_net_sync(tag)
+		|| matches!(
+			tag,
+			"net-accept" | "net-read" | "net-write" | "net-connect" | "net-connect-tls"
+		)
 }
 
 /// Whether `tag` is a `BlockingPool` offload builtin (host/src/offload.rs) — a suspending `$task`
@@ -1733,6 +1743,9 @@ pub(crate) fn task_builtin_kind(tag: &str) -> Option<i32> {
 		// connect is offloaded to a pool worker (blocking DNS + handshake), not a readiness
 		// park; the host submits the dial and hands back the socket on collect.
 		"net-connect" => task_kind::NET_CONNECT,
+		// connect-tls is the same offloaded dial as connect, with the TLS handshake folded
+		// into the worker's blocking call; same settle (`result conn`).
+		"net-connect-tls" => task_kind::NET_CONNECT_TLS,
 		// `std/web/stream`: pull the next host-fed RPC stream event (a `$task` the
 		// scheduler drives — dequeue or park on `wait::RPC`).
 		"rpc-stream-next" => task_kind::RPC_NEXT,

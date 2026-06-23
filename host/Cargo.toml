@@ -41,3 +41,13 @@ jiff = "0.2.25"
 # Vendored per the stdlib heavy-lifting rule; `HostDb` stays crate-agnostic so a later
 # swap to a pure-Rust engine (turso) is a one-file change.
 rusqlite = { version = "0.31", features = ["bundled"] }
+# `std/sys/net` TLS (`net.connect-tls`, https `http.fetch`): a pure-Rust TLS stack.
+# `ring` provider (not the default `aws-lc-rs`) so the build needs no C toolchain/cmake;
+# `webpki-roots` is the bundled Mozilla CA set the client verifies servers against.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = "0.26"
+
+[dev-dependencies]
+# Generate a self-signed cert in the TLS integration test so it runs hermetically on
+# loopback (no network, both ends under the test's control).
+rcgen = "0.13"

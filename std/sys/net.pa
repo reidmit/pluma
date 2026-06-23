@@ -82,3 +82,14 @@ public def close :: fun connection -> result nothing string = built-in "net-clos
 #
 #     try conn = net.connect "127.0.0.1:8080"
 public def connect :: fun string -> task (result connection string) = built-in "net-connect"
+
+# Like `connect`, but secures the connection with TLS -- the encryption
+# behind `https`. The server's certificate is verified against the built-in
+# set of trusted authorities, and the host part of `address` is the name
+# checked against it, so connect to `example.com:443`, not an IP. Once open,
+# `read` and `write` work exactly as on a plain connection -- the encryption
+# is handled for you. `err` if nothing is listening, the handshake fails, or
+# the certificate doesn't check out.
+#
+#     try conn = net.connect-tls "example.com:443"
+public def connect-tls :: fun string -> task (result connection string) = built-in "net-connect-tls"

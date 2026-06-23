@@ -1386,6 +1386,21 @@ pub(crate) fn build_pump_fn(
 							});
 						});
 					});
+					// connect-tls: identical marshalling + settle to connect — the TLS
+					// handshake is folded into the host worker's blocking dial, invisible here.
+					w.local_get(tk).i32(task_kind::NET_CONNECT_TLS).i32_eq();
+					w.if_(|w| {
+						w.i32(0).global_set(nm.bump);
+						let (ap, al) = marshal_str_arg(w, nm, tp, 0);
+						w.local_get(fid);
+						w.local_get(ap).local_get(al);
+						w.call(net.connect_tls);
+						net_settle(w, g, fid, fval, fkind, nm, |w, n| {
+							box_i(w, |w| {
+								w.local_get(n);
+							});
+						});
+					});
 				}
 
 				// BlockingPool offload ops (host/src/offload.rs): hand the blocking call to a host

@@ -336,9 +336,9 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 		ftypes.for_net_listen()
 	} else if tag == "net-close" {
 		ftypes.for_net_close()
-	} else if tag == "net-local-addr" || tag == "net-connect" {
-		// `net-connect` is now `(fid, addr_ptr, addr_len) -> (status, conn-id)` — the same
-		// 3-in/2-out shape as `net-local-addr` (it's offloaded, so it takes the fiber id).
+	} else if tag == "net-local-addr" || tag == "net-connect" || tag == "net-connect-tls" {
+		// `net-connect`/`net-connect-tls` are `(fid, addr_ptr, addr_len) -> (status, conn-id)`
+		// — the same 3-in/2-out shape as `net-local-addr` (offloaded, so they take the fiber id).
 		ftypes.for_net_local_addr()
 	} else if tag == "net-read" || tag == "net-write" {
 		ftypes.for_net_rw()

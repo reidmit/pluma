@@ -38,6 +38,9 @@ pub(crate) enum OpResult {
 	/// A connected socket from an offloaded `net.connect` (the worker did the blocking DNS +
 	/// handshake); the scheduler thread adopts it into `HostNet` on collect.
 	Conn(std::net::TcpStream),
+	/// A handshaked TLS client from an offloaded `net.connect-tls` (the worker did the
+	/// blocking dial + TLS handshake); adopted into `HostNet` on collect, like `Conn`.
+	Tls(crate::net::TlsClient),
 	Err(String),
 }
 

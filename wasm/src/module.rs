@@ -144,6 +144,7 @@ impl Module {
 			close: imports.register("net-close"),
 			local_addr: imports.register("net-local-addr"),
 			connect: imports.register("net-connect"),
+			connect_tls: imports.register("net-connect-tls"),
 			accept: imports.register("net-accept"),
 			read: imports.register("net-read"),
 			write: imports.register("net-write"),
