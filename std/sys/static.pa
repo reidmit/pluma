@@ -52,6 +52,7 @@ public def serve-file :: fun string string -> task http.response = fun root path
 				],
 				body,
 				stream-body: none,
+				hijack: none,
 			}
 		} is err _ {
 			task.ok (http.not-found ())

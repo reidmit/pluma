@@ -22,6 +22,7 @@ use crate::{BufferedIo, CapturingIo, HostIo, HostState, RunCapture, RunResult, S
 
 mod compile;
 mod compress;
+mod crypto;
 mod db;
 mod entropy;
 mod fs;
@@ -38,6 +39,7 @@ use marshal::{get_prop, read_mem, register};
 // table below can name each `cb_*` bare (the table is the canonical `pluma.*` surface).
 use compile::cb_compile_wasm_hex;
 use compress::*;
+use crypto::*;
 use db::*;
 use entropy::*;
 use fs::*;
@@ -471,6 +473,8 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 	register(scope, pluma, data, "gzip-decode", cb_gzip_decode);
 	register(scope, pluma, data, "brotli-encode", cb_brotli_encode);
 	register(scope, pluma, data, "brotli-decode", cb_brotli_decode);
+	// SHA-1 (host/src/crypto.rs): the WebSocket handshake accept-key digest, same ABI.
+	register(scope, pluma, data, "sha1", cb_sha1);
 	// std/web/fetch — the browser HTTP transport, here a blocking HTTP/1.1 exchange.
 	register(scope, pluma, data, "web-fetch", cb_web_fetch);
 	// std/event — SSR stubs (a server build constructs view handlers but never runs

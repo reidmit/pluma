@@ -67,6 +67,7 @@ pub fn stdlib_sources() -> &'static [(&'static str, &'static str)] {
 			"std/sys/terminal",
 			include_str!("../../std/sys/terminal.pa"),
 		),
+		("std/sys/ws", include_str!("../../std/sys/ws.pa")),
 		("std/web/dom", include_str!("../../std/web/dom.pa")),
 		("std/web/fetch", include_str!("../../std/web/fetch.pa")),
 		("std/web/render", include_str!("../../std/web/render.pa")),

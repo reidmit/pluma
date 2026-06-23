@@ -66,11 +66,18 @@ public alias request {
 # elements as a series of SSE-style events and closes the connection at the
 # end, so `body`/`Content-Length` are ignored. One stream per connection --
 # like the rest of this module, the socket closes when the reply is done.
+#
+# `hijack` is `none` for an ordinary reply. `some take-over` instead hands the
+# raw connection to `take-over` *in place of* sending this response -- a
+# protocol upgrade (e.g. `ws.upgrade` switching to WebSocket). The handler that
+# returns it owns the connection from there; the server writes nothing itself
+# and closes once `take-over` returns. `status`/`headers`/`body` are then unused.
 public alias response {
 	status :: int,
 	headers :: dict string string,
 	body :: bytes,
 	stream-body :: option (stream bytes),
+	hijack :: option (fun net.connection -> task nothing),
 }
 
 # --- building responses --------------------------------------------------
@@ -85,6 +92,7 @@ public def text :: fun int string -> response = fun status body {
 		headers: dict.from-entries [("content-type", "text/plain; charset=utf-8")],
 		body: string.to-bytes body,
 		stream-body: none,
+		hijack: none,
 	}
 }
 
@@ -98,6 +106,7 @@ public def html :: fun int string -> response = fun status body {
 		headers: dict.from-entries [("content-type", "text/html; charset=utf-8")],
 		body: string.to-bytes body,
 		stream-body: none,
+		hijack: none,
 	}
 }
 
@@ -118,6 +127,7 @@ public def redirect :: fun int string -> response = fun status location {
 		headers: dict.from-entries [("location", location)],
 		body: string.to-bytes "",
 		stream-body: none,
+		hijack: none,
 	}
 }
 
@@ -129,7 +139,7 @@ public def redirect :: fun int string -> response = fun status location {
 #
 #     http.stream-response 200 (dict.from-entries [("content-type", "text/event-stream")]) events
 public def stream-response :: fun int (dict string string) (stream bytes) -> response = fun status headers events {
-	{status, headers, body: string.to-bytes "", stream-body: some events}
+	{status, headers, body: string.to-bytes "", stream-body: some events, hijack: none}
 }
 
 # --- the server ----------------------------------------------------------
@@ -285,19 +295,27 @@ def handle-conn :: fun net.connection (fun request -> task response) bytes -> ta
 					body,
 				}
 				try resp = handler req
-				when resp.stream-body is some events {
-					# Streaming is framed by connection close — never keep-alive.
-					try write-all conn (serialize-stream-head resp)
-					try write-events conn events
+				when resp.hijack is some take-over {
+					# The handler upgraded this connection to another protocol (e.g. WebSocket)
+					# and now owns the raw socket. Run it to completion, then close — we write
+					# no HTTP response and don't keep this connection alive for more requests.
+					try take-over conn
 					finish conn
 				} is none {
-					let alive = wants-keep-alive parsed.headers
-					let encoded = compress-response parsed.headers resp
-					try write-all conn (serialize encoded alive)
-					if alive {
-						handle-conn conn handler rest
-					} else {
+					when resp.stream-body is some events {
+						# Streaming is framed by connection close — never keep-alive.
+						try write-all conn (serialize-stream-head resp)
+						try write-events conn events
 						finish conn
+					} is none {
+						let alive = wants-keep-alive parsed.headers
+						let encoded = compress-response parsed.headers resp
+						try write-all conn (serialize encoded alive)
+						if alive {
+							handle-conn conn handler rest
+						} else {
+							finish conn
+						}
 					}
 				}
 			} is err _ {
@@ -965,7 +983,7 @@ def decode-encoding :: fun string bytes -> result bytes string = fun enc body {
 # record's exact shape, so it works for both the framing reader and the streaming
 # client's lighter head).
 def mk-response = fun parsed body {
-	{status: parsed.status, headers: parsed.headers, body, stream-body: none}
+	{status: parsed.status, headers: parsed.headers, body, stream-body: none, hijack: none}
 }
 
 # Whether a response to `verb` with this status carries no body, per HTTP: any

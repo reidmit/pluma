@@ -1264,10 +1264,11 @@ pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 			arity: 1,
 			returns_value: true,
 		}),
-		// `std/compress` codecs: one bytes arg in, `result bytes` out. They ride the
-		// `io.read-file-bytes` marshalling shape (`io_kind` → `ReadFileBytes`); this entry
-		// just classifies them as host builtins so registration finds them.
-		"gzip-encode" | "gzip-decode" | "brotli-encode" | "brotli-decode" => Some(HostSig {
+		// `std/compress` codecs and SHA-1 (the WebSocket handshake digest): one bytes arg in,
+		// `result bytes` out. They ride the `io.read-file-bytes` marshalling shape (`io_kind` →
+		// `ReadFileBytes`); this entry just classifies them as host builtins so registration
+		// finds them.
+		"gzip-encode" | "gzip-decode" | "brotli-encode" | "brotli-decode" | "sha1" => Some(HostSig {
 			arity: 1,
 			returns_value: true,
 		}),
@@ -1611,9 +1612,8 @@ pub(crate) fn io_kind(tag: &str) -> Option<IoKind> {
 		"io-read-file" | "uuid-parse" | "compile-wasm-hex" | "sandbox-run-hex" => IoKind::ReadFileStr,
 		// `std/compress` codecs: a bytes arg in, a `result bytes` out — the same
 		// marshalled-read shape as reading a file as bytes (`io.read-file-bytes`).
-		"io-read-file-bytes" | "gzip-encode" | "gzip-decode" | "brotli-encode" | "brotli-decode" => {
-			IoKind::ReadFileBytes
-		}
+		"io-read-file-bytes" | "gzip-encode" | "gzip-decode" | "brotli-encode" | "brotli-decode"
+		| "sha1" => IoKind::ReadFileBytes,
 		"io-read-dir" => IoKind::ReadDir,
 		"io-args" => IoKind::Args,
 		"io-env" => IoKind::EnvVar,
@@ -1677,6 +1677,8 @@ pub(crate) fn is_io_result(tag: &str) -> bool {
 			| "gzip-decode"
 			| "brotli-encode"
 			| "brotli-decode"
+			// SHA-1 (WebSocket handshake) — `result bytes string` via `__io_result`.
+			| "sha1"
 			// the playground compile + run primitives — `result string` via `__io_result`.
 			| "compile-wasm-hex"
 			| "sandbox-run-hex"

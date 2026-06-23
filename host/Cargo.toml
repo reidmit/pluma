@@ -53,3 +53,5 @@ rustls-pemfile = "2"
 # pure-Rust `miniz_oxide` DEFLATE (no C toolchain); `brotli` is pure-Rust too.
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 brotli = "7"
+# SHA-1 for the WebSocket handshake accept-key (`std/sys/ws`). Pure Rust, no C toolchain.
+sha1 = "0.10"

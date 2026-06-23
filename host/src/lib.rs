@@ -52,6 +52,9 @@ mod db;
 // `Content-Encoding`.
 mod compress;
 
+// Engine-independent SHA-1 — the WebSocket handshake accept-key digest (`std/sys/ws`).
+mod crypto;
+
 // The V8 backend: instantiates the WasmGC artifact under V8 over the
 // marshalling ABI. Reuses this crate's engine-independent core (`HostState`/`HostNet`/
 // `NetRet`/`BufferedIo`/`read_line_from`) — a descendant module sees its ancestors'

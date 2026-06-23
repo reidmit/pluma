@@ -1,0 +1,536 @@
+# WebSockets (RFC 6455) over `std/sys/net` -- a message-framed, bidirectional
+# connection on top of a single TCP (or TLS) socket. Both ends speak the same
+# `conn` API; the only difference is who dials (`connect`) and who upgrades an
+# incoming HTTP request (`upgrade`).
+#
+#     # client
+#     try sock = ws.connect "ws://127.0.0.1:8080/socket"
+#     try _ = ws.send-text sock "hello"
+#     try reply = ws.receive sock          # => some (ws.message.text "...")
+#
+#     # server: one route of an ordinary http handler
+#     def handler = fun req {
+#         if req.path == "/socket" {
+#             ws.upgrade req fun sock {
+#                 try msg = ws.receive sock
+#                 when msg is some m { echo sock m } is none { task.ok () }
+#             }
+#         } else {
+#             task.ok (http.html 200 page)
+#         }
+#     }
+#
+# v1 carries text and binary messages, answers pings, and closes cleanly. It
+# does not negotiate extensions (permessage-deflate) or subprotocols, and reads
+# whole messages into memory (no streaming of a single huge frame).
+
+use std/base64
+use std/bit
+use std/bytes
+use std/dict
+use std/list
+use std/random
+use std/string
+use std/task
+use std/sys/net
+use std/sys/http
+
+# An open WebSocket connection. `raw` is the underlying socket; `masking` is
+# whether this end masks the frames it sends (clients must, servers must not);
+# `buf` holds bytes read past the last frame -- the start of the next one --
+# threaded between reads.
+public alias conn {
+	raw :: net.connection,
+	masking :: bool,
+	buf :: ref bytes,
+}
+
+# A message carried over a WebSocket: UTF-8 `text` or raw `binary`.
+public enum message {
+	text string
+	binary bytes
+}
+
+# --- protocol constants --------------------------------------------------
+
+# The fixed GUID a server appends to the client's key before hashing (RFC 6455).
+# Not a secret -- a protocol constant.
+def ws-guid :: string = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+# SHA-1, host-provided. Used only to derive the handshake accept-key; not a
+# general-purpose hash (and so deliberately not surfaced in a `std` module).
+def sha1 :: fun bytes -> result bytes string = built-in "sha1"
+
+def op-continuation :: int = 0
+def op-text :: int = 1
+def op-binary :: int = 2
+def op-close :: int = 8
+def op-ping :: int = 9
+def op-pong :: int = 10
+
+def empty-bytes :: bytes = string.to-bytes ""
+def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
+
+# --- sending -------------------------------------------------------------
+
+# Send one message (a client masks it, a server doesn't). Fails the task on a
+# write error -- the peer hung up.
+public def send :: fun conn message -> task nothing string = fun c msg {
+	when msg is message.text t {
+		send-frame c op-text (string.to-bytes t)
+	} is message.binary b {
+		send-frame c op-binary b
+	}
+}
+
+# Send a UTF-8 text message.
+public def send-text :: fun conn string -> task nothing string = fun c t {
+	send-frame c op-text (string.to-bytes t)
+}
+
+# Send a binary message.
+public def send-binary :: fun conn bytes -> task nothing string = fun c b {
+	send-frame c op-binary b
+}
+
+# Close the connection: send a close frame, then shut the socket. Best-effort --
+# a failed write just means the peer already went away.
+public def close :: fun conn -> task nothing = fun c {
+	try _ = task.attempt (send-frame c op-close empty-bytes)
+	let _ = net.close c.raw
+	task.ok ()
+}
+
+def send-frame :: fun conn int bytes -> task nothing string = fun c opcode payload {
+	try _ = write-all c.raw (encode-frame c.masking opcode payload)
+	task.ok ()
+}
+
+# Encode one message as a single FIN frame with `opcode`. A masking end (client)
+# masks the payload with a fresh random key, as the protocol requires.
+def encode-frame :: fun bool int bytes -> bytes = fun masking opcode payload {
+	let header = bytes.from-list [128 + opcode] ?? empty-bytes
+	let mask-bit = if masking {
+		128
+	} else {
+		0
+	}
+	let prefix = bytes.concat header (length-bytes mask-bit (bytes.length payload))
+	if masking {
+		let key = mask-key ()
+		bytes.concat (bytes.concat prefix key) (apply-mask key payload)
+	} else {
+		bytes.concat prefix payload
+	}
+}
+
+# The length portion of a frame header: the 7-bit code with `mask-bit` folded in,
+# plus the 16- or 64-bit extended length when the payload is large.
+def length-bytes :: fun int int -> bytes = fun mask-bit len {
+	if len < 126 {
+		bytes.from-list [mask-bit + len] ?? empty-bytes
+	} else if len < 65536 {
+		bytes.from-list [mask-bit + 126, byte-at len 8, byte-at len 0] ?? empty-bytes
+	} else {
+		bytes.concat (bytes.from-list [mask-bit + 127] ?? empty-bytes) (u64-be len)
+	}
+}
+
+# A fresh 4-byte masking key. Falls back to a fixed key only if the host RNG
+# fails (it doesn't) -- masking is for framing, not security.
+def mask-key :: fun nothing -> bytes = fun {
+	random.bytes 4 ?? (bytes.from-list [0, 0, 0, 0] ?? empty-bytes)
+}
+
+# XOR each payload byte with the masking key, cycling the 4 key bytes. Its own
+# inverse, so it both masks (on send) and unmasks (on receive).
+def apply-mask :: fun bytes bytes -> bytes = fun key payload {
+	bytes.build (bytes.length payload) fun i {
+		bit.xor (bytes.get payload i) (bytes.get key (bit.bitwise-and i 3))
+	}
+}
+
+# Byte `shift` bits up from the bottom of `n` (big-endian extraction).
+def byte-at :: fun int int -> int = fun n shift {
+	bit.bitwise-and (bit.shift-right-unsigned n shift) 255
+}
+
+# `n` as 8 big-endian bytes. Realistic payloads stay well under 2^53, so the high
+# bytes are zero and `n` never goes negative.
+def u64-be :: fun int -> bytes = fun n {
+	bytes.from-list [
+		byte-at n 56,
+		byte-at n 48,
+		byte-at n 40,
+		byte-at n 32,
+		byte-at n 24,
+		byte-at n 16,
+		byte-at n 8,
+		byte-at n 0,
+	] ?? empty-bytes
+}
+
+# --- receiving -----------------------------------------------------------
+
+# One decoded frame.
+alias frame {
+	fin :: bool,
+	opcode :: int,
+	payload :: bytes,
+}
+
+# Receive the next message: `some msg` for a text/binary message, `none` when the
+# peer closes (cleanly, or by hanging up). Pings are answered with a pong and
+# skipped, and a close frame is acknowledged. Fragmented messages are reassembled.
+# Fails the task on a protocol or socket error.
+public def receive :: fun conn -> task (option message) string = fun c {
+	receive-loop c op-text empty-bytes
+}
+
+# Read frames until a full data message arrives, handling control frames and
+# fragmentation. `kind` is the opcode of the message being assembled (text or
+# binary) and `acc` the payload gathered so far.
+def receive-loop :: fun conn int bytes -> task (option message) string = fun c kind acc {
+	try mf = read-frame c
+	when mf is none {
+		task.ok none
+	} is some f {
+		if f.opcode == op-close {
+			try _ = task.attempt (send-frame c op-close empty-bytes)
+			task.ok none
+		} else if f.opcode == op-ping {
+			try _ = send-frame c op-pong f.payload
+			receive-loop c kind acc
+		} else if f.opcode == op-pong {
+			receive-loop c kind acc
+		} else if f.opcode == op-continuation {
+			finish-or-continue c kind (bytes.concat acc f.payload) f.fin
+		} else {
+			# A fresh data frame (text or binary) starts a new message.
+			finish-or-continue c f.opcode f.payload f.fin
+		}
+	}
+}
+
+# Either complete the message (this frame was the final one) or keep reading the
+# remaining fragments.
+def finish-or-continue :: fun conn int bytes bool -> task (option message) string = fun c kind payload fin {
+	if fin {
+		finish-message kind payload
+	} else {
+		receive-loop c kind payload
+	}
+}
+
+def finish-message :: fun int bytes -> task (option message) string = fun kind payload {
+	if kind == op-binary {
+		task.ok (some (message.binary payload))
+	} else {
+		when bytes.to-string payload is ok t {
+			task.ok (some (message.text t))
+		} is err _ {
+			task.err "ws.receive: invalid UTF-8 in text frame"
+		}
+	}
+}
+
+# Read and decode one frame off the connection, pulling more bytes as needed and
+# leaving any surplus in `c.buf`. `none` if the peer closes before a whole frame
+# arrives.
+def read-frame :: fun conn -> task (option frame) string = fun c {
+	try head = ensure c 2
+	if bytes.length head < 2 {
+		task.ok none
+	} else {
+		let b0 = bytes.get head 0
+		let b1 = bytes.get head 1
+		let fin = bit.bitwise-and b0 128 != 0
+		let opcode = bit.bitwise-and b0 15
+		let masked = bit.bitwise-and b1 128 != 0
+		let len7 = bit.bitwise-and b1 127
+		try sized = resolve-length c len7
+		when sized is none {
+			task.ok none
+		} is some dims {
+			read-frame-body c fin opcode masked dims.0 dims.1
+		}
+	}
+}
+
+# Pull the rest of a frame whose header is parsed: `plen` payload bytes after the
+# fixed 2 header bytes plus `ext` extended-length bytes plus the masking key.
+def read-frame-body :: fun conn bool int bool int int -> task (option frame) string = fun c fin opcode masked plen ext {
+	let mask-len = if masked {
+		4
+	} else {
+		0
+	}
+	let total = 2 + ext + mask-len + plen
+	try full = ensure c total
+	if bytes.length full < total {
+		task.ok none
+	} else {
+		ref.set c.buf (bytes.slice full total (bytes.length full))
+		let payload-off = 2 + ext + mask-len
+		let raw = bytes.slice full payload-off total
+		let payload = if masked {
+			apply-mask (bytes.slice full (2 + ext) (2 + ext + 4)) raw
+		} else {
+			raw
+		}
+		task.ok (some {fin, opcode, payload})
+	}
+}
+
+# Resolve the payload length from the 7-bit code, reading the 2- or 8-byte
+# extended length when present. `some (length, extra-header-bytes)`, or `none` if
+# the peer closed before the length was complete.
+def resolve-length :: fun conn int -> task (option (int, int)) string = fun c len7 {
+	if len7 < 126 {
+		task.ok (some (len7, 0))
+	} else if len7 == 126 {
+		try buf = ensure c 4
+		if bytes.length buf < 4 {
+			task.ok none
+		} else {
+			task.ok (some (be-int buf 2 2, 2))
+		}
+	} else {
+		try buf = ensure c 10
+		if bytes.length buf < 10 {
+			task.ok none
+		} else {
+			task.ok (some (be-int buf 2 8, 8))
+		}
+	}
+}
+
+# Ensure `c.buf` holds at least `n` bytes, reading from the socket as needed.
+# Returns the buffer (>= n bytes, or fewer -- down to empty -- if the peer closed
+# first; every caller checks for the short read).
+def ensure :: fun conn int -> task bytes string = fun c n {
+	let cur = ref.get c.buf
+	if bytes.length cur >= n {
+		task.ok cur
+	} else {
+		try r = net.read c.raw 4096
+		when r is ok chunk {
+			if bytes.is-empty chunk {
+				task.ok cur
+			} else {
+				ref.set c.buf (bytes.concat cur chunk)
+				ensure c n
+			}
+		} is err e {
+			task.err e
+		}
+	}
+}
+
+# Big-endian integer of `n` bytes from `b` starting at `off`.
+def be-int :: fun bytes int int -> int = fun b off n {
+	be-fold b off (off + n) 0
+}
+
+def be-fold :: fun bytes int int int -> int = fun b i end acc {
+	if i >= end {
+		acc
+	} else {
+		be-fold b (i + 1) end (acc * 256 + bytes.get b i)
+	}
+}
+
+# --- the client ----------------------------------------------------------
+
+# Open a WebSocket connection to `url` -- `ws://host:port/path`, or `wss://...`
+# over TLS. Performs the HTTP upgrade handshake and validates the server's
+# `Sec-WebSocket-Accept`. Fails the task with a message if the connection or
+# handshake fails.
+public def connect :: fun string -> task conn string = fun url {
+	let secure = string.starts-with url "wss://"
+	let after = if secure {
+		string.drop url 6
+	} else if string.starts-with url "ws://" {
+		string.drop url 5
+	} else {
+		url
+	}
+	let segs = string.split after "/"
+	let raw-authority = list.head segs ?? after
+	let default-port = if secure {
+		":443"
+	} else {
+		":80"
+	}
+	let authority = if string.contains raw-authority ":" {
+		raw-authority
+	} else {
+		raw-authority ++ default-port
+	}
+	let path = "/" ++ string.join (list.drop segs 1) "/"
+	try sock = task.unwrap (open secure authority)
+	let key = client-key ()
+	try _ = write-all sock (handshake-request authority path key)
+	try resp = read-handshake-response sock
+	if resp.status == 101 and resp.accept == accept-key key {
+		task.ok {raw: sock, masking: true, buf: ref.new resp.leftover}
+	} else {
+		let _ = net.close sock
+		task.err ("ws.connect: handshake rejected (status " ++ to-string resp.status ++ ")")
+	}
+}
+
+def open :: fun bool string -> task (result net.connection string) = fun secure authority {
+	if secure {
+		net.connect-tls authority
+	} else {
+		net.connect authority
+	}
+}
+
+# A random 16-byte nonce, base64-encoded, for `Sec-WebSocket-Key`.
+def client-key :: fun nothing -> string = fun {
+	base64.encode (random.bytes 16 ?? string.to-bytes "0123456789abcdef")
+}
+
+def handshake-request :: fun string string string -> bytes = fun authority path key {
+	string.to-bytes "GET $(path) HTTP/1.1\r\nHost: $(authority)\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: $(key)\r\nSec-WebSocket-Version: 13\r\n\r\n"
+}
+
+# Read the upgrade response head and pull out the status and accept key, keeping
+# any bytes that arrived past it (normally none -- the server waits for the client
+# to speak first).
+def read-handshake-response :: fun net.connection -> task {status :: int, accept :: string, leftover :: bytes} string = fun sock {
+	try raw = read-until-crlf2 sock empty-bytes
+	let parts = bytes.split raw crlf2
+	let head = list.head parts ?? empty-bytes
+	let leftover = bytes.join (list.drop parts 1) crlf2
+	let lines = string.split (bytes.to-string head ?? "") "\r\n"
+	let status-line = list.head lines ?? ""
+	let status = string.to-int (nth (string.split status-line " ") 1 "0") ?? 0
+	task.ok {status, accept: find-header (list.drop lines 1) "sec-websocket-accept", leftover}
+}
+
+def read-until-crlf2 :: fun net.connection bytes -> task bytes string = fun sock acc {
+	if bytes.contains acc crlf2 {
+		task.ok acc
+	} else {
+		try r = net.read sock 4096
+		when r is ok chunk {
+			if bytes.is-empty chunk {
+				task.ok acc
+			} else {
+				read-until-crlf2 sock (bytes.concat acc chunk)
+			}
+		} is err e {
+			task.err e
+		}
+	}
+}
+
+# --- the server ----------------------------------------------------------
+
+# Upgrade an HTTP request to a WebSocket connection, running `handler` on the open
+# socket. Return this from an HTTP handler in place of an ordinary response:
+#
+#     ws.upgrade req fun sock { ... }
+#
+# When `req` is a valid WebSocket upgrade, the response carries a `hijack` that
+# completes the handshake (a `101`) and then hands the connection to `handler`;
+# the HTTP server closes the socket once `handler` returns. If `req` is not a
+# valid upgrade (no `Upgrade: websocket` / `Sec-WebSocket-Key`), a `400` is
+# returned and `handler` never runs.
+public def upgrade :: fun http.request (fun conn -> task nothing string) -> http.response = fun req handler {
+	when dict.lookup req.headers "sec-websocket-key" is some key {
+		if is-websocket-upgrade req.headers {
+			{
+				status: 101,
+				headers: dict.empty (),
+				body: empty-bytes,
+				stream-body: none,
+				hijack: some (server-session key handler),
+			}
+		} else {
+			bad-request ()
+		}
+	} is none {
+		bad-request ()
+	}
+}
+
+# The connection take-over for an accepted upgrade: write the `101` handshake,
+# then run `handler` on the server-side connection. Best-effort -- a failed
+# handshake write or a handler fault just ends the session (the HTTP server closes
+# the socket afterward).
+def server-session :: fun string (fun conn -> task nothing string) -> (fun net.connection -> task nothing) = fun key handler {
+	fun raw {
+		try sent = task.attempt (write-all raw (handshake-response key))
+		when sent is ok _ {
+			try _ = task.attempt (handler {raw, masking: false, buf: ref.new empty-bytes})
+			task.ok ()
+		} is err _ {
+			task.ok ()
+		}
+	}
+}
+
+def handshake-response :: fun string -> bytes = fun key {
+	string.to-bytes "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: $(accept-key key)\r\n\r\n"
+}
+
+def is-websocket-upgrade :: fun (dict string string) -> bool = fun headers {
+	string.contains (string.to-lower (dict.lookup headers "upgrade" ?? "")) "websocket"
+}
+
+def bad-request :: fun nothing -> http.response = fun {
+	http.text 400 "expected a WebSocket upgrade"
+}
+
+# The `Sec-WebSocket-Accept` value for a client's key: base64 of SHA-1 over the
+# key concatenated with the protocol GUID.
+def accept-key :: fun string -> string = fun key {
+	when sha1 (string.to-bytes (key ++ ws-guid)) is ok digest {
+		base64.encode digest
+	} is err _ {
+		""
+	}
+}
+
+# --- shared helpers ------------------------------------------------------
+
+# Write every byte of `data`, looping until the socket has taken it all. Fails the
+# task on a write error.
+def write-all :: fun net.connection bytes -> task nothing string = fun conn data {
+	if bytes.is-empty data {
+		task.ok ()
+	} else {
+		try n = task.unwrap (net.write conn data)
+		if n >= bytes.length data {
+			task.ok ()
+		} else {
+			write-all conn (bytes.slice data n (bytes.length data))
+		}
+	}
+}
+
+# The value of the first `Name: value` header line whose name matches `name`
+# (case-insensitively), or `""` if none.
+def find-header :: fun (list string) string -> string = fun lines name {
+	list.fold lines "" fun acc line {
+		let kv = string.split line ":"
+		if list.length kv >= 2 and string.to-lower (string.trim (list.head kv ?? "")) == name {
+			string.trim (string.join (list.drop kv 1) ":")
+		} else {
+			acc
+		}
+	}
+}
+
+# The list element at `i`, or `fallback` if `i` is past the end.
+def nth :: fun (list string) int string -> string = fun xs i fallback {
+	if i < list.length xs {
+		list.get xs i
+	} else {
+		fallback
+	}
+}
