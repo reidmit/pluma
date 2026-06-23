@@ -440,6 +440,7 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 	register(scope, pluma, data, "time-parse", cb_time_parse);
 	// std/sys/net — socket ops (the multi-result ones return a `[status, n]` JS array).
 	register(scope, pluma, data, "net-listen", cb_net_listen);
+	register(scope, pluma, data, "net-listen-tls", cb_net_listen_tls);
 	register(scope, pluma, data, "net-connect", cb_net_connect);
 	register(scope, pluma, data, "net-connect-tls", cb_net_connect_tls);
 	register(scope, pluma, data, "net-close", cb_net_close);

@@ -16,42 +16,53 @@ use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::os::fd::{AsRawFd, RawFd};
 use std::sync::{Arc, OnceLock};
 
-use rustls::pki_types::ServerName;
-use rustls::{ClientConfig, ClientConnection, RootCertStore};
+use rustls::client::WebPkiServerVerifier;
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{
+	ClientConfig, ClientConnection, DigitallySignedStruct, RootCertStore, ServerConfig,
+	ServerConnection, SignatureScheme,
+};
 use socket2::{Domain, Socket, Type};
 
 use crate::offload::{Interest, Reactor};
 
-/// A TLS client connection: the underlying (non-blocking, after adoption) TCP socket
-/// plus the rustls session driving it. The handshake is already complete by the time
-/// one of these lands in the socket table — the offloaded `connect-tls` worker runs it
-/// blocking (`tls_client_connect`), so the suspending read/write path here only ever
-/// moves application records, never handshake messages.
+/// A TLS connection — client or server — as the underlying (non-blocking) TCP socket plus
+/// the rustls session driving it (`rustls::Connection` unifies `ClientConnection` and
+/// `ServerConnection`, so one record-layer driver serves both ends). The handshake is run
+/// *lazily* by `tls_read`/`tls_write` on first use, not up front: those drivers move
+/// whatever TLS records rustls wants and park on the matching readiness, so a handshake in
+/// flight is just records that happen to precede application data — no separate phase, and
+/// no worker thread pinned for a handshake round-trip.
 ///
-/// `write_pending` guards the resume of a partial write: a `net.write` that couldn't
-/// flush all its ciphertext parks and re-runs with the *same* plaintext, so the flag
-/// says "the plaintext is already buffered in rustls — don't feed it again, just keep
-/// flushing." Cleared once the ciphertext is fully drained.
-pub(crate) struct TlsClient {
+/// `write_pending` guards the resume of a partial write: a `net.write` that couldn't flush
+/// all its ciphertext parks and re-runs with the *same* plaintext, so the flag says "the
+/// plaintext is already buffered in rustls — don't feed it again, just keep flushing."
+/// Cleared once the ciphertext is fully drained.
+pub(crate) struct TlsConn {
 	sock: TcpStream,
-	conn: Box<ClientConnection>,
+	conn: rustls::Connection,
 	write_pending: bool,
 }
 
 /// A live socket the program holds a handle to (an opaque `int` id into `sockets`).
 /// A `Tls` connection reads/writes exactly like a plain `Conn` from the caller's view —
 /// the byte ops below transparently run the rustls record layer over it — so nothing
-/// above `net.connect-tls` (the HTTP framing, the keep-alive loop) knows the difference.
+/// above `net.connect-tls` / a `net.listen-tls` listener (the HTTP framing, the keep-alive
+/// loop) knows the difference. A `TlsListener` carries the server config every connection
+/// it accepts is wrapped in.
 enum SocketEntry {
 	Listener(TcpListener),
+	TlsListener(TcpListener, Arc<ServerConfig>),
 	Conn(TcpStream),
-	Tls(TlsClient),
+	Tls(TlsConn),
 }
 
 impl SocketEntry {
 	fn raw_fd(&self) -> RawFd {
 		match self {
 			SocketEntry::Listener(l) => l.as_raw_fd(),
+			SocketEntry::TlsListener(l, _) => l.as_raw_fd(),
 			SocketEntry::Conn(c) => c.as_raw_fd(),
 			SocketEntry::Tls(t) => t.sock.as_raw_fd(),
 		}
@@ -117,6 +128,26 @@ impl HostNet {
 		}
 	}
 
+	/// Bind a TLS-terminating listener. `spec` is `"addr\tcert-pem\tkey-pem"` (PEM never
+	/// contains a tab); the cert+key build the rustls `ServerConfig` every accepted
+	/// connection is wrapped in. Connections accepted off it are `Tls` and handshake lazily
+	/// on first read/write, so `accept`/`read`/`write` are unchanged from the plaintext path.
+	pub(crate) fn listen_tls(&mut self, spec: &str) -> NetRet {
+		let mut parts = spec.splitn(3, '\t');
+		let addr = parts.next().unwrap_or("");
+		let cert_pem = parts.next().unwrap_or("");
+		let key_pem = parts.next().unwrap_or("");
+		let config = match build_server_config(cert_pem, key_pem) {
+			Ok(c) => c,
+			Err(e) => return NetRet::Err(e),
+		};
+		let listener = match bind_reusable(addr).and_then(|l| l.set_nonblocking(true).map(|()| l)) {
+			Ok(l) => l,
+			Err(e) => return NetRet::Err(e.to_string()),
+		};
+		NetRet::OkInt(self.store(SocketEntry::TlsListener(listener, config)) as i32)
+	}
+
 	pub(crate) fn close(&mut self, id: u32) -> NetRet {
 		match self.sockets.remove(&id) {
 			Some(_) => NetRet::OkNothing,
@@ -127,6 +158,7 @@ impl HostNet {
 	pub(crate) fn local_addr(&self, id: u32) -> NetRet {
 		let addr = match self.sockets.get(&id) {
 			Some(SocketEntry::Listener(l)) => l.local_addr(),
+			Some(SocketEntry::TlsListener(l, _)) => l.local_addr(),
 			Some(SocketEntry::Conn(c)) => c.local_addr(),
 			Some(SocketEntry::Tls(t)) => t.sock.local_addr(),
 			None => return NetRet::Err(format!("net.local-addr: no such socket ({id})")),
@@ -147,26 +179,56 @@ impl HostNet {
 		}
 	}
 
-	/// Adopt a TLS client connection handed back by an offloaded `net.connect-tls` worker
-	/// (which did the blocking dial + TLS handshake — see `tls_client_connect`): switch the
-	/// now-handshaked socket to non-blocking and store it, returning the socket id. The
-	/// resulting connection reads/writes through `read`/`write` like any other.
-	pub(crate) fn adopt_tls_conn(&mut self, client: TlsClient) -> NetRet {
-		match client.sock.set_nonblocking(true) {
-			Ok(()) => NetRet::OkInt(self.store(SocketEntry::Tls(client)) as i32),
+	/// Wrap a freshly connected stream (handed back by the offloaded `net.connect-tls`
+	/// worker, which did only the blocking dial) in a client-side TLS session and store it,
+	/// non-blocking, returning the socket id. `server_name` is the SNI / cert name; `config`
+	/// carries the trust roots. The handshake runs lazily on first read/write, like the
+	/// server side — no handshake on the worker, so no pool thread is pinned for it.
+	pub(crate) fn adopt_tls_client(
+		&mut self,
+		stream: TcpStream,
+		server_name: ServerName<'static>,
+		config: Arc<ClientConfig>,
+	) -> NetRet {
+		let conn = match ClientConnection::new(config, server_name) {
+			Ok(c) => rustls::Connection::Client(c),
+			Err(e) => return NetRet::Err(format!("net.connect-tls: {e}")),
+		};
+		self.adopt_tls(stream, conn)
+	}
+
+	/// Store `conn` (a client- or server-side rustls session) over `stream`, set non-blocking,
+	/// return the socket id.
+	fn adopt_tls(&mut self, stream: TcpStream, conn: rustls::Connection) -> NetRet {
+		match stream.set_nonblocking(true) {
+			Ok(()) => NetRet::OkInt(self.store(SocketEntry::Tls(TlsConn {
+				sock: stream,
+				conn,
+				write_pending: false,
+			})) as i32),
 			Err(e) => NetRet::Err(e.to_string()),
 		}
 	}
 
 	pub(crate) fn try_accept(&mut self, reactor: &mut Reactor, fid: i32, lid: u32) -> NetRet {
-		let res = match self.sockets.get(&lid) {
-			Some(SocketEntry::Listener(l)) => l.accept(),
+		// A TLS listener wraps each accepted stream in a server session (config cloned out so
+		// the borrow of the table ends before we store the new connection). The handshake is
+		// deferred to the first read/write — accept itself never blocks on it.
+		let (res, tls_config) = match self.sockets.get(&lid) {
+			Some(SocketEntry::Listener(l)) => (l.accept(), None),
+			Some(SocketEntry::TlsListener(l, cfg)) => (l.accept(), Some(cfg.clone())),
 			_ => return NetRet::Err(format!("net.accept: not a listener ({lid})")),
 		};
 		match res {
-			Ok((stream, _peer)) => match stream.set_nonblocking(true) {
-				Ok(()) => NetRet::OkInt(self.store(SocketEntry::Conn(stream)) as i32),
-				Err(e) => NetRet::Err(e.to_string()),
+			Ok((stream, _peer)) => match tls_config {
+				Some(cfg) => match ServerConnection::new(cfg) {
+					Ok(c) => self.adopt_tls(stream, rustls::Connection::Server(c)),
+					Err(e) => NetRet::Err(format!("net.accept: {e}")),
+				},
+				None => match stream.set_nonblocking(true) {
+					Ok(()) => NetRet::OkInt(self.store(SocketEntry::Conn(stream)) as i32),
+					Err(e) => NetRet::Err(e.to_string()),
+				},
 			},
 			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
 				self.park(reactor, fid, lid, Interest::Read)
@@ -236,24 +298,72 @@ impl HostNet {
 	}
 }
 
-// --- TLS (`net.connect-tls`, https `http.fetch`) -------------------------------
+// --- TLS (`net.connect-tls`, `net.listen-tls`, https `http.fetch`) -------------
 //
-// A TLS connection runs rustls' record layer over a non-blocking socket. The handshake
-// is *not* here — `tls_client_connect` completes it blocking on the `connect-tls` worker
-// before the connection is adopted — so these two ops only ever move application data,
-// parking the fiber on socket readiness exactly like the plaintext path (`reactor` is
-// passed straight through, so registering on it doesn't re-borrow the socket table).
+// A TLS connection runs rustls' record layer over a non-blocking socket. `tls_read`/
+// `tls_write` are one non-blocking driver shared by both ends (the session is a
+// `rustls::Connection`, client or server): each moves whatever TLS records rustls wants
+// and parks the fiber on the *matching* readiness. The handshake isn't a separate phase —
+// it's just the records that flow before application data — so it completes lazily across
+// these calls with no worker thread pinned and no risk of the offload pool deadlocking on
+// mutually-blocked handshakes. `reactor` is a separate borrow from the socket table, so
+// parking on it never re-borrows `self.sockets`.
+
+/// Park `fid` on `t`'s socket becoming ready for `interest`. Used by the TLS driver, which
+/// holds a `&mut TlsConn` borrowed out of the table and so can't call `HostNet::park`.
+fn tls_park(reactor: &mut Reactor, fid: i32, t: &TlsConn, interest: Interest) -> NetRet {
+	match reactor.register_socket(fid, t.sock.as_raw_fd(), interest) {
+		Ok(()) => NetRet::WouldBlock,
+		Err(e) => NetRet::Err(e),
+	}
+}
+
+/// Flush every TLS record rustls currently wants to send, parking on write-readiness if the
+/// socket fills. Drives both handshake output (ServerHello, Finished, …) and queued
+/// application ciphertext. `Ok(false)` = more to flush but the socket blocked (parked);
+/// `Ok(true)` = nothing left to write.
+fn tls_pump_writes(reactor: &mut Reactor, fid: i32, t: &mut TlsConn) -> Result<bool, NetRet> {
+	while t.conn.wants_write() {
+		match t.conn.write_tls(&mut t.sock) {
+			Ok(_) => {}
+			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+				return Err(tls_park(reactor, fid, t, Interest::Write));
+			}
+			Err(e) => return Err(NetRet::Err(e.to_string())),
+		}
+	}
+	Ok(true)
+}
+
+/// Pull one batch of ciphertext off the socket and feed it to rustls. `Ok(true)` = bytes
+/// were ingested (caller should retry decrypting); `Ok(false)` = clean socket EOF. A
+/// would-block parks on read-readiness (returned via `Err`).
+fn tls_pump_read(reactor: &mut Reactor, fid: i32, t: &mut TlsConn) -> Result<bool, NetRet> {
+	match t.conn.read_tls(&mut t.sock) {
+		Ok(0) => Ok(false), // socket EOF
+		Ok(_) => match t.conn.process_new_packets() {
+			Ok(_) => Ok(true),
+			Err(e) => Err(NetRet::Err(e.to_string())),
+		},
+		Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+			Err(tls_park(reactor, fid, t, Interest::Read))
+		}
+		Err(e) => Err(NetRet::Err(e.to_string())),
+	}
+}
 
 /// Read up to `max` plaintext bytes from a TLS connection (the `Tls` arm of `net.read`).
-/// Drains rustls' already-decrypted buffer first; only when that's empty does it pull
-/// fresh ciphertext off the socket, decrypt it, and try again — parking on read-readiness
-/// if the socket has nothing to give. A zero-length `OkBytes` is a clean end of stream
-/// (peer `close_notify`, or the socket hitting EOF), the same empty-`bytes` signal the
-/// plaintext `read` uses.
-fn tls_read(reactor: &mut Reactor, fid: i32, t: &mut TlsClient, max: usize) -> NetRet {
+/// Flushes any pending TLS output first (so a handshake reply or key-update ack isn't
+/// stranded), hands back already-decrypted plaintext, and otherwise pulls + decrypts more
+/// ciphertext — parking on the right readiness as it goes. A zero-length `OkBytes` is a
+/// clean end of stream (peer `close_notify`, or socket EOF), the same empty-`bytes` signal
+/// the plaintext `read` uses.
+fn tls_read(reactor: &mut Reactor, fid: i32, t: &mut TlsConn, max: usize) -> NetRet {
 	let mut buf = vec![0u8; max];
 	loop {
-		// 1. Hand back any plaintext rustls has already decrypted.
+		if let Err(park) = tls_pump_writes(reactor, fid, t) {
+			return park;
+		}
 		match t.conn.reader().read(&mut buf) {
 			Ok(n) => {
 				buf.truncate(n);
@@ -262,87 +372,63 @@ fn tls_read(reactor: &mut Reactor, fid: i32, t: &mut TlsClient, max: usize) -> N
 			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {} // need more ciphertext
 			Err(e) => return NetRet::Err(e.to_string()),
 		}
-		// 2. Pull ciphertext off the socket and feed it to rustls.
-		match t.conn.read_tls(&mut t.sock) {
-			Ok(0) => return NetRet::OkBytes(Vec::new()), // socket EOF
-			Ok(_) => {
-				if let Err(e) = t.conn.process_new_packets() {
-					return NetRet::Err(e.to_string());
-				}
-				// A post-handshake message (e.g. a TLS 1.3 key update) can leave rustls
-				// wanting to write an acknowledgement; flush it best-effort so it isn't
-				// stranded on a read-only request/response exchange.
-				tls_flush_best_effort(t);
-				// loop: try to decrypt+return, or pull more ciphertext
-			}
-			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-				let fd = t.sock.as_raw_fd();
-				return match reactor.register_socket(fid, fd, Interest::Read) {
-					Ok(()) => NetRet::WouldBlock,
-					Err(e) => NetRet::Err(e),
-				};
-			}
-			Err(e) => return NetRet::Err(e.to_string()),
+		match tls_pump_read(reactor, fid, t) {
+			Ok(true) => {}                                   // ingested — retry decrypt
+			Ok(false) => return NetRet::OkBytes(Vec::new()), // EOF
+			Err(park) => return park,
 		}
 	}
 }
 
-/// Write `data` to a TLS connection (the `Tls` arm of `net.write`), reporting all of it
-/// as written once the encrypted bytes are fully flushed to the socket. rustls buffers the
-/// plaintext, so on a would-block mid-flush the fiber parks and re-runs this with the same
-/// `data`; `write_pending` keeps that resume from buffering the plaintext twice.
-fn tls_write(reactor: &mut Reactor, fid: i32, t: &mut TlsClient, data: &[u8]) -> NetRet {
+/// Write `data` to a TLS connection (the `Tls` arm of `net.write`), reporting all of it as
+/// written once the encrypted bytes are fully flushed. rustls buffers the plaintext, so on
+/// a would-block mid-flush the fiber parks and re-runs this with the same `data`;
+/// `write_pending` keeps that resume from buffering the plaintext twice. If the session is
+/// still handshaking, the driver reads peer records as needed so a write issued before the
+/// handshake settles still makes progress.
+fn tls_write(reactor: &mut Reactor, fid: i32, t: &mut TlsConn, data: &[u8]) -> NetRet {
 	if !t.write_pending {
 		if let Err(e) = t.conn.writer().write_all(data) {
 			return NetRet::Err(e.to_string());
 		}
 		t.write_pending = true;
 	}
-	while t.conn.wants_write() {
-		match t.conn.write_tls(&mut t.sock) {
-			Ok(_) => {}
-			Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-				let fd = t.sock.as_raw_fd();
-				return match reactor.register_socket(fid, fd, Interest::Write) {
-					Ok(()) => NetRet::WouldBlock,
-					Err(e) => NetRet::Err(e),
-				};
+	loop {
+		if let Err(park) = tls_pump_writes(reactor, fid, t) {
+			return park;
+		}
+		// Flushed everything rustls had queued. If a handshake is still in flight it's now
+		// our turn to read the peer's next flight; otherwise the write is complete.
+		if t.conn.is_handshaking() && t.conn.wants_read() {
+			match tls_pump_read(reactor, fid, t) {
+				Ok(true) => continue, // advanced the handshake — loop to flush our reply
+				Ok(false) => return NetRet::Err("net.write: connection closed mid-handshake".into()),
+				Err(park) => return park,
 			}
-			Err(e) => return NetRet::Err(e.to_string()),
 		}
-	}
-	t.write_pending = false;
-	NetRet::OkInt(data.len() as i32)
-}
-
-/// Push out whatever ciphertext rustls has queued, stopping at the first would-block.
-/// Used opportunistically after a read to drain control-message acknowledgements; a
-/// would-block here is fine (the next `write` finishes the flush), so errors are ignored.
-fn tls_flush_best_effort(t: &mut TlsClient) {
-	while t.conn.wants_write() {
-		match t.conn.write_tls(&mut t.sock) {
-			Ok(_) => {}
-			Err(_) => break,
-		}
+		t.write_pending = false;
+		return NetRet::OkInt(data.len() as i32);
 	}
 }
 
-/// The process-wide client TLS config: verify servers against the bundled Mozilla root
-/// set (`webpki-roots`), no client certificate. Built once — assembling the root store and
-/// the crypto config is non-trivial and the result is immutable and shareable. Pinned to
-/// the `ring` provider so the config never depends on a process-global default provider
-/// being installed.
+/// The process-wide client TLS config: verify servers against the bundled Mozilla root set
+/// (`webpki-roots`), no client certificate. Built once — assembling the root store and the
+/// crypto config is non-trivial and the result is immutable and shareable. Pinned to the
+/// `ring` provider so the config never depends on a process-global default provider being
+/// installed.
 fn default_client_config() -> Arc<ClientConfig> {
 	static CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
 	CONFIG
-		.get_or_init(|| {
-			let roots = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-			Arc::new(build_client_config(roots))
-		})
+		.get_or_init(|| Arc::new(build_client_config(public_roots())))
 		.clone()
 }
 
-/// Assemble a client config trusting `roots` (the production set, or a test's own CA).
+/// The bundled Mozilla trust anchors as a fresh root store.
+fn public_roots() -> RootCertStore {
+	RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned())
+}
+
+/// Assemble a client config trusting `roots`, pinned to the `ring` provider.
 fn build_client_config(roots: RootCertStore) -> ClientConfig {
 	ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
 		.with_safe_default_protocol_versions()
@@ -351,37 +437,141 @@ fn build_client_config(roots: RootCertStore) -> ClientConfig {
 		.with_no_client_auth()
 }
 
-/// Dial `addr` (a `host:port`) and complete the TLS handshake, blocking — this runs on the
-/// `connect-tls` offload worker, so blocking is fine and keeps the handshake off the
-/// suspending read/write path. SNI is the host part of `addr`. Returns a handshaked
-/// `TlsClient` the scheduler thread adopts (`adopt_tls_conn`). The `Result` mirrors plain
-/// `connect`'s: `Err` carries the message, surfaced to Pluma as `err`.
-pub(crate) fn tls_client_connect(addr: &str) -> Result<TlsClient, String> {
-	tls_connect_with(addr, default_client_config())
+/// The client config for a connect: the cached public-roots config when no extra trust is
+/// pinned, else a fresh config that trusts the certificate(s) in `ca_pem` in addition to
+/// the public roots. This is what `connect-tls-trusting` reaches for self-signed / private
+/// servers, and what makes a hermetic loopback test possible. Building a verifier
+/// per-connect is fine — connects are rare next to I/O.
+fn client_config_for(ca_pem: Option<&str>) -> Result<Arc<ClientConfig>, String> {
+	let Some(pem) = ca_pem else {
+		return Ok(default_client_config());
+	};
+	let pinned = parse_certs(pem)?;
+	if pinned.is_empty() {
+		return Err("net.connect-tls: trust anchor PEM held no certificate".into());
+	}
+	// Two trust paths, unioned: webpki chain validation against the public roots *plus* the
+	// provided certs as anchors (so a real internal CA, which signs a separate leaf,
+	// validates normally), and exact-leaf pinning of the provided certs (so a *self-signed*
+	// server cert is trusted even though webpki rejects a CA-flagged cert used as a leaf).
+	let provider = Arc::new(rustls::crypto::ring::default_provider());
+	let mut roots = public_roots();
+	roots.add_parsable_certificates(pinned.clone());
+	let webpki = WebPkiServerVerifier::builder_with_provider(Arc::new(roots), provider.clone())
+		.build()
+		.map_err(|e| format!("net.connect-tls: {e}"))?;
+	let verifier = Arc::new(PinnedOrWebPki { pinned, webpki });
+	let config = ClientConfig::builder_with_provider(provider)
+		.with_safe_default_protocol_versions()
+		.expect("ring provider supports the default TLS versions")
+		.dangerous()
+		.with_custom_certificate_verifier(verifier)
+		.with_no_client_auth();
+	Ok(Arc::new(config))
 }
 
-/// `tls_client_connect`, but with an explicit config — the seam the integration test uses
-/// to trust its self-signed loopback cert instead of the public roots.
-fn tls_connect_with(addr: &str, config: Arc<ClientConfig>) -> Result<TlsClient, String> {
-	// SNI / cert name = the host part of `host:port` (rsplit so an IPv6 literal's inner
-	// colons stay with the host).
-	let host = addr.rsplit_once(':').map(|(h, _)| h).unwrap_or(addr);
-	let server_name = ServerName::try_from(host.to_string())
-		.map_err(|e| format!("net.connect-tls: bad server name `{host}`: {e}"))?;
-	let mut sock = TcpStream::connect(addr).map_err(|e| e.to_string())?;
-	let mut conn =
-		ClientConnection::new(config, server_name).map_err(|e| format!("net.connect-tls: {e}"))?;
-	// Drive the handshake to completion on the (still blocking) socket.
-	while conn.is_handshaking() {
-		conn
-			.complete_io(&mut sock)
-			.map_err(|e| format!("net.connect-tls: handshake failed: {e}"))?;
+/// A server-cert verifier that trusts a connection if the server's leaf certificate exactly
+/// matches one we were told to pin, and otherwise defers to standard webpki chain validation
+/// (`net.connect-tls-trusting`). Pinning is what lets a self-signed cert through — webpki
+/// alone rejects a CA-flagged certificate presented as the leaf. The handshake-signature
+/// checks always go through webpki, so even a pinned server still has to prove it holds the
+/// matching private key.
+#[derive(Debug)]
+struct PinnedOrWebPki {
+	pinned: Vec<CertificateDer<'static>>,
+	webpki: Arc<WebPkiServerVerifier>,
+}
+
+impl ServerCertVerifier for PinnedOrWebPki {
+	fn verify_server_cert(
+		&self,
+		end_entity: &CertificateDer<'_>,
+		intermediates: &[CertificateDer<'_>],
+		server_name: &ServerName<'_>,
+		ocsp_response: &[u8],
+		now: UnixTime,
+	) -> Result<ServerCertVerified, rustls::Error> {
+		if self
+			.pinned
+			.iter()
+			.any(|c| c.as_ref() == end_entity.as_ref())
+		{
+			return Ok(ServerCertVerified::assertion());
+		}
+		self
+			.webpki
+			.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)
 	}
-	Ok(TlsClient {
-		sock,
-		conn: Box::new(conn),
-		write_pending: false,
-	})
+
+	fn verify_tls12_signature(
+		&self,
+		message: &[u8],
+		cert: &CertificateDer<'_>,
+		dss: &DigitallySignedStruct,
+	) -> Result<HandshakeSignatureValid, rustls::Error> {
+		self.webpki.verify_tls12_signature(message, cert, dss)
+	}
+
+	fn verify_tls13_signature(
+		&self,
+		message: &[u8],
+		cert: &CertificateDer<'_>,
+		dss: &DigitallySignedStruct,
+	) -> Result<HandshakeSignatureValid, rustls::Error> {
+		self.webpki.verify_tls13_signature(message, cert, dss)
+	}
+
+	fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+		self.webpki.supported_verify_schemes()
+	}
+}
+
+/// Build a server config from a PEM cert chain + private key (the `net.listen-tls` inputs).
+fn build_server_config(cert_pem: &str, key_pem: &str) -> Result<Arc<ServerConfig>, String> {
+	let certs = parse_certs(cert_pem)?;
+	if certs.is_empty() {
+		return Err("net.listen-tls: certificate PEM held no certificate".into());
+	}
+	let key = rustls_pemfile::private_key(&mut key_pem.as_bytes())
+		.map_err(|e| format!("net.listen-tls: bad key PEM: {e}"))?
+		.ok_or("net.listen-tls: key PEM held no private key")?;
+	ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+		.with_safe_default_protocol_versions()
+		.expect("ring provider supports the default TLS versions")
+		.with_no_client_auth()
+		.with_single_cert(certs, key)
+		.map(Arc::new)
+		.map_err(|e| format!("net.listen-tls: {e}"))
+}
+
+/// Parse a PEM blob into DER certificates.
+fn parse_certs(pem: &str) -> Result<Vec<rustls::pki_types::CertificateDer<'static>>, String> {
+	rustls_pemfile::certs(&mut pem.as_bytes())
+		.collect::<Result<Vec<_>, _>>()
+		.map_err(|e| format!("bad certificate PEM: {e}"))
+}
+
+/// Split a `net.connect-tls` spec — `"host:port"` or `"host:port\tca-pem"` — into the dial
+/// address and the optional pinned trust anchor.
+pub(crate) fn split_tls_spec(spec: &str) -> (&str, Option<&str>) {
+	match spec.split_once('\t') {
+		Some((addr, ca)) => (addr, Some(ca)),
+		None => (spec, None),
+	}
+}
+
+/// The SNI / certificate name to verify a server against: the host part of `host:port`
+/// (rsplit so an IPv6 literal's inner colons stay with the host).
+pub(crate) fn tls_server_name(addr: &str) -> Result<ServerName<'static>, String> {
+	let host = addr.rsplit_once(':').map(|(h, _)| h).unwrap_or(addr);
+	ServerName::try_from(host.to_string())
+		.map_err(|e| format!("net.connect-tls: bad server name `{host}`: {e}"))
+}
+
+/// Build the client config a connect should use from its spec's optional CA (the seam the
+/// blocking `web-fetch` path and the async connect callback share).
+pub(crate) fn tls_client_config(ca_pem: Option<&str>) -> Result<Arc<ClientConfig>, String> {
+	client_config_for(ca_pem)
 }
 
 // --- std/web/fetch transport (the native/V8 host) ------------------------------
@@ -501,112 +691,4 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
 		.step_by(2)
 		.map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
 		.collect()
-}
-
-#[cfg(test)]
-mod tests {
-	use std::io::{Read, Write};
-	use std::net::TcpListener;
-	use std::sync::Arc;
-	use std::thread;
-
-	use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
-	use rustls::{RootCertStore, ServerConfig, ServerConnection, StreamOwned};
-
-	use super::{HostNet, NetRet, build_client_config, tls_connect_with};
-	use crate::offload::Reactor;
-
-	/// End-to-end TLS over loopback, hermetic (no network, both ends the test's own):
-	/// a rustls echo server with a freshly generated self-signed cert, and the real
-	/// client path — `tls_connect_with` (blocking handshake) then `HostNet`'s
-	/// non-blocking `try_write`/`try_read` driven through a `Reactor` exactly as the
-	/// scheduler drives them, parking on would-block and waking on `poll`.
-	#[test]
-	fn tls_client_roundtrip() {
-		// A self-signed cert valid for 127.0.0.1 (the SAN is parsed as an IP).
-		let ck = rcgen::generate_simple_self_signed(vec!["127.0.0.1".to_string()]).unwrap();
-		let cert_der: CertificateDer<'static> = ck.cert.der().clone();
-		let key_der = PrivatePkcs8KeyDer::from(ck.key_pair.serialize_der());
-
-		// rustls echo server: accept one connection, read a line, write it back uppercased.
-		let server_config = ServerConfig::builder_with_provider(Arc::new(
-			rustls::crypto::ring::default_provider(),
-		))
-		.with_safe_default_protocol_versions()
-		.unwrap()
-		.with_no_client_auth()
-		.with_single_cert(vec![cert_der.clone()], key_der.into())
-		.unwrap();
-		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-		let addr = listener.local_addr().unwrap().to_string();
-		let server_config = Arc::new(server_config);
-		let server = thread::spawn(move || {
-			let (sock, _) = listener.accept().unwrap();
-			let conn = ServerConnection::new(server_config).unwrap();
-			let mut tls = StreamOwned::new(conn, sock);
-			let mut buf = [0u8; 64];
-			let n = tls.read(&mut buf).unwrap(); // drives the handshake, then reads app data
-			let upper: Vec<u8> = buf[..n].iter().map(u8::to_ascii_uppercase).collect();
-			tls.write_all(&upper).unwrap();
-			tls.flush().unwrap();
-		});
-
-		// Client: trust the test cert, dial + handshake (blocking, as the offload worker does).
-		let mut roots = RootCertStore::empty();
-		roots.add(cert_der).unwrap();
-		let config = Arc::new(build_client_config(roots));
-		let client = tls_connect_with(&addr, config).expect("tls handshake");
-
-		// Adopt it into a socket table and exercise the suspending byte ops through a reactor.
-		let mut net = HostNet::default();
-		let cid = match net.adopt_tls_conn(client) {
-			NetRet::OkInt(n) => n as u32,
-			other => panic!("adopt: {}", describe(&other)),
-		};
-		let mut reactor = Reactor::default();
-		let fid = 1;
-
-		send_all(&mut net, &mut reactor, fid, cid, b"hello\n");
-		let got = recv_line(&mut net, &mut reactor, fid, cid);
-		assert_eq!(got, b"HELLO\n");
-		server.join().unwrap();
-	}
-
-	/// Write every byte, re-driving `try_write` after each park (would-block → poll → retry),
-	/// the same loop the scheduler runs around a `wait::IO` fiber.
-	fn send_all(net: &mut HostNet, reactor: &mut Reactor, fid: i32, cid: u32, msg: &[u8]) {
-		let mut sent = 0;
-		while sent < msg.len() {
-			match net.try_write(reactor, fid, cid, &msg[sent..]) {
-				NetRet::OkInt(n) => sent += n as usize,
-				NetRet::WouldBlock => assert_eq!(reactor.poll(-1), fid, "woke wrong fiber"),
-				other => panic!("write: {}", describe(&other)),
-			}
-		}
-	}
-
-	/// Read until a newline (or EOF), parking on would-block just like the scheduler.
-	fn recv_line(net: &mut HostNet, reactor: &mut Reactor, fid: i32, cid: u32) -> Vec<u8> {
-		let mut got = Vec::new();
-		loop {
-			match net.try_read(reactor, fid, cid, 1024) {
-				NetRet::OkBytes(b) if b.is_empty() => return got, // EOF
-				NetRet::OkBytes(b) => {
-					got.extend_from_slice(&b);
-					if got.ends_with(b"\n") {
-						return got;
-					}
-				}
-				NetRet::WouldBlock => assert_eq!(reactor.poll(-1), fid, "woke wrong fiber"),
-				other => panic!("read: {}", describe(&other)),
-			}
-		}
-	}
-
-	fn describe(r: &NetRet) -> String {
-		match r {
-			NetRet::Err(e) => format!("err: {e}"),
-			_ => "unexpected NetRet".to_string(),
-		}
-	}
 }

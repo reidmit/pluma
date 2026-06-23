@@ -40,6 +40,21 @@ opaque enum connection {
 #     net.listen "127.0.0.1:8080"   # ok <listener> or err
 public def listen :: fun string -> result listener string = built-in "net-listen"
 
+# Like `listen`, but every accepted connection is secured with TLS -- this is
+# how you serve `https`. `cert` and `key` are PEM text: the server's
+# certificate chain and its matching private key. Connections handed back by
+# `accept` read and write exactly like plain ones -- the encryption is handled
+# for you. `err` if the address is taken, or the certificate and key don't load
+# or don't match.
+#
+#     try server = net.listen-tls "0.0.0.0:443" cert-pem key-pem
+public def listen-tls :: fun string string string -> result listener string = fun address cert key {
+	# The host takes one string and splits on tabs (PEM never contains a tab).
+	listen-tls-raw (address ++ "\t" ++ cert ++ "\t" ++ key)
+}
+
+def listen-tls-raw :: fun string -> result listener string = built-in "net-listen-tls"
+
 # The address this listener is actually bound to, like
 # `"127.0.0.1:54123"`. Useful when you listen on port `0` to let the
 # system pick any free port, then need to know which one it chose.
@@ -92,4 +107,20 @@ public def connect :: fun string -> task (result connection string) = built-in "
 # the certificate doesn't check out.
 #
 #     try conn = net.connect-tls "example.com:443"
-public def connect-tls :: fun string -> task (result connection string) = built-in "net-connect-tls"
+public def connect-tls :: fun string -> task (result connection string) = fun address {
+	connect-tls-raw address
+}
+
+# Like `connect-tls`, but also trusts the certificate authority in `ca` (PEM
+# text) on top of the built-in set. Use it to reach a server whose certificate
+# is self-signed or signed by a private/internal authority -- pass that
+# authority's (or the server's own self-signed) certificate as `ca`. Everything
+# else behaves like `connect-tls`.
+#
+#     try conn = net.connect-tls-trusting "internal.example:443" ca-pem
+public def connect-tls-trusting :: fun string string -> task (result connection string) = fun address ca {
+	# The host takes one string and splits the trust anchor off on a tab.
+	connect-tls-raw (address ++ "\t" ++ ca)
+}
+
+def connect-tls-raw :: fun string -> task (result connection string) = built-in "net-connect-tls"

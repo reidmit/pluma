@@ -141,6 +141,7 @@ impl Module {
 		// even when only some are used is harmless; it keeps the indices a contiguous block.
 		let net_imports = uses_net.then(|| NetImports {
 			listen: imports.register("net-listen"),
+			listen_tls: imports.register("net-listen-tls"),
 			close: imports.register("net-close"),
 			local_addr: imports.register("net-local-addr"),
 			connect: imports.register("net-connect"),

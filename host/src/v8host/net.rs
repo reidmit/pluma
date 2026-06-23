@@ -99,14 +99,15 @@ pub(super) fn cb_net_connect(
 	}
 }
 
-/// `net-connect-tls(i32 fid, i32 addr_ptr, i32 addr_len) -> (i32 status, i32 conn-id)`:
-/// dial a server and complete the TLS handshake, offloaded to a pool worker (the blocking
-/// DNS + TCP + TLS handshake mustn't stall the scheduler thread — `crate::net::
-/// tls_client_connect`). Submit-or-collect exactly like `cb_net_connect`: the first call
-/// submits the blocking connect+handshake and reports would-block (status 1); the wake's
-/// re-run adopts the handshaked TLS connection into the table and returns its id. From the
-/// Pluma side it's indistinguishable from a plain connection — `read`/`write`/`close` run
-/// the record layer transparently. status: 0 ok, 1 would-block, 2 error.
+/// `net-connect-tls(i32 fid, i32 spec_ptr, i32 spec_len) -> (i32 status, i32 conn-id)`:
+/// open a TLS client connection. `spec` is `"host:port"` or `"host:port\tca-pem"` (a pinned
+/// trust anchor). Submit-or-collect like `cb_net_connect`: only the blocking *dial* is
+/// offloaded to a pool worker; the first call submits `TcpStream::connect` and reports
+/// would-block (status 1), the wake's re-run wraps the connected socket in a client TLS
+/// session (SNI + trust from `spec`) and stores it. The TLS handshake itself runs lazily on
+/// the first read/write, so no pool thread is pinned for it. From the Pluma side it's a
+/// plain connection — `read`/`write`/`close` run the record layer transparently. status: 0
+/// ok, 1 would-block, 2 error.
 pub(super) fn cb_net_connect_tls(
 	scope: &mut v8::HandleScope,
 	args: v8::FunctionCallbackArguments,
@@ -116,8 +117,18 @@ pub(super) fn cb_net_connect_tls(
 	let (ap, al) = (argi(scope, &args, 1), argi(scope, &args, 2));
 	let (ctx, mem) = ctx_and_mem(scope, &args);
 	match ctx.state.reactor.collect(fid) {
-		Some(crate::offload::OpResult::Tls(client)) => {
-			let ret = ctx.state.net.adopt_tls_conn(client);
+		Some(crate::offload::OpResult::Conn(stream)) => {
+			// Re-read the spec (the wasm re-marshals it on the collect call) to build the
+			// session: SNI/cert name + trust roots come from it, none of which needs I/O.
+			let spec = read_str(scope, mem, ap, al);
+			let (addr, ca) = crate::net::split_tls_spec(&spec);
+			let ret = match (
+				crate::net::tls_server_name(addr),
+				crate::net::tls_client_config(ca),
+			) {
+				(Ok(name), Ok(config)) => ctx.state.net.adopt_tls_client(stream, name, config),
+				(Err(e), _) | (_, Err(e)) => crate::net::NetRet::Err(e),
+			};
 			let (s, n) = net_scalar_v8(ctx, ret);
 			set_pair(scope, &mut rv, s, n);
 		}
@@ -125,19 +136,37 @@ pub(super) fn cb_net_connect_tls(
 			ctx.state.last_error = e;
 			set_pair(scope, &mut rv, 2, 0);
 		}
-		Some(_) => unreachable!("net-connect-tls collected a non-tls result"),
+		Some(_) => unreachable!("net-connect-tls collected a non-conn result"),
 		None => {
-			let addr = read_str(scope, mem, ap, al);
+			let spec = read_str(scope, mem, ap, al);
+			let (addr, _ca) = crate::net::split_tls_spec(&spec);
+			let addr = addr.to_string();
 			ctx.state.reactor.submit(
 				fid,
-				Box::new(move || match crate::net::tls_client_connect(&addr) {
-					Ok(client) => crate::offload::OpResult::Tls(client),
-					Err(e) => crate::offload::OpResult::Err(e),
+				Box::new(move || match std::net::TcpStream::connect(&addr) {
+					Ok(s) => crate::offload::OpResult::Conn(s),
+					Err(e) => crate::offload::OpResult::Err(e.to_string()),
 				}),
 			);
 			set_pair(scope, &mut rv, 1, 0);
 		}
 	}
+}
+
+/// `net-listen-tls(i32 spec_ptr, i32 spec_len) -> (i32 status, i32 listener-id)`: bind a
+/// TLS-terminating listener. `spec` is `"addr\tcert-pem\tkey-pem"`. Synchronous like
+/// `net-listen` (the bind doesn't block); accepted connections handshake lazily.
+pub(super) fn cb_net_listen_tls(
+	scope: &mut v8::HandleScope,
+	args: v8::FunctionCallbackArguments,
+	mut rv: v8::ReturnValue,
+) {
+	let (sp, sl) = (argi(scope, &args, 0), argi(scope, &args, 1));
+	let (ctx, mem) = ctx_and_mem(scope, &args);
+	let spec = read_str(scope, mem, sp, sl);
+	let ret = ctx.state.net.listen_tls(&spec);
+	let (s, n) = net_scalar_v8(ctx, ret);
+	set_pair(scope, &mut rv, s, n);
 }
 
 pub(super) fn cb_net_close(

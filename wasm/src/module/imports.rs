@@ -332,7 +332,7 @@ pub(super) fn import_type(tag: &str, ftypes: &mut FuncTypes) -> u32 {
 			Some(DomKind::DevStoreGet) => ftypes.for_dom_dev_store_get(),
 			Some(DomKind::Listen | DomKind::SetBoolProp) | None => ftypes.for_dom_listen(),
 		}
-	} else if tag == "net-listen" || tag == "net-accept" {
+	} else if tag == "net-listen" || tag == "net-listen-tls" || tag == "net-accept" {
 		ftypes.for_net_listen()
 	} else if tag == "net-close" {
 		ftypes.for_net_close()

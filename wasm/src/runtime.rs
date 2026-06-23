@@ -674,6 +674,7 @@ impl Runtime {
 #[derive(Clone, Copy, Default)]
 pub(crate) struct NetImports {
 	pub(crate) listen: u32,
+	pub(crate) listen_tls: u32,
 	pub(crate) close: u32,
 	pub(crate) local_addr: u32,
 	pub(crate) connect: u32,
@@ -748,7 +749,10 @@ pub(crate) fn is_offload_builtin(tag: &str) -> bool {
 /// `result` (or a Pure `$task`, for `connect`) at the `emit` call site, rather
 /// than a suspending `$task` the scheduler drives.
 pub(crate) fn is_net_sync(tag: &str) -> bool {
-	matches!(tag, "net-listen" | "net-close" | "net-local-addr")
+	matches!(
+		tag,
+		"net-listen" | "net-listen-tls" | "net-close" | "net-local-addr"
+	)
 }
 
 /// One helper's wasm function type, resolved against the interner at emission.

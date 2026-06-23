@@ -46,8 +46,6 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 # `webpki-roots` is the bundled Mozilla CA set the client verifies servers against.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 webpki-roots = "0.26"
-
-[dev-dependencies]
-# Generate a self-signed cert in the TLS integration test so it runs hermetically on
-# loopback (no network, both ends under the test's control).
-rcgen = "0.13"
+# Parse PEM into the DER cert/key types rustls wants — server cert+key for `net.listen-tls`,
+# and a custom CA bundle for `net.connect-tls`'s pinned-trust variant.
+rustls-pemfile = "2"

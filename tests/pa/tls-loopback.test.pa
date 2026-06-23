@@ -1,0 +1,95 @@
+use std/assert
+use std/bytes
+use std/string
+use std/task
+use std/test
+use std/sys/net
+
+# End-to-end TLS over loopback, hermetic: a `net.listen-tls` server and a
+# `net.connect-tls-trusting` client handshake against each other in-process and
+# exchange bytes. Both ends are ours -- the server presents the self-signed cert
+# below, the client is told to trust it -- so nothing leaves the machine.
+#
+# It also exercises the design's load-bearing choice: the TLS handshakes run
+# *non-blocking*, driven by the in-process scheduler interleaving the two fibers
+# (client parked on write-readiness, server on read-readiness), not by blocking
+# worker threads -- which is why a client and server can handshake against each
+# other inside one isolate without deadlocking a worker pool.
+
+# A self-signed certificate + key for 127.0.0.1, valid for ~100 years (so this
+# test doesn't rot). Generated with:
+#   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+#     -keyout key.pem -out cert.pem -days 36500 -nodes \
+#     -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1"
+def cert :: string = """
+-----BEGIN CERTIFICATE-----
+MIIBkDCCATagAwIBAgIUbna9jULX5HnEVf45dR1AwRjg5K8wCgYIKoZIzj0EAwIw
+FDESMBAGA1UEAwwJMTI3LjAuMC4xMCAXDTI2MDYyMzE1MTUxM1oYDzIxMjYwNTMw
+MTUxNTEzWjAUMRIwEAYDVQQDDAkxMjcuMC4wLjEwWTATBgcqhkjOPQIBBggqhkjO
+PQMBBwNCAAT6T4jSZM++BOxmR2bO6/0+2Qu8Kd78DRHoeDQVD/88nODYZbk5rR+K
+hanKZ8i5NI8JQ/cV8XG3gpiLWjkZs1S9o2QwYjAdBgNVHQ4EFgQUXg9XeHZl+srw
+F7UAe0c+GbjvBr0wHwYDVR0jBBgwFoAUXg9XeHZl+srwF7UAe0c+GbjvBr0wDwYD
+VR0TAQH/BAUwAwEB/zAPBgNVHREECDAGhwR/AAABMAoGCCqGSM49BAMCA0gAMEUC
+IQDkQJ3JTYa+4d3wxhG24Jq3VY0KxWawCpaqL5Y8jTx5RwIgJJwJrOgB+P/JSgny
+oKXAZNQd8AhqKSaP2bwbfx1d6OM=
+-----END CERTIFICATE-----
+"""
+
+def key :: string = """
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgkSOIXE0oH11QqBA1
+O/MKtAyc4fFHFFQSMAH/MO01PnqhRANCAAT6T4jSZM++BOxmR2bO6/0+2Qu8Kd78
+DRHoeDQVD/88nODYZbk5rR+KhanKZ8i5NI8JQ/cV8XG3gpiLWjkZs1S9
+-----END PRIVATE KEY-----
+"""
+
+# Accept one TLS connection, read the request, reply, and close. The server-side
+# handshake happens transparently inside the first `read`.
+def serve-echo :: fun net.listener -> task nothing = fun server {
+	try conn = task.unwrap (net.accept server)
+	try _req = task.unwrap (net.read conn 1024)
+	try _sent = task.unwrap (net.write conn (string.to-bytes "pong"))
+	net.close conn
+	task.ok ()
+}
+
+# Connect over TLS (trusting our self-signed cert), send a request, read the reply.
+# The client-side handshake happens transparently inside the first `write`.
+def talk :: fun string -> task string string = fun addr {
+	try conn = task.unwrap (net.connect-tls-trusting addr cert)
+	try _sent = task.unwrap (net.write conn (string.to-bytes "ping"))
+	try reply = task.unwrap (net.read conn 1024)
+	net.close conn
+	task.ok (bytes.to-string reply ?? "<non-utf8>")
+}
+
+# Stand up the server on an ephemeral loopback port, learn the port, and run one
+# client round-trip against it.
+def run :: fun nothing -> task string string = fun {
+	when net.listen-tls "127.0.0.1:0" cert key is ok server {
+		when net.local-addr server is ok addr {
+			scope as s {
+				s.spawn (serve-echo server)
+				try reply = talk addr
+				s.cancel ()
+				task.ok reply
+			}
+		} is err e {
+			task.err ("local-addr: " ++ e)
+		}
+	} is err e {
+		task.err ("listen-tls: " ++ e)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "tls loopback echo" fun {
+		try settled = task.attempt (run ())
+		when settled is ok reply {
+			assert.equals reply "pong"
+		} is err e {
+			# Surface the failure message by asserting on it.
+			assert.equals ("error: " ++ e) "pong"
+		}
+	},
+]

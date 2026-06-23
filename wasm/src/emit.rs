@@ -3083,6 +3083,15 @@ impl<'a> FnEmitter<'a> {
 				self.ins(Instruction::Call(net.listen));
 				self.shape_net_id_result(io_result);
 			}
+			"net-listen-tls" => {
+				// ("addr\tcert\tkey", len) -> (status, socket-id); same shape as net-listen,
+				// just a longer (PEM-bearing) arg the host splits.
+				let (ap, al) = self.marshal_strlike_arg(&args[0], alloc, store);
+				self.ins(Instruction::LocalGet(ap));
+				self.ins(Instruction::LocalGet(al));
+				self.ins(Instruction::Call(net.listen_tls));
+				self.shape_net_id_result(io_result);
+			}
 			"net-close" => {
 				// (id) -> status; reuse the io status → `ok nothing` / `err` shaper.
 				self.atom(&args[0]);

@@ -151,6 +151,21 @@ public def serve :: fun string (fun request -> task response) -> task nothing = 
 	}
 }
 
+# Like `serve`, but terminates TLS -- this serves `https`. `cert` and `key` are
+# PEM text (the certificate chain and its private key); see `net.listen-tls`.
+# Requests reach `handler` already decrypted, and responses are encrypted on the
+# way out, so a handler written for `serve` works here unchanged. `err`s as a
+# failed task if the address can't be bound or the cert/key don't load.
+#
+#     http.serve-tls "0.0.0.0:443" cert-pem key-pem handler
+public def serve-tls :: fun string string string (fun request -> task response) -> task nothing = fun address cert key handler {
+	when net.listen-tls (with-port-from-env address) cert key is ok server {
+		serve-on server handler
+	} is err e {
+		task.err ("http.serve-tls: " ++ e)
+	}
+}
+
 # `address` with its port replaced by `$PORT` when that variable is set, else
 # `address` unchanged. See `serve` for why.
 def with-port-from-env :: fun string -> string = fun address {
