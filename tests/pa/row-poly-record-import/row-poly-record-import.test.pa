@@ -14,7 +14,7 @@ def tests :: test.suite = [
 	test.case "row-poly-record-import" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			7

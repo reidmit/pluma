@@ -23,7 +23,7 @@ def tests :: test.suite = [
 ```
 
 A case's body is a function that returns a [`task`](/docs/reference/tasks):
-succeeding means the test passed, failing (`task.fail message`) means it failed.
+succeeding means the test passed, failing (`task.err message`) means it failed.
 You rarely write those by hand, though: the `std/assert` checks produce exactly
 that task, so a case body is usually just one assertion. Because the body is a
 task, a case can `try` asynchronous work directly — a synchronous test is simply

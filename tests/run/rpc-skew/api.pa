@@ -3,5 +3,5 @@
 use std/task
 
 public remote def add :: fun int int -> task int = fun a b {
-	task.return (a + b)
+	task.ok (a + b)
 }

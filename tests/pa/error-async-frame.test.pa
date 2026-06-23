@@ -26,19 +26,19 @@ implement describe db-error {
 
 # Precise async failure at the leaf.
 def query :: fun nothing -> task int db-error = fun {
-	task.fail db-error.timeout
+	task.err db-error.timeout
 }
 
 # Erase mode: precise db-error -> error at the await, with a frame.
 def load :: fun nothing -> task int error = fun {
 	try n = query ()
-	task.return (n + 1)
+	task.ok (n + 1)
 }
 
 # Frame mode: source is already `error`, so this hop just adds another frame.
 def serve :: fun nothing -> task int error = fun {
 	try c = load ()
-	task.return (c * 10)
+	task.ok (c * 10)
 }
 
 def show :: fun bool -> string = fun b {
@@ -58,14 +58,14 @@ def run = fun {
 		print (show (error.is-a e db-error.timeout))
 		print (show (error.is-a e db-error.refused))
 	}
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "error-async-frame" fun {
 		try cap = io.capture fun {
 			try task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "error-async-frame.test:39: error-async-frame.test:33: timed out\nyes\nno\n"
 	},

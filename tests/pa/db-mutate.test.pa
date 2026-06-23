@@ -39,7 +39,7 @@ def dump :: fun connection string -> task nothing string = fun conn label {
 	list.each items fun it {
 		print "  #$(to-string it.id) $(it.title) done=$(to-string it.done)"
 	}
-	task.return ()
+	task.ok ()
 }
 
 def run = fun {
@@ -60,14 +60,14 @@ def run = fun {
 	} is err e {
 		print "validate: $(e)"
 	}
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "db-mutate" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			updated: 2

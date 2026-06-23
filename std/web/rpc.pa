@@ -17,12 +17,12 @@ def send :: fun string bytes (dict string string) -> task bytes = fun route body
 	try outcome = task.attempt (fetch.post (rpc.server-origin ++ "/_rpc/" ++ route) headers body)
 	when outcome is ok resp {
 		if resp.status == 200 {
-			task.return resp.body
+			task.ok resp.body
 		} else {
-			task.fail (rpc.status-error route resp.status)
+			task.err (rpc.status-error route resp.status)
 		}
 	} is err e {
-		task.fail (rpc.rpc-error.transport e)
+		task.err (rpc.rpc-error.transport e)
 	}
 }
 

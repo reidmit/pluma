@@ -368,7 +368,7 @@ public def mount :: fun dom.node (fun nothing -> view) -> task nothing = fun par
 	dom.append-child parent (build (v ()))
 	sync-styles ()
 	signal.set-on-flush sync-styles
-	task.return ()
+	task.ok ()
 }
 
 # --- dev HMR: keyed-signal state across a `pluma dev` reload -----------------
@@ -413,7 +413,7 @@ public def mount-dev :: fun dom.node (fun nothing -> view) -> task nothing = fun
 		persist ()
 	}
 	persist ()
-	task.return ()
+	task.ok ()
 }
 
 # --- hydrate: adopt a server-rendered DOM tree instead of building it ---------
@@ -436,7 +436,7 @@ public def hydrate :: fun dom.node (fun nothing -> view) -> task nothing = fun p
 	adopt (v ()) (dom.child-at parent 0)
 	sync-styles ()
 	signal.set-on-flush sync-styles
-	task.return ()
+	task.ok ()
 }
 
 # --- boot payload: read the server's serialized initial data ------------------

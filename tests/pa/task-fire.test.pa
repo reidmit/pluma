@@ -8,23 +8,23 @@ use std/sys/io
 
 def run = fun {
 	let log = ref.new []
-	task.fire (task.return 42) fun n {
+	task.fire (task.ok 42) fun n {
 		ref.set log [...ref.get log, n]
 	}
-	task.fire (task.return 7) fun n {
+	task.fire (task.ok 7) fun n {
 		ref.set log [...ref.get log, n]
 	}
 	# Let the spawned fibers run before we read the result.
 	try task.yield ()
 	print (to-string (ref.get log))
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "task-fire" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "[42, 7]\n"
 	},

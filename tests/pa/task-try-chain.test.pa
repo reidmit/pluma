@@ -9,29 +9,29 @@ use std/sys/io
 # event loop the moment `main` (itself a task) is driven to completion.
 
 def add-one = fun n {
-	try x = task.return n
-	task.return (x + 1)
+	try x = task.ok n
+	task.ok (x + 1)
 }
 
 def run = fun {
 	let base = 100
 	let bump = fun n {
-		try y = task.return (n + base)
-		task.return (y * 2)
+		try y = task.ok (n + base)
+		task.ok (y * 2)
 	}
 	try a = add-one 41
 	try b = bump 5
 	try task.sleep 1ms
 	print (to-string a)
 	print (to-string b)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "task-try-chain" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			42

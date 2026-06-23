@@ -54,7 +54,7 @@ def tests :: test.suite = [
 	test.case "top-level-keywords" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "reid\ncircle radius 5\nrect 3 x 4\nthe number 42\ncircle radius 7\n"
 	},

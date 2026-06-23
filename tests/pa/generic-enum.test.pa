@@ -55,7 +55,7 @@ def tests :: test.suite = [
 	test.case "generic-enum" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			1

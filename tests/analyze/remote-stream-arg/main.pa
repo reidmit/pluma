@@ -6,5 +6,5 @@ use std/task
 # message rather than leaving the door silently ajar -- only `stream R` *results*
 # are supported.
 public remote def feed :: fun (stream int) -> task int = fun _s {
-	task.return 0
+	task.ok 0
 }

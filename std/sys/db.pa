@@ -66,7 +66,7 @@ public def open :: fun string -> task connection string = fun path {
 	try raw = run-op op-open 0 path no-bytes
 	try text = task.lift (bytes.to-string raw)
 	try id = task.lift (string.to-int text)
-	task.return (connection.handle id)
+	task.ok (connection.handle id)
 }
 
 # Closes a connection, releasing its database file. After this the handle is dead. Awaiting
@@ -74,7 +74,7 @@ public def open :: fun string -> task connection string = fun path {
 public def close :: fun connection -> task nothing string = fun conn {
 	when conn is connection.handle id {
 		try run-op op-close id "" no-bytes
-		task.return ()
+		task.ok ()
 	}
 }
 
@@ -113,7 +113,7 @@ def execute-count :: fun connection string (list value) -> task int string = fun
 public def batch :: fun connection string -> task nothing string = fun conn script {
 	when conn is connection.handle id {
 		try run-op op-batch id script no-bytes
-		task.return ()
+		task.ok ()
 	}
 }
 
@@ -127,7 +127,7 @@ public def batch :: fun connection string -> task nothing string = fun conn scri
 #     try moved = db.transaction conn (fun {
 #         try _ = db.execute conn "update acct set bal = bal - 10 where id = ?" [sql.int 1]
 #         try _ = db.execute conn "update acct set bal = bal + 10 where id = ?" [sql.int 2]
-#         task.return ()
+#         task.ok ()
 #     })
 #
 # All of `body`'s ops must use this same `conn`: the transaction is connection state, and the
@@ -140,11 +140,11 @@ public def transaction :: fun connection (fun nothing -> task a string) -> task 
 	try outcome = task.attempt (body ())
 	when outcome is ok v {
 		try execute conn "COMMIT" []
-		task.return v
+		task.ok v
 	} is err e {
 		# Surface the body's failure; the rollback's own outcome is best-effort.
 		try _rolled = task.attempt (execute conn "ROLLBACK" [])
-		task.fail e
+		task.err e
 	}
 }
 
@@ -238,7 +238,7 @@ public def insert :: fun connection (table a) a -> task nothing string = fun con
 	let cells = (sql.table-encode t) value
 	let (text, binds) = sql.compile-insert (sql.table-name t) cells
 	try execute conn text binds
-	task.return ()
+	task.ok ()
 }
 
 # Deletes the rows of `t` matching `filters` (AND-joined; an empty `filters` deletes every
@@ -310,7 +310,7 @@ def applied-versions :: fun connection -> task (list int) string = fun conn {
 # recorded and a later re-run retries it.
 def apply-pending :: fun connection (list migration) int -> task int string = fun conn pending count {
 	when pending is [] {
-		task.return count
+		task.ok count
 	} is [m, ...rest] {
 		# Attempt the migration so a failure can be tagged with its version
 		# before re-raising; the failing migration's transaction already
@@ -319,7 +319,7 @@ def apply-pending :: fun connection (list migration) int -> task int string = fu
 		when outcome is ok _ {
 			apply-pending conn rest (count + 1)
 		} is err e {
-			task.fail "migration $(to-string m.version): $(e)"
+			task.err "migration $(to-string m.version): $(e)"
 		}
 	}
 }

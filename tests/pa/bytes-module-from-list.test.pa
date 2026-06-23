@@ -25,7 +25,7 @@ def tests :: test.suite = [
 	test.case "bytes-module-from-list" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "'ABC'\n'\\x89PNG'\n'\\x00\\xff'\n''\nbyte out of range (0..256): 256\nbyte out of range (0..256): -1\n"
 	},

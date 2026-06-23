@@ -31,7 +31,7 @@ def tests :: test.suite = [
 	test.case "if-else-pattern" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			got 42

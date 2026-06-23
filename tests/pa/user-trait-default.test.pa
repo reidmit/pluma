@@ -33,7 +33,7 @@ def tests :: test.suite = [
 	test.case "user-trait-default" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "hello, the number\nexplicit: a flag\n"
 	},

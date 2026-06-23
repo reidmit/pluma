@@ -44,7 +44,7 @@ handlers, anything reactive) to the existing elements, instead of rebuilding the
 
 ```pluma
 # server: wrap the view in the full HTML document for this route
-task.return (http.html 200 (app.document { lang: "en", title: "Title", head: [], body: page () }))
+task.ok (http.html 200 (app.document { lang: "en", title: "Title", head: [], body: page () }))
 
 # browser: adopt that server HTML rather than rebuild it
 render.hydrate (dom.body ()) page

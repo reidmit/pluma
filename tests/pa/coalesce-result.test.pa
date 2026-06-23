@@ -27,7 +27,7 @@ def tests :: test.suite = [
 	test.case "coalesce-result" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			42

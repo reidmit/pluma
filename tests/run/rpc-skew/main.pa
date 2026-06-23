@@ -22,9 +22,9 @@ def route-fp :: string = "3046392278730166848"
 def probe :: fun string (dict string string) -> task int = fun url headers {
 	try resp = task.attempt (http.fetch url http.method.post headers (wire.encode (2, 3)))
 	when resp is ok r {
-		task.return r.status
+		task.ok r.status
 	} is err _e {
-		task.return 0
+		task.ok 0
 	}
 }
 
@@ -41,14 +41,14 @@ def main = fun {
 				try ok-status = probe url (dict.from-entries [("x-rpc-fingerprint", route-fp)])
 				print "correct fingerprint -> $(to-string ok-status)"
 				s.cancel ()
-				task.return 0
+				task.ok 0
 			}
 		} else {
 			print "local-addr failed"
-			task.return 1
+			task.ok 1
 		}
 	} else {
 		print "listen failed"
-		task.return 1
+		task.ok 1
 	}
 }

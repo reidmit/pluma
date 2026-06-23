@@ -16,7 +16,7 @@ def offload-sleep :: fun duration -> task nothing = built-in "offload-sleep"
 
 def nap = fun label {
 	try offload-sleep 10ms
-	task.return label
+	task.ok label
 }
 
 def run = fun {
@@ -27,7 +27,7 @@ def run = fun {
 		try b = h2
 		print a
 		print b
-		task.return 0
+		task.ok 0
 	}
 }
 
@@ -35,7 +35,7 @@ def tests :: test.suite = [
 	test.case "offload-sleep" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			a

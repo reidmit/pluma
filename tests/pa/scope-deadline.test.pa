@@ -12,27 +12,27 @@ def guarded = fun {
 		s.cancel-after 15ms
 		let h = s.spawn (slow-child ())
 		try v = h
-		task.return v
+		task.ok v
 	}
 }
 
 def slow-child = fun {
 	defer print "child-cleanup-ran"
 	try task.sleep 5s
-	task.return 1
+	task.ok 1
 }
 
 def run = fun {
-	try v = guarded () ?? task.return 7
+	try v = guarded () ?? task.ok 7
 	print (to-string v)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "scope-deadline" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			child-cleanup-ran

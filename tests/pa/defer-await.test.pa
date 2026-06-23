@@ -18,7 +18,7 @@ def tag :: local string = local.new "-"
 def async-cleanup :: fun string -> task nothing = fun name {
 	try task.sleep 1ms
 	print "async cleanup $(name) (tag=$(local.get tag))"
-	task.return ()
+	task.ok ()
 }
 
 # Three defers pushed A, B, C; they fire LIFO at exit: C, B, A.
@@ -28,33 +28,33 @@ def normal :: fun nothing -> task nothing = fun {
 	defer async-cleanup "C"
 	try task.sleep 1ms
 	print "normal body"
-	task.return ()
+	task.ok ()
 }
 
 # The cleanup fires on the failure path, before the failure propagates.
 def failing :: fun nothing -> task nothing = fun {
 	defer async-cleanup "fail-cleanup"
 	try task.sleep 1ms
-	try task.fail "boom"
+	try task.err "boom"
 	print "unreachable"
-	task.return ()
+	task.ok ()
 }
 
 def run = fun {
 	try local.with tag "T" fun {
 		try normal ()
 		try task.attempt (failing ())
-		task.return ()
+		task.ok ()
 	}
 	print "done"
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "defer-await" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			normal body

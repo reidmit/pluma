@@ -30,7 +30,7 @@ use std/sys/fs
 
 def load-config :: fun string -> task string string = fun path {
 	try text = fs.read-text path
-	task.return text
+	task.ok text
 }
 ```
 

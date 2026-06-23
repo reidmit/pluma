@@ -7,36 +7,36 @@ use std/sys/io
 # `attempt` reifies failure into a `result`. All compose with `|`.
 
 def run = fun {
-	try a = task.return 21 |> task.map fun n { n + n }
+	try a = task.ok 21 |> task.map fun n { n + n }
 	print (to-string a)
-	try b = task.then (task.return 10) fun n {
-		task.return (n + 5)
+	try b = task.then (task.ok 10) fun n {
+		task.ok (n + 5)
 	}
 	print (to-string b)
-	try c = task.fail "down" |> task.or-else fun { task.return 100 }
+	try c = task.err "down" |> task.or-else fun { task.ok 100 }
 	print (to-string c)
-	try d = task.fail "nope" ?? task.return 7
+	try d = task.err "nope" ?? task.ok 7
 	print (to-string d)
-	try ok-r = task.attempt (task.return 1)
+	try ok-r = task.attempt (task.ok 1)
 	when ok-r is ok v {
 		print ("ok " ++ to-string v)
 	} is err e {
 		print ("err " ++ e)
 	}
-	try err-r = task.attempt (task.fail "boom")
+	try err-r = task.attempt (task.err "boom")
 	when err-r is ok v {
 		print ("ok " ++ to-string v)
 	} is err e {
 		print ("err " ++ e)
 	}
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "task-combinators" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			42

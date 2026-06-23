@@ -13,17 +13,17 @@ def race = fun ts {
 		s.cancel ()
 		when first is some r {
 			when r is ok v {
-				task.return v
+				task.ok v
 			} is err e {
-				task.fail e
+				task.err e
 			}
 		} is none {
-			task.fail "race: empty"
+			task.err "race: empty"
 		}
 	}
 }
 
 def main = fun {
-	try winner = race [task.return 10, task.return 20]
-	task.return winner
+	try winner = race [task.ok 10, task.ok 20]
+	task.ok winner
 }

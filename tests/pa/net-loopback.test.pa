@@ -20,12 +20,12 @@ def serve-one = fun server {
 		when r is ok msg {
 			try net.write conn msg
 			net.close conn
-			task.return ()
+			task.ok ()
 		} is err e {
-			task.fail e
+			task.err e
 		}
 	} is err e {
-		task.fail e
+		task.err e
 	}
 }
 
@@ -37,12 +37,12 @@ def round-trip = fun addr {
 		try r = net.read conn 1024
 		net.close conn
 		when r is ok reply {
-			task.return (bytes.to-string reply ?? "<bad utf8>")
+			task.ok (bytes.to-string reply ?? "<bad utf8>")
 		} is err e {
-			task.fail e
+			task.err e
 		}
 	} is err e {
-		task.fail e
+		task.err e
 	}
 }
 
@@ -53,15 +53,15 @@ def run = fun {
 				s.spawn (serve-one server)
 				try reply = round-trip addr
 				print reply
-				task.return 0
+				task.ok 0
 			}
 		} else {
 			print "local-addr failed"
-			task.return 1
+			task.ok 1
 		}
 	} else {
 		print "listen failed"
-		task.return 1
+		task.ok 1
 	}
 }
 
@@ -69,7 +69,7 @@ def tests :: test.suite = [
 	test.case "net-loopback" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "hello over tcp\n"
 	},

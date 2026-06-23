@@ -12,14 +12,14 @@ use ui
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
-		task.return (http.html 200 (app.document {
+		task.ok (http.html 200 (app.document {
 			lang: "en",
 			title: "Pluma Tasks",
 			head: [],
 			body: ui.page (),
 		}))
 	} else {
-		task.return (http.not-found ())
+		task.ok (http.not-found ())
 	}
 }
 

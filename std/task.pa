@@ -4,8 +4,8 @@
 # The `task` type itself is built in and always available (see the prelude),
 # and the async *syntax* -- `try`/`??` over a task, the `scope` block, `defer`,
 # duration literals -- needs no import. But the named functions here all live
-# behind `use std/task`: since you can't build a task without `task.return` /
-# `task.fail`, async code imports this module anyway.
+# behind `use std/task`: since you can't build a task without `task.ok` /
+# `task.err`, async code imports this module anyway.
 #
 # You rarely call `task.then` by hand: inside a function that returns a
 # `task`, `try x = some-task` awaits it and reads top-to-bottom, the same
@@ -15,19 +15,19 @@
 # they're built on.
 use std/list
 
-# Lifts a plain value into a task that is already finished. `task.return
+# Lifts a plain value into a task that is already finished. `task.ok
 # 5` is the task that immediately produces `5`. It's how an async function
 # hands back its final result:
 #
 #     try user = http.get url
-#     task.return user.name
-public def return :: fun a -> task a e = built-in "task-return"
+#     task.ok user.name
+public def ok :: fun a -> task a e = built-in "task-return"
 
 # A task that fails with `e` the moment it runs. Failure propagates
 # through `try` (the awaiting task fails too) until something recovers it
 # with `??` / `task.or-else` or reifies it with `task.attempt`. The error
-# you pass *is* the task's failure type: `task.fail "nope"` is a `task a string`.
-public def fail :: fun e -> task a e = built-in "task-fail"
+# you pass *is* the task's failure type: `task.err "nope"` is a `task a string`.
+public def err :: fun e -> task a e = built-in "task-fail"
 
 # Hands the scheduler a turn without doing any I/O. A long CPU-bound loop
 # can call `task.yield ()` periodically so sibling tasks (and cancellation)
@@ -83,9 +83,9 @@ public def map :: fun (task a e) (fun a -> b) -> task b e = built-in "task-map"
 public def map-err :: fun (task a e) (fun e -> f) -> task a f = fun t g {
 	then (attempt t) fun r {
 		when r is ok v {
-			return v
+			ok v
 		} is err e {
-			fail (g e)
+			err (g e)
 		}
 	}
 }
@@ -215,9 +215,9 @@ def manual-next :: fun (manual-scope-handle a) nothing -> task (option (result a
 # inverse of `task.attempt`, which reifies a task's failure back into a `result`.
 public def lift :: fun (result a e) -> task a e = fun r {
 	when r is ok x {
-		return x
+		ok x
 	} is err e {
-		fail e
+		err e
 	}
 }
 
@@ -250,7 +250,7 @@ def await-into :: fun (list (task a)) (list a) int int -> task (list a) = fun ha
 		list.push acc x
 		await-into handles acc (i + 1) n
 	} else {
-		return acc
+		ok acc
 	}
 }
 
@@ -263,7 +263,7 @@ public def both :: fun (task a) (task b) -> task (a, b) = fun t1 t2 {
 		let h2 = s.spawn t2
 		try a = h1
 		try b = h2
-		return (a, b)
+		ok (a, b)
 	}
 }
 
@@ -297,7 +297,7 @@ public def race :: fun (list (task a)) -> task a = fun ts {
 		when first is some r {
 			lift r
 		} is none {
-			fail "race: empty"
+			err "race: empty"
 		}
 	}
 }
@@ -308,11 +308,11 @@ public def race :: fun (list (task a)) -> task a = fun ts {
 def drain-any :: fun (manual-scope-handle a) -> task a = fun s {
 	try got = s.next ()
 	when got is none {
-		fail "any: all tasks failed"
+		err "any: all tasks failed"
 	} is some r {
 		when r is ok v {
 			s.cancel ()
-			return v
+			ok v
 		} is err _e {
 			drain-any s
 		}
@@ -345,7 +345,7 @@ public def retry :: fun int (task a) -> task a = fun n t {
 # first wins. If the timer wins, `t` is cancelled and the task fails with
 # "timeout".
 public def with-timeout :: fun duration (task a) -> task a = fun d t {
-	race [t, sleep d |> then fun _slept { fail "timeout" }]
+	race [t, sleep d |> then fun _slept { err "timeout" }]
 }
 
 # Drives `pool`: each time a child settles, re-raise a failure (fail-fast) or
@@ -356,7 +356,7 @@ public def with-timeout :: fun duration (task a) -> task a = fun d t {
 def gather :: fun (manual-scope-handle a) (list (task a)) (ref int) (list a) -> task (list a) = fun s ts next acc {
 	try got = s.next ()
 	when got is none {
-		return acc
+		ok acc
 	} is some r {
 		try x = lift r
 		list.push acc x

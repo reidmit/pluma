@@ -480,11 +480,11 @@ pub(crate) enum Helper {
 	/// `__rpc_stream_open(req) -> value` — `rpc-stream-open` (`std/web/stream`): mint a
 	/// fresh channel in the `rpc_channels` registry, marshal the request `$str` into
 	/// scratch, ask the host to start the `fetch` (`rpc-stream-open` import) keyed by
-	/// the new token, and return `task.return token` (the resource the stream owns).
+	/// the new token, and return `task.ok token` (the resource the stream owns).
 	RpcStreamOpen,
 	/// `__rpc_stream_close(token) -> value` — `rpc-stream-close`: ask the host to abort
 	/// the subscription's `fetch` reader (`rpc-stream-close` import) and return
-	/// `task.return ()`.
+	/// `task.ok ()`.
 	RpcStreamClose,
 	/// `__web_fetch(req) -> value` — the browser lowering of `web-fetch` (`std/web/fetch`):
 	/// the single-shot degenerate case of `__rpc_stream_open`. Mint a fresh channel,

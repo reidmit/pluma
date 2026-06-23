@@ -16,30 +16,30 @@ def res :: fun string int int -> stream int = fun tag limit fail-at {
 	stream.from-resource {
 		open: fun {
 			print "[$(tag)] open"
-			task.return (ref.new 0)
+			task.ok (ref.new 0)
 		},
 		next: fun cur {
 			let i = ref.get cur
 			ref.set cur (i + 1)
 			if i == fail-at {
-				try task.fail "boom"
-				task.return none
+				try task.err "boom"
+				task.ok none
 			} else if i < limit {
-				task.return (some i)
+				task.ok (some i)
 			} else {
-				task.return none
+				task.ok none
 			}
 		},
 		close: fun _cur {
 			print "[$(tag)] close"
-			task.return ()
+			task.ok ()
 		},
 	}
 }
 
 def show :: fun int -> task nothing = fun n {
 	print "  $(to-string n)"
-	task.return ()
+	task.ok ()
 }
 
 # A consumer that sleeps before each element, so a deadline can land mid-stream.
@@ -67,14 +67,14 @@ def run = fun {
 	} is err _e {
 		print "  cancelled"
 	}
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "stream-resource" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			drained:

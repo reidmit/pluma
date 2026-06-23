@@ -8,7 +8,7 @@
 #
 #     def handler = fun req {
 #         if req.path == "/" {
-#             task.return (http.html 200 (page ()))
+#             task.ok (http.html 200 (page ()))
 #         } else if string.starts-with req.path "/_rpc/" {
 #             rpc.dispatch req
 #         } else {
@@ -44,7 +44,7 @@ public def serve-file :: fun string string -> task http.response = fun root path
 	if is-safe path {
 		try found = task.attempt (fs.read-bytes (root ++ path))
 		when found is ok body {
-			task.return {
+			task.ok {
 				status: 200,
 				headers: dict.from-entries [
 					("content-type", content-type path),
@@ -54,10 +54,10 @@ public def serve-file :: fun string string -> task http.response = fun root path
 				stream-body: none,
 			}
 		} is err _ {
-			task.return (http.not-found ())
+			task.ok (http.not-found ())
 		}
 	} else {
-		task.return (http.not-found ())
+		task.ok (http.not-found ())
 	}
 }
 

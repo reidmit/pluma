@@ -30,12 +30,12 @@ def req :: fun string (list (string, string)) -> http.request = fun p hs {
 def hit :: fun (fun http.request -> task http.response) http.request -> task nothing = fun app r {
 	try resp = app r
 	print "$(to-string resp.status) $(bytes.to-string resp.body ?? "<bad utf8>")"
-	task.return ()
+	task.ok ()
 }
 
 # The base handler: echoes the request path back in the body.
 def base :: middleware.handler = fun rq {
-	task.return (http.text 200 ("base saw " ++ rq.path))
+	task.ok (http.text 200 ("base saw " ++ rq.path))
 }
 
 # A middleware that brackets the body with markers, so the nesting order is
@@ -45,7 +45,7 @@ def wrap :: fun string -> middleware.middleware = fun tag {
 		fun rq {
 			try resp = next rq
 			let inner = bytes.to-string resp.body ?? ""
-			task.return (http.text resp.status ("[" ++ tag ++ " " ++ inner ++ " " ++ tag ++ "]"))
+			task.ok (http.text resp.status ("[" ++ tag ++ " " ++ inner ++ " " ++ tag ++ "]"))
 		}
 	}
 }
@@ -65,7 +65,7 @@ def require-auth :: middleware.middleware = fun next {
 		when dict.lookup rq.headers "authorization" is some _ {
 			next rq
 		} is none {
-			task.return (http.text 401 "unauthorized")
+			task.ok (http.text 401 "unauthorized")
 		}
 	}
 }
@@ -86,14 +86,14 @@ def run = fun {
 	try hit guarded (req "/secret" [("authorization", "t")]) # 200 base saw /secret
 	try hit app (req "/api" [("authorization", "t")]) # 200 [log base saw /api/rewritten log]
 	try hit app (req "/api" []) # 401 [log unauthorized log] (outer wrap still shapes the 401)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "middleware-chain" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			200 [outer [inner base saw / inner] outer]

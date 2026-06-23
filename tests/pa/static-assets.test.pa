@@ -20,14 +20,14 @@ def run = fun {
 	io.print ("escape status = " ++ to-string escaped.status)
 	try missing = static.serve-file "public" "/does-not-exist.svg"
 	io.print ("missing status = " ++ to-string missing.status)
-	task.return ()
+	task.ok ()
 }
 
 def tests :: test.suite = [
 	test.case "static-assets" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			/logo.svg -> image/svg+xml

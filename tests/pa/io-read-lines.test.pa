@@ -22,7 +22,7 @@ def tests :: test.suite = [
 		try cap = io.capture fun {
 			io.with-stdin "apple\nbanana\ncherry\n" fun {
 				run ()
-				task.return ()
+				task.ok ()
 			}
 		}
 		assert.matches cap.out "1: apple\n2: banana\n3: cherry\ndone\n"

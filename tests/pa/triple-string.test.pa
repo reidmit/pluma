@@ -47,7 +47,7 @@ def tests :: test.suite = [
 	test.case "triple-string" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "<ul>\n\t<li>Ada</li>\n</ul>\n===\nno need to escape \"quotes\" here\n===\ntab\tand newline\nstay literal? no\nbackslash \\ kept\n===\nfirst\n\nthird\n===\nmargin\n  is stripped\n"
 	},

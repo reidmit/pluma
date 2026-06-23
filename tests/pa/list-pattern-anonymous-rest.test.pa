@@ -41,7 +41,7 @@ def tests :: test.suite = [
 	test.case "list-pattern-anonymous-rest" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			none

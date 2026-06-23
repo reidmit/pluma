@@ -53,7 +53,7 @@ def tests :: test.suite = [
 	test.case "error-decode-enums" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "odd length\nbad digit\nok\nerror-decode-enums.test:27: time: invalid date/time: month 13 is out of range 1..=12\nyes\n"
 	},

@@ -33,7 +33,7 @@ def tests :: test.suite = [
 	test.case "variant-with-record-arg" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			reid: 90

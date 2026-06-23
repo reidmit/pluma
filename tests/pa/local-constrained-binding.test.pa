@@ -32,7 +32,7 @@ def tests :: test.suite = [
 	test.case "local-constrained-binding" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			[1, 2, 3]

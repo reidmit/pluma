@@ -3,7 +3,7 @@ def demo = fun {
 	scope as s {
 		let h = s.spawn work
 		try a = h
-		task.return a
+		task.ok a
 	}
 }
 
@@ -11,12 +11,12 @@ def race-ish = fun ts {
 	manual scope as s {
 		try first = s.next ()
 		s.cancel ()
-		task.return first
+		task.ok first
 	}
 }
 
 def anon = fun {
 	scope {
-		task.return 1
+		task.ok 1
 	}
 }

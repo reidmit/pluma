@@ -15,7 +15,7 @@
 //
 // The hand-emitted driver (`helpers/task.rs`) advances such a `$task` by calling
 // its poll closure and interpreting the `__poll` result. The task primitives
-// (`task.return`/…) and the side-effecting scope kernel are lowered in `emit.rs`.
+// (`task.ok`/…) and the side-effecting scope kernel are lowered in `emit.rs`.
 
 use crate::runtime::task_kind;
 use ir::{Atom, Block, Const, IrProgram, Rvalue, Stmt, StmtKind, VarId};

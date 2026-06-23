@@ -54,12 +54,12 @@ def main = fun {
 	if string.starts-with (dom.path ()) "/docs" {
 		# The docs are Markdown, server-rendered only — no interactivity to hydrate,
 		# so the Markdown (and its renderer) stays out of the client bundle.
-		task.return ()
+		task.ok ()
 	} else if string.starts-with (dom.path ()) "/std" {
 		# The stdlib reference is static — server-rendered, no interactivity — so
 		# the client does nothing. Keeping it out of the bundle means the (large,
 		# highlighted) docs data never ships to the browser.
-		task.return ()
+		task.ok ()
 	} else if dom.path () == "/playground" {
 		# Inject the real browser capabilities here — this is the one place
 		# `std/web/sandbox` + the URL helpers are named, so they only land in the client.

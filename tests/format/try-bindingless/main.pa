@@ -19,8 +19,8 @@ def run :: fun int -> (result int string) = fun n {
 }
 
 def main = fun {
-	try task.return 1
-	try x = task.return 2
+	try task.ok 1
+	try x = task.ok 2
 	print (to-string x)
-	task.return 0
+	task.ok 0
 }

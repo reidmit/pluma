@@ -19,14 +19,14 @@ def count-acct :: fun connection -> task int string = fun conn {
 	when list.head rows is some r {
 		task.lift (sql.get-int r "n")
 	} is none {
-		task.fail "no count row"
+		task.err "no count row"
 	}
 }
 
 def report-count :: fun connection string -> task nothing string = fun conn label {
 	try n = count-acct conn
 	print "$(label): count=$(to-string n)"
-	task.return ()
+	task.ok ()
 }
 
 def run = fun {
@@ -40,7 +40,7 @@ def run = fun {
 			sql.text "a",
 		]
 		try _i = db.execute conn "insert into acct values (?, ?)" [sql.text "b", sql.int 10]
-		task.return 42
+		task.ok 42
 	}
 	print "tx1 committed, body returned $(to-string v)"
 	try _c1 = report-count conn "after commit"
@@ -48,7 +48,7 @@ def run = fun {
 		# a rolled-back transaction: the body *fails*, so the insert is undone
 
 		try _i = db.execute conn "insert into acct values (?, ?)" [sql.text "c", sql.int 999]
-		task.fail "abort on purpose"
+		task.err "abort on purpose"
 	})
 	when aborted is ok _ {
 		print "tx2 unexpected ok"
@@ -56,14 +56,14 @@ def run = fun {
 		print "tx2 rolled back: $(e)"
 	}
 	try _c2 = report-count conn "after rollback"
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "db-transaction" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			tx1 committed, body returned 42

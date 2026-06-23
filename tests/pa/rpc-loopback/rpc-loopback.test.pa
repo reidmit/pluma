@@ -19,14 +19,14 @@ def run = fun {
 	print msg
 	try sum = api.add 2 3
 	print "2 + 3 = $(to-string sum)"
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "rpc-loopback" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			pong

@@ -22,7 +22,7 @@ def req :: fun http.method string -> http.request = fun m p {
 def hit :: fun (fun http.request -> task http.response) http.method string -> task nothing = fun app m p {
 	try resp = app (req m p)
 	print "$(to-string resp.status) $(bytes.to-string resp.body ?? "<bad utf8>")"
-	task.return ()
+	task.ok ()
 }
 
 def run = fun {
@@ -31,17 +31,17 @@ def run = fun {
 			# An exact route placed before an overlapping prefix: first match wins,
 			# so "/static/index.html" hits this, not the prefix below.
 
-			task.return (http.text 200 "the index")
+			task.ok (http.text 200 "the index")
 		},
-		router.get "/" fun _rq { task.return (http.text 200 "home") },
-		router.get "/health" fun _rq { task.return (http.text 200 "ok") },
-		router.post "/users" fun _rq { task.return (http.text 201 "created") },
+		router.get "/" fun _rq { task.ok (http.text 200 "home") },
+		router.get "/health" fun _rq { task.ok (http.text 200 "ok") },
+		router.post "/users" fun _rq { task.ok (http.text 201 "created") },
 		router.get "/dup" fun _rq {
 			# A duplicate path: the first one wins, the second is never reached.
-			task.return (http.text 200 "first")
+			task.ok (http.text 200 "first")
 		},
-		router.get "/dup" fun _rq { task.return (http.text 200 "second") },
-		router.prefix "/static" fun rq { task.return (http.text 200 ("file " ++ rq.path)) },
+		router.get "/dup" fun _rq { task.ok (http.text 200 "second") },
+		router.prefix "/static" fun rq { task.ok (http.text 200 ("file " ++ rq.path)) },
 	]
 
 	try hit app http.method.get "/" # 200 home
@@ -53,14 +53,14 @@ def run = fun {
 	try hit app http.method.get "/users" # 404  (path exists, wrong method)
 	try hit app http.method.post "/" # 404  (path exists, wrong method)
 	try hit app http.method.get "/missing" # 404  (no route)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "router-dispatch" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			200 home

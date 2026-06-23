@@ -27,12 +27,12 @@ def tests :: test.suite = [
 				print (read1 ())
 				print (read1 ())
 				print (read1 ())
-				task.return ()
+				task.ok ()
 			}
 		}
 		try outside = io.capture fun {
 			print (read1 ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches inside.out "a\nb\n<eof>\n"
 		assert.matches outside.out "<eof>\n"
@@ -45,10 +45,10 @@ def tests :: test.suite = [
 			io.with-stdin "outer\n" fun {
 				try io.with-stdin "inner\n" fun {
 					print (read1 ())
-					task.return ()
+					task.ok ()
 				}
 				print (read1 ())
-				task.return ()
+				task.ok ()
 			}
 		}
 		assert.matches cap.out "inner\nouter\n"

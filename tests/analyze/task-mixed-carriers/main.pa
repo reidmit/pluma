@@ -5,6 +5,6 @@ use std/task
 
 def bad = fun {
 	try x = ok 1
-	try y = task.return 2
-	task.return (x + y)
+	try y = task.ok 2
+	task.ok (x + y)
 }

@@ -6,8 +6,8 @@
 use std/task
 
 def beat = fun {
-	try task.return 0
-	task.return 1
+	try task.ok 0
+	task.ok 1
 }
 
 def compute = fun n {

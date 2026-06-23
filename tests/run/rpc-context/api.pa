@@ -11,7 +11,7 @@ use std/sys/rpc/context
 public remote def guarded-add :: fun int int -> task int = fun a b {
 	when context.header "x-role" is some role {
 		if role == "admin" {
-			task.return (a + b)
+			task.ok (a + b)
 		} else {
 			rpc.reject 403
 		}

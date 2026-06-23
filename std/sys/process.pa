@@ -266,11 +266,11 @@ public def shell-sync :: fun string -> result output string = fun cmd {
 public def check :: fun string (list string) -> task string string = fun cmd args {
 	try out = run cmd args
 	if out.status == 0 {
-		task.return out.stdout
+		task.ok out.stdout
 	} else if string.length out.stderr > 0 {
-		task.fail out.stderr
+		task.err out.stderr
 	} else {
-		task.fail "$(cmd) exited with status $(to-string out.status)"
+		task.err "$(cmd) exited with status $(to-string out.status)"
 	}
 }
 

@@ -59,7 +59,7 @@ def tests :: test.suite = [
 	test.case "core-dict-collision" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "3\nr\ng\nb\n2\nfalse\nr\nb\n"
 	},

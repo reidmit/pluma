@@ -95,7 +95,7 @@ def tests :: test.suite = [
 	test.case "time-basics" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			2026-05-25T14:30:00Z

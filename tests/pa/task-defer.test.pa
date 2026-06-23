@@ -13,14 +13,14 @@ def run = fun {
 	defer print "deferred B (first)"
 	try task.sleep 1ms
 	print "body"
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "task-defer" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			body

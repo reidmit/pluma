@@ -32,7 +32,7 @@ def tests :: test.suite = [
 	test.case "view-ssr-handlers" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "<form><input type=\"text\" value=\"a &amp; b\" placeholder=\"name &lt;here&gt;\"><button>Save</button></form>\n"
 	},

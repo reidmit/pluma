@@ -15,7 +15,7 @@ use std/sys/net
 # Output is the (deterministic) status line and body the client received.
 
 def handler :: fun http.request -> task http.response = fun req {
-	task.return (http.text 200 ("you asked for " ++ req.path))
+	task.ok (http.text 200 ("you asked for " ++ req.path))
 }
 
 # Read from the connection until the server closes it (Connection: close). The raw
@@ -24,7 +24,7 @@ def handler :: fun http.request -> task http.response = fun req {
 def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
 	try chunk = task.unwrap (net.read conn 4096)
 	if bytes.is-empty chunk {
-		task.return acc
+		task.ok acc
 	} else {
 		drain conn (bytes.concat acc chunk)
 	}
@@ -35,7 +35,7 @@ def client :: fun string -> task string = fun addr {
 	try task.unwrap (net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"))
 	try raw = drain conn (string.to-bytes "")
 	net.close conn
-	task.return (bytes.to-string raw ?? "<bad utf8>")
+	task.ok (bytes.to-string raw ?? "<bad utf8>")
 }
 
 def run = fun {
@@ -49,15 +49,15 @@ def run = fun {
 				print status
 				print body
 				s.cancel ()
-				task.return 0
+				task.ok 0
 			}
 		} else {
 			print "local-addr failed"
-			task.return 1
+			task.ok 1
 		}
 	} else {
 		print "listen failed"
-		task.return 1
+		task.ok 1
 	}
 }
 
@@ -65,7 +65,7 @@ def tests :: test.suite = [
 	test.case "http-loopback" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			HTTP/1.1 200 OK

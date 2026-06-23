@@ -26,7 +26,7 @@ def tests :: test.suite = [
 	test.case "variant-as-value" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			color.red

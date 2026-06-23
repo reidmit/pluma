@@ -37,7 +37,7 @@ def tests :: test.suite = [
 	test.case "core-math-extras" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			2

@@ -19,7 +19,7 @@ use std/sys/http
 
 def ping :: fun string -> task http.response string = fun url {
 	try resp = http.fetch url http.method.get (dict.empty ()) (string.to-bytes "")
-	task.return resp
+	task.ok resp
 }
 ```
 

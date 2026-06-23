@@ -10,9 +10,9 @@ use std/sys/io
 # activation-stack snapshot/restore on every suspension.
 
 def worker = fun n {
-	try a = task.return n
-	try b = task.return (n * 3)
-	task.return (a + b)
+	try a = task.ok n
+	try b = task.ok (n * 3)
+	task.ok (a + b)
 }
 
 def run = fun {
@@ -22,14 +22,14 @@ def run = fun {
 		acc + x
 	}
 	print (to-string total)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "async-scope" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "319200\n"
 	},

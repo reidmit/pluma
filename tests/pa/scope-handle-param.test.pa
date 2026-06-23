@@ -10,14 +10,14 @@ use std/sys/io
 
 def sleeper = fun ms n {
 	try task.sleep ms
-	task.return n
+	task.ok n
 }
 
 # Takes a *manual* handle as a parameter and drains it, summing the successes.
 def drain-sum :: fun (manual-scope-handle int) int -> task int = fun s acc {
 	try got = s.next ()
 	when got is none {
-		task.return acc
+		task.ok acc
 	} is some r {
 		when r is ok v {
 			drain-sum s (acc + v)
@@ -34,7 +34,7 @@ def spawn-pair :: fun scope-handle (task int) (task int) -> task (int, int) = fu
 	let h2 = s.spawn t2
 	try a = h1
 	try b = h2
-	task.return (a, b)
+	task.ok (a, b)
 }
 
 def collect = fun {
@@ -50,7 +50,7 @@ def paired = fun {
 	scope as s {
 		try pair = spawn-pair s (sleeper 1ms 100) (sleeper 1ms 23)
 		when pair is (a, b) {
-			task.return (a + b)
+			task.ok (a + b)
 		}
 	}
 }
@@ -60,14 +60,14 @@ def run = fun {
 	print "sum $(to-string total)"
 	try p = paired ()
 	print "paired $(to-string p)"
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "scope-handle-param" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			sum 42

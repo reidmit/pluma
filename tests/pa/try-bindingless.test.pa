@@ -11,7 +11,7 @@ use std/sys/io
 
 def beat :: fun string -> (task int) = fun label {
 	print label
-	task.return 0
+	task.ok 0
 }
 
 def steps :: fun int -> (result int string) = fun n {
@@ -30,21 +30,21 @@ def compute :: fun int -> (result int string) = fun n {
 
 def run = fun {
 	try beat "one"
-	try x = task.return 21
+	try x = task.ok 21
 	try beat "two"
 	if compute 21 is ok v {
 		print (to-string (x + v))
 	} else {
 		print "failed"
 	}
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "try-bindingless" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			one

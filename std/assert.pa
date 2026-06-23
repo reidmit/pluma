@@ -1,5 +1,5 @@
 # Checks for use inside tests. Each check returns a `task`: it succeeds
-# (`task.return ()`) when it holds and fails (`task.fail message`) when it
+# (`task.ok ()`) when it holds and fails (`task.err message`) when it
 # doesn't. A `std/test` case body returns one of these — `pluma test` passes
 # the case when the task succeeds and reports the message when it fails.
 # Combine several checks in one case with `assert.all`.
@@ -15,16 +15,16 @@ use std/list
 use std/string
 use std/task
 
-# `task.return ()` when the two values are equal, compared deeply by value,
-# else `task.fail` showing both sides. The everyday workhorse.
+# `task.ok ()` when the two values are equal, compared deeply by value,
+# else `task.err` showing both sides. The everyday workhorse.
 #
 #     assert.equals (1 + 1) 2
 #     assert.equals (string.to-upper "hi") "HI"
 public def equals :: fun a a -> task nothing string = fun a b {
 	if a == b {
-		task.return ()
+		task.ok ()
 	} else {
-		task.fail "expected $(to-string b), got $(to-string a)"
+		task.err "expected $(to-string b), got $(to-string a)"
 	}
 }
 
@@ -33,9 +33,9 @@ public def equals :: fun a a -> task nothing string = fun a b {
 #     assert.not-equals "cat" "dog"
 public def not-equals :: fun a a -> task nothing string = fun a b {
 	if a == b {
-		task.fail "expected a value other than $(to-string a)"
+		task.err "expected a value other than $(to-string a)"
 	} else {
-		task.return ()
+		task.ok ()
 	}
 }
 
@@ -49,9 +49,9 @@ public def not-equals :: fun a a -> task nothing string = fun a b {
 #         """
 public def matches :: fun string string -> task nothing string = fun actual expected {
 	if actual == expected {
-		task.return ()
+		task.ok ()
 	} else {
-		task.fail ("output differs (- expected, + actual):\n" ++ diff-lines actual expected)
+		task.err ("output differs (- expected, + actual):\n" ++ diff-lines actual expected)
 	}
 }
 
@@ -97,18 +97,18 @@ def diff-lines :: fun string string -> string = fun actual expected {
 # Succeeds when `value` is `true`.
 public def is-true :: fun bool -> task nothing string = fun value {
 	if value {
-		task.return ()
+		task.ok ()
 	} else {
-		task.fail "expected true, got false"
+		task.err "expected true, got false"
 	}
 }
 
 # Succeeds when `value` is `false`.
 public def is-false :: fun bool -> task nothing string = fun value {
 	if value is false {
-		task.return ()
+		task.ok ()
 	} else {
-		task.fail "expected false, got true"
+		task.err "expected false, got true"
 	}
 }
 
@@ -117,18 +117,18 @@ public def is-false :: fun bool -> task nothing string = fun value {
 #     assert.is-some (list.head [1, 2, 3])
 public def is-some :: fun (option a) -> task nothing string = fun value {
 	if value is some _ {
-		task.return ()
+		task.ok ()
 	} else {
-		task.fail "expected some, got none"
+		task.err "expected some, got none"
 	}
 }
 
 # Succeeds when the option is `none`.
 public def is-none :: fun (option a) -> task nothing string = fun value {
 	if value is none {
-		task.return ()
+		task.ok ()
 	} else {
-		task.fail "expected none, got some"
+		task.err "expected none, got some"
 	}
 }
 
@@ -137,18 +137,18 @@ public def is-none :: fun (option a) -> task nothing string = fun value {
 #     assert.is-ok (string.to-int "42")
 public def is-ok :: fun (result a e) -> task nothing string = fun value {
 	if value is ok _ {
-		task.return ()
+		task.ok ()
 	} else {
-		task.fail "expected ok, got err"
+		task.err "expected ok, got err"
 	}
 }
 
 # Succeeds when the result is a failure (`err _`).
 public def is-err :: fun (result a e) -> task nothing string = fun value {
 	if value is err _ {
-		task.return ()
+		task.ok ()
 	} else {
-		task.fail "expected err, got ok"
+		task.err "expected err, got ok"
 	}
 }
 
@@ -173,9 +173,9 @@ public def all :: fun (list (task nothing string)) -> task nothing string = fun 
 def all-go :: fun (list (task nothing string)) bool string -> task nothing string = fun checks had acc {
 	when checks is [] {
 		if had {
-			task.fail acc
+			task.err acc
 		} else {
-			task.return ()
+			task.ok ()
 		}
 	} is [first, ...rest] {
 		try outcome = task.attempt first

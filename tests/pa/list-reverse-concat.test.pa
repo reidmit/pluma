@@ -16,7 +16,7 @@ def tests :: test.suite = [
 	test.case "list-reverse-concat" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			[4, 3, 2, 1]

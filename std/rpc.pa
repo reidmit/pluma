@@ -139,7 +139,7 @@ def outbound-headers :: local (list (string, string)) = local.new []
 #
 #     rpc.with-headers [("x-trace-id", trace)] (fun {
 #         try a = api.add 2 3   # the call attaches x-trace-id
-#         task.return a
+#         task.ok a
 #     })
 public def with-headers :: fun (list (string, string)) (fun nothing -> task a) -> task a = fun headers body {
 	local.with outbound-headers [...local.get outbound-headers, ...headers] body
@@ -164,7 +164,7 @@ public def call-unary :: fun string string bytes -> task bytes = fun route fp bo
 	when ref.get current is some send {
 		send route body (outbound fp)
 	} is none {
-		task.fail (rpc-error.transport "no rpc transport configured")
+		task.err (rpc-error.transport "no rpc transport configured")
 	}
 }
 
@@ -178,7 +178,7 @@ public def call-stream :: fun string string bytes -> stream bytes = fun route fp
 		send route body (outbound fp)
 	} is none {
 		stream.from-seed 0 fun _n {
-			task.fail (rpc-error.transport "no rpc stream transport configured")
+			task.err (rpc-error.transport "no rpc stream transport configured")
 		}
 	}
 }
@@ -188,8 +188,8 @@ public def call-stream :: fun string string bytes -> stream bytes = fun route fp
 # on the decoded result so a bad payload surfaces as a recoverable `rpc-error`.
 public def lift :: fun (result a wire-error) -> task a = fun r {
 	when r is ok v {
-		task.return v
+		task.ok v
 	} is err _e {
-		task.fail (rpc-error.transport "malformed rpc reply")
+		task.err (rpc-error.transport "malformed rpc reply")
 	}
 }

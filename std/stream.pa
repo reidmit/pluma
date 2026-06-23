@@ -18,7 +18,7 @@
 #     # the first 10 lines of a file, upper-cased, printed
 #     try _ = stream.for-each
 #         (stream.take (stream.map (lines file) string.upper) 10)
-#         (fun line { io.print line; task.return () })
+#         (fun line { io.print line; task.ok () })
 #
 # A stream is **single-consumer** — pulling an element consumes it — and a
 # resource-owning stream releases that resource **exactly once**, whether it
@@ -55,7 +55,7 @@ enum phase r {
 #
 #     # the powers of two below a million: 1, 2, 4, 8, …
 #     stream.from-seed 1 (fun n {
-#         if n < 1000000 { task.return (some (n, n * 2)) } else { task.return none }
+#         if n < 1000000 { task.ok (some (n, n * 2)) } else { task.ok none }
 #     })
 public def from-seed :: fun s (fun s -> task (option (a, s))) -> stream a = fun initial step {
 	let cell = ref.new (some initial)
@@ -64,18 +64,18 @@ public def from-seed :: fun s (fun s -> task (option (a, s))) -> stream a = fun 
 			try out = step cur
 			when out is some pair {
 				ref.set cell (some pair.1)
-				task.return (some pair.0)
+				task.ok (some pair.0)
 			} is none {
 				ref.set cell none
-				task.return none
+				task.ok none
 			}
 		} is none {
-			task.return none
+			task.ok none
 		}
 	}
 	let stop = fun {
 		ref.set cell none
-		task.return ()
+		task.ok ()
 	}
 	stream.stream pull stop
 }
@@ -108,19 +108,19 @@ public def from-resource :: fun {
 			task.shielded (cfg.close r)
 		} is phase.fresh {
 			ref.set cell phase.closed
-			task.return ()
+			task.ok ()
 		} is phase.closed {
-			task.return ()
+			task.ok ()
 		}
 	}
 	# Pull one from a live resource; on drain, release before reporting `none`.
 	let from-live = fun r {
 		try out = cfg.next r
 		when out is some x {
-			task.return (some x)
+			task.ok (some x)
 		} is none {
 			try stop ()
-			task.return none
+			task.ok none
 		}
 	}
 	let pull = fun {
@@ -131,7 +131,7 @@ public def from-resource :: fun {
 		} is phase.live r {
 			from-live r
 		} is phase.closed {
-			task.return none
+			task.ok none
 		}
 	}
 	stream.stream pull stop
@@ -146,9 +146,9 @@ public def map :: fun (stream a) (fun a -> b) -> stream b = fun s f {
 		let mapped = fun {
 			try out = pull ()
 			when out is some x {
-				task.return (some (f x))
+				task.ok (some (f x))
 			} is none {
-				task.return none
+				task.ok none
 			}
 		}
 		stream.stream mapped stop
@@ -156,7 +156,7 @@ public def map :: fun (stream a) (fun a -> b) -> stream b = fun s f {
 }
 
 # Applies the async `f` to every element as it is pulled, awaiting its task. Like
-# `map`, but `f` does real async work per element and a `task.fail` inside it
+# `map`, but `f` does real async work per element and a `task.err` inside it
 # faults the stream (the failure rides the pull's task, surfacing on whoever is
 # consuming). Shares the source's release. The remote-stream client uses this to
 # wire-decode each frame, so a malformed frame faults the subscription.
@@ -166,9 +166,9 @@ public def map-task :: fun (stream a) (fun a -> task b) -> stream b = fun s f {
 			try out = pull ()
 			when out is some x {
 				try y = f x
-				task.return (some y)
+				task.ok (some y)
 			} is none {
-				task.return none
+				task.ok none
 			}
 		}
 		stream.stream mapped stop
@@ -190,12 +190,12 @@ def pull-matching :: fun (fun nothing -> task (option a)) (fun a -> bool) -> tas
 	try out = pull ()
 	when out is some x {
 		if keep x {
-			task.return (some x)
+			task.ok (some x)
 		} else {
 			pull-matching pull keep
 		}
 	} is none {
-		task.return none
+		task.ok none
 	}
 }
 
@@ -210,13 +210,13 @@ public def take :: fun (stream a) int -> stream a = fun s n {
 				try out = pull ()
 				when out is some x {
 					ref.set left (ref.get left - 1)
-					task.return (some x)
+					task.ok (some x)
 				} is none {
-					task.return none
+					task.ok none
 				}
 			} else {
 				try stop ()
-				task.return none
+				task.ok none
 			}
 		}
 		stream.stream bounded stop
@@ -231,19 +231,19 @@ public def take-while :: fun (stream a) (fun a -> bool) -> stream a = fun s keep
 		let done = ref.new false
 		let bounded = fun {
 			if ref.get done {
-				task.return none
+				task.ok none
 			} else {
 				try out = pull ()
 				when out is some x {
 					if keep x {
-						task.return (some x)
+						task.ok (some x)
 					} else {
 						ref.set done true
 						try stop ()
-						task.return none
+						task.ok none
 					}
 				} is none {
-					task.return none
+					task.ok none
 				}
 			}
 		}
@@ -259,7 +259,7 @@ public def take-while :: fun (stream a) (fun a -> bool) -> stream a = fun s keep
 public def for-each :: fun (stream a) (fun a -> task nothing) -> task nothing = fun s body {
 	defer task.shielded (release s)
 	try for-each-loop s body
-	task.return ()
+	task.ok ()
 }
 
 def for-each-loop :: fun (stream a) (fun a -> task nothing) -> task nothing = fun s body {
@@ -268,7 +268,7 @@ def for-each-loop :: fun (stream a) (fun a -> task nothing) -> task nothing = fu
 		try body x
 		for-each-loop s body
 	} is none {
-		task.return ()
+		task.ok ()
 	}
 }
 
@@ -277,7 +277,7 @@ def for-each-loop :: fun (stream a) (fun a -> task nothing) -> task nothing = fu
 public def fold :: fun (stream a) b (fun b a -> task b) -> task b = fun s init f {
 	defer task.shielded (release s)
 	try out = fold-loop s init f
-	task.return out
+	task.ok out
 }
 
 def fold-loop :: fun (stream a) b (fun b a -> task b) -> task b = fun s acc f {
@@ -286,7 +286,7 @@ def fold-loop :: fun (stream a) b (fun b a -> task b) -> task b = fun s acc f {
 		try acc2 = f acc x
 		fold-loop s acc2 f
 	} is none {
-		task.return acc
+		task.ok acc
 	}
 }
 
@@ -294,7 +294,7 @@ def fold-loop :: fun (stream a) b (fun b a -> task b) -> task b = fun s acc f {
 # releases. Use it to run a producer whose work happens in the pulling.
 public def drain :: fun (stream a) -> task nothing = fun s {
 	for-each s fun _x {
-		task.return ()
+		task.ok ()
 	}
 }
 

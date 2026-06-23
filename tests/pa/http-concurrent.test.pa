@@ -27,9 +27,9 @@ use std/sys/net
 # never starts -- ends the run rather than spinning forever.
 def await-pair :: fun (ref int) int -> task bool = fun gate fuel {
 	if ref.get gate >= 2 {
-		task.return true
+		task.ok true
 	} else if fuel <= 0 {
-		task.return false
+		task.ok false
 	} else {
 		try task.sleep 5ms
 		await-pair gate (fuel - 1)
@@ -41,7 +41,7 @@ def await-pair :: fun (ref int) int -> task bool = fun gate fuel {
 def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
 	try chunk = task.unwrap (net.read conn 4096)
 	if bytes.is-empty chunk {
-		task.return acc
+		task.ok acc
 	} else {
 		drain conn (bytes.concat acc chunk)
 	}
@@ -54,7 +54,7 @@ def client :: fun string string -> task string = fun addr path {
 	try raw = drain conn (string.to-bytes "")
 	net.close conn
 	let body = bytes.to-string raw ?? "<bad utf8>"
-	task.return (list.head (list.drop (string.split body "\r\n\r\n") 1) ?? "<no body>")
+	task.ok (list.head (list.drop (string.split body "\r\n\r\n") 1) ?? "<no body>")
 }
 
 def run = fun {
@@ -68,9 +68,9 @@ def run = fun {
 				ref.set gate (n + 1)
 				try paired = await-pair gate 400
 				if paired {
-					task.return (http.text 200 ("paired " ++ req.path))
+					task.ok (http.text 200 ("paired " ++ req.path))
 				} else {
-					task.return (http.text 200 ("alone " ++ req.path))
+					task.ok (http.text 200 ("alone " ++ req.path))
 				}
 			}
 			scope as s {
@@ -83,15 +83,15 @@ def run = fun {
 				print (list.get bodies 0)
 				print (list.get bodies 1)
 				s.cancel ()
-				task.return 0
+				task.ok 0
 			}
 		} else {
 			print "local-addr failed"
-			task.return 1
+			task.ok 1
 		}
 	} else {
 		print "listen failed"
-		task.return 1
+		task.ok 1
 	}
 }
 
@@ -99,7 +99,7 @@ def tests :: test.suite = [
 	test.case "http-concurrent" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			paired /a

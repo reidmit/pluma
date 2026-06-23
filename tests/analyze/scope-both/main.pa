@@ -9,11 +9,11 @@ def both = fun t1 t2 {
 		let h2 = s.spawn t2
 		try a = h1
 		try b = h2
-		task.return (a, b)
+		task.ok (a, b)
 	}
 }
 
 def main = fun {
-	try pair = both (task.return 1) (task.return 2)
-	task.return pair
+	try pair = both (task.ok 1) (task.ok 2)
+	task.ok pair
 }

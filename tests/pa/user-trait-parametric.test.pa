@@ -36,7 +36,7 @@ def tests :: test.suite = [
 	test.case "user-trait-parametric" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "42\nsome 7\nsome some 99\n"
 	},

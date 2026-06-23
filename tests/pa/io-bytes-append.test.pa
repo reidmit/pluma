@@ -32,7 +32,7 @@ def tests :: test.suite = [
 	test.case "io-bytes-append" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			wrote

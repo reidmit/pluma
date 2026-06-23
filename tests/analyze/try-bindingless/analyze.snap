@@ -20,30 +20,30 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                     kind: fun(7:11-10:1) {
                         params: [],
                         body: [
-                            expr(8:1-9:14) :: task int a {
-                                kind: try(8:1-9:14) {
+                            expr(8:1-9:10) :: task int a {
+                                kind: try(8:1-9:10) {
                                     pattern: pattern(8:1-8:1) Underscore,
-                                    value: expr(8:5-8:18) :: task int a {
-                                        kind: call(8:5-8:18) {
-                                            callee: expr(8:5-8:16) :: a -> task a b {
-                                                kind: namespace-access `task.return`,
+                                    value: expr(8:5-8:14) :: task int a {
+                                        kind: call(8:5-8:14) {
+                                            callee: expr(8:5-8:12) :: a -> task a b {
+                                                kind: namespace-access `task.ok`,
                                             },
                                             args: [
-                                                expr(8:17-8:18) :: int {
-                                                    kind: literal(8:17-8:18) int 0,
+                                                expr(8:13-8:14) :: int {
+                                                    kind: literal(8:13-8:14) int 0,
                                                 },
                                             ],
                                         },
                                     },
                                     rest: [
-                                        expr(9:1-9:14) :: task int a {
-                                            kind: call(9:1-9:14) {
-                                                callee: expr(9:1-9:12) :: a -> task a b {
-                                                    kind: namespace-access `task.return`,
+                                        expr(9:1-9:10) :: task int a {
+                                            kind: call(9:1-9:10) {
+                                                callee: expr(9:1-9:8) :: a -> task a b {
+                                                    kind: namespace-access `task.ok`,
                                                 },
                                                 args: [
-                                                    expr(9:13-9:14) :: int {
-                                                        kind: literal(9:13-9:14) int 1,
+                                                    expr(9:9-9:10) :: int {
+                                                        kind: literal(9:9-9:10) int 1,
                                                     },
                                                 ],
                                             },

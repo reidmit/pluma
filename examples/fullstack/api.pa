@@ -16,7 +16,7 @@ use std/time
 # Adds two numbers, on the server. (A toy stand-in for real server work — a
 # database read, a downstream call — that a browser can't do directly.)
 public remote def add :: fun int int -> task int = fun a b {
-	task.return (a + b)
+	task.ok (a + b)
 }
 
 # A *subscription*: a server→client stream that emits an incrementing counter

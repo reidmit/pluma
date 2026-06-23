@@ -7,9 +7,9 @@ use std/task
 public remote def ticks :: fun int -> stream int = fun n {
 	stream.from-seed 0 fun i {
 		if i < n {
-			task.return (some (i, i + 1))
+			task.ok (some (i, i + 1))
 		} else {
-			task.return none
+			task.ok none
 		}
 	}
 }
@@ -17,9 +17,9 @@ public remote def ticks :: fun int -> stream int = fun n {
 public remote def boom :: fun int -> stream int = fun n {
 	stream.from-seed 0 fun i {
 		if i < n {
-			task.return (some (i, i + 1))
+			task.ok (some (i, i + 1))
 		} else {
-			task.fail "boom"
+			task.err "boom"
 		}
 	}
 }

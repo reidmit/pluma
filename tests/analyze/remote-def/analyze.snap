@@ -18,20 +18,20 @@ module `main` (tests/analyze/remote-def/main.pa) {
                             ident(3:67-3:68) `n` :: int,
                         ],
                         body: [
-                            expr(4:1-4:20) :: task int a {
-                                kind: call(4:1-4:20) {
-                                    callee: expr(4:1-4:12) :: a -> task a b {
-                                        kind: namespace-access `task.return`,
+                            expr(4:1-4:16) :: task int a {
+                                kind: call(4:1-4:16) {
+                                    callee: expr(4:1-4:8) :: a -> task a b {
+                                        kind: namespace-access `task.ok`,
                                     },
                                     args: [
-                                        expr(4:13-4:20) :: int {
-                                            kind: expr(4:14-4:19) :: int {
-                                                kind: binary op(4:16-4:17) `*` {
-                                                    left: expr(4:14-4:15) :: int {
-                                                        kind: ident(4:14-4:15) `n`,
+                                        expr(4:9-4:16) :: int {
+                                            kind: expr(4:10-4:15) :: int {
+                                                kind: binary op(4:12-4:13) `*` {
+                                                    left: expr(4:10-4:11) :: int {
+                                                        kind: ident(4:10-4:11) `n`,
                                                     },
-                                                    right: expr(4:18-4:19) :: int {
-                                                        kind: literal(4:18-4:19) int 2,
+                                                    right: expr(4:14-4:15) :: int {
+                                                        kind: literal(4:14-4:15) int 2,
                                                     },
                                                 },
                                             },

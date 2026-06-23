@@ -81,7 +81,7 @@ public alias suite list test
 
 # --- constructors (the public surface) ---------------------------------------
 
-# A single case: a name and a task that succeeds to pass / fails (`task.fail msg`,
+# A single case: a name and a task that succeeds to pass / fails (`task.err msg`,
 # or a failing assertion) to fail. The body is a task, so a case can `try` async
 # work directly; a purely synchronous body is just an instantaneous task (the
 # `assert.*` checks already return one).
@@ -124,7 +124,7 @@ def flatten-node :: fun (list string) run-status test -> list entry = fun path s
 	when node is test.leaf name body {
 		[{path, name, status: stat, body}]
 	} is test.pend name {
-		[{path, name, status: run-status.pending, body: fun { task.return () }}]
+		[{path, name, status: run-status.pending, body: fun { task.ok () }}]
 	} is test.nest name children {
 		list.flat-map children fun child {
 			flatten-node [...path, name] stat child
@@ -205,7 +205,7 @@ def print-msg :: fun string string -> nothing = fun indent msg {
 # run one at a time and their output never interleaves.
 def task-fold :: fun (list b) a (fun a b -> task a e) -> task a e = fun items acc f {
 	when items is [] {
-		task.return acc
+		task.ok acc
 	} is [first, ...rest] {
 		try next = f acc first
 		task-fold rest next f
@@ -229,9 +229,9 @@ alias case-result {path :: list string, name :: string, kind :: outcome}
 def run-body :: fun entry -> task outcome e = fun e {
 	try res = task.attempt (e.body ())
 	when res is ok _u {
-		task.return outcome.ok-case
+		task.ok outcome.ok-case
 	} is err msg {
-		task.return (outcome.failed msg)
+		task.ok (outcome.failed msg)
 	}
 }
 
@@ -239,14 +239,14 @@ def run-body :: fun entry -> task outcome e = fun e {
 # and a normal case runs unless something else in the module is focused.
 def run-entry :: fun bool entry -> task outcome e = fun any-focused e {
 	when e.status is run-status.pending {
-		task.return outcome.is-todo
+		task.ok outcome.is-todo
 	} is run-status.skipped {
-		task.return outcome.did-skip
+		task.ok outcome.did-skip
 	} is run-status.focused {
 		run-body e
 	} is run-status.normal {
 		if any-focused {
-			task.return outcome.did-skip
+			task.ok outcome.did-skip
 		} else {
 			run-body e
 		}
@@ -259,7 +259,7 @@ def run-entry :: fun bool entry -> task outcome e = fun any-focused e {
 def run-entries :: fun bool (list entry) -> task (list case-result) e = fun any-focused entries {
 	task-fold entries [] fun results e {
 		try kind = run-entry any-focused e
-		task.return [...results, {path: e.path, name: e.name, kind}]
+		task.ok [...results, {path: e.path, name: e.name, kind}]
 	}
 }
 
@@ -395,9 +395,9 @@ public def run-all :: fun bool (list {
 	print ""
 	print (summary-line color final)
 	if final.failed == 0 {
-		task.return (ok ())
+		task.ok (ok ())
 	} else {
-		task.return (err "")
+		task.ok (err "")
 	}
 }
 
@@ -415,7 +415,7 @@ def run-suites :: fun bool (list {
 		}
 		try results = run-entries any-focused entries
 		report-module color suite.name results
-		task.return {
+		task.ok {
 			passed: a.passed + count-kind results kind-is-pass,
 			failed: a.failed + count-kind results kind-is-fail,
 			skipped: a.skipped + count-kind results kind-is-skip,
@@ -440,9 +440,9 @@ public def run-all-sharded :: fun bool (option string) (list {
 		# into one summary) rather than printing a per-shard summary.
 		print (shard-counts-line final)
 		if final.failed == 0 {
-			task.return (ok ())
+			task.ok (ok ())
 		} else {
-			task.return (err "")
+			task.ok (err "")
 		}
 	} else {
 		run-all color suites

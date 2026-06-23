@@ -6,10 +6,10 @@ use std/task
 def steps = fun {
 	try a = task.sleep 1s
 	try b = task.sleep 2s
-	task.return (a, b)
+	task.ok (a, b)
 }
 
 def use-steps = fun {
 	try pair = steps ()
-	task.return pair
+	task.ok pair
 }

@@ -25,7 +25,7 @@ def tests :: test.suite = [
 	test.case "list-set" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			[10, 1, 2, 99]

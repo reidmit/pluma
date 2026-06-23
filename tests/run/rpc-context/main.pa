@@ -28,15 +28,15 @@ def probe :: fun string (dict string string) -> task int = fun url headers {
 		if r.status == 200 {
 			let decoded :: result int wire-error = wire.decode r.body
 			when decoded is ok n {
-				task.return n
+				task.ok n
 			} is err _e {
-				task.return (0 - 1)
+				task.ok (0 - 1)
 			}
 		} else {
-			task.return r.status
+			task.ok r.status
 		}
 	} is err _e {
-		task.return 0
+		task.ok 0
 	}
 }
 
@@ -53,14 +53,14 @@ def main = fun {
 				try admin = probe url (dict.from-entries [("x-role", "admin")])
 				print "admin -> $(to-string admin)"
 				s.cancel ()
-				task.return 0
+				task.ok 0
 			}
 		} else {
 			print "local-addr failed"
-			task.return 1
+			task.ok 1
 		}
 	} else {
 		print "listen failed"
-		task.return 1
+		task.ok 1
 	}
 }

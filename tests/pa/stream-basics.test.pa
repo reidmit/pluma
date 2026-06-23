@@ -12,9 +12,9 @@ use std/sys/io
 def counter :: fun int -> stream int = fun limit {
 	stream.from-seed 0 fun n {
 		if n < limit {
-			task.return (some (n, n + 1))
+			task.ok (some (n, n + 1))
 		} else {
-			task.return none
+			task.ok none
 		}
 	}
 }
@@ -29,19 +29,19 @@ def run = fun {
 	}
 	try stream.for-each (stream.take doubled 4) fun n {
 		print "take: $(to-string n)"
-		task.return ()
+		task.ok ()
 	}
 	try stream.for-each (stream.take-while (counter 100) fun n {
 		# take-while stops at the first element that fails the predicate.
 		n < 3
 	}) fun n {
 		print "while: $(to-string n)"
-		task.return ()
+		task.ok ()
 	}
 	try total = stream.fold (counter 5) 0 fun acc n {
 		# fold: sum of 0..4.
 
-		task.return (acc + n)
+		task.ok (acc + n)
 	}
 	print "fold sum = $(to-string total)"
 	try stream.drain (stream.take (counter 1000000) 3)
@@ -51,7 +51,7 @@ def run = fun {
 	try b = stream.next s
 	try c = stream.next s
 	print "next: $(to-string (a ?? -1)) $(to-string (b ?? -1)) $(to-string (c ?? -1))"
-	task.return 0
+	task.ok 0
 }
 
 # drain runs the pulls for effect and discards the elements.
@@ -62,7 +62,7 @@ def tests :: test.suite = [
 	test.case "stream-basics" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			take: 0

@@ -19,7 +19,7 @@ def tests :: test.suite = [
 	test.case "string-module-split-join" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			[a, b, c]

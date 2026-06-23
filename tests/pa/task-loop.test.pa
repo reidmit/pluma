@@ -6,7 +6,7 @@ use std/sys/io
 # `await` inside a `while` loop. A task `try` is type-transparent to its
 # continuation, so it can sit in a loop body (which stays `nothing`-typed) while
 # still suspending each iteration; the function is async because its tail is a
-# task (`task.return`). On the frame-snapshot runtime the whole frame (loop IP +
+# task (`task.ok`). On the frame-snapshot runtime the whole frame (loop IP +
 # locals) is saved at each suspension; the CPS pass flattens the loop's back-edge
 # into the dispatch loop and threads the loop-carried `ref`s/binds through state.
 
@@ -21,14 +21,14 @@ def run = fun {
 		ref.set cursor tail
 	}
 	print (to-string (ref.get total))
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "task-loop" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "10\n"
 	},

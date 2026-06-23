@@ -24,7 +24,7 @@ use std/sys/rpc
 
 # Stands in for the synthesized dispatcher: always 200.
 def inner :: fun http.request -> task http.response = fun _req {
-	task.return (http.text 200 "ok")
+	task.ok (http.text 200 "ok")
 }
 
 # A request with the given method and headers; path/query/body are fixed.
@@ -70,14 +70,14 @@ def run = fun {
 	report "cross-origin (allowed)" d
 	try e = same (req http.method.post [])
 	report "no-origin (curl)" e
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "rpc-cors-gate" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			same-origin -> 200 acao=-

@@ -46,14 +46,14 @@ def run = fun {
 		string.length e.key > 0
 	}
 	print "env-all: non-empty=$(to-string (list.length envs > 0)) all-named=$(to-string named)"
-	task.return ()
+	task.ok ()
 }
 
 def tests :: test.suite = [
 	test.case "process-run" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			run: status=0 out=hello world ok=true

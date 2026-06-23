@@ -32,7 +32,7 @@ def tests :: test.suite = [
 	test.case "core-dict-derived" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			[x, y]

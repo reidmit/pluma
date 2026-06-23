@@ -6437,8 +6437,8 @@ impl<'compiler> Analyzer<'compiler> {
 				// erasing, else the precise source), so awaiting a `task a e`
 				// propagates its typed failure to the caller (the async `?`). For a
 				// tail-position `try`-chain this is automatic (its tail is
-				// `task.return`); the live case is a `try` whose continuation tail is
-				// *not* a task (e.g. forgetting `task.return`) — that still errors
+				// `task.ok`); the live case is a `try` whose continuation tail is
+				// *not* a task (e.g. forgetting `task.ok`) — that still errors
 				// here. `scope` bodies carry their own task constraint, so the walker
 				// passes `None` inside them.
 				if let Some(tail) = enclosing_tail {

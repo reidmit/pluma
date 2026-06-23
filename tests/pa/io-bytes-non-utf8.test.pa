@@ -44,7 +44,7 @@ def tests :: test.suite = [
 	test.case "io-bytes-non-utf8" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			wrote

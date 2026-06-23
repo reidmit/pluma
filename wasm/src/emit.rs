@@ -3148,7 +3148,7 @@ impl<'a> FnEmitter<'a> {
 			CAP,
 			alloc,
 		);
-		// Wrap the `result` (on the stack) in `task.return result` -- a Pure `$task`.
+		// Wrap the `result` (on the stack) in `task.ok result` -- a Pure `$task`.
 		let r = self.fresh_local(types::value_ref());
 		self.ins(Instruction::LocalSet(r));
 		self.ins(Instruction::I32Const(types::TAG_TASK));

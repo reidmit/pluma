@@ -29,7 +29,7 @@ def tests :: test.suite = [
 	test.case "dict-transient-alias" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			3

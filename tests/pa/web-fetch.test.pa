@@ -26,10 +26,10 @@ def run = fun {
 	try resp = task.attempt (fetch.post "http://127.0.0.1:1/_rpc/echo" (dict.empty ()) (string.to-bytes "ping"))
 	when resp is ok r {
 		print "unexpected ok (status $(to-string r.status))"
-		task.return 1
+		task.ok 1
 	} is err _e {
 		print "web-fetch to a closed port failed as expected (err)"
-		task.return 0
+		task.ok 0
 	}
 }
 
@@ -37,7 +37,7 @@ def tests :: test.suite = [
 	test.case "web-fetch" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "web-fetch to a closed port failed as expected (err)\n"
 	},

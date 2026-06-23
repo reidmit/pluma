@@ -49,11 +49,11 @@ def exit :: fun e -> nothing = built-in "local-exit"
 #
 #     local.with trace-id "req-42" (fun {
 #         try _ = handle-request ()   # any local.get trace-id in here sees "req-42"
-#         task.return ()
+#         task.ok ()
 #     })
 public def with :: fun (local a) a (fun nothing -> task b) -> task b = fun cell val body {
 	let saved = enter cell val
 	defer exit saved
 	try r = body ()
-	task.return r
+	task.ok r
 }

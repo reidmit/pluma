@@ -9,7 +9,7 @@ use std/sys/io
 # bound `d`, folds it into the accumulator, and continues. Sum is 2+4+6 = 12.
 
 def double = fun x {
-	task.return (x + x)
+	task.ok (x + x)
 }
 
 def run = fun {
@@ -23,14 +23,14 @@ def run = fun {
 		ref.set cursor tail
 	}
 	print (to-string (ref.get acc))
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "task-loop-bind" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "12\n"
 	},

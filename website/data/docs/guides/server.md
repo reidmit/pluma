@@ -10,10 +10,10 @@ use std/sys/http
 
 def app :: fun http.request -> task http.response = router.handler [
 	router.get "/" fun _req {
-		task.return (http.text 200 "hello from Pluma")
+		task.ok (http.text 200 "hello from Pluma")
 	},
 	router.get "/health" fun _req {
-		task.return (http.text 200 "ok")
+		task.ok (http.text 200 "ok")
 	},
 ]
 

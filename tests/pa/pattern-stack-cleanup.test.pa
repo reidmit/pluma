@@ -55,7 +55,7 @@ def tests :: test.suite = [
 	test.case "pattern-stack-cleanup" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			second was 2

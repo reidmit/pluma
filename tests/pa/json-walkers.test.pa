@@ -115,7 +115,7 @@ def tests :: test.suite = [
 	test.case "json-walkers" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			no nope

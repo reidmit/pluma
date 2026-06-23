@@ -46,14 +46,14 @@ def run = fun {
 	}
 	try after = db.migrate conn [{version: 3, up: "create table temp_t (x integer)"}]
 	print "retry applied: $(to-string after)"
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "db-migrate" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			applied: 2

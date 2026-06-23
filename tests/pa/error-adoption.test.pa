@@ -60,7 +60,7 @@ def tests :: test.suite = [
 	test.case "error-adoption" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "error-adoption.test:26: missing SETTING\nerror-adoption.test:31: unauthorized\nyes\nno\n"
 	},

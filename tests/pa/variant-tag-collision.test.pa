@@ -30,18 +30,18 @@ def describe = fun s {
 }
 
 def run = fun {
-	try task.return 0
+	try task.ok 0
 	print (describe status.idle)
 	print (describe status.pending)
 	print (describe status.done)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "variant-tag-collision" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			idle

@@ -12,34 +12,34 @@ def both = fun t1 t2 {
 		let h2 = s.spawn t2
 		try a = h1
 		try b = h2
-		task.return (a, b)
+		task.ok (a, b)
 	}
 }
 
 # A child failing fails the whole scope (fail-fast); `??` recovers it.
 def boom = fun {
 	scope as s {
-		let h1 = s.spawn (task.fail "kaboom")
-		let h2 = s.spawn (task.return 2)
+		let h1 = s.spawn (task.err "kaboom")
+		let h2 = s.spawn (task.ok 2)
 		try a = h1
 		try b = h2
-		task.return (a + b)
+		task.ok (a + b)
 	}
 }
 
 def run = fun {
-	try pair = both (task.return 1) (task.return 2)
+	try pair = both (task.ok 1) (task.ok 2)
 	print (to-string pair)
-	try recovered = boom () ?? task.return 999
+	try recovered = boom () ?? task.ok 999
 	print (to-string recovered)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "scope-both" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			(1, 2)

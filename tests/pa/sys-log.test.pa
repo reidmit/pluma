@@ -39,7 +39,7 @@ def tests :: test.suite = [
 	test.case "sys-log" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "14:30:00 INFO  starting up\n14:30:00 WARN  served page  path=/docs status=200 ratio=0.5 cache-hit=true tags=[\"a\",\"b\"]\n{\"time\":\"2024-05-25T14:30:00Z\",\"level\":\"info\",\"msg\":\"starting up\"}\n{\"time\":\"2024-05-25T14:30:00Z\",\"level\":\"error\",\"msg\":\"served page\",\"path\":\"/docs\",\"status\":200,\"ratio\":0.5,\"cache-hit\":true,\"tags\":[\"a\",\"b\"]}\n14:30:00 DEBUG d\n{\"time\":\"2024-05-25T14:30:00Z\",\"level\":\"debug\",\"msg\":\"d\"}\n"
 	},

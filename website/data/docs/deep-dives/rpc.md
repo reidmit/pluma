@@ -21,11 +21,11 @@ mention of the network:
 use std/task
 
 public remote def greet :: fun string -> task string = fun name {
-	task.return ("hello, " ++ name)
+	task.ok ("hello, " ++ name)
 }
 
 public remote def add :: fun int int -> task int = fun a b {
-	task.return (a + b)
+	task.ok (a + b)
 }
 ```
 
@@ -66,9 +66,9 @@ def main = fun {
 
 def handler :: fun http.request -> task http.response = fun req {
 	if req.path == "/" {
-		task.return (http.html 200 (ui.document ()))
+		task.ok (http.html 200 (ui.document ()))
 	} else {
-		task.return (http.not-found ())
+		task.ok (http.not-found ())
 	}
 }
 ```

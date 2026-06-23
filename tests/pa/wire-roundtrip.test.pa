@@ -58,7 +58,7 @@ def tests :: test.suite = [
 	test.case "wire-roundtrip" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "int bytes: 01\nint: -1\nrec: ada 36\nlist len: 3\nenum: shape.rect 3 4\ndecode err: wire-error.unexpected-end\n"
 	},

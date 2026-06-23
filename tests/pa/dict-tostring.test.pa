@@ -30,7 +30,7 @@ def tests :: test.suite = [
 	test.case "dict-tostring" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			{b: 2, c: 3, a: 1}

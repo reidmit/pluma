@@ -23,7 +23,7 @@ use std/sys/db
 def with-db = fun {
 	try conn = db.open "app.db"
 	# ... use conn ...
-	task.return conn
+	task.ok conn
 }
 ```
 

@@ -23,9 +23,9 @@ pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 	// NB: `std/task` is deliberately *not* auto-imported. The async syntax
 	// (`try`/`??` over a task, `scope`, `defer`, duration literals) needs no
 	// import — it's type-driven and lowers to fully-qualified globals — but
-	// every *named* task function (`task.return`, `task.sleep`, `task.both`,
+	// every *named* task function (`task.ok`, `task.sleep`, `task.both`,
 	// the kernel behind `s.spawn`/`s.next`, …) lives behind `use std/task`.
-	// Since you can't build a task without `task.return`/`task.fail`, async
+	// Since you can't build a task without `task.ok`/`task.err`, async
 	// code imports `std/task` anyway; keeping it explicit avoids pulling the
 	// whole combinator surface into every module's namespace.
 ];
@@ -933,7 +933,7 @@ mod platform_gating_tests {
 		let api = "use std/task\nuse std/request\nuse std/sys/io\n\n\
 			public def label :: fun nothing -> string = fun {\n\t\"api\"\n}\n\n\
 			public remote def shout :: fun request string -> task string = fun _req msg {\n\
-			\tlet _ = io.print msg\n\ttask.return msg\n}\n";
+			\tlet _ = io.print msg\n\ttask.ok msg\n}\n";
 		let main = "use api\n\ndef main = fun {\n\tprint (api.label ())\n}\n";
 		let diags = check_multi(Some(Target::Web), &[("api", api), ("main", main)], "main");
 		assert!(

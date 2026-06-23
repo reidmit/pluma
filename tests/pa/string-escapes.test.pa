@@ -20,7 +20,7 @@ def tests :: test.suite = [
 	test.case "string-escapes" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "tab\tend\nnewline\nend\nliteral backslash-n: a\\nb\nquote: \"hi\"\nbackslash: a\\b\nescaped dollar: \$(name) is literal\nreal interpolation: world\nbare dollar: 5$ and $5\n"
 	},

@@ -15,23 +15,23 @@ def tenant :: local string = local.new "none"
 def worker :: fun string -> task nothing = fun name {
 	try task.sleep 1ms
 	print "worker $(name): $(local.get tenant)"
-	task.return ()
+	task.ok ()
 }
 
 def run = fun {
 	scope as s {
 		let a = local.with tenant "acme" fun {
-			task.return (s.spawn (worker "a"))
+			task.ok (s.spawn (worker "a"))
 		}
 		try ha = a
 		let b = local.with tenant "globex" fun {
-			task.return (s.spawn (worker "b"))
+			task.ok (s.spawn (worker "b"))
 		}
 		try hb = b
 		try ha
 		try hb
 		print "parent: $(local.get tenant)"
-		task.return ()
+		task.ok ()
 	}
 }
 
@@ -39,7 +39,7 @@ def tests :: test.suite = [
 	test.case "local-capture-spawn" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			worker a: acme

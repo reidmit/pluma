@@ -36,7 +36,7 @@ def tests :: test.suite = [
 	test.case "core-dict-int-keys" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			two

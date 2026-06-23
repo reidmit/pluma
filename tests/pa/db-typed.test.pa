@@ -76,14 +76,14 @@ def run = fun {
 	} is err e {
 		print "validate: $(e)"
 	}
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "db-typed" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			open todos: 2

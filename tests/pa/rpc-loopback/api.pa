@@ -7,15 +7,15 @@ use std/task
 
 # Zero arguments.
 public remote def ping :: fun nothing -> task string = fun {
-	task.return "pong"
+	task.ok "pong"
 }
 
 # One argument.
 public remote def greet :: fun string -> task string = fun name {
-	task.return ("hello, " ++ name)
+	task.ok ("hello, " ++ name)
 }
 
 # Several arguments (sent as an encoded tuple).
 public remote def add :: fun int int -> task int = fun a b {
-	task.return (a + b)
+	task.ok (a + b)
 }

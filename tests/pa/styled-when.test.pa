@@ -25,7 +25,7 @@ def tests :: test.suite = [
 	test.case "styled-when" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			<div class="cb30c6231 cd722bd7f">a</div>

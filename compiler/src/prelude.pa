@@ -51,7 +51,7 @@ public enum result a b {
 
 # A computation that, when run, will eventually produce an `a`, fail with
 # an `e`, or be cancelled. A `task a e` is an *async result*: its second
-# parameter is the failure type, so the failure channel `task.fail` and
+# parameter is the failure type, so the failure channel `task.err` and
 # `try` already carry is now typed (`db.execute ... : task (list row) string`).
 # A `task a` is *cold*: building one does nothing; awaiting it with `try`,
 # spawning it into a `scope`, or `task.start`ing it runs it. Tasks are
@@ -65,10 +65,10 @@ public enum result a b {
 # `task a e` into a `task (result a e) _` you can match on. The `task.*`
 # helpers (in `std/task`, auto-imported) build and combine them; `scope`
 # (a keyword) runs them concurrently. A task that never fails in a typed
-# way (`task.return`, `task.sleep`) leaves `e` polymorphic.
+# way (`task.ok`, `task.sleep`) leaves `e` polymorphic.
 #
 # The type has no surface constructors -- you never write `task.mk`; you
-# make one with `task.return` / `task.sleep` / an async function call.
+# make one with `task.ok` / `task.sleep` / an async function call.
 public enum task a e {
 }
 

@@ -68,7 +68,7 @@ def tests :: test.suite = [
 	test.case "error-classify" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "serving request: error-classify.test:37: timed out\nyes\nno\nno\nno\nno\n"
 	},

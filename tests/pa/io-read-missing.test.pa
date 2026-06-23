@@ -21,7 +21,7 @@ def tests :: test.suite = [
 	test.case "io-read-missing" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			got err

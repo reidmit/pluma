@@ -2,11 +2,11 @@
 use std/task
 
 def make-num = fun {
-	task.return 42
+	task.ok 42
 }
 
 def make-fail = fun {
-	task.fail "boom"
+	task.err "boom"
 }
 
 def pause = fun {

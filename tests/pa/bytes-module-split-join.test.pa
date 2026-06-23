@@ -21,7 +21,7 @@ def tests :: test.suite = [
 	test.case "bytes-module-split-join" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "['a', 'b', 'c']\n['a', 'b', '', 'c']\n['abc']\n['']\n['a', 'b', 'c']\n'a,b,c'\n'only'\n''\n'a\\x00b'\n"
 	},

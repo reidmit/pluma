@@ -33,7 +33,7 @@ def tests :: test.suite = [
 	test.case "debug-passthrough" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "[debug-passthrough.test:16] 42\ndoubled: 84\n[debug-passthrough.test:20] 3\n[debug-passthrough.test:20] 4\nsum: 7\n[debug-passthrough.test:24] color.red\nit was red\n"
 	},

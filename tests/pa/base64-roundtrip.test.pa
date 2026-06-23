@@ -43,7 +43,7 @@ def tests :: test.suite = [
 	test.case "base64-roundtrip" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "\nZg==\nZm8=\nZm9v\naGVsbG8=\n//79\nZg\n__79\n'f'\n'f'\n'foo'\n'\\xff\\xfe\\xfd'\nerr: invalid base64 character\nerr: invalid base64 length\n'\\xff\\xfe\\xfd'\n'hello'\n"
 	},

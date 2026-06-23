@@ -2,5 +2,5 @@ use std/request
 use std/task
 
 remote def double :: fun request int -> task int = fun _req n {
-	task.return (n * 2)
+	task.ok (n * 2)
 }

@@ -14,7 +14,7 @@ def trace :: local string = local.new "-"
 def show :: fun string -> task nothing = fun label {
 	try task.sleep 1ms
 	print "$(label): $(local.get trace)"
-	task.return ()
+	task.ok ()
 }
 
 def run = fun {
@@ -23,20 +23,20 @@ def run = fun {
 		try show "inside"
 		try local.with trace "inner" fun {
 			try show "nested"
-			task.return ()
+			task.ok ()
 		}
 		try show "back"
-		task.return ()
+		task.ok ()
 	}
 	try show "after"
-	task.return ()
+	task.ok ()
 }
 
 def tests :: test.suite = [
 	test.case "local-with-shadow" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			before: -

@@ -14,12 +14,12 @@ def read-trace = fun {
 
 def scoped = fun {
 	local.with trace "req" fun {
-		task.return (local.get trace)
+		task.ok (local.get trace)
 	}
 }
 
 def scoped-int = fun {
 	local.with count 42 fun {
-		task.return (local.get count)
+		task.ok (local.get count)
 	}
 }

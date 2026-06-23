@@ -27,7 +27,7 @@ use std/stream
 use std/task
 
 def counting :: fun nothing -> stream int = fun {
-	stream.from-seed 1 (fun n { task.return (some (n, n + 1)) })
+	stream.from-seed 1 (fun n { task.ok (some (n, n + 1)) })
 }
 ```
 
@@ -62,12 +62,12 @@ use std/task
 
 try _ = stream.for-each (stream.take (counting ()) 5) (fun v {
 	print (to-string v)
-	task.return ()
+	task.ok ()
 })
 # prints 1 2 3 4 5
 
 try total = stream.fold (stream.take (counting ()) 4) 0 (fun acc x {
-	task.return (acc + x)
+	task.ok (acc + x)
 })
 # total => 10
 ```

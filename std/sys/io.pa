@@ -76,7 +76,7 @@ def capture-err :: fun nothing -> result string string = built-in "io-capture-er
 #
 # `thunk` is a task, awaited to completion with the streams diverted -- so output
 # produced *across* suspension points (sleeps, spawned children) is captured too.
-# For synchronous code under test, end the thunk with `task.return`. The frame is
+# For synchronous code under test, end the thunk with `task.ok`. The frame is
 # always torn down, even if `thunk` fails (the failure then propagates). Captures
 # nest -- an inner `capture` collects only its own thunk's output.
 public def capture :: fun (fun nothing -> task a e) -> task {
@@ -89,9 +89,9 @@ public def capture :: fun (fun nothing -> task a e) -> task {
 	let out = capture-out () ?? ""
 	let err = capture-err () ?? ""
 	when outcome is ok _v {
-		task.return {out, err}
+		task.ok {out, err}
 	} is err e {
-		task.fail e
+		task.err e
 	}
 }
 
@@ -120,8 +120,8 @@ public def with-stdin :: fun string (fun nothing -> task a e) -> task a e = fun 
 	try outcome = task.attempt (thunk ())
 	with-stdin-end () ?? ""
 	when outcome is ok v {
-		task.return v
+		task.ok v
 	} is err e {
-		task.fail e
+		task.err e
 	}
 }

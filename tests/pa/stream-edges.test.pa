@@ -13,9 +13,9 @@ use std/sys/io
 def counter :: fun int -> stream int = fun limit {
 	stream.from-seed 0 fun n {
 		if n < limit {
-			task.return (some (n, n + 1))
+			task.ok (some (n, n + 1))
 		} else {
-			task.return none
+			task.ok none
 		}
 	}
 }
@@ -25,27 +25,27 @@ def res :: fun string int -> stream int = fun tag limit {
 	stream.from-resource {
 		open: fun {
 			print "[$(tag)] open"
-			task.return (ref.new 0)
+			task.ok (ref.new 0)
 		},
 		next: fun cur {
 			let i = ref.get cur
 			ref.set cur (i + 1)
 			if i < limit {
-				task.return (some i)
+				task.ok (some i)
 			} else {
-				task.return none
+				task.ok none
 			}
 		},
 		close: fun _cur {
 			print "[$(tag)] close"
-			task.return ()
+			task.ok ()
 		},
 	}
 }
 
 def show :: fun int -> task nothing = fun n {
 	print "  $(to-string n)"
-	task.return ()
+	task.ok ()
 }
 
 def run = fun {
@@ -53,17 +53,17 @@ def run = fun {
 	print "map-task order:"
 	let doubled = stream.map-task (counter 4) fun n {
 		try task.yield ()
-		task.return (n * 10)
+		task.ok (n * 10)
 	}
 	try stream.for-each doubled show
 	# A fault inside map-task must still release the upstream resource.
 	print "map-task fault releases:"
 	let faulting = stream.map-task (res "B" 10) fun n {
 		if n == 2 {
-			try task.fail "boom"
-			task.return n
+			try task.err "boom"
+			task.ok n
 		} else {
-			task.return n
+			task.ok n
 		}
 	}
 	try r = task.attempt (stream.for-each faulting show)
@@ -83,17 +83,17 @@ def run = fun {
 	# fold over an empty (take 0) stream returns the initial accumulator.
 	print "empty fold:"
 	try total = stream.fold (stream.take (counter 99) 0) 7 fun acc n {
-		task.return (acc + n)
+		task.ok (acc + n)
 	}
 	print "  total = $(to-string total)"
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "stream-edges" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			map-task order:

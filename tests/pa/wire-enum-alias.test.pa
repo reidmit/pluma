@@ -53,7 +53,7 @@ def tests :: test.suite = [
 	test.case "wire-enum-alias" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			raw: 000e056e6f727468

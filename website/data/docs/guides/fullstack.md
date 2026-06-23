@@ -28,7 +28,7 @@ use std/task
 
 # Runs on the server; the browser calls it as if it were local.
 public remote def add :: fun int int -> task int = fun a b {
-	task.return (a + b)
+	task.ok (a + b)
 }
 ```
 
@@ -52,14 +52,14 @@ def handler :: fun http.request -> task http.response = fun req {
 		# collected CSS, and the client hydration script. You give it the document
 		# lang, a title, the page body, and any extra <head> tags (std/view/head) --
 		# no hand-written HTML.
-		task.return (http.html 200 (app.document {
+		task.ok (http.html 200 (app.document {
 			lang: "en",
 			title: "Sum",
 			head: [],
 			body: ui.page (),
 		}))
 	} else {
-		task.return (http.not-found ())
+		task.ok (http.not-found ())
 	}
 }
 

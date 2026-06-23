@@ -72,29 +72,29 @@ def check :: fun string string -> task (string, outcome) e = fun base path {
 	let fetched = task.with-timeout 250ms (http.fetch (base ++ path) http.method.get (dict.empty ()) (string.to-bytes ""))
 	try settled = task.attempt fetched
 	when settled is ok resp {
-		task.return (path, classify resp.status)
+		task.ok (path, classify resp.status)
 	} is err msg {
 		let o = if msg == "timeout" {
 			outcome.timed-out
 		} else {
 			outcome.unreachable msg
 		}
-		task.return (path, o)
+		task.ok (path, o)
 	}
 }
 
 def handler :: fun http.request -> task http.response = fun req {
 	if string.contains req.path "slow" {
 		try task.sleep 1s
-		task.return (http.text 200 "eventually")
+		task.ok (http.text 200 "eventually")
 	} else if string.contains req.path "redirect" {
-		task.return (http.text 301 "moved")
+		task.ok (http.text 301 "moved")
 	} else if string.contains req.path "missing" {
-		task.return (http.not-found ())
+		task.ok (http.not-found ())
 	} else if string.contains req.path "boom" {
-		task.return (http.text 500 "kaboom")
+		task.ok (http.text 500 "kaboom")
 	} else {
-		task.return (http.text 200 "hello")
+		task.ok (http.text 200 "hello")
 	}
 }
 
@@ -125,15 +125,15 @@ def run = fun {
 				})
 				s.cancel ()
 				report results
-				task.return 0
+				task.ok 0
 			}
 		} else {
 			print "local-addr failed"
-			task.return 1
+			task.ok 1
 		}
 	} else {
 		print "listen failed"
-		task.return 1
+		task.ok 1
 	}
 }
 
@@ -141,7 +141,7 @@ def tests :: test.suite = [
 	test.case "link-check" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			/ OK 200

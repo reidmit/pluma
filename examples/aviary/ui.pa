@@ -556,6 +556,6 @@ public def load-data :: fun route -> task model.page-data = fun r {
 			}
 		}
 	} is route.unknown {
-		task.return model.page-data.missing
+		task.ok model.page-data.missing
 	}
 }

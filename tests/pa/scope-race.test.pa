@@ -9,14 +9,14 @@ use std/sys/io
 
 def sleeper = fun ms n {
 	try task.sleep ms
-	task.return n
+	task.ok n
 }
 
 # A slow child whose cleanup must run when it's cancelled as a race loser.
 def slow = fun label {
 	defer print label
 	try task.sleep 5s
-	task.return 0
+	task.ok 0
 }
 
 def race = fun ts {
@@ -28,12 +28,12 @@ def race = fun ts {
 		s.cancel ()
 		when first is some r {
 			when r is ok v {
-				task.return v
+				task.ok v
 			} is err e {
-				task.fail e
+				task.err e
 			}
 		} is none {
-			task.fail "race: empty"
+			task.err "race: empty"
 		}
 	}
 }
@@ -41,14 +41,14 @@ def race = fun ts {
 def run = fun {
 	try w = race [slow "loser-cleanup-ran", sleeper 2ms 42]
 	print (to-string w)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "scope-race" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			loser-cleanup-ran

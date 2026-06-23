@@ -21,7 +21,7 @@ def tests :: test.suite = [
 		try cap = io.capture fun {
 			io.with-stdin "line one\nline two\nno trailing newline" fun {
 				run ()
-				task.return ()
+				task.ok ()
 			}
 		}
 		assert.matches cap.out "line one\nline two\nno trailing newline\n37\n"

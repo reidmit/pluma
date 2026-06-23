@@ -5,9 +5,9 @@
 #
 #     def handler = fun req {
 #         if req.path == "/" {
-#             task.return (http.html 200 (page ()))
+#             task.ok (http.html 200 (page ()))
 #         } else {
-#             task.return (http.not-found ())
+#             task.ok (http.not-found ())
 #         }
 #     }
 #
@@ -66,7 +66,7 @@ public def serve :: fun string (fun http.request -> task http.response) -> task 
 # the browser then hydrates.
 #
 #     handler = fun req {
-#         task.return (http.html 200 (app.document {
+#         task.ok (http.html 200 (app.document {
 #             lang: "en",
 #             title: "Home",
 #             head: [],

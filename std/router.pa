@@ -61,7 +61,7 @@ def make :: fun (fun http.request -> bool) (fun http.request -> task http.respon
 # A route that answers GET requests whose path is exactly `path`.
 #
 #     router.get "/health" (fun req {
-#         task.return (http.text 200 "ok")
+#         task.ok (http.text 200 "ok")
 #     })
 public def get :: fun string (fun http.request -> task http.response) -> route = fun path handle {
 	make fun req {
@@ -77,7 +77,7 @@ public def get :: fun string (fun http.request -> task http.response) -> route =
 #
 #     router.post "/users" (fun req {
 #         try id = create-user req.body
-#         task.return (http.text 201 id)
+#         task.ok (http.text 201 id)
 #     })
 public def post :: fun string (fun http.request -> task http.response) -> route = fun path handle {
 	make fun req {
@@ -130,7 +130,7 @@ public def handler :: fun (list route) -> (fun http.request -> task http.respons
 		when first-match routes req is some t {
 			t
 		} is none {
-			task.return (http.not-found ())
+			task.ok (http.not-found ())
 		}
 	}
 }

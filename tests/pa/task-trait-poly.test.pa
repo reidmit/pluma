@@ -14,30 +14,30 @@ use std/sys/io
 def add-tasks :: fun (task a) (task a) -> task a = fun x y {
 	try p = x
 	try q = y
-	task.return (p + q)
+	task.ok (p + q)
 }
 
 def bigger :: fun (task a) (task a) -> task bool = fun x y {
 	try p = x
 	try q = y
-	task.return (p > q)
+	task.ok (p > q)
 }
 
 def run = fun {
-	try i = add-tasks (task.return 100) (task.return 23)
-	try f = add-tasks (task.return 1.5) (task.return 2.25)
-	try b = bigger (task.return 5) (task.return 9)
+	try i = add-tasks (task.ok 100) (task.ok 23)
+	try f = add-tasks (task.ok 1.5) (task.ok 2.25)
+	try b = bigger (task.ok 5) (task.ok 9)
 	print (to-string i)
 	print (to-string f)
 	print (to-string b)
-	task.return 0
+	task.ok 0
 }
 
 def tests :: test.suite = [
 	test.case "task-trait-poly" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			123

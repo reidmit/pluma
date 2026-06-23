@@ -18,7 +18,7 @@ def run = fun {
 		print "2: $(local.get stage)"
 		try task.sleep 1ms
 		print "3: $(local.get stage)"
-		task.return ()
+		task.ok ()
 	}
 }
 
@@ -26,7 +26,7 @@ def tests :: test.suite = [
 	test.case "local-across-await" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			1: running

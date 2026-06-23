@@ -22,7 +22,7 @@ def tests :: test.suite = [
 	test.case "error-chain" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			loading user 7: querying db: connection refused

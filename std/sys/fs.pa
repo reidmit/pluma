@@ -85,7 +85,7 @@ def fs-op-sync-b :: fun int string bytes -> result bytes string = built-in "fs-o
 # plain value rather than a `result`.
 def run :: fun (task (result bytes string)) (fun (result bytes string) -> a) -> task a = fun t decode {
 	try r = t
-	task.return (decode r)
+	task.ok (decode r)
 }
 
 # Like `run`, but for the fallible ops: the decoder yields a `result a string`, which

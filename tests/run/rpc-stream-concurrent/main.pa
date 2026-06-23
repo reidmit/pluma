@@ -30,7 +30,7 @@ def sum-sub :: fun string int -> task int string = fun route n {
 	let s = decode-ints (rpc.call-stream route route-fp (wire.encode n))
 	stream.fold s 0 fun acc x {
 		try task.sleep 2ms
-		task.return (acc + x)
+		task.ok (acc + x)
 	}
 }
 
@@ -49,14 +49,14 @@ def main = fun {
 				print "slow sum  = $(to-string a)"
 				print "ticks sum = $(to-string b)"
 				s.cancel ()
-				task.return 0
+				task.ok 0
 			}
 		} else {
 			print "local-addr failed"
-			task.return 1
+			task.ok 1
 		}
 	} else {
 		print "listen failed"
-		task.return 1
+		task.ok 1
 	}
 }

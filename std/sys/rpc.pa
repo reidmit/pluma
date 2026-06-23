@@ -30,12 +30,12 @@ def send :: fun string bytes (dict string string) -> task bytes = fun route body
 	try outcome = task.attempt (http.fetch (rpc.server-origin ++ "/_rpc/" ++ route) http.method.post headers body)
 	when outcome is ok resp {
 		if resp.status == 200 {
-			task.return resp.body
+			task.ok resp.body
 		} else {
-			task.fail (rpc.status-error route resp.status)
+			task.err (rpc.status-error route resp.status)
 		}
 	} is err e {
-		task.fail (rpc.rpc-error.transport e)
+		task.err (rpc.rpc-error.transport e)
 	}
 }
 
@@ -89,12 +89,12 @@ def reject-status :: local (ref (option int)) = local.new (ref.new none)
 # ...). The in-handler authorization guard an app builds on `context`:
 #
 #     public def require-auth :: fun nothing -> task nothing = fun {
-#         when context.header "authorization" is some _tok { task.return () }
+#         when context.header "authorization" is some _tok { task.ok () }
 #         is none { rpc.reject 401 }
 #     }
 public def reject :: fun int -> task a = fun status {
 	ref.set (local.get reject-status) (some status)
-	task.fail "rpc-reject"
+	task.err "rpc-reject"
 }
 
 # Runs one endpoint invocation and shapes its outcome into an HTTP response. The
@@ -113,12 +113,12 @@ public def respond :: fun http.request (fun nothing -> task bytes) -> task http.
 		local.with reject-status box fun {
 			try outcome = task.attempt (produce ())
 			when outcome is ok b {
-				task.return {status: 200, headers: dict.empty (), body: b, stream-body: none}
+				task.ok {status: 200, headers: dict.empty (), body: b, stream-body: none}
 			} is err _e {
 				when ref.get box is some status {
-					task.return (http.text status "")
+					task.ok (http.text status "")
 				} is none {
-					task.return (http.text 500 "rpc: handler failed")
+					task.ok (http.text 500 "rpc: handler failed")
 				}
 			}
 		}
@@ -138,7 +138,7 @@ public def respond :: fun http.request (fun nothing -> task bytes) -> task http.
 public def respond-stream :: fun http.request (fun nothing -> stream bytes) -> task http.response = fun req produce {
 	context.with-request req fun {
 		let events = produce ()
-		task.return (http.stream-response 200 stream-headers events)
+		task.ok (http.stream-response 200 stream-headers events)
 	}
 }
 
@@ -265,13 +265,13 @@ public def guard :: fun policy (fun http.request -> task http.response) -> (fun 
 	fun req {
 		if admits pol req {
 			if req.method is http.method.options {
-				task.return (preflight req)
+				task.ok (preflight req)
 			} else {
 				try resp = inner req
-				task.return (with-cors pol req resp)
+				task.ok (with-cors pol req resp)
 			}
 		} else {
-			task.return (http.text 403 "rpc: cross-origin request rejected")
+			task.ok (http.text 403 "rpc: cross-origin request rejected")
 		}
 	}
 }

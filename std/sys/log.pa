@@ -136,7 +136,7 @@ def level-from-env :: fun nothing -> level = fun {
 #         log.with [log.str "request-id" (uuid.v4 ()), log.str "path" req.path] fun {
 #             try resp = next req
 #             log.info "request" [log.int "status" resp.status]
-#             task.return resp
+#             task.ok resp
 #         }
 #     } }
 public def with :: fun (list field) (fun nothing -> task a) -> task a = fun fields body {

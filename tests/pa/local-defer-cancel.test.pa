@@ -15,18 +15,18 @@ def slow :: fun nothing -> task nothing = fun {
 	defer print "cleanup sees label=$(local.get label)"
 	try task.sleep 10s
 	print "slow finished (should NOT print)"
-	task.return ()
+	task.ok ()
 }
 
 def run = fun {
 	scope as s {
 		let h = local.with label "tagged" fun {
-			task.return (s.spawn (slow ()))
+			task.ok (s.spawn (slow ()))
 		}
 		try h
 		try task.sleep 1ms
 		s.cancel ()
-		task.return ()
+		task.ok ()
 	}
 }
 
@@ -34,7 +34,7 @@ def tests :: test.suite = [
 	test.case "local-defer-cancel" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "cleanup sees label=tagged\n"
 	},

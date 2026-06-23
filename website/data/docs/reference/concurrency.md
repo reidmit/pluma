@@ -17,14 +17,14 @@ functions live in `std/task`.
 A function that does async work returns a `task`. Its type is `task a e`: a task
 that, when it finishes, either produces an `a` or fails with an `e`. (That's the
 same success/failure split as `result`, carried through an asynchronous
-computation.) You build the simplest tasks with `task.return`, which wraps a
-finished value, and `task.fail`, which fails:
+computation.) You build the simplest tasks with `task.ok`, which wraps a
+finished value, and `task.err`, which fails:
 
 ```pluma
 use std/task
 
 def fetch-port :: fun nothing -> task int string = fun {
-	task.return 8080
+	task.ok 8080
 }
 ```
 
@@ -37,7 +37,7 @@ callbacks and no special await syntax:
 def load-greeting :: fun string -> task string string = fun url {
 	try page = http.get url       # await; on failure, bail out
 	try name = field page "name"
-	task.return "hi, $(name)"
+	task.ok "hi, $(name)"
 }
 ```
 
@@ -58,7 +58,7 @@ use std/task
 
 def double = fun n {
 	try task.sleep 5ms
-	task.return (n * 2)
+	task.ok (n * 2)
 }
 
 try results = task.all (list.map [1, 2, 3] double)
@@ -107,7 +107,7 @@ scope as s {
 	try rb = b
 	print (ra ++ " and " ++ rb)
 	s.cancel ()             # stop anything still running
-	task.return 0
+	task.ok 0
 }
 ```
 
@@ -128,7 +128,7 @@ def with-connection = fun addr {
 	try conn = connect addr
 	defer close conn          # runs however this function exits
 	try reply = send conn "ping"
-	task.return reply
+	task.ok reply
 }
 ```
 

@@ -87,21 +87,21 @@ module `main` (tests/analyze/local-types/main.pa) {
                                             kind: fun(15:24-17:2) {
                                                 params: [],
                                                 body: [
-                                                    expr(16:2-16:31) :: task string a {
-                                                        kind: call(16:2-16:31) {
-                                                            callee: expr(16:2-16:13) :: a -> task a b {
-                                                                kind: namespace-access `task.return`,
+                                                    expr(16:2-16:27) :: task string a {
+                                                        kind: call(16:2-16:27) {
+                                                            callee: expr(16:2-16:9) :: a -> task a b {
+                                                                kind: namespace-access `task.ok`,
                                                             },
                                                             args: [
-                                                                expr(16:14-16:31) :: string {
-                                                                    kind: expr(16:15-16:30) :: string {
-                                                                        kind: call(16:15-16:30) {
-                                                                            callee: expr(16:15-16:24) :: (local a) -> a {
+                                                                expr(16:10-16:27) :: string {
+                                                                    kind: expr(16:11-16:26) :: string {
+                                                                        kind: call(16:11-16:26) {
+                                                                            callee: expr(16:11-16:20) :: (local a) -> a {
                                                                                 kind: namespace-access `local.get`,
                                                                             },
                                                                             args: [
-                                                                                expr(16:25-16:30) :: local string {
-                                                                                    kind: ident(16:25-16:30) `trace`,
+                                                                                expr(16:21-16:26) :: local string {
+                                                                                    kind: ident(16:21-16:26) `trace`,
                                                                                 },
                                                                             ],
                                                                         },
@@ -142,21 +142,21 @@ module `main` (tests/analyze/local-types/main.pa) {
                                             kind: fun(21:21-23:2) {
                                                 params: [],
                                                 body: [
-                                                    expr(22:2-22:31) :: task int a {
-                                                        kind: call(22:2-22:31) {
-                                                            callee: expr(22:2-22:13) :: a -> task a b {
-                                                                kind: namespace-access `task.return`,
+                                                    expr(22:2-22:27) :: task int a {
+                                                        kind: call(22:2-22:27) {
+                                                            callee: expr(22:2-22:9) :: a -> task a b {
+                                                                kind: namespace-access `task.ok`,
                                                             },
                                                             args: [
-                                                                expr(22:14-22:31) :: int {
-                                                                    kind: expr(22:15-22:30) :: int {
-                                                                        kind: call(22:15-22:30) {
-                                                                            callee: expr(22:15-22:24) :: (local a) -> a {
+                                                                expr(22:10-22:27) :: int {
+                                                                    kind: expr(22:11-22:26) :: int {
+                                                                        kind: call(22:11-22:26) {
+                                                                            callee: expr(22:11-22:20) :: (local a) -> a {
                                                                                 kind: namespace-access `local.get`,
                                                                             },
                                                                             args: [
-                                                                                expr(22:25-22:30) :: local int {
-                                                                                    kind: ident(22:25-22:30) `count`,
+                                                                                expr(22:21-22:26) :: local int {
+                                                                                    kind: ident(22:21-22:26) `count`,
                                                                                 },
                                                                             ],
                                                                         },

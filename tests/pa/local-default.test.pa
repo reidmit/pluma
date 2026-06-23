@@ -13,14 +13,14 @@ def color :: local string = local.new "blue"
 def run = fun {
 	print (local.get color)
 	print (to-string (local.get (local.new 7)))
-	task.return ()
+	task.ok ()
 }
 
 def tests :: test.suite = [
 	test.case "local-default" fun {
 		try cap = io.capture fun {
 			try run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			blue

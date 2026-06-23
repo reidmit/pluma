@@ -467,9 +467,9 @@ impl<'a> Lowerer<'a> {
 		Ok(self.emit_let(Rvalue::CallClosure(g, vec![task, f]), SYNTHETIC))
 	}
 
-	/// `task.return value` as an atom.
+	/// `task.ok value` as an atom.
 	fn task_return(&mut self, value: Atom) -> Result<Atom, String> {
-		let g = self.rpc_global("std/task", "return", SYNTHETIC)?;
+		let g = self.rpc_global("std/task", "ok", SYNTHETIC)?;
 		Ok(self.emit_let(Rvalue::CallClosure(g, vec![value]), SYNTHETIC))
 	}
 

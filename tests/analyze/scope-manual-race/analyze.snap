@@ -135,14 +135,14 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                                 ),
                                                                             ],
                                                                         ) [
-                                                                            expr(15:4-15:17) :: task a string {
-                                                                                kind: call(15:4-15:17) {
-                                                                                    callee: expr(15:4-15:15) :: a -> task a b {
-                                                                                        kind: namespace-access `task.return`,
+                                                                            expr(15:4-15:13) :: task a string {
+                                                                                kind: call(15:4-15:13) {
+                                                                                    callee: expr(15:4-15:11) :: a -> task a b {
+                                                                                        kind: namespace-access `task.ok`,
                                                                                     },
                                                                                     args: [
-                                                                                        expr(15:16-15:17) :: a {
-                                                                                            kind: ident(15:16-15:17) `v`,
+                                                                                        expr(15:12-15:13) :: a {
+                                                                                            kind: ident(15:12-15:13) `v`,
                                                                                         },
                                                                                     ],
                                                                                 },
@@ -161,14 +161,14 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                                                 ),
                                                                             ],
                                                                         ) [
-                                                                            expr(17:4-17:15) :: task a string {
-                                                                                kind: call(17:4-17:15) {
-                                                                                    callee: expr(17:4-17:13) :: a -> task b a {
-                                                                                        kind: namespace-access `task.fail`,
+                                                                            expr(17:4-17:14) :: task a string {
+                                                                                kind: call(17:4-17:14) {
+                                                                                    callee: expr(17:4-17:12) :: a -> task b a {
+                                                                                        kind: namespace-access `task.err`,
                                                                                     },
                                                                                     args: [
-                                                                                        expr(17:14-17:15) :: string {
-                                                                                            kind: ident(17:14-17:15) `e`,
+                                                                                        expr(17:13-17:14) :: string {
+                                                                                            kind: ident(17:13-17:14) `e`,
                                                                                         },
                                                                                     ],
                                                                                 },
@@ -180,14 +180,14 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                                             case(19:4-21:3) is pattern(19:7-19:11) Identifier(
                                                                 ident(19:7-19:11) `none`,
                                                             ) [
-                                                                expr(20:3-20:26) :: task a string {
-                                                                    kind: call(20:3-20:26) {
-                                                                        callee: expr(20:3-20:12) :: a -> task b a {
-                                                                            kind: namespace-access `task.fail`,
+                                                                expr(20:3-20:25) :: task a string {
+                                                                    kind: call(20:3-20:25) {
+                                                                        callee: expr(20:3-20:11) :: a -> task b a {
+                                                                            kind: namespace-access `task.err`,
                                                                         },
                                                                         args: [
-                                                                            expr(20:14-20:26) :: string {
-                                                                                kind: literal(20:14-20:26) string "race: empty",
+                                                                            expr(20:13-20:25) :: string {
+                                                                                kind: literal(20:13-20:25) string "race: empty",
                                                                             },
                                                                         ],
                                                                     },
@@ -211,39 +211,39 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                     kind: fun(25:11-28:1) {
                         params: [],
                         body: [
-                            expr(26:1-27:19) :: task a b {
-                                kind: try(26:1-27:19) {
+                            expr(26:1-27:15) :: task a b {
+                                kind: try(26:1-27:15) {
                                     pattern: pattern(26:5-26:11) Identifier(
                                         ident(26:5-26:11) `winner`,
                                     ),
-                                    value: expr(26:14-26:51) :: task int string {
-                                        kind: call(26:14-26:51) {
+                                    value: expr(26:14-26:43) :: task int string {
+                                        kind: call(26:14-26:43) {
                                             callee: expr(26:14-26:18) :: (list (task int a)) -> task int string {
                                                 kind: ident(26:14-26:18) `race`,
                                             },
                                             args: [
-                                                expr(26:19-26:51) :: list (task int a) {
+                                                expr(26:19-26:43) :: list (task int a) {
                                                     kind: [
-                                                        expr(26:20-26:34) :: task int a {
-                                                            kind: call(26:20-26:34) {
-                                                                callee: expr(26:20-26:31) :: a -> task a b {
-                                                                    kind: namespace-access `task.return`,
+                                                        expr(26:20-26:30) :: task int a {
+                                                            kind: call(26:20-26:30) {
+                                                                callee: expr(26:20-26:27) :: a -> task a b {
+                                                                    kind: namespace-access `task.ok`,
                                                                 },
                                                                 args: [
-                                                                    expr(26:32-26:34) :: int {
-                                                                        kind: literal(26:32-26:34) int 10,
+                                                                    expr(26:28-26:30) :: int {
+                                                                        kind: literal(26:28-26:30) int 10,
                                                                     },
                                                                 ],
                                                             },
                                                         },
-                                                        expr(26:36-26:50) :: task int a {
-                                                            kind: call(26:36-26:50) {
-                                                                callee: expr(26:36-26:47) :: a -> task a b {
-                                                                    kind: namespace-access `task.return`,
+                                                        expr(26:32-26:42) :: task int a {
+                                                            kind: call(26:32-26:42) {
+                                                                callee: expr(26:32-26:39) :: a -> task a b {
+                                                                    kind: namespace-access `task.ok`,
                                                                 },
                                                                 args: [
-                                                                    expr(26:48-26:50) :: int {
-                                                                        kind: literal(26:48-26:50) int 20,
+                                                                    expr(26:40-26:42) :: int {
+                                                                        kind: literal(26:40-26:42) int 20,
                                                                     },
                                                                 ],
                                                             },
@@ -254,14 +254,14 @@ module `main` (tests/analyze/scope-manual-race/main.pa) {
                                         },
                                     },
                                     rest: [
-                                        expr(27:1-27:19) :: task a b {
-                                            kind: call(27:1-27:19) {
-                                                callee: expr(27:1-27:12) :: a -> task a b {
-                                                    kind: namespace-access `task.return`,
+                                        expr(27:1-27:15) :: task a b {
+                                            kind: call(27:1-27:15) {
+                                                callee: expr(27:1-27:8) :: a -> task a b {
+                                                    kind: namespace-access `task.ok`,
                                                 },
                                                 args: [
-                                                    expr(27:13-27:19) :: a {
-                                                        kind: ident(27:13-27:19) `winner`,
+                                                    expr(27:9-27:15) :: a {
+                                                        kind: ident(27:9-27:15) `winner`,
                                                     },
                                                 ],
                                             },

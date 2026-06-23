@@ -20,7 +20,7 @@ def captured :: ref (dict string string) = ref.new (dict.empty ())
 
 def fake :: rpc.sender = fun _route body headers {
 	ref.set captured headers
-	task.return body
+	task.ok body
 }
 
 def header-of :: fun string -> string = fun key {
@@ -64,7 +64,7 @@ def run = fun {
 	try call "fp-4"
 	let after-trace = header-of "x-trace-id"
 	print "after trace -> $(after-trace)"
-	task.return 0
+	task.ok 0
 }
 
 # Back outside every scope: the binding is gone again.
@@ -73,7 +73,7 @@ def tests :: test.suite = [
 	test.case "rpc-with-headers" fun {
 		try cap = io.capture fun {
 			try _outcome = task.attempt (run ())
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out """
 			bare trace -> <absent>

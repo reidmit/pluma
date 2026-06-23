@@ -16,14 +16,14 @@ module `main` (tests/analyze/task-basics/main.pa) {
                     kind: fun(3:15-5:1) {
                         params: [],
                         body: [
-                            expr(4:1-4:15) :: task int a {
-                                kind: call(4:1-4:15) {
-                                    callee: expr(4:1-4:12) :: a -> task a b {
-                                        kind: namespace-access `task.return`,
+                            expr(4:1-4:11) :: task int a {
+                                kind: call(4:1-4:11) {
+                                    callee: expr(4:1-4:8) :: a -> task a b {
+                                        kind: namespace-access `task.ok`,
                                     },
                                     args: [
-                                        expr(4:13-4:15) :: int {
-                                            kind: literal(4:13-4:15) int 42,
+                                        expr(4:9-4:11) :: int {
+                                            kind: literal(4:9-4:11) int 42,
                                         },
                                     ],
                                 },
@@ -38,14 +38,14 @@ module `main` (tests/analyze/task-basics/main.pa) {
                     kind: fun(7:16-9:1) {
                         params: [],
                         body: [
-                            expr(8:1-8:17) :: task a string {
-                                kind: call(8:1-8:17) {
-                                    callee: expr(8:1-8:10) :: a -> task b a {
-                                        kind: namespace-access `task.fail`,
+                            expr(8:1-8:16) :: task a string {
+                                kind: call(8:1-8:16) {
+                                    callee: expr(8:1-8:9) :: a -> task b a {
+                                        kind: namespace-access `task.err`,
                                     },
                                     args: [
-                                        expr(8:12-8:17) :: string {
-                                            kind: literal(8:12-8:17) string "boom",
+                                        expr(8:11-8:16) :: string {
+                                            kind: literal(8:11-8:16) string "boom",
                                         },
                                     ],
                                 },

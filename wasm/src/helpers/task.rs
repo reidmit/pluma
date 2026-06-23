@@ -629,7 +629,7 @@ pub(crate) fn build_rpc_stream_event_fn(
 /// `__rpc_stream_open(req) -> value`: `rpc-stream-open` (`std/web/stream`). Mint a
 /// fresh channel record in the `rpc_channels` registry (lazily creating it), marshal
 /// the request `$str` into scratch via `__send_bytes` (offset 0), ask the host to
-/// start the `fetch` for that token, and return `task.return token` — the resource a
+/// start the `fetch` for that token, and return `task.ok token` — the resource a
 /// `from-resource` stream owns. `send` is `__send_bytes`; `host_open` the
 /// `rpc-stream-open` import.
 pub(crate) fn build_rpc_stream_open_fn(
@@ -702,7 +702,7 @@ pub(crate) fn build_rpc_stream_open_fn(
 }
 
 /// `__rpc_stream_close(token) -> value`: `rpc-stream-close`. Ask the host to abort
-/// the subscription's `fetch` reader and return `task.return ()`. `host_close` is the
+/// the subscription's `fetch` reader and return `task.ok ()`. `host_close` is the
 /// `rpc-stream-close` import.
 pub(crate) fn build_rpc_stream_close_fn(host_close: u32) -> Function {
 	let mut w = Wat::new(1);

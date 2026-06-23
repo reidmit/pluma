@@ -41,12 +41,12 @@ def main = fun {
 				let ticks = decode-ints (rpc.call-stream "api.ticks" route-fp (wire.encode 4))
 				try stream.for-each ticks fun n {
 					print "tick $(to-string n)"
-					task.return ()
+					task.ok ()
 				}
 				let boom = decode-ints (rpc.call-stream "api.boom" route-fp (wire.encode 2))
 				try outcome = task.attempt (stream.for-each boom fun n {
 					print "boom $(to-string n)"
-					task.return ()
+					task.ok ()
 				})
 				when outcome is ok _ {
 					print "boom: clean end (unexpected)"
@@ -54,14 +54,14 @@ def main = fun {
 					print "boom: faulted as expected"
 				}
 				s.cancel ()
-				task.return 0
+				task.ok 0
 			}
 		} else {
 			print "local-addr failed"
-			task.return 1
+			task.ok 1
 		}
 	} else {
 		print "listen failed"
-		task.return 1
+		task.ok 1
 	}
 }

@@ -3,7 +3,7 @@
 # runs it, accepting connections and replying to each one.
 #
 #     def handler = fun req {
-#         task.return (http.text 200 "hello from pluma")
+#         task.ok (http.text 200 "hello from pluma")
 #     }
 #     def main = fun { http.serve "127.0.0.1:8080" handler }
 #
@@ -147,7 +147,7 @@ public def serve :: fun string (fun request -> task response) -> task nothing = 
 	when net.listen (with-port-from-env address) is ok server {
 		serve-on server handler
 	} is err e {
-		task.fail ("http.serve: " ++ e)
+		task.err ("http.serve: " ++ e)
 	}
 }
 
@@ -202,9 +202,9 @@ enum serve-event {
 def accept-one :: fun net.listener -> task serve-event = fun server {
 	try c = net.accept server
 	when c is ok conn {
-		task.return (serve-event.arrived conn)
+		task.ok (serve-event.arrived conn)
 	} is err _ {
-		task.return serve-event.closed
+		task.ok serve-event.closed
 	}
 }
 
@@ -213,7 +213,7 @@ def accept-one :: fun net.listener -> task serve-event = fun server {
 # scope.
 def handle-child :: fun net.connection (fun request -> task response) -> task serve-event = fun conn handler {
 	try handle-conn conn handler (string.to-bytes "")
-	task.return serve-event.served
+	task.ok serve-event.served
 }
 
 # Drain the serve scope. Each settled child drives exactly one `s.next`, so
@@ -226,7 +226,7 @@ def handle-child :: fun net.connection (fun request -> task response) -> task se
 def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun request -> task response) -> task nothing = fun s server handler {
 	try got = s.next ()
 	when got is none {
-		task.return ()
+		task.ok ()
 	} is some outcome {
 		when outcome is ok ev {
 			when ev is serve-event.arrived conn {
@@ -306,7 +306,7 @@ def wants-keep-alive :: fun (dict string string) -> bool = fun headers {
 
 def finish :: fun net.connection -> task nothing = fun conn {
 	net.close conn
-	task.return ()
+	task.ok ()
 }
 
 # --- reading ------------------------------------------------------------
@@ -317,17 +317,17 @@ def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
 # peer closes). The leftover after the headers is the start of the body.
 def read-until-headers :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
 	if bytes.contains acc crlf2 {
-		task.return (ok acc)
+		task.ok (ok acc)
 	} else {
 		try r = net.read conn 4096
 		when r is ok chunk {
 			if bytes.is-empty chunk {
-				task.return (ok acc)
+				task.ok (ok acc)
 			} else {
 				read-until-headers conn (bytes.concat acc chunk)
 			}
 		} is err e {
-			task.return (err e)
+			task.ok (err e)
 		}
 	}
 }
@@ -337,17 +337,17 @@ def read-until-headers :: fun net.connection bytes -> task (result bytes string)
 # The server keep-alive loop threads that leftover into the next iteration.
 def read-body-framed :: fun net.connection bytes int -> task (result (bytes, bytes) string) = fun conn acc need {
 	if bytes.length acc >= need {
-		task.return (ok (bytes.slice acc 0 need, bytes.slice acc need (bytes.length acc)))
+		task.ok (ok (bytes.slice acc 0 need, bytes.slice acc need (bytes.length acc)))
 	} else {
 		try r = net.read conn 4096
 		when r is ok chunk {
 			if bytes.is-empty chunk {
-				task.return (ok (acc, string.to-bytes ""))
+				task.ok (ok (acc, string.to-bytes ""))
 			} else {
 				read-body-framed conn (bytes.concat acc chunk) need
 			}
 		} is err e {
-			task.return (err e)
+			task.ok (err e)
 		}
 	}
 }
@@ -356,17 +356,17 @@ def read-body-framed :: fun net.connection bytes int -> task (result (bytes, byt
 # whatever already arrived with the headers.
 def read-body :: fun net.connection bytes int -> task (result bytes string) = fun conn acc need {
 	if bytes.length acc >= need {
-		task.return (ok (bytes.slice acc 0 need))
+		task.ok (ok (bytes.slice acc 0 need))
 	} else {
 		try r = net.read conn 4096
 		when r is ok chunk {
 			if bytes.is-empty chunk {
-				task.return (ok acc)
+				task.ok (ok acc)
 			} else {
 				read-body conn (bytes.concat acc chunk) need
 			}
 		} is err e {
-			task.return (err e)
+			task.ok (err e)
 		}
 	}
 }
@@ -457,17 +457,17 @@ def parse-head :: fun bytes -> {
 # (one `write` can accept fewer bytes than offered).
 def write-all :: fun net.connection bytes -> task (result int string) = fun conn data {
 	if bytes.is-empty data {
-		task.return (ok 0)
+		task.ok (ok 0)
 	} else {
 		try w = net.write conn data
 		when w is ok n {
 			if n >= bytes.length data {
-				task.return (ok n)
+				task.ok (ok n)
 			} else {
 				write-all conn (bytes.slice data n (bytes.length data))
 			}
 		} is err e {
-			task.return (err e)
+			task.ok (err e)
 		}
 	}
 }
@@ -508,14 +508,14 @@ def serialize-stream-head :: fun response -> bytes = fun resp {
 def write-events :: fun net.connection (stream bytes) -> task nothing = fun conn events {
 	try outcome = task.attempt (stream.for-each events fun chunk {
 		try write-all conn (event-next chunk)
-		task.return ()
+		task.ok ()
 	})
 	when outcome is ok _ {
 		try write-all conn event-done
-		task.return ()
+		task.ok ()
 	} is err _ {
 		try write-all conn event-fault
-		task.return ()
+		task.ok ()
 	}
 }
 
@@ -566,7 +566,7 @@ def status-names :: dict int string = dict.from-entries [
 #         post (dict.empty ()) (string.to-bytes "hi")
 public def fetch :: fun string method (dict string string) bytes -> task response string = fun url verb headers body {
 	if string.starts-with url "https://" {
-		task.fail "https is not supported: the net stack is TCP-only, with no TLS"
+		task.err "https is not supported: the net stack is TCP-only, with no TLS"
 	} else {
 		let split = split-url url
 		let authority = split.0
@@ -575,7 +575,7 @@ public def fetch :: fun string method (dict string string) bytes -> task respons
 		try task.unwrap (write-all conn (serialize-request verb path authority headers body))
 		try resp = read-response conn
 		net.close conn
-		task.return resp
+		task.ok resp
 	}
 }
 
@@ -637,7 +637,7 @@ def read-response :: fun net.connection -> task response string = fun conn {
 	try raw = task.unwrap (read-until-headers conn (string.to-bytes ""))
 	let parsed = parse-response-head raw
 	try body = task.unwrap (read-body conn parsed.body-start parsed.content-length)
-	task.return {status: parsed.status, headers: parsed.headers, body, stream-body: none}
+	task.ok {status: parsed.status, headers: parsed.headers, body, stream-body: none}
 }
 
 # Split the raw bytes at the header/body boundary and parse the status line +
@@ -677,7 +677,7 @@ def parse-response-head :: fun bytes -> {
 #
 #     try _ = stream.for-each
 #         (http.fetch-stream "http://127.0.0.1:8080/_rpc/api.ticks" post hdrs body)
-#         (fun frame { io.print (hex.encode frame); task.return () })
+#         (fun frame { io.print (hex.encode frame); task.ok () })
 public def fetch-stream :: fun string method (dict string string) bytes -> stream bytes = fun url verb headers body {
 	stream.from-resource {
 		open: fun {
@@ -689,17 +689,17 @@ public def fetch-stream :: fun string method (dict string string) bytes -> strea
 				when raw-r is ok raw {
 					let parsed = parse-response-head raw
 					if parsed.status == 200 {
-						task.return (conn, ref.new parsed.body-start)
+						task.ok (conn, ref.new parsed.body-start)
 					} else {
 						net.close conn
-						task.fail ("http.fetch-stream: status " ++ to-string parsed.status)
+						task.err ("http.fetch-stream: status " ++ to-string parsed.status)
 					}
 				} is err e {
 					net.close conn
-					task.fail e
+					task.err e
 				}
 			} is err e {
-				task.fail e
+				task.err e
 			}
 		},
 		next: fun res {
@@ -709,7 +709,7 @@ public def fetch-stream :: fun string method (dict string string) bytes -> strea
 		close: fun res {
 			let (conn, _buf) = res
 			net.close conn
-			task.return ()
+			task.ok ()
 		},
 	}
 }
@@ -729,13 +729,13 @@ def read-event :: fun net.connection (ref bytes) -> task (option bytes) = fun co
 		try r = net.read conn 4096
 		when r is ok chunk {
 			if bytes.is-empty chunk {
-				task.return none
+				task.ok none
 			} else {
 				ref.set buf (bytes.concat (ref.get buf) chunk)
 				read-event conn buf
 			}
 		} is err e {
-			task.fail e
+			task.err e
 		}
 	}
 }
@@ -760,14 +760,14 @@ def parse-event :: fun bytes -> task (option bytes) = fun ev {
 	let kind = line-after lines "event: "
 	if kind == "next" {
 		when hex.decode (line-after lines "data: ") is ok b {
-			task.return (some b)
+			task.ok (some b)
 		} is err _ {
-			task.fail "http.fetch-stream: malformed frame"
+			task.err "http.fetch-stream: malformed frame"
 		}
 	} else if kind == "fault" {
-		task.fail "http.fetch-stream: stream faulted"
+		task.err "http.fetch-stream: stream faulted"
 	} else {
-		task.return none
+		task.ok none
 	}
 }
 

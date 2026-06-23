@@ -21,6 +21,6 @@ def bad-with-body = fun {
 # bound value type mismatches the cell (`local int` bound with a string) — error.
 def bad-bind = fun {
 	local.with cell "nope" fun {
-		task.return (local.get cell)
+		task.ok (local.get cell)
 	}
 }

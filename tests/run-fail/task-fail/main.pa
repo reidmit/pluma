@@ -5,8 +5,8 @@ use std/task
 
 def inner = fun {
 	defer print "inner cleanup"
-	try task.fail "kaboom"
-	task.return 0
+	try task.err "kaboom"
+	task.ok 0
 }
 
 def main = fun {
@@ -14,5 +14,5 @@ def main = fun {
 	print "start"
 	try inner ()
 	print "unreachable"
-	task.return 0
+	task.ok 0
 }

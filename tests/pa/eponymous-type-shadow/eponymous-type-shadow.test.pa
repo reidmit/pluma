@@ -25,7 +25,7 @@ def tests :: test.suite = [
 	test.case "eponymous-type-shadow" fun {
 		try cap = io.capture fun {
 			run ()
-			task.return ()
+			task.ok ()
 		}
 		assert.matches cap.out "the local unit circle\n"
 	},

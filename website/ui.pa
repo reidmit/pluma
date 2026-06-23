@@ -291,7 +291,7 @@ def snippets :: list (string, string) = [
 		"""
 			# api.pa — one signature, two sides
 			remote def hi :: fun string -> task string =
-				fun name { task.return ("hi, " ++ name) }
+				fun name { task.ok ("hi, " ++ name) }
 
 			# ui.pa — the browser just calls it
 			let msg = api.hi "you"
