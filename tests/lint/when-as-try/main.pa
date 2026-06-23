@@ -1,30 +1,37 @@
-use value
-use parser
+# A self-contained helper that fails, so the `ok`/`err` matches below type-check
+# without importing anything.
+def step :: fun int -> result int string = fun n {
+	if n < 0 {
+		err "negative"
+	} else {
+		ok (n + 1)
+	}
+}
 
 # The canonical case: unwrap `ok`, re-propagate `err` unchanged. (fires)
-public def a = fun env l {
-	when eval env l is ok lv {
-		ok (value.num-neg lv)
+public def a = fun n {
+	when step n is ok v {
+		ok (v * 2)
 	} is err m {
 		err m
 	}
 }
 
 # Arms in the other order — `err` passthrough first. Still a `try`. (fires)
-public def b = fun env l {
-	when eval env l is err m {
+public def b = fun n {
+	when step n is err m {
 		err m
-	} is ok lv {
-		ok lv
+	} is ok v {
+		ok v
 	}
 }
 
 # Nested: both the outer and the inner `when` are tail-position passthroughs,
 # so each is reported on its own.
-public def c = fun env l r {
-	when eval env l is ok lv {
-		when eval env r is ok rv {
-			ok (value.num-add lv rv)
+public def c = fun n {
+	when step n is ok x {
+		when step x is ok y {
+			ok (x + y)
 		} is err m {
 			err m
 		}
@@ -35,28 +42,29 @@ public def c = fun env l r {
 
 # The `err` arm does real work (rewrites the message), so it is NOT pure
 # propagation — `try` wouldn't preserve it. Left alone.
-public def d = fun env l {
-	when eval env l is ok lv {
-		ok lv
+public def d = fun n {
+	when step n is ok v {
+		ok v
 	} is err m {
 		err "in d: $(m)"
 	}
 }
 
-# The `err` arm re-wraps a DIFFERENT value, not the bound error. Left alone.
-public def e = fun env l {
-	when eval env l is ok lv {
-		ok lv
-	} is err m {
+# The `err` arm discards the error and returns a fixed message — not a
+# passthrough of the bound error. Left alone.
+public def e = fun n {
+	when step n is ok v {
+		ok v
+	} is err _ {
 		err "boom"
 	}
 }
 
 # Not the block tail — the `when`'s value is bound to a `let`, so `try` (whose
 # continuation is the rest of the block) can't stand in for it. Left alone.
-public def f = fun env l {
-	let x = when eval env l is ok lv {
-		ok lv
+public def f = fun n {
+	let x = when step n is ok v {
+		ok v
 	} is err m {
 		err m
 	}
@@ -65,15 +73,11 @@ public def f = fun env l {
 
 # A genuine three-way match is exhaustive dispatch, not an unwrap. Left alone.
 public def g = fun n {
-	when n is value.num.int-val i {
-		ok i
-	} is value.num.float-val fl {
+	when n is 0 {
 		ok 0
-	} is err m {
-		err m
+	} is 1 {
+		ok 1
+	} else {
+		err "other"
 	}
-}
-
-def eval = fun env e {
-	ok e
 }
