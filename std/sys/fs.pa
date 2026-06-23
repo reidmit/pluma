@@ -101,20 +101,14 @@ def run-result :: fun (task (result bytes string)) (fun (result bytes string) ->
 # Raw bytes are already valid UTF-8 here (the host read them with `read_to_string`), but
 # decode through `bytes.to-string` so a surprise still surfaces as `err`.
 def to-text :: fun (result bytes string) -> result string string = fun r {
-	when r is ok raw {
-		bytes.to-string raw
-	} is err e {
-		err e
-	}
+	try raw = r
+	bytes.to-string raw
 }
 
 # A `nothing`-returning op: the payload is empty; keep only ok/err.
 def to-void :: fun (result bytes string) -> result nothing string = fun r {
-	when r is ok _ {
-		ok ()
-	} is err e {
-		err e
-	}
+	try _ = r
+	ok ()
 }
 
 # A `bool` query: infallible host-side, "1"/"0" on the ok side; any error reads as false.
@@ -129,44 +123,25 @@ def to-bool :: fun (result bytes string) -> bool = fun r {
 # `read-dir`: names are NUL-separated with a trailing NUL; split, drop the trailing empty,
 # decode each (a non-UTF-8 name reads as "" and is dropped).
 def to-names :: fun (result bytes string) -> result (list string) string = fun r {
-	when r is ok raw {
-		ok (bytes.split raw '\x00' |> list.map fun b {
-			bytes.to-string b ?? ""
-		} |> list.filter fun s { string.length s > 0 })
-	} is err e {
-		err e
-	}
+	try raw = r
+	ok (bytes.split raw '\x00' |> list.map fun b { bytes.to-string b ?? "" } |> list.filter fun s {
+		string.length s > 0
+	})
 }
 
 # `stat`: the host returns `"<kind>\t<size>\t<modified-nanos>"`.
 def to-info :: fun (result bytes string) -> result file-info string = fun r {
-	when r is ok raw {
-		when bytes.to-string raw is ok line {
-			parse-info line
-		} is err e {
-			err e
-		}
-	} is err e {
-		err e
-	}
+	try raw = r
+	try line = bytes.to-string raw
+	parse-info line
 }
 
 def parse-info :: fun string -> result file-info string = fun line {
 	let fields = string.split line "\t"
 	if list.length fields == 3 {
-		when string.to-int (list.get fields 1) is ok size {
-			when string.to-int (list.get fields 2) is ok nanos {
-				ok {
-					size,
-					kind: parse-kind (list.get fields 0),
-					modified: time.from-unix-nanos nanos,
-				}
-			} is err e {
-				err e
-			}
-		} is err e {
-			err e
-		}
+		try size = string.to-int (list.get fields 1)
+		try nanos = string.to-int (list.get fields 2)
+		ok {size, kind: parse-kind (list.get fields 0), modified: time.from-unix-nanos nanos}
 	} else {
 		err "fs.stat: malformed stat record"
 	}
@@ -394,13 +369,10 @@ public def find-up :: fun string string -> option string = fun start name {
 #
 #     try root = fs.project-root ()   # e.g. ok "/Users/you/my-app"
 public def project-root :: fun nothing -> result string string = fun {
-	when process.cwd () is ok here {
-		when find-up here "pluma.pa" is some root {
-			ok root
-		} is none {
-			err "fs.project-root: no pluma.pa found above $(here)"
-		}
-	} is err e {
-		err e
+	try here = process.cwd ()
+	when find-up here "pluma.pa" is some root {
+		ok root
+	} is none {
+		err "fs.project-root: no pluma.pa found above $(here)"
 	}
 }

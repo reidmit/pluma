@@ -150,26 +150,20 @@ def read-status :: fun bytes -> int = fun b {
 }
 
 def decode-output :: fun (result bytes string) -> result output string = fun r {
-	when r is ok raw {
-		let out-len = read-u32 raw 4
-		let err-off = 8 + out-len
-		let err-len = read-u32 raw err-off
-		ok {
-			status: read-status raw,
-			stdout: bytes.to-string (bytes.slice raw 8 err-off) ?? "",
-			stderr: bytes.to-string (bytes.slice raw (err-off + 4) (err-off + 4 + err-len)) ?? "",
-		}
-	} is err e {
-		err e
+	try raw = r
+	let out-len = read-u32 raw 4
+	let err-off = 8 + out-len
+	let err-len = read-u32 raw err-off
+	ok {
+		status: read-status raw,
+		stdout: bytes.to-string (bytes.slice raw 8 err-off) ?? "",
+		stderr: bytes.to-string (bytes.slice raw (err-off + 4) (err-off + 4 + err-len)) ?? "",
 	}
 }
 
 def decode-status :: fun (result bytes string) -> result int string = fun r {
-	when r is ok raw {
-		ok (read-status raw)
-	} is err e {
-		err e
-	}
+	try raw = r
+	ok (read-status raw)
 }
 
 def await-output :: fun (task (result bytes string)) -> task output string = fun t {

@@ -72,11 +72,8 @@ public def parse-steps = fun s i acc {
 			if j >= string.length s {
 				err "unterminated '[' in path"
 			} else {
-				when parse-bracket (string.slice s (i + 1) j) is ok st {
-					parse-steps s (j + 1) [st, ...acc]
-				} is err msg {
-					err msg
-				}
+				try st = parse-bracket (string.slice s (i + 1) j)
+				parse-steps s (j + 1) [st, ...acc]
 			}
 		} else {
 			err "unexpected '$(c)' at position $(to-string i)"

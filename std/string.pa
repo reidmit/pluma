@@ -540,15 +540,12 @@ def parse-float-body :: fun bytes int int -> result float string = fun b n start
 	if d1 + df == 0 {
 		err "invalid float literal"
 	} else {
-		when parse-exp b n i2 is ok pair {
-			let (i3, e) = pair
-			if i3 == n {
-				ok (apply-exp mantissa (e - df))
-			} else {
-				err "invalid float literal"
-			}
-		} is err msg {
-			err msg
+		try pair = parse-exp b n i2
+		let (i3, e) = pair
+		if i3 == n {
+			ok (apply-exp mantissa (e - df))
+		} else {
+			err "invalid float literal"
 		}
 	}
 }
@@ -571,14 +568,11 @@ public def to-float :: fun string -> result float string = fun s {
 		} else {
 			0
 		}
-		when parse-float-body b n start is ok v {
-			if c0 == 45 {
-				ok (0.0 - v)
-			} else {
-				ok v
-			}
-		} is err msg {
-			err msg
+		try v = parse-float-body b n start
+		if c0 == 45 {
+			ok (0.0 - v)
+		} else {
+			ok v
 		}
 	}
 }

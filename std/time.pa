@@ -94,13 +94,10 @@ implement describe time-error {
 #     time.make 2026 5 25 14 30 0 0   # => ok 2026-05-25T14:30:00Z
 #     time.make 2026 2 30 0 0 0 0     # => err (time-error.field-out-of-range "day" ...)
 public def make :: fun int int int int int int int -> result instant time-error = fun y m d h mi s ns {
-	when validate-components y m d h mi s ns is ok _u {
-		let days = days-from-civil y m d
-		let secs = days * 86400 + h * 3600 + mi * 60 + s
-		ok (from-unix-nanos (secs * 1000000000 + ns))
-	} is err e {
-		err e
-	}
+	try _u = validate-components y m d h mi s ns
+	let days = days-from-civil y m d
+	let secs = days * 86400 + h * 3600 + mi * 60 + s
+	ok (from-unix-nanos (secs * 1000000000 + ns))
 }
 
 # A date at midnight UTC. `err` on an impossible date.

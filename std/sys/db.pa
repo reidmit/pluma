@@ -388,22 +388,16 @@ def read-line :: fun bytes int -> result (string, int) string = fun b pos {
 	if stop >= bytes.length b {
 		err "db: unterminated field in result"
 	} else {
-		when bytes.to-string (bytes.slice b pos stop) is ok s {
-			ok (s, stop + 1)
-		} is err e {
-			err e
-		}
+		try s = bytes.to-string (bytes.slice b pos stop)
+		ok (s, stop + 1)
 	}
 }
 
 def read-len :: fun bytes int -> result (int, int) string = fun b pos {
 	try line = read-line b pos
 	let (text, next) = line
-	when string.to-int text is ok n {
-		ok (n, next)
-	} is err e {
-		err e
-	}
+	try n = string.to-int text
+	ok (n, next)
 }
 
 # Decode one value starting at `pos`, returning it with the next position.
@@ -415,27 +409,18 @@ def decode-value :: fun bytes int -> result (value, int) string = fun b pos {
 	} else if tag == 1 {
 		try line = read-line b after
 		let (text, next) = line
-		when string.to-int text is ok n {
-			ok (sql.value.int n, next)
-		} is err e {
-			err e
-		}
+		try n = string.to-int text
+		ok (sql.value.int n, next)
 	} else if tag == 2 {
 		try line = read-line b after
 		let (text, next) = line
-		when string.to-float text is ok x {
-			ok (sql.value.float x, next)
-		} is err e {
-			err e
-		}
+		try x = string.to-float text
+		ok (sql.value.float x, next)
 	} else if tag == 3 {
 		try header = read-len b after
 		let (n, start) = header
-		when bytes.to-string (bytes.slice b start (start + n)) is ok s {
-			ok (sql.value.text s, start + n)
-		} is err e {
-			err e
-		}
+		try s = bytes.to-string (bytes.slice b start (start + n))
+		ok (sql.value.text s, start + n)
 	} else if tag == 4 {
 		try header = read-len b after
 		let (n, start) = header
@@ -453,13 +438,10 @@ def decode-cells :: fun bytes int int (list (string, value)) -> result ((list (s
 	} else {
 		try header = read-len b pos
 		let (name-len, name-start) = header
-		when bytes.to-string (bytes.slice b name-start (name-start + name-len)) is ok name {
-			try valpair = decode-value b (name-start + name-len)
-			let (v, next) = valpair
-			decode-cells b next (n - 1) [(name, v), ...acc]
-		} is err e {
-			err e
-		}
+		try name = bytes.to-string (bytes.slice b name-start (name-start + name-len))
+		try valpair = decode-value b (name-start + name-len)
+		let (v, next) = valpair
+		decode-cells b next (n - 1) [(name, v), ...acc]
 	}
 }
 

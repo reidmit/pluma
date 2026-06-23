@@ -437,21 +437,12 @@ public def flat-map :: fun (list a) (fun a -> list b) -> list b = fun xs f {
 #     list.try-map ["1", "x", "3"] string.to-int    # => err "..."
 public def try-map :: fun (list a) (fun a -> result b e) -> result (list b) e = fun xs f {
 	let collected = fold xs (ok []) fun acc x {
-		when acc is ok ys {
-			when f x is ok y {
-				ok [y, ...ys]
-			} is err e {
-				err e
-			}
-		} is err e {
-			err e
-		}
+		try ys = acc
+		try y = f x
+		ok [y, ...ys]
 	}
-	when collected is ok ys {
-		ok (reverse ys)
-	} is err e {
-		err e
-	}
+	try ys = collected
+	ok (reverse ys)
 }
 
 # Concatenates a list of lists into a single flat list, preserving

@@ -49,11 +49,8 @@ public enum parsed a {
 # ---------------------------------------------------------------------
 
 public def parse = fun src {
-	when lexer.tokenize src is err e {
-		err e
-	} is ok toks {
-		parse-stmt toks
-	}
+	try toks = lexer.tokenize src
+	parse-stmt toks
 }
 
 # An assignment is exactly a name, then `=`, then an expression. Any

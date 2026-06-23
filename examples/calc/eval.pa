@@ -25,21 +25,12 @@ public def eval = fun env e {
 			err "undefined name '$(name)'"
 		}
 	} is parser.expr.neg inner {
-		when eval env inner is ok v {
-			ok (value.num-neg v)
-		} is err m {
-			err m
-		}
+		try v = eval env inner
+		ok (value.num-neg v)
 	} is parser.expr.bin op l r {
-		when eval env l is ok lv {
-			when eval env r is ok rv {
-				apply-op op lv rv
-			} is err m {
-				err m
-			}
-		} is err m {
-			err m
-		}
+		try lv = eval env l
+		try rv = eval env r
+		apply-op op lv rv
 	} is parser.expr.call name args {
 		eval-call env name args
 	}
@@ -78,11 +69,8 @@ public def apply-op = fun op a b {
 # ---------------------------------------------------------------------
 
 public def eval-call = fun env name args {
-	when eval-args env args [] is ok vals {
-		apply-fn name vals
-	} is err m {
-		err m
-	}
+	try vals = eval-args env args []
+	apply-fn name vals
 }
 
 # Evaluate every argument left to right, collecting the values (or the
@@ -91,11 +79,8 @@ public def eval-args = fun env args acc {
 	when args is [] {
 		ok (list.reverse acc)
 	} is [a, ...rest] {
-		when eval env a is ok v {
-			eval-args env rest [v, ...acc]
-		} is err m {
-			err m
-		}
+		try v = eval env a
+		eval-args env rest [v, ...acc]
 	}
 }
 
