@@ -12,16 +12,21 @@ def loud = fun name result {
 	result
 }
 
+# Runtime-opaque constants: the guard is statically known to us but not a bare
+# literal, so we exercise codegen's short-circuit (not a constant fold).
+def no = fun { false }
+def yes = fun { true }
+
 def run = fun {
 	# `and` skips the right operand when the left is false — the trap never runs.
-	if false and 10 / 0 == 0 {
+	if no () and 10 / 0 == 0 {
 		print "and-then"
 	} else {
 		print "and short-circuited"
 	}
 
 	# `or` skips the right operand when the left is true.
-	if true or 10 / 0 == 0 {
+	if yes () or 10 / 0 == 0 {
 		print "or short-circuited"
 	} else {
 		print "or-else"
