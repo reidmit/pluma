@@ -1,0 +1,156 @@
+use std/assert
+use std/bytes
+use std/dict
+use std/string
+use std/task
+use std/test
+use std/sys/http
+use std/sys/net
+
+# Client-side HTTP behaviour that needs a server speaking a specific dialect, so
+# these stand up raw `net` servers (not `http.serve`) on loopback and drive the
+# real `http.fetch` against them: (1) a chunked-transfer response is decoded, and
+# (2) a keep-alive connection is actually reused across two fetches.
+
+def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
+
+# Read off a connection until the blank line ending the request headers (the test
+# clients send no body), or the peer closes.
+def read-headers :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+	if bytes.contains acc crlf2 {
+		task.ok (ok acc)
+	} else {
+		try r = net.read conn 4096
+		when r is ok chunk {
+			if bytes.is-empty chunk {
+				task.ok (ok acc)
+			} else {
+				read-headers conn (bytes.concat acc chunk)
+			}
+		} is err e {
+			task.ok (err e)
+		}
+	}
+}
+
+def write-bytes :: fun net.connection bytes -> task (result int string) = fun conn data {
+	if bytes.is-empty data {
+		task.ok (ok 0)
+	} else {
+		try w = net.write conn data
+		when w is ok n {
+			if n >= bytes.length data {
+				task.ok (ok n)
+			} else {
+				write-bytes conn (bytes.slice data n (bytes.length data))
+			}
+		} is err e {
+			task.ok (err e)
+		}
+	}
+}
+
+def close-it :: fun net.connection -> nothing = fun conn {
+	let _ = net.close conn
+	()
+}
+
+# --- chunked transfer decoding -------------------------------------------
+
+# Serve one hand-rolled chunked response: "Hello" + " World" as two chunks.
+def serve-chunked :: fun net.listener -> task nothing = fun server {
+	try conn = task.unwrap (net.accept server)
+	try _req = task.unwrap (read-headers conn (string.to-bytes ""))
+	let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n"
+	try _sent = task.unwrap (write-bytes conn (string.to-bytes resp))
+	close-it conn
+	task.ok ()
+}
+
+def run-chunked :: fun nothing -> task string string = fun {
+	when net.listen "127.0.0.1:0" is ok server {
+		when net.local-addr server is ok addr {
+			scope as s {
+				s.spawn (serve-chunked server)
+				try resp = http.fetch ("http://" ++ addr ++ "/x") http.method.get (dict.empty ()) (string.to-bytes "")
+				s.cancel ()
+				task.ok (bytes.to-string resp.body ?? "<non-utf8>")
+			}
+		} is err e {
+			task.err ("addr: " ++ e)
+		}
+	} is err e {
+		task.err ("listen: " ++ e)
+	}
+}
+
+# --- keep-alive connection reuse -----------------------------------------
+
+# Accept EXACTLY ONE connection, then serve requests on it forever (keep-alive).
+# Because no second connection is ever accepted, a second fetch can only succeed
+# if the client reused the first connection.
+def serve-one-conn :: fun net.listener -> task nothing = fun server {
+	try conn = task.unwrap (net.accept server)
+	respond-loop conn
+}
+
+def respond-loop :: fun net.connection -> task nothing = fun conn {
+	try req = task.unwrap (read-headers conn (string.to-bytes ""))
+	if bytes.is-empty req {
+		close-it conn
+		task.ok ()
+	} else {
+		try _sent = task.unwrap (write-bytes conn (string.to-bytes "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nok!"))
+		respond-loop conn
+	}
+}
+
+# Fetch under a timeout so a *broken* reuse (the second request hanging on a
+# connection the server never accepts) fails fast as status 0 instead of hanging.
+def get-status :: fun string -> task int string = fun base {
+	try settled = task.attempt (task.with-timeout 2s (http.fetch (base ++ "/k") http.method.get (dict.empty ()) (string.to-bytes "")))
+	when settled is ok r {
+		task.ok r.status
+	} is err _ {
+		task.ok 0
+	}
+}
+
+def run-keepalive :: fun nothing -> task (int, int) string = fun {
+	when net.listen "127.0.0.1:0" is ok server {
+		when net.local-addr server is ok addr {
+			scope as s {
+				s.spawn (serve-one-conn server)
+				try first = get-status ("http://" ++ addr)
+				try second = get-status ("http://" ++ addr)
+				s.cancel ()
+				task.ok (first, second)
+			}
+		} is err e {
+			task.err ("addr: " ++ e)
+		}
+	} is err e {
+		task.err ("listen: " ++ e)
+	}
+}
+
+def tests :: test.suite = [
+	test.case "chunked response decoded" fun {
+		try settled = task.attempt (run-chunked ())
+		when settled is ok body {
+			assert.equals body "Hello World"
+		} is err e {
+			assert.equals ("error: " ++ e) "Hello World"
+		}
+	},
+	test.case "keep-alive connection reused" fun {
+		try settled = task.attempt (run-keepalive ())
+		when settled is ok pair {
+			# Both succeed (200, 200) only if the single accepted connection served
+			# both requests -- i.e. the second fetch reused the first connection.
+			assert.equals pair (200, 200)
+		} is err e {
+			assert.equals ("error: " ++ e) "(200, 200)"
+		}
+	},
+]

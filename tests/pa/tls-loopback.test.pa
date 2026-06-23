@@ -1,8 +1,10 @@
 use std/assert
 use std/bytes
+use std/dict
 use std/string
 use std/task
 use std/test
+use std/sys/http
 use std/sys/net
 
 # End-to-end TLS over loopback, hermetic: a `net.listen-tls` server and a
@@ -22,26 +24,26 @@ use std/sys/net
 #     -keyout key.pem -out cert.pem -days 36500 -nodes \
 #     -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1"
 def cert :: string = """
------BEGIN CERTIFICATE-----
-MIIBkDCCATagAwIBAgIUbna9jULX5HnEVf45dR1AwRjg5K8wCgYIKoZIzj0EAwIw
-FDESMBAGA1UEAwwJMTI3LjAuMC4xMCAXDTI2MDYyMzE1MTUxM1oYDzIxMjYwNTMw
-MTUxNTEzWjAUMRIwEAYDVQQDDAkxMjcuMC4wLjEwWTATBgcqhkjOPQIBBggqhkjO
-PQMBBwNCAAT6T4jSZM++BOxmR2bO6/0+2Qu8Kd78DRHoeDQVD/88nODYZbk5rR+K
-hanKZ8i5NI8JQ/cV8XG3gpiLWjkZs1S9o2QwYjAdBgNVHQ4EFgQUXg9XeHZl+srw
-F7UAe0c+GbjvBr0wHwYDVR0jBBgwFoAUXg9XeHZl+srwF7UAe0c+GbjvBr0wDwYD
-VR0TAQH/BAUwAwEB/zAPBgNVHREECDAGhwR/AAABMAoGCCqGSM49BAMCA0gAMEUC
-IQDkQJ3JTYa+4d3wxhG24Jq3VY0KxWawCpaqL5Y8jTx5RwIgJJwJrOgB+P/JSgny
-oKXAZNQd8AhqKSaP2bwbfx1d6OM=
------END CERTIFICATE-----
-"""
+	-----BEGIN CERTIFICATE-----
+	MIIBkDCCATagAwIBAgIUbna9jULX5HnEVf45dR1AwRjg5K8wCgYIKoZIzj0EAwIw
+	FDESMBAGA1UEAwwJMTI3LjAuMC4xMCAXDTI2MDYyMzE1MTUxM1oYDzIxMjYwNTMw
+	MTUxNTEzWjAUMRIwEAYDVQQDDAkxMjcuMC4wLjEwWTATBgcqhkjOPQIBBggqhkjO
+	PQMBBwNCAAT6T4jSZM++BOxmR2bO6/0+2Qu8Kd78DRHoeDQVD/88nODYZbk5rR+K
+	hanKZ8i5NI8JQ/cV8XG3gpiLWjkZs1S9o2QwYjAdBgNVHQ4EFgQUXg9XeHZl+srw
+	F7UAe0c+GbjvBr0wHwYDVR0jBBgwFoAUXg9XeHZl+srwF7UAe0c+GbjvBr0wDwYD
+	VR0TAQH/BAUwAwEB/zAPBgNVHREECDAGhwR/AAABMAoGCCqGSM49BAMCA0gAMEUC
+	IQDkQJ3JTYa+4d3wxhG24Jq3VY0KxWawCpaqL5Y8jTx5RwIgJJwJrOgB+P/JSgny
+	oKXAZNQd8AhqKSaP2bwbfx1d6OM=
+	-----END CERTIFICATE-----
+	"""
 
 def key :: string = """
------BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgkSOIXE0oH11QqBA1
-O/MKtAyc4fFHFFQSMAH/MO01PnqhRANCAAT6T4jSZM++BOxmR2bO6/0+2Qu8Kd78
-DRHoeDQVD/88nODYZbk5rR+KhanKZ8i5NI8JQ/cV8XG3gpiLWjkZs1S9
------END PRIVATE KEY-----
-"""
+	-----BEGIN PRIVATE KEY-----
+	MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgkSOIXE0oH11QqBA1
+	O/MKtAyc4fFHFFQSMAH/MO01PnqhRANCAAT6T4jSZM++BOxmR2bO6/0+2Qu8Kd78
+	DRHoeDQVD/88nODYZbk5rR+KhanKZ8i5NI8JQ/cV8XG3gpiLWjkZs1S9
+	-----END PRIVATE KEY-----
+	"""
 
 # Accept one TLS connection, read the request, reply, and close. The server-side
 # handshake happens transparently inside the first `read`.
@@ -82,6 +84,32 @@ def run :: fun nothing -> task string string = fun {
 	}
 }
 
+# An https round-trip: `http.serve-tls` serving the self-signed cert, fetched by
+# `http.fetch-trusting` told to trust it. Exercises the whole HTTP-over-TLS path
+# plus the client's custom-CA trust in one go.
+def serve-https :: fun net.listener -> task nothing = fun server {
+	http.serve-on server fun _req {
+		task.ok (http.text 200 "secure body")
+	}
+}
+
+def https-roundtrip :: fun nothing -> task http.response string = fun {
+	when net.listen-tls "127.0.0.1:0" cert key is ok server {
+		when net.local-addr server is ok addr {
+			scope as s {
+				s.spawn (serve-https server)
+				try resp = http.fetch-trusting ("https://" ++ addr ++ "/") cert http.method.get (dict.empty ()) (string.to-bytes "")
+				s.cancel ()
+				task.ok resp
+			}
+		} is err e {
+			task.err ("local-addr: " ++ e)
+		}
+	} is err e {
+		task.err ("listen-tls: " ++ e)
+	}
+}
+
 def tests :: test.suite = [
 	test.case "tls loopback echo" fun {
 		try settled = task.attempt (run ())
@@ -90,6 +118,14 @@ def tests :: test.suite = [
 		} is err e {
 			# Surface the failure message by asserting on it.
 			assert.equals ("error: " ++ e) "pong"
+		}
+	},
+	test.case "https fetch-trusting round-trip" fun {
+		try settled = task.attempt (https-roundtrip ())
+		when settled is ok resp {
+			assert.equals (to-string resp.status ++ " " ++ (bytes.to-string resp.body ?? "?")) "200 secure body"
+		} is err e {
+			assert.equals ("error: " ++ e) "200 secure body"
 		}
 	},
 ]

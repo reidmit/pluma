@@ -574,21 +574,118 @@ def status-names :: dict int string = dict.from-entries [
 # Makes one HTTP/1.1 request and returns the response. `url` looks like
 # "http://127.0.0.1:8080/path" or "https://example.com/path" (the `http://`
 # scheme is optional and assumed). An `https` URL is fetched over TLS, with the
-# server's certificate verified; everything else goes over plain TCP. The
-# connection is closed after the single exchange (`Connection: close`). The task
+# server's certificate verified. Connections are kept alive and reused across
+# calls to the same host where the server allows it, so a burst of requests to
+# one host doesn't pay a fresh TCP (and TLS) handshake every time. The task
 # *fails* with a message if the host can't be reached or the exchange breaks down.
 #
 #     try resp = http.fetch "https://example.com/"
 #         get (dict.empty ()) (string.to-bytes "")
 public def fetch :: fun string method (dict string string) bytes -> task response string = fun url verb headers body {
+	fetch-with url none verb headers body
+}
+
+# Like `fetch`, but also trusts the certificate authority in `ca` (PEM text),
+# for an `https` host whose certificate is self-signed or signed by a private
+# authority -- the client-side counterpart of `http.serve-tls`. See
+# `net.connect-tls-trusting`. (These connections are not pooled.)
+#
+#     try resp = http.fetch-trusting "https://internal.example/" ca-pem
+#         get (dict.empty ()) (string.to-bytes "")
+public def fetch-trusting :: fun string string method (dict string string) bytes -> task response string = fun url ca verb headers body {
+	fetch-with url (some ca) verb headers body
+}
+
+def fetch-with :: fun string (option string) method (dict string string) bytes -> task response string = fun url ca verb headers body {
 	let split = split-url url
 	let authority = split.0
 	let path = split.1
-	try conn = task.unwrap (open-conn url authority)
-	try task.unwrap (write-all conn (serialize-request verb path authority headers body))
-	try resp = read-response conn
-	net.close conn
-	task.ok resp
+	let secure = url-secure url
+	let key = pool-key secure authority
+	let req = serialize-request verb path authority headers body true
+	# A pooled connection may have been closed by the server since it went idle;
+	# reusing it then fails with no response, so fall back to a fresh connection.
+	let idle = when ca is none {
+		pool-take key
+	} else {
+		none
+	}
+	when idle is some conn {
+		try reused = exchange-pooled conn req verb
+		when reused is some pair {
+			checkin key conn ca pair.1
+			task.ok pair.0
+		} is none {
+			let _ = net.close conn
+			fetch-new secure authority key req verb ca
+		}
+	} is none {
+		fetch-new secure authority key req verb ca
+	}
+}
+
+# Run one request/response over a fresh connection, returning the response and
+# either pooling or closing the connection. A `defer` closes the connection if the
+# task is cancelled (or fails) before it's been handed to `checkin`.
+def fetch-new :: fun bool string string bytes method (option string) -> task response string = fun secure authority key req verb ca {
+	try conn = task.unwrap (open-conn secure authority ca)
+	let settled = ref.new false
+	defer close-unless conn settled
+	try _ = task.unwrap (write-all conn req)
+	try pair = read-response-and-reuse conn verb
+	checkin key conn ca pair.1
+	ref.set settled true
+	task.ok pair.0
+}
+
+# Run one request/response over a connection taken from the pool. `some (resp,
+# reusable)` on success; `none` if the connection was dead (write failed or no
+# response arrived) and the caller should retry on a fresh one.
+def exchange-pooled :: fun net.connection bytes method -> task (option (response, bool)) string = fun conn req verb {
+	try sent = task.attempt (task.unwrap (write-all conn req))
+	when sent is err _ {
+		task.ok none
+	} is ok _ {
+		try got = task.attempt (read-response-and-reuse conn verb)
+		when got is err _ {
+			task.ok none
+		} is ok pair {
+			# A status of 0 means we read no valid status line -- the connection had
+			# been closed -- so treat it as stale rather than a real response.
+			if pair.0.status == 0 {
+				task.ok none
+			} else {
+				task.ok (some pair)
+			}
+		}
+	}
+}
+
+# Return `conn` to the pool when the exchange left it reusable, else close it.
+# Custom-CA connections (`ca` present) are never pooled.
+def checkin :: fun string net.connection (option string) bool -> nothing = fun key conn ca reusable {
+	when ca is none {
+		if reusable {
+			pool-put key conn
+		} else {
+			discard-close conn
+		}
+	} else {
+		discard-close conn
+	}
+}
+
+def close-unless :: fun net.connection (ref bool) -> nothing = fun conn settled {
+	if ref.get settled {
+		()
+	} else {
+		discard-close conn
+	}
+}
+
+def discard-close :: fun net.connection -> nothing = fun conn {
+	let _ = net.close conn
+	()
 }
 
 # Whether `url` calls for a secure (TLS) transport -- i.e. an `https` scheme.
@@ -596,14 +693,58 @@ def url-secure :: fun string -> bool = fun url {
 	string.starts-with url "https://"
 }
 
-# Open a connection to `authority` (a `host:port`), choosing TLS or plain TCP by
-# the scheme of the original `url`. The split between the two lives here so both
-# `fetch` and `fetch-stream` route `https` through `net.connect-tls`.
-def open-conn :: fun string string -> task (result connection string) = fun url authority {
-	if url-secure url {
-		net.connect-tls authority
+# Open a connection to `authority` (a `host:port`): TLS when `secure`, trusting an
+# extra CA when one is given, else plain TCP.
+def open-conn :: fun bool string (option string) -> task (result connection string) = fun secure authority ca {
+	if secure {
+		when ca is some pem {
+			net.connect-tls-trusting authority pem
+		} is none {
+			net.connect-tls authority
+		}
 	} else {
 		net.connect authority
+	}
+}
+
+# --- the connection pool -------------------------------------------------
+
+# Idle keep-alive connections, keyed by transport+authority (e.g.
+# "s:example.com:443"). A connection is checked out for exactly one exchange and
+# returned only if that exchange left it reusable, so a pooled connection is never
+# shared between two in-flight requests. `pool-take`/`pool-put` don't suspend, so
+# they run atomically against other fibers (the scheduler only switches at `try`).
+def conn-pool :: ref (dict string (list net.connection)) = ref.new (dict.empty ())
+
+# Most idle connections kept per host; beyond this, returned connections are closed.
+def pool-cap :: int = 8
+
+def pool-key :: fun bool string -> string = fun secure authority {
+	if secure {
+		"s:"
+	} else {
+		"p:"
+	} ++ authority
+}
+
+def pool-take :: fun string -> option net.connection = fun key {
+	let table = ref.get conn-pool
+	let idle = dict.lookup table key ?? []
+	when list.head idle is some conn {
+		ref.set conn-pool (dict.insert table key (list.drop idle 1))
+		some conn
+	} is none {
+		none
+	}
+}
+
+def pool-put :: fun string net.connection -> nothing = fun key conn {
+	let table = ref.get conn-pool
+	let idle = dict.lookup table key ?? []
+	if list.length idle >= pool-cap {
+		discard-close conn
+	} else {
+		ref.set conn-pool (dict.insert table key [conn, ...idle])
 	}
 }
 
@@ -637,13 +778,19 @@ def split-url :: fun string -> (string, string) = fun url {
 }
 
 # Render a request as HTTP/1.1 bytes: request line, Host, the computed
-# Content-Length, Connection: close, a blank line, then body.
-def serialize-request :: fun method string string (dict string string) bytes -> bytes = fun verb path authority headers body {
+# Content-Length, then body. With `keep-alive`, no `Connection` header is sent
+# (HTTP/1.1 keeps the connection open by default); otherwise `Connection: close`.
+def serialize-request :: fun method string string (dict string string) bytes bool -> bytes = fun verb path authority headers body keep-alive {
 	let request-line = method-name verb ++ " " ++ path ++ " HTTP/1.1\r\n"
 	let host-line = "Host: " ++ authority ++ "\r\n"
 	let custom-lines = string.join (list.map (dict.entries headers) render-header) ""
 	let length-line = "Content-Length: " ++ to-string (bytes.length body) ++ "\r\n"
-	let head = request-line ++ host-line ++ custom-lines ++ length-line ++ "Connection: close\r\n\r\n"
+	let conn-line = if keep-alive {
+		""
+	} else {
+		"Connection: close\r\n"
+	}
+	let head = request-line ++ host-line ++ custom-lines ++ length-line ++ conn-line ++ "\r\n"
 	bytes.concat (string.to-bytes head) body
 }
 
@@ -667,14 +814,171 @@ def method-name :: fun method -> string = fun m {
 	}
 }
 
-# Read and parse one response off `conn`: the status line + headers, then the
-# body sized by Content-Length (whatever already arrived with the headers
-# counts toward it).
-def read-response :: fun net.connection -> task response string = fun conn {
+# Read and parse one response off `conn`, returning it together with whether the
+# connection can be reused (kept alive). The body is framed precisely -- by
+# `Transfer-Encoding: chunked`, by `Content-Length`, by the no-body rule for HEAD
+# / 1xx / 204 / 304, or (last resort) by the connection closing -- so that with
+# keep-alive we stop exactly at the end of this response and leave the socket
+# positioned for the next one. A close-delimited body spends the connection, so it
+# reports `false`; otherwise reuse rides on the response's `Connection` header.
+def read-response-and-reuse :: fun net.connection method -> task (response, bool) string = fun conn verb {
 	try raw = task.unwrap (read-until-headers conn (string.to-bytes ""))
 	let parsed = parse-response-head raw
-	try body = task.unwrap (read-body conn parsed.body-start parsed.content-length)
-	task.ok {status: parsed.status, headers: parsed.headers, body, stream-body: none}
+	let keep-alive = response-keep-alive parsed.headers
+	if response-bodyless verb parsed.status {
+		task.ok (mk-response parsed (string.to-bytes ""), keep-alive)
+	} else if parsed.chunked {
+		try body = task.unwrap (read-chunked conn parsed.body-start (string.to-bytes ""))
+		task.ok (mk-response parsed body, keep-alive)
+	} else if parsed.has-length {
+		try body = task.unwrap (read-body conn parsed.body-start parsed.content-length)
+		task.ok (mk-response parsed body, keep-alive)
+	} else {
+		try body = task.unwrap (read-to-close conn parsed.body-start)
+		task.ok (mk-response parsed body, false)
+	}
+}
+
+# Build a `response` from a parsed head + body (row-polymorphic over the parse
+# record's exact shape, so it works for both the framing reader and the streaming
+# client's lighter head).
+def mk-response = fun parsed body {
+	{status: parsed.status, headers: parsed.headers, body, stream-body: none}
+}
+
+# Whether a response to `verb` with this status carries no body, per HTTP: any
+# response to HEAD, and every 1xx / 204 / 304 -- where a Content-Length, if
+# present, describes the resource but is not actually sent on the wire.
+def response-bodyless :: fun method int -> bool = fun verb status {
+	when verb is method.head {
+		true
+	} else {
+		status == 204 or status == 304 or status >= 100 and status < 200
+	}
+}
+
+# Whether the server agreed to keep the connection open: true unless it sent
+# `Connection: close` (HTTP/1.1 keeps connections alive by default).
+def response-keep-alive :: fun (dict string string) -> bool = fun headers {
+	when dict.lookup headers "connection" is some v {
+		if string.contains (string.to-lower v) "close" {
+			false
+		} else {
+			true
+		}
+	} is none {
+		true
+	}
+}
+
+# Read a close-delimited body: everything until the peer hangs up.
+def read-to-close :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+	try r = net.read conn 4096
+	when r is ok chunk {
+		if bytes.is-empty chunk {
+			task.ok (ok acc)
+		} else {
+			read-to-close conn (bytes.concat acc chunk)
+		}
+	} is err e {
+		task.ok (err e)
+	}
+}
+
+# --- chunked transfer decoding ------------------------------------------
+
+def crlf :: bytes = string.to-bytes "\r\n"
+
+# Decode a `Transfer-Encoding: chunked` body. `buf` is the unconsumed bytes (it
+# starts at a chunk-size line); `acc` is the body decoded so far. Each chunk is
+# `<hex-size>[;ext]\r\n<size bytes>\r\n`; a zero size ends the body. We read more
+# from `conn` whenever the buffer doesn't yet hold a full size line, or a full
+# chunk plus its trailing CRLF, and on the terminator we drain through the closing
+# blank line so the connection is left clean for reuse.
+def read-chunked :: fun net.connection bytes bytes -> task (result bytes string) = fun conn buf acc {
+	when index-of-crlf buf 0 is some idx {
+		let size = hex-prefix-value buf
+		if size == 0 {
+			# Last chunk: make sure the closing "\r\n\r\n" (after any trailers) has been
+			# read off the socket before we hand the connection back.
+			if bytes.contains (bytes.slice buf idx (bytes.length buf)) crlf2 {
+				task.ok (ok acc)
+			} else {
+				try buf2 = task.unwrap (chunked-pull conn buf)
+				read-chunked conn buf2 acc
+			}
+		} else {
+			let data-start = idx + 2
+			let data-end = data-start + size
+			let need = data-end + 2
+			if bytes.length buf >= need {
+				let chunk = bytes.slice buf data-start data-end
+				read-chunked conn (bytes.slice buf need (bytes.length buf)) (bytes.concat acc chunk)
+			} else {
+				try buf2 = task.unwrap (chunked-pull conn buf)
+				read-chunked conn buf2 acc
+			}
+		}
+	} is none {
+		try buf2 = task.unwrap (chunked-pull conn buf)
+		read-chunked conn buf2 acc
+	}
+}
+
+# Read one more block into `buf`; fail if the peer closed before the body ended.
+def chunked-pull :: fun net.connection bytes -> task (result bytes string) = fun conn buf {
+	try r = net.read conn 4096
+	when r is ok chunk {
+		if bytes.is-empty chunk {
+			task.ok (err "http.fetch: connection closed mid chunked body")
+		} else {
+			task.ok (ok (bytes.concat buf chunk))
+		}
+	} is err e {
+		task.ok (err e)
+	}
+}
+
+# Index of the first "\r\n" at or after `i`, or none. The size line is short, so
+# starting each search at the front of the unconsumed buffer keeps this cheap.
+def index-of-crlf :: fun bytes int -> option int = fun b i {
+	if i + 1 >= bytes.length b {
+		none
+	} else if bytes.get b i == 13 and bytes.get b (i + 1) == 10 {
+		some i
+	} else {
+		index-of-crlf b (i + 1)
+	}
+}
+
+# Value of the hex digits at the front of `b` (a chunk-size line), stopping at the
+# first non-hex byte (`;` extensions, or the CR).
+def hex-prefix-value :: fun bytes -> int = fun b {
+	hex-fold b 0 0
+}
+
+def hex-fold :: fun bytes int int -> int = fun b i acc {
+	if i >= bytes.length b {
+		acc
+	} else {
+		when hex-digit-value (bytes.get b i) is some d {
+			hex-fold b (i + 1) (acc * 16 + d)
+		} is none {
+			acc
+		}
+	}
+}
+
+def hex-digit-value :: fun int -> option int = fun c {
+	if c >= 48 and c <= 57 {
+		some (c - 48)
+	} else if c >= 97 and c <= 102 {
+		some (c - 87)
+	} else if c >= 65 and c <= 70 {
+		some (c - 55)
+	} else {
+		none
+	}
 }
 
 # Split the raw bytes at the header/body boundary and parse the status line +
@@ -683,6 +987,8 @@ def parse-response-head :: fun bytes -> {
 	status :: int,
 	headers :: dict string string,
 	content-length :: int,
+	has-length :: bool,
+	chunked :: bool,
 	body-start :: bytes,
 } = fun raw {
 	let parts = bytes.split raw crlf2
@@ -699,7 +1005,19 @@ def parse-response-head :: fun bytes -> {
 	} is none {
 		0
 	}
-	{status, headers, content-length: clen, body-start}
+	let chunked = when dict.lookup headers "transfer-encoding" is some te {
+		string.contains (string.to-lower te) "chunked"
+	} is none {
+		false
+	}
+	{
+		status,
+		headers,
+		content-length: clen,
+		has-length: dict.contains-key headers "content-length",
+		chunked,
+		body-start,
+	}
 }
 
 # --- the streaming client ------------------------------------------------
@@ -719,9 +1037,9 @@ public def fetch-stream :: fun string method (dict string string) bytes -> strea
 	stream.from-resource {
 		open: fun {
 			let split = split-url url
-			try c = open-conn url split.0
+			try c = open-conn (url-secure url) split.0 none
 			when c is ok conn {
-				try write-all conn (serialize-request verb split.1 split.0 headers body)
+				try write-all conn (serialize-request verb split.1 split.0 headers body false)
 				try raw-r = read-until-headers conn (string.to-bytes "")
 				when raw-r is ok raw {
 					let parsed = parse-response-head raw
