@@ -4,7 +4,7 @@ use std/test
 use std/sys/io
 
 def is-even = fun n {
-	when n is 0 {
+	if n is 0 {
 		true
 	} else {
 		is-odd (n - 1)
@@ -12,7 +12,7 @@ def is-even = fun n {
 }
 
 def is-odd = fun n {
-	when n is 0 {
+	if n is 0 {
 		false
 	} else {
 		is-even (n - 1)

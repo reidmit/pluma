@@ -8,7 +8,7 @@ use std/sys/io
 # `push`): `some last` while non-empty, `none` once empty. Together push/pop
 # make a list a last-in-first-out stack.
 def show :: fun (option int) -> string = fun o {
-	when o is some x {
+	if o is some x {
 		"some $(to-string x)"
 	} else {
 		"none"

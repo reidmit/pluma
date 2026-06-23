@@ -18,7 +18,7 @@ def kind = fun xs {
 }
 
 def starts-with-zero = fun xs {
-	when xs is [0, ...] {
+	if xs is [0, ...] {
 		true
 	} else {
 		false

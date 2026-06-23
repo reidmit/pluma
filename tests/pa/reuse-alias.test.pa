@@ -21,7 +21,7 @@ def build = fun m i versions {
 
 def run = fun {
 	let versions = build (dict.empty ()) 3 []
-	when versions is [a, b, c] {
+	if versions is [a, b, c] {
 		print (dict.size a)
 		print (dict.size b)
 		print (dict.size c)
