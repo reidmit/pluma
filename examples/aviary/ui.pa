@@ -337,6 +337,7 @@ def add-form :: fun (signal string) (signal string) (signal string) (signal mode
 						signal.set place ""
 						signal.set count "1"
 					}
+					()
 				}
 			},
 		] [
@@ -519,6 +520,7 @@ def note-form :: fun int (signal model.page-data) (signal string) -> view = fun 
 							()
 						}
 					}
+					()
 				}
 			},
 		] [

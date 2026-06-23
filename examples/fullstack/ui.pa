@@ -130,7 +130,7 @@ public def page :: fun nothing -> view = using view {
 						stop ()
 						ref.set cancel none
 					} is none {
-						let stop = task.spawn-cancelable (stream.for-each (api.ticks 1) fun n {
+						let stop = task.spawn (stream.for-each (api.ticks 1) fun n {
 							signal.set tick n
 							task.ok ()
 						})

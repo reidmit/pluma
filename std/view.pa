@@ -198,36 +198,50 @@ public def checked :: fun (signal bool) -> attribute = fun s {
 }
 
 # --- event handlers (effectful) ---------------------------------------------
+#
+# A handler runs for its side effects; its return value is discarded. So the
+# argument type is `fun event -> a` (any return), which lets a handler end in a
+# fire-and-forget `task.fire` / `task.spawn` -- whose value is the `stop` handle --
+# without a trailing `()` to throw it away.
 
 # Run `handler` (which receives the raw event) when the named event fires.
-public def on :: fun string (fun event -> nothing) -> attribute = attribute.handler
+public def on :: fun string (fun event -> a) -> attribute = fun name handler {
+	attribute.handler name fun e {
+		handler e
+		()
+	}
+}
 
 # Run `handler` on click (the event is ignored -- it takes no arguments).
-public def on-click :: fun (fun nothing -> nothing) -> attribute = fun handler {
+public def on-click :: fun (fun nothing -> a) -> attribute = fun handler {
 	attribute.handler "click" fun _e {
 		handler ()
+		()
 	}
 }
 
 # Run `handler` with the input's current text on every keystroke.
-public def on-input :: fun (fun string -> nothing) -> attribute = fun handler {
+public def on-input :: fun (fun string -> a) -> attribute = fun handler {
 	attribute.handler "input" fun e {
 		handler (event.target-value e)
+		()
 	}
 }
 
 # Like `on-input`, but on the `change` event (commit: blur / Enter / select).
-public def on-change :: fun (fun string -> nothing) -> attribute = fun handler {
+public def on-change :: fun (fun string -> a) -> attribute = fun handler {
 	attribute.handler "change" fun e {
 		handler (event.target-value e)
+		()
 	}
 }
 
 # Run `handler` on submit, suppressing the browser's full-page reload.
-public def on-submit :: fun (fun nothing -> nothing) -> attribute = fun handler {
+public def on-submit :: fun (fun nothing -> a) -> attribute = fun handler {
 	attribute.handler "submit" fun e {
 		event.prevent-default e
 		handler ()
+		()
 	}
 }
 
@@ -243,7 +257,12 @@ public def on-submit :: fun (fun nothing -> nothing) -> attribute = fun handler 
 #     view.div [view.id "app", view.on-mount (fun {
 #         task.fire (api.list-todos ()) fun board { signal.set todos board }
 #     })] [...]
-public def on-mount :: fun (fun nothing -> nothing) -> attribute = attribute.on-mount
+public def on-mount :: fun (fun nothing -> a) -> attribute = fun action {
+	attribute.on-mount fun {
+		action ()
+		()
+	}
+}
 
 # --- to-string: render a view to an HTML string (SSR / headless) -------------
 #

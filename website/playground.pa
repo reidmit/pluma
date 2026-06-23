@@ -133,9 +133,7 @@ def placeholder :: string = "Press Run to compile this program on the server and
 
 # --- styles -----------------------------------------------------------------
 
-def wrap :: css.ruleset = using css {
-	.rule [.padding-top (.rem 2.0), .padding-bottom (.rem 4.0)]
-}
+def wrap :: css.ruleset = using css { .rule [.padding-top (.rem 2.0), .padding-bottom (.rem 4.0)] }
 
 def grid :: css.ruleset = using css {
 	.rule [
@@ -286,6 +284,7 @@ def execute :: fun (fun string -> result string string) (signal string) (signal 
 			signal.set out message
 		}
 	}
+	()
 }
 
 # --- page -------------------------------------------------------------------
