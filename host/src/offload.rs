@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::os::fd::{BorrowedFd, RawFd};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use polling::{Event, Events, Poller};
 
@@ -191,34 +191,59 @@ impl Reactor {
 			if self.waits.is_empty() && self.inflight.is_empty() {
 				return -1;
 			}
-			let timeout = if deadline < 0 {
+			// The scheduler reads a `-1` return as "the deadline genuinely elapsed" and
+			// then fires the soonest virtual timer (jumping its logical clock straight to
+			// that deadline). So `-1` must mean a real timeout, never a spurious wake:
+			// `Poller::wait` can return early with no events and no completions (a stale
+			// `notify` edge left by an already-drained completion). Absorb those by
+			// re-waiting for the time still left, and only report `-1` once the full
+			// timeout has actually passed.
+			let start = Instant::now();
+			let budget = if deadline < 0 {
 				None
 			} else {
 				Some(Duration::from_nanos(deadline as u64))
 			};
-			self.events.clear();
-			if self.poller.wait(&mut self.events, timeout).is_err() {
-				return -1;
-			}
-			// Socket readiness: each ready event's token is the parked fid.
-			for ev in self.events.iter() {
-				let fid = ev.key as i32;
-				if let Some(fd) = self.waits.remove(&fid) {
-					// SAFETY: same fd we added; deleted before the socket is dropped.
-					let _ = self.poller.delete(unsafe { BorrowedFd::borrow_raw(fd) });
+			loop {
+				let timeout = match budget {
+					None => None,
+					Some(b) => Some(b.saturating_sub(start.elapsed())),
+				};
+				self.events.clear();
+				if self.poller.wait(&mut self.events, timeout).is_err() {
+					return -1;
+				}
+				// Socket readiness: each ready event's token is the parked fid.
+				for ev in self.events.iter() {
+					let fid = ev.key as i32;
+					if let Some(fd) = self.waits.remove(&fid) {
+						// SAFETY: same fd we added; deleted before the socket is dropped.
+						let _ = self.poller.delete(unsafe { BorrowedFd::borrow_raw(fd) });
+						self.ready.push_back(fid);
+					}
+				}
+				// Worker completions (woken by `Poller::notify`): stash each result for its
+				// fiber's collect call, unless the op was cancelled mid-flight.
+				let mut q = self.completions.lock().unwrap();
+				while let Some((fid, res)) = q.pop_front() {
+					self.inflight.remove(&fid);
+					if self.discarded.remove(&fid) {
+						continue; // cancelled — drop the result
+					}
+					self.done.insert(fid, res);
 					self.ready.push_back(fid);
 				}
-			}
-			// Worker completions (woken by `Poller::notify`): stash each result for its
-			// fiber's collect call, unless the op was cancelled mid-flight.
-			let mut q = self.completions.lock().unwrap();
-			while let Some((fid, res)) = q.pop_front() {
-				self.inflight.remove(&fid);
-				if self.discarded.remove(&fid) {
-					continue; // cancelled — drop the result
+				drop(q);
+				// A real wake landed work — hand it back. Otherwise this was a spurious
+				// wake: re-wait unless the budget is spent (a true timeout → `-1`).
+				if !self.ready.is_empty() {
+					break;
 				}
-				self.done.insert(fid, res);
-				self.ready.push_back(fid);
+				if let Some(b) = budget {
+					if start.elapsed() >= b {
+						break;
+					}
+				}
 			}
 		}
 		self.ready.pop_front().unwrap_or(-1)

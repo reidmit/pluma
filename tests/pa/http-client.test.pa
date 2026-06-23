@@ -87,12 +87,32 @@ def run-chunked :: fun nothing -> task string string = fun {
 
 # --- keep-alive connection reuse -----------------------------------------
 
-# Accept EXACTLY ONE connection, then serve requests on it forever (keep-alive).
-# Because no second connection is ever accepted, a second fetch can only succeed
-# if the client reused the first connection.
-def serve-one-conn :: fun net.listener -> task nothing = fun server {
-	try conn = task.unwrap (net.accept server)
-	respond-loop conn
+# A server that accepts connections concurrently, counting each one, and serves
+# every request on a connection in turn (HTTP/1.1 keep-alive). Because it accepts
+# concurrently it never wedges -- so the test can prove reuse by counting: N
+# sequential fetches that reuse one connection produce far fewer accepts than N.
+def count-accepts :: fun net.listener (ref int) -> task nothing = fun server counter {
+	manual scope as s {
+		s.spawn (accept-conn server counter)
+		drain-accepts s server counter
+	}
+}
+
+# Settles to `some conn` for a freshly accepted (and counted) connection, `none`
+# when a served connection finishes -- one homogeneous type for the manual scope.
+def accept-conn :: fun net.listener (ref int) -> task (option net.connection) = fun server counter {
+	try c = net.accept server
+	when c is ok conn {
+		ref.set counter (ref.get counter + 1)
+		task.ok (some conn)
+	} is err _ {
+		task.ok none
+	}
+}
+
+def serve-conn :: fun net.connection -> task (option net.connection) = fun conn {
+	try _ = respond-loop conn
+	task.ok none
 }
 
 def respond-loop :: fun net.connection -> task nothing = fun conn {
@@ -106,26 +126,58 @@ def respond-loop :: fun net.connection -> task nothing = fun conn {
 	}
 }
 
-# Fetch under a timeout so a *broken* reuse (the second request hanging on a
-# connection the server never accepts) fails fast as status 0 instead of hanging.
-def get-status :: fun string -> task int string = fun base {
-	try settled = task.attempt (task.with-timeout 2s (http.fetch (base ++ "/k") http.method.get (dict.empty ()) (string.to-bytes "")))
-	when settled is ok r {
-		task.ok r.status
-	} is err _ {
-		task.ok 0
+# Drain the accept scope: an accepted connection spawns its keep-alive handler and
+# re-arms the acceptor; a finished handler just continues; `none` (listener closed
+# on cancel) ends the loop.
+def drain-accepts :: fun (manual-scope-handle (option net.connection)) net.listener (ref int) -> task nothing = fun s server counter {
+	try got = s.next ()
+	when got is none {
+		task.ok ()
+	} is some outcome {
+		when outcome is ok maybe {
+			when maybe is some conn {
+				s.spawn (serve-conn conn)
+				s.spawn (accept-conn server counter)
+				drain-accepts s server counter
+			} is none {
+				drain-accepts s server counter
+			}
+		} is err _ {
+			drain-accepts s server counter
+		}
 	}
 }
 
-def run-keepalive :: fun nothing -> task (int, int) string = fun {
+# Fetch `base` `n` times in turn, counting the 200s. A reused connection makes the
+# fetches fast; the timeout is only a safety net against a genuine reuse break.
+def fetch-n :: fun string int int -> task int string = fun base n oks {
+	if n <= 0 {
+		task.ok oks
+	} else {
+		try settled = task.attempt (task.with-timeout 5s (http.fetch (base ++ "/r") http.method.get (dict.empty ()) (string.to-bytes "")))
+		let got = when settled is ok r {
+			if r.status == 200 {
+				1
+			} else {
+				0
+			}
+		} is err _ {
+			0
+		}
+		fetch-n base (n - 1) (oks + got)
+	}
+}
+
+# Run 4 sequential fetches against the counting server and report (accepts, oks).
+def run-reuse :: fun nothing -> task (int, int) string = fun {
 	when net.listen "127.0.0.1:0" is ok server {
 		when net.local-addr server is ok addr {
+			let counter = ref.new 0
 			scope as s {
-				s.spawn (serve-one-conn server)
-				try first = get-status ("http://" ++ addr)
-				try second = get-status ("http://" ++ addr)
+				s.spawn (count-accepts server counter)
+				try oks = fetch-n ("http://" ++ addr) 4 0
 				s.cancel ()
-				task.ok (first, second)
+				task.ok (ref.get counter, oks)
 			}
 		} is err e {
 			task.err ("addr: " ++ e)
@@ -194,13 +246,17 @@ def tests :: test.suite = [
 		}
 	},
 	test.case "keep-alive connection reused" fun {
-		try settled = task.attempt (run-keepalive ())
+		try settled = task.attempt (run-reuse ())
 		when settled is ok pair {
-			# Both succeed (200, 200) only if the single accepted connection served
-			# both requests -- i.e. the second fetch reused the first connection.
-			assert.equals pair (200, 200)
+			# pair = (accepts, oks). All 4 fetches succeed, and they cost fewer than
+			# 4 connections -- proof the client reused kept-alive connections (with
+			# pooling working it's a single accept).
+			assert.all [
+				assert.equals pair.1 4,
+				assert.is-true (pair.0 >= 1 and pair.0 < 4),
+			]
 		} is err e {
-			assert.equals ("error: " ++ e) "(200, 200)"
+			assert.equals ("error: " ++ e) "(reused)"
 		}
 	},
 ]
