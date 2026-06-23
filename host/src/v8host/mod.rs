@@ -113,9 +113,11 @@ pub fn run_streaming_v8(bytes: &[u8], args: &[String]) -> i32 {
 /// a bounded thread pool runs in parallel. `num_modules` is the suite count
 /// (`program.test_suites.len()`); each isolate is told its index via the host's
 /// reserved `PLUMA_TEST_SHARD` env name and runs just that module. Each isolate
-/// captures its own report; reports print in module order so output is
-/// deterministic regardless of which thread finished first, ending with one
-/// aggregate summary. Exit code: 0 all-pass, 1 on any failure or trap.
+/// captures its own report and prints it as soon as that module finishes, so
+/// output streams in finish order (not module order) — a shared lock serializes
+/// printing so modules never interleave mid-line. Once all threads join, one
+/// aggregate summary closes the run. Exit code: 0 all-pass, 1 on any failure or
+/// trap.
 pub fn run_test_v8(bytes: &[u8], num_modules: usize, color: bool) -> i32 {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use std::sync::{Arc, Mutex};
@@ -146,14 +148,16 @@ pub fn run_test_v8(bytes: &[u8], num_modules: usize, color: bool) -> i32 {
 		.unwrap_or(4)
 		.clamp(1, num_items);
 	let cursor = Arc::new(AtomicUsize::new(0));
-	let results: Arc<Mutex<Vec<Option<RunCapture>>>> =
-		Arc::new(Mutex::new((0..num_items).map(|_| None).collect()));
+	// Shared print state: the running [passed, failed, skipped, todo] totals plus
+	// the aggregate exit code. The lock also serializes printing so a module's
+	// report is emitted whole, never interleaved with another worker's output.
+	let shared: Arc<Mutex<([i64; 4], i32)>> = Arc::new(Mutex::new(([0i64; 4], 0)));
 
 	let handles: Vec<_> = (0..workers)
 		.map(|_| {
 			let compiled = Arc::clone(&compiled);
 			let cursor = Arc::clone(&cursor);
-			let results = Arc::clone(&results);
+			let shared = Arc::clone(&shared);
 			std::thread::spawn(move || {
 				loop {
 					let i = cursor.fetch_add(1, Ordering::Relaxed);
@@ -166,7 +170,32 @@ pub fn run_test_v8(bytes: &[u8], num_modules: usize, color: bool) -> i32 {
 						Vec::new(),
 						Some((i as u32, num_items as u32)),
 					);
-					results.lock().unwrap()[i] = Some(cap);
+					// Stream this module's report the moment it finishes. Each shard's
+					// output ends with a `<RS>p f s t` counts line (see
+					// `std/test.shard-counts-line`); pick those out and sum them into the
+					// shared totals, printing the module tree without them. Holding the
+					// lock across the whole print keeps modules from interleaving mid-line.
+					let (totals, code) = &mut *shared.lock().unwrap();
+					for line in cap.stdout.split_inclusive('\n') {
+						match line.strip_prefix('\u{1e}') {
+							Some(counts) => {
+								for (slot, n) in totals.iter_mut().zip(
+									counts
+										.split_whitespace()
+										.filter_map(|tok| tok.parse::<i64>().ok()),
+								) {
+									*slot += n;
+								}
+							}
+							None => print!("{line}"),
+						}
+					}
+					use std::io::Write;
+					let _ = std::io::stdout().flush();
+					eprint!("{}", cap.stderr);
+					if test_exit_code(&cap.status) != 0 {
+						*code = 1;
+					}
 				}
 			})
 		})
@@ -180,36 +209,9 @@ pub fn run_test_v8(bytes: &[u8], num_modules: usize, color: bool) -> i32 {
 		}
 	}
 
-	// Print in work-item order so the report is deterministic regardless of which
-	// thread finished first. Each shard's output ends with a `<RS>p f s t` counts
-	// line (see `std/test.shard-counts-line`); pick those out, sum them, and print
-	// the module trees without them — then one aggregate summary for the whole run.
-	let results = Arc::try_unwrap(results)
-		.unwrap_or_else(|_| unreachable!("workers joined"))
-		.into_inner()
-		.unwrap();
-	let mut totals = [0i64; 4]; // passed, failed, skipped, todo
-	for cap in results.into_iter().flatten() {
-		for line in cap.stdout.split_inclusive('\n') {
-			match line.strip_prefix('\u{1e}') {
-				Some(counts) => {
-					for (slot, n) in totals.iter_mut().zip(
-						counts
-							.split_whitespace()
-							.filter_map(|tok| tok.parse::<i64>().ok()),
-					) {
-						*slot += n;
-					}
-				}
-				None => print!("{line}"),
-			}
-		}
-		eprint!("{}", cap.stderr);
-		if test_exit_code(&cap.status) != 0 {
-			code = 1;
-		}
-	}
-
+	// All shards have printed their trees; close with one aggregate summary.
+	let (totals, worker_code) = *shared.lock().unwrap();
+	code |= worker_code;
 	print_pool_summary(totals, color);
 	if totals[1] > 0 {
 		code = 1;
