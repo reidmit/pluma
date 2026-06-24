@@ -368,7 +368,7 @@ public def connect :: fun string -> task conn string = fun url {
 		raw-authority ++ default-port
 	}
 	let path = "/" ++ string.join (list.drop segs 1) "/"
-	try sock = task.unwrap (open secure authority)
+	try sock = task.flatten (open secure authority)
 	let key = client-key ()
 	try _ = write-all sock (handshake-request authority path key)
 	try resp = read-handshake-response sock
@@ -504,7 +504,7 @@ def write-all :: fun net.connection bytes -> task nothing string = fun conn data
 	if bytes.is-empty data {
 		task.ok ()
 	} else {
-		try n = task.unwrap (net.write conn data)
+		try n = task.flatten (net.write conn data)
 		if n >= bytes.length data {
 			task.ok ()
 		} else {

@@ -6,20 +6,20 @@
 # result -- see the prelude. Import it (`use std/result`) for the
 # helpers below.
 
-# Chains a follow-up step onto a result. `then r f` runs `f` on the
+# Chains a follow-up step onto a result. `and-then r f` runs `f` on the
 # value inside an `ok`, and `f` returns another result. If `r` is
 # already `err`, `f` is skipped and that same error passes straight
 # through. So a run of steps that each might fail stops at the first
 # failure and carries its error out.
 #
-#     result.then (ok 4) (fun n { ok (n * 2) })        # => ok 8
-#     result.then (err "bad") (fun n { ok (n * 2) })   # => err "bad"
+#     result.and-then (ok 4) (fun n { ok (n * 2) })        # => ok 8
+#     result.and-then (err "bad") (fun n { ok (n * 2) })   # => err "bad"
 #
 # As with options, `try` is the readable way to write such a chain:
 #
 #     try text = fs.read-file path   # stop with the err if it fails
 #     ok (string.length text)        # otherwise carry on
-public def then :: fun (result a e) (fun a -> result b e) -> result b e = fun r f {
+public def and-then :: fun (result a e) (fun a -> result b e) -> result b e = fun r f {
 	when r is ok v {
 		f v
 	} is err e {
@@ -73,10 +73,27 @@ public def expect :: fun (result a e) string -> a = fun r msg {
 #     result.map (ok 4) (fun n { n * 2 })        # => ok 8
 #     result.map (err "bad") (fun n { n * 2 })   # => err "bad"
 #
-# When `f` itself returns a result, reach for `then`, which flattens.
+# When `f` itself returns a result, reach for `and-then`, which flattens.
 public def map :: fun (result a e) (fun a -> b) -> result b e = fun r f {
 	when r is ok v {
 		ok (f v)
+	} is err e {
+		err e
+	}
+}
+
+# Collapses a result nested in a result: an outer `err` (or an inner `err`)
+# passes its error straight through, and `ok (ok v)` becomes `ok v`. The
+# `result` member of the `flatten` family (`list.flatten`, `option.flatten`,
+# `task.flatten`); the same join `and-then` performs, here with the inner
+# result already in hand rather than produced by a continuation.
+#
+#     result.flatten (ok (ok 4))        # => ok 4
+#     result.flatten (ok (err "bad"))   # => err "bad"
+#     result.flatten (err "outer")      # => err "outer"
+public def flatten :: fun (result (result a e) e) -> result a e = fun r {
+	when r is ok inner {
+		inner
 	} is err e {
 		err e
 	}

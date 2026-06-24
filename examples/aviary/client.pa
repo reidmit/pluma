@@ -57,7 +57,7 @@ def main = fun {
 	when render.boot-data "pluma-boot" is ok data0 {
 		start r0 data0
 	} is err _e {
-		task.then (ui.load-data r0) fun data0 {
+		task.and-then (ui.load-data r0) fun data0 {
 			start r0 data0
 		}
 	}

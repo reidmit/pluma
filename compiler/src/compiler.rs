@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 // list to mirror the analyzer's view of what's in scope.
 //
 // `option` and `result` share their local name with the prelude enums of
-// the same name (intentional — `option.then` resolves to the module's
-// `then`, `option.some` falls through to the enum's `some`). The
+// the same name (intentional — `option.and-then` resolves to the module's
+// `and-then`, `option.some` falls through to the enum's `some`). The
 // FieldAccess dispatch in the analyzer handles the overlap.
 pub const AUTO_IMPORTS: &[(&str, &str)] = &[
 	("std/ref", "ref"),

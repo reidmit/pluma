@@ -2,7 +2,7 @@ use std/assert
 use std/option as opt
 use std/test
 
-# Helpers that wrap an int or return none, so `then` has something
+# Helpers that wrap an int or return none, so `and-then` has something
 # to do.
 def positive = fun n {
 	if n > 0 {
@@ -16,7 +16,7 @@ def doubled = fun n {
 	some (n * 2)
 }
 
-# `try x = expr` desugars to opt.then, so the two should agree.
+# `try x = expr` desugars to opt.and-then, so the two should agree.
 def try-pipe = fun {
 	try x = some 4
 	try y = positive x
@@ -29,39 +29,39 @@ def try-pipe-none = fun {
 }
 
 def tests :: test.suite = [
-	test.case "then on some runs the continuation" fun {
-		# --- then on `some` ---
+	test.case "and-then on some runs the continuation" fun {
+		# --- and-then on `some` ---
 
-		when opt.then (some 3) doubled is some n {
+		when opt.and-then (some 3) doubled is some n {
 			assert.equals n 6
 		} is none {
 			assert.is-true false
 		}
 	},
-	test.case "then can change the inner type" fun {
-		when opt.then (some 5) fun n { some (to-string n) } is some s {
+	test.case "and-then can change the inner type" fun {
+		when opt.and-then (some 5) fun n { some (to-string n) } is some s {
 			assert.equals s "5"
 		} is none {
 			assert.is-true false
 		}
 	},
-	test.case "then can short-circuit a some into a none" fun {
-		when opt.then (some (-3)) positive is some _n {
+	test.case "and-then can short-circuit a some into a none" fun {
+		when opt.and-then (some (-3)) positive is some _n {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
 	},
-	test.case "then on none stays none" fun {
-		# --- then on `none` ---
+	test.case "and-then on none stays none" fun {
+		# --- and-then on `none` ---
 
-		when opt.then none doubled is some _n {
+		when opt.and-then none doubled is some _n {
 			assert.is-true false
 		} is none {
 			assert.is-true true
 		}
 	},
-	test.case "then on none does not call the continuation" fun {
+	test.case "and-then on none does not call the continuation" fun {
 		let counter = ref.new 0
 		let bump-and-double = fun n {
 			ref.update counter fun c {
@@ -70,7 +70,7 @@ def tests :: test.suite = [
 			some (n * 2)
 		}
 		assert.all [
-			when opt.then none bump-and-double is some _n {
+			when opt.and-then none bump-and-double is some _n {
 				assert.is-true false
 			} is none {
 				assert.is-true true
@@ -78,11 +78,11 @@ def tests :: test.suite = [
 			assert.equals (ref.get counter) 0,
 		]
 	},
-	test.case "two-step then composes" fun {
-		# --- chained then ---
+	test.case "two-step and-then composes" fun {
+		# --- chained and-then ---
 
-		let r = opt.then (some 4) fun n {
-			opt.then (positive n) doubled
+		let r = opt.and-then (some 4) fun n {
+			opt.and-then (positive n) doubled
 		}
 		when r is some n {
 			assert.equals n 8
@@ -90,7 +90,7 @@ def tests :: test.suite = [
 			assert.is-true false
 		}
 	},
-	test.case "try desugars to then on some" fun {
+	test.case "try desugars to and-then on some" fun {
 		when try-pipe () is some n {
 			assert.equals n 8
 		} is none {
@@ -105,7 +105,7 @@ def tests :: test.suite = [
 		}
 	},
 	test.case "or-else on some returns the payload" fun {
-		# --- or-else (the recovering dual of then; `??` desugars to it) ---
+		# --- or-else (the recovering dual of and-then; `??` desugars to it) ---
 
 		assert.equals (opt.or-else (some 7) fun { 0 }) 7
 	},

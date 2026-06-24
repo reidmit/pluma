@@ -7,7 +7,7 @@
 # behind `use std/task`: since you can't build a task without `task.ok` /
 # `task.err`, async code imports this module anyway.
 #
-# You rarely call `task.then` by hand: inside a function that returns a
+# You rarely call `task.and-then` by hand: inside a function that returns a
 # `task`, `try x = some-task` awaits it and reads top-to-bottom, the same
 # way `try` works over `option`/`result`. The combinators here
 # (`task.all`, `task.race`, `task.with-timeout`, …) compose tasks that run
@@ -40,7 +40,7 @@ public def yield :: fun nothing -> task nothing e = built-in "task-yield"
 # running. `try _ = task.sleep 200ms` pauses just the current task.
 public def sleep :: fun duration -> task nothing e = built-in "task-sleep"
 
-# Chains a follow-up step onto a task: `then t k` runs `t`, and when it
+# Chains a follow-up step onto a task: `and-then t k` runs `t`, and when it
 # succeeds runs `k` on the result (which returns the next task). If `t`
 # fails, `k` is skipped and the failure propagates. This is the explicit
 # form of what `try` does line-by-line, so reach for `try` instead unless
@@ -48,7 +48,7 @@ public def sleep :: fun duration -> task nothing e = built-in "task-sleep"
 #
 #     try x = t
 #     k x
-public def then :: fun (task a e) (fun a -> task b e) -> task b e = built-in "task-then"
+public def and-then :: fun (task a e) (fun a -> task b e) -> task b e = built-in "task-then"
 
 # Recovers from a failed task. `or-else t recover` runs `t`; if it succeeds,
 # its value passes through, and `recover` is never run. If `t` fails,
@@ -81,7 +81,7 @@ public def map :: fun (task a e) (fun a -> b) -> task b e = built-in "task-map"
 #
 #     fetch url |> task.map-err (fun e { error.context "loading $(url)" e })
 public def map-err :: fun (task a e) (fun e -> f) -> task a f = fun t g {
-	then (attempt t) fun r {
+	and-then (attempt t) fun r {
 		when r is ok v {
 			ok v
 		} is err e {
@@ -233,9 +233,11 @@ public def lift :: fun (result a e) -> task a e = fun r {
 # fails it with `e`. The bridge up from the low-level layer that carries failure
 # *inside* the task (a raw `std/sys/net` read, a host builtin returning a
 # `task (result a string)`) to the typed-error world, so callers read a straight
-# line of `try`s instead of re-matching each inner `ok`/`err`. `task.unwrap t`
-# is `task.lift` behind an await; the inverse of `task.attempt`.
-public def unwrap :: fun (task (result a e)) -> task a e = fun t {
+# line of `try`s instead of re-matching each inner `ok`/`err`. `task.flatten t`
+# is `task.lift` behind an await; the inverse of `task.attempt`. (Named for the
+# `flatten` family -- `list.flatten`, `option.flatten` -- it collapses one
+# redundant failure-bearing layer, here a `result` nested in a `task`.)
+public def flatten :: fun (task (result a e)) -> task a e = fun t {
 	try r = t
 	lift r
 }
@@ -352,7 +354,7 @@ public def retry :: fun int (task a) -> task a = fun n t {
 # first wins. If the timer wins, `t` is cancelled and the task fails with
 # "timeout".
 public def with-timeout :: fun duration (task a) -> task a = fun d t {
-	race [t, sleep d |> then fun _slept { err "timeout" }]
+	race [t, sleep d |> and-then fun _slept { err "timeout" }]
 }
 
 # Drives `pool`: each time a child settles, re-raise a failure (fail-fast) or

@@ -9,7 +9,7 @@ use crate::types::Type;
 // the end of the surrounding body (`parse_body_expressions` collects it
 // when it sees the `try` keyword). At analyze time the analyzer peeks
 // the RHS's inferred head constructor and rewrites this node into a
-// `<carrier>.then value fun pattern { rest }` call.
+// `<carrier>.and-then value fun pattern { rest }` call.
 //
 // `binding` records whether the source wrote an explicit `Pattern =`. The
 // bindingless form `try Expr` is exact sugar for `try _ = Expr` — it parses
@@ -23,7 +23,7 @@ use crate::types::Type;
 // (e.g. `α := int` when the RHS is `option int`).
 //
 // `task_carrier`: the `option`/`result` carriers are rewritten away by the
-// analyzer into `<carrier>.then` calls, so a `Try` node normally never
+// analyzer into `<carrier>.and-then` calls, so a `Try` node normally never
 // survives to codegen. The `task` carrier is the exception — it is left
 // intact (with `task_carrier = true`) so codegen can lower the whole
 // `try`-chain into a resumable state machine (the CPS transform), rather

@@ -723,10 +723,10 @@ def fetch-with :: fun string (option string) method (dict string string) bytes -
 # either pooling or closing the connection. A `defer` closes the connection if the
 # task is cancelled (or fails) before it's been handed to `checkin`.
 def fetch-new :: fun bool string string bytes method (option string) -> task response string = fun secure authority key req verb ca {
-	try conn = task.unwrap (open-conn secure authority ca)
+	try conn = task.flatten (open-conn secure authority ca)
 	let settled = ref.new false
 	defer close-unless conn settled
-	try _ = task.unwrap (write-all conn req)
+	try _ = task.flatten (write-all conn req)
 	try pair = read-response-and-reuse conn verb
 	checkin key conn ca pair.1
 	ref.set settled true
@@ -737,7 +737,7 @@ def fetch-new :: fun bool string string bytes method (option string) -> task res
 # reusable)` on success; `none` if the connection was dead (write failed or no
 # response arrived) and the caller should retry on a fresh one.
 def exchange-pooled :: fun net.connection bytes method -> task (option (response, bool)) string = fun conn req verb {
-	try sent = task.attempt (task.unwrap (write-all conn req))
+	try sent = task.attempt (task.flatten (write-all conn req))
 	when sent is err _ {
 		task.ok none
 	} is ok _ {
@@ -924,7 +924,7 @@ def method-name :: fun method -> string = fun m {
 # positioned for the next one. A close-delimited body spends the connection, so it
 # reports `false`; otherwise reuse rides on the response's `Connection` header.
 def read-response-and-reuse :: fun net.connection method -> task (response, bool) string = fun conn verb {
-	try raw = task.unwrap (read-until-headers conn (string.to-bytes ""))
+	try raw = task.flatten (read-until-headers conn (string.to-bytes ""))
 	let parsed = parse-response-head raw
 	# Read the raw (still-encoded) body, framed, then -- once the connection is past
 	# it and reuse is decided -- undo any `Content-Encoding` (gzip / brotli).
@@ -941,13 +941,13 @@ def read-framed-body = fun conn verb parsed {
 	if response-bodyless verb parsed.status {
 		task.ok (string.to-bytes "", true)
 	} else if parsed.chunked {
-		try body = task.unwrap (read-chunked conn parsed.body-start (string.to-bytes ""))
+		try body = task.flatten (read-chunked conn parsed.body-start (string.to-bytes ""))
 		task.ok (body, true)
 	} else if parsed.has-length {
-		try body = task.unwrap (read-body conn parsed.body-start parsed.content-length)
+		try body = task.flatten (read-body conn parsed.body-start parsed.content-length)
 		task.ok (body, true)
 	} else {
-		try body = task.unwrap (read-to-close conn parsed.body-start)
+		try body = task.flatten (read-to-close conn parsed.body-start)
 		task.ok (body, false)
 	}
 }
@@ -1044,7 +1044,7 @@ def read-chunked :: fun net.connection bytes bytes -> task (result bytes string)
 			if bytes.contains (bytes.slice buf idx (bytes.length buf)) crlf2 {
 				task.ok (ok acc)
 			} else {
-				try buf2 = task.unwrap (chunked-pull conn buf)
+				try buf2 = task.flatten (chunked-pull conn buf)
 				read-chunked conn buf2 acc
 			}
 		} else {
@@ -1055,12 +1055,12 @@ def read-chunked :: fun net.connection bytes bytes -> task (result bytes string)
 				let chunk = bytes.slice buf data-start data-end
 				read-chunked conn (bytes.slice buf need (bytes.length buf)) (bytes.concat acc chunk)
 			} else {
-				try buf2 = task.unwrap (chunked-pull conn buf)
+				try buf2 = task.flatten (chunked-pull conn buf)
 				read-chunked conn buf2 acc
 			}
 		}
 	} is none {
-		try buf2 = task.unwrap (chunked-pull conn buf)
+		try buf2 = task.flatten (chunked-pull conn buf)
 		read-chunked conn buf2 acc
 	}
 }

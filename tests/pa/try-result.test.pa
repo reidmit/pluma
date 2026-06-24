@@ -3,7 +3,7 @@ use std/task
 use std/test
 use std/sys/io
 
-# `try` on result. Each `try` desugars to `result.then expr fun pattern { rest }`.
+# `try` on result. Each `try` desugars to `result.and-then expr fun pattern { rest }`.
 # Returning `err` from the chain short-circuits past every following expression.
 
 def all-ok = fun {

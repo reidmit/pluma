@@ -36,39 +36,39 @@ def try-pipe-err = fun {
 }
 
 def tests :: test.suite = [
-	test.case "then on ok runs the continuation" fun {
-		# --- then on `ok` ---
+	test.case "and-then on ok runs the continuation" fun {
+		# --- and-then on `ok` ---
 
-		when res.then (ok 3) doubled is ok n {
+		when res.and-then (ok 3) doubled is ok n {
 			assert.equals n 6
 		} is err _e {
 			assert.is-true false
 		}
 	},
-	test.case "then can change the ok type" fun {
-		when res.then (ok 5) fun n { ok (to-string n) } is ok s {
+	test.case "and-then can change the ok type" fun {
+		when res.and-then (ok 5) fun n { ok (to-string n) } is ok s {
 			assert.equals s "5"
 		} is err _e {
 			assert.is-true false
 		}
 	},
-	test.case "then can flip ok into err" fun {
-		when res.then (ok (-3)) checked is ok _n {
+	test.case "and-then can flip ok into err" fun {
+		when res.and-then (ok (-3)) checked is ok _n {
 			assert.is-true false
 		} is err e {
 			assert.equals e "non-positive"
 		}
 	},
-	test.case "then on err stays err" fun {
-		# --- then on `err` ---
+	test.case "and-then on err stays err" fun {
+		# --- and-then on `err` ---
 
-		when res.then bad-boom doubled is ok _n {
+		when res.and-then bad-boom doubled is ok _n {
 			assert.is-true false
 		} is err e {
 			assert.equals e "boom"
 		}
 	},
-	test.case "then on err does not call the continuation" fun {
+	test.case "and-then on err does not call the continuation" fun {
 		let counter = ref.new 0
 		let bump-and-double = fun n {
 			ref.update counter fun c {
@@ -77,7 +77,7 @@ def tests :: test.suite = [
 			ok (n * 2)
 		}
 		assert.all [
-			when res.then bad-skip bump-and-double is ok _n {
+			when res.and-then bad-skip bump-and-double is ok _n {
 				assert.is-true false
 			} is err e {
 				assert.equals e "skip"
@@ -85,11 +85,11 @@ def tests :: test.suite = [
 			assert.equals (ref.get counter) 0,
 		]
 	},
-	test.case "two-step then composes" fun {
-		# --- chained then ---
+	test.case "two-step and-then composes" fun {
+		# --- chained and-then ---
 
-		let r = res.then (ok 4) fun n {
-			res.then (checked n) doubled
+		let r = res.and-then (ok 4) fun n {
+			res.and-then (checked n) doubled
 		}
 		when r is ok n {
 			assert.equals n 8
@@ -97,7 +97,7 @@ def tests :: test.suite = [
 			assert.is-true false
 		}
 	},
-	test.case "try desugars to then on ok" fun {
+	test.case "try desugars to and-then on ok" fun {
 		when try-pipe () is ok n {
 			assert.equals n 8
 		} is err _e {
@@ -112,7 +112,7 @@ def tests :: test.suite = [
 		}
 	},
 	test.case "or-else on ok returns the payload" fun {
-		# --- or-else (the recovering dual of then; `??` desugars to it) ---
+		# --- or-else (the recovering dual of and-then; `??` desugars to it) ---
 
 		assert.equals (res.or-else (ok 7) fun { 0 }) 7
 	},
@@ -189,4 +189,27 @@ def tests :: test.suite = [
 		}
 	},
 	test.case "error is none on ok" fun { assert.is-none (res.error (ok 4)) },
+	test.case "flatten collapses ok (ok x)" fun {
+		# --- flatten ---
+
+		when res.flatten (ok (ok 4)) is ok n {
+			assert.equals n 4
+		} is err _e {
+			assert.is-true false
+		}
+	},
+	test.case "flatten surfaces the inner err" fun {
+		when res.flatten (ok (err "inner")) is ok _n {
+			assert.is-true false
+		} is err e {
+			assert.equals e "inner"
+		}
+	},
+	test.case "flatten passes the outer err through" fun {
+		when res.flatten (err "outer") is ok _n {
+			assert.is-true false
+		} is err e {
+			assert.equals e "outer"
+		}
+	},
 ]

@@ -3,7 +3,7 @@ use std/task
 use std/test
 use std/sys/io
 
-# `try` on option. Each `try` desugars to `option.then expr fun pattern { rest }`.
+# `try` on option. Each `try` desugars to `option.and-then expr fun pattern { rest }`.
 # `none` short-circuits past every following expression.
 
 def take-two = fun {

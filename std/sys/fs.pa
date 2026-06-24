@@ -89,11 +89,11 @@ def run :: fun (task (result bytes string)) (fun (result bytes string) -> a) -> 
 }
 
 # Like `run`, but for the fallible ops: the decoder yields a `result a string`, which
-# `task.unwrap` joins onto the task's own failure channel so the wrapper returns a clean
+# `task.flatten` joins onto the task's own failure channel so the wrapper returns a clean
 # `task a string` (a missing file or decode failure fails the task rather than surfacing as
 # an `err` value the caller has to re-match).
 def run-result :: fun (task (result bytes string)) (fun (result bytes string) -> result a string) -> task a string = fun t decode {
-	task.unwrap (task.map t decode)
+	task.flatten (task.map t decode)
 }
 
 # --- decoders (shared by the async + sync wrappers) ----------------------------

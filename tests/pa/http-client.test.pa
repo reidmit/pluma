@@ -60,10 +60,10 @@ def close-it :: fun net.connection -> nothing = fun conn {
 
 # Serve one hand-rolled chunked response: "Hello" + " World" as two chunks.
 def serve-chunked :: fun net.listener -> task nothing = fun server {
-	try conn = task.unwrap (net.accept server)
-	try _req = task.unwrap (read-headers conn (string.to-bytes ""))
+	try conn = task.flatten (net.accept server)
+	try _req = task.flatten (read-headers conn (string.to-bytes ""))
 	let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n"
-	try _sent = task.unwrap (write-bytes conn (string.to-bytes resp))
+	try _sent = task.flatten (write-bytes conn (string.to-bytes resp))
 	close-it conn
 	task.ok ()
 }
@@ -116,12 +116,12 @@ def serve-conn :: fun net.connection -> task (option net.connection) = fun conn 
 }
 
 def respond-loop :: fun net.connection -> task nothing = fun conn {
-	try req = task.unwrap (read-headers conn (string.to-bytes ""))
+	try req = task.flatten (read-headers conn (string.to-bytes ""))
 	if bytes.is-empty req {
 		close-it conn
 		task.ok ()
 	} else {
-		try _sent = task.unwrap (write-bytes conn (string.to-bytes "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nok!"))
+		try _sent = task.flatten (write-bytes conn (string.to-bytes "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nok!"))
 		respond-loop conn
 	}
 }
@@ -192,11 +192,11 @@ def run-reuse :: fun nothing -> task (int, int) string = fun {
 # Serve a gzip-compressed body, labelled `Content-Encoding: gzip`. The payload is
 # produced by `compress.gzip`, so the client must run the codec to recover it.
 def serve-gzip :: fun net.listener -> task nothing = fun server {
-	try conn = task.unwrap (net.accept server)
-	try _req = task.unwrap (read-headers conn (string.to-bytes ""))
+	try conn = task.flatten (net.accept server)
+	try _req = task.flatten (read-headers conn (string.to-bytes ""))
 	let payload = compress.gzip (string.to-bytes "compressed hello")
 	let head = "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: " ++ to-string (bytes.length payload) ++ "\r\nConnection: close\r\n\r\n"
-	try _sent = task.unwrap (write-bytes conn (bytes.concat (string.to-bytes head) payload))
+	try _sent = task.flatten (write-bytes conn (bytes.concat (string.to-bytes head) payload))
 	close-it conn
 	task.ok ()
 }

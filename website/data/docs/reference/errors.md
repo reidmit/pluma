@@ -155,7 +155,7 @@ you'd otherwise write by hand. A few you'll reach for often:
 | Call | What it does |
 | --- | --- |
 | `option.map o f` | Apply `f` to the value inside a `some`, leave `none` alone |
-| `option.then o f` | Chain a step that itself returns an `option` |
+| `option.and-then o f` | Chain a step that itself returns an `option` |
 | `option.is-some o` | True when there's a value |
 | `result.map r f` | Transform an `ok` value, leave an `err` alone |
 | `result.map-err r f` | Transform the `err`, leave an `ok` alone |
@@ -169,9 +169,10 @@ option.map (first [9, 8]) (fun n { n * 10 })   # => some 90
 option.map (first []) (fun n { n * 10 })        # => none
 ```
 
-`map` and `then` are the workhorses: `map` transforms the value when it's there
-and quietly passes an empty/failed value through, and `then` is `map` for a step
-that might itself come up empty, so the result doesn't end up doubly wrapped.
+`map` and `and-then` are the workhorses: `map` transforms the value when it's
+there and quietly passes an empty/failed value through, and `and-then` is `map`
+for a step that might itself come up empty, so the result doesn't end up doubly
+wrapped.
 
 ## std/error: erasing late
 

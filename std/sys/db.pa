@@ -53,7 +53,7 @@ def no-bytes :: bytes = string.to-bytes ""
 # channel, so callers get a `task bytes string` -- a host-side error fails the
 # task rather than surfacing as an `err` value to re-match.
 def run-op :: fun int int string bytes -> task bytes string = fun op id sql payload {
-	task.unwrap (db-op op id sql payload)
+	task.flatten (db-op op id sql payload)
 }
 
 # --- opening & closing ---------------------------------------------------------

@@ -49,7 +49,7 @@ def web-fetch :: fun string -> task (result string string) = built-in "web-fetch
 #     try resp = fetch.post "http://host/_rpc/x" headers body
 public def post :: fun string (dict string string) bytes -> task response string = fun url headers body {
 	let req = string.join ["POST", url, render-headers headers, hex.encode body] "\t"
-	try text = task.unwrap (web-fetch req)
+	try text = task.flatten (web-fetch req)
 	task.lift (parse-response text)
 }
 

@@ -9,7 +9,7 @@ use std/sys/io
 def run = fun {
 	try a = task.ok 21 |> task.map fun n { n + n }
 	print (to-string a)
-	try b = task.then (task.ok 10) fun n {
+	try b = task.and-then (task.ok 10) fun n {
 		task.ok (n + 5)
 	}
 	print (to-string b)

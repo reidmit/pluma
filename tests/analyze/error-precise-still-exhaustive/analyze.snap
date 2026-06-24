@@ -114,7 +114,7 @@ module `main` (tests/analyze/error-precise-still-exhaustive/main.pa) {
                             expr(28:1-29:11) :: result int db-error {
                                 kind: call(28:1-29:11) {
                                     callee: expr(28:1-29:11) :: a {
-                                        kind: namespace-access `result.then`,
+                                        kind: namespace-access `result.and-then`,
                                     },
                                     args: [
                                         expr(28:9-28:17) :: result int db-error {

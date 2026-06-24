@@ -863,7 +863,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 			// 2b. type-directed dispatch + rewrite for `try`. Walks the AST,
 			//     reads each `try`'s RHS head constructor (substituted), and
-			//     rewrites it into a `<carrier>.then` call. May emit
+			//     rewrites it into a `<carrier>.and-then` call. May emit
 			//     additional linking constraints; if so, re-unify with them
 			//     appended so the new tyvars resolve before annotate.
 			//
@@ -3440,7 +3440,7 @@ impl<'compiler> Analyzer<'compiler> {
 				// RHS's inferred head constructor, which isn't known until
 				// after unify. The post-unify `dispatch_try_nodes` pass
 				// reads the head, picks a carrier, rewrites this node into
-				// a `<carrier>.then` call, and emits the remaining linking
+				// a `<carrier>.and-then` call, and emits the remaining linking
 				// constraints (which are then re-unified).
 				expr.ty = self.new_type_var();
 
@@ -5888,7 +5888,7 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	// Walk the AST and rewrite each `try` expression whose RHS head
-	// constructor is resolved into the equivalent `<carrier>.then` call,
+	// constructor is resolved into the equivalent `<carrier>.and-then` call,
 	// emitting linking constraints into `new_constraints`. `try`s whose
 	// RHS is still an unresolved tyvar are LEFT IN PLACE so a subsequent
 	// iteration (after re-unifying against the new constraints) can take
@@ -6337,8 +6337,8 @@ impl<'compiler> Analyzer<'compiler> {
 		}
 
 		// Task carrier: unlike option/result, we do NOT rewrite the `try`
-		// into a `task.then` call. Lowering a task `try`-chain to a tree of
-		// `.then` closures *is* the trampoline; for the CPS transform we
+		// into a `task.and-then` call. Lowering a task `try`-chain to a tree of
+		// `.and-then` closures *is* the trampoline; for the CPS transform we
 		// keep the `Try` node intact (flag it `task_carrier`) so codegen can
 		// lay the chain out as one resumable state-machine step function.
 		// We only emit the linking constraints, then leave the node for
@@ -6583,7 +6583,7 @@ impl<'compiler> Analyzer<'compiler> {
 			dispatch_sink: None,
 		};
 
-		// The value handed to `then`. Erasing wraps it in `result.map-err` with
+		// The value handed to `and-then`. Erasing wraps it in `result.map-err` with
 		// a coercion that frames (and, for a precise source, renders) the error
 		// into the `error` carrier; otherwise it's the source value untouched.
 		let value_node = match coerce {
@@ -6599,19 +6599,19 @@ impl<'compiler> Analyzer<'compiler> {
 			),
 		};
 
-		// Build the callee — a NamespaceAccess(["<carrier>", "then"]).
+		// Build the callee — a NamespaceAccess(["<carrier>", "and-then"]).
 		let module_ident = IdentifierNode {
 			name: carrier_module_name.to_string(),
 			range: try_range,
 		};
 		let method_ident = IdentifierNode {
-			name: "then".to_string(),
+			name: "and-then".to_string(),
 			range: try_range,
 		};
 		let callee = ExprNode {
 			range: try_range,
 			kind: ExprKind::NamespaceAccess(vec![module_ident, method_ident]),
-			// `then`'s type doesn't strictly need to be set — codegen for
+			// `and-then`'s type doesn't strictly need to be set — codegen for
 			// NamespaceAccess looks up the global by name. Annotate will
 			// fill the placeholder if anything reads it.
 			ty: self.new_type_var(),
@@ -6818,7 +6818,7 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	// Rewrite one `??` BinaryOperation. The dual of `do_try_dispatch`:
-	// `try` propagates failure via `<carrier>.then` (keeps the monad); `??`
+	// `try` propagates failure via `<carrier>.and-then` (keeps the monad); `??`
 	// recovers from failure via `<carrier>.or-else` (leaves the monad with a
 	// bare value). `expr.kind` must be a `NullCoalescing` BinaryOperation on
 	// entry. Returns `true` once handled (rewritten to a `Call`, or reported
@@ -6893,7 +6893,7 @@ impl<'compiler> Analyzer<'compiler> {
 
 		// Wrap the default in a thunk so it's evaluated only on the failure
 		// arm: `fun { default }` has type `fun nothing -> a`. This makes `??`
-		// short-circuit, the dual of `then`'s lazy continuation.
+		// short-circuit, the dual of `and-then`'s lazy continuation.
 		let right_range = right.range;
 		let right_ty = right.ty.clone();
 		let thunk_ty = self.new_type_var();
@@ -6917,7 +6917,7 @@ impl<'compiler> Analyzer<'compiler> {
 		};
 
 		// Callee: NamespaceAccess(["<carrier>", "or-else"]). Resolved by name
-		// in codegen, like the `try` rewrite's `then`.
+		// in codegen, like the `try` rewrite's `and-then`.
 		let module_ident = IdentifierNode {
 			name: carrier_module_name.to_string(),
 			range: coalesce_range,

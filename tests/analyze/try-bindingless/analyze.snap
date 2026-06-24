@@ -66,7 +66,7 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                             expr(13:1-15:11) :: result int string {
                                 kind: call(13:1-15:11) {
                                     callee: expr(13:1-15:11) :: a {
-                                        kind: namespace-access `result.then`,
+                                        kind: namespace-access `result.and-then`,
                                     },
                                     args: [
                                         expr(13:5-13:12) :: result int string {
@@ -90,7 +90,7 @@ module `main` (tests/analyze/try-bindingless/main.pa) {
                                                     expr(14:1-15:11) :: result int string {
                                                         kind: call(14:1-15:11) {
                                                             callee: expr(14:1-15:11) :: a {
-                                                                kind: namespace-access `result.then`,
+                                                                kind: namespace-access `result.and-then`,
                                                             },
                                                             args: [
                                                                 expr(14:15-14:28) :: result int string {

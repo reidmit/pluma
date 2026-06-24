@@ -16,7 +16,7 @@ def run = fun {
 	}
 	# (2) a task that only settles after sleeping -- stop it first, so its
 	# callback (which would push 99) is cancelled at the suspension point.
-	let stop = task.fire (task.then (task.sleep 50ms) fun _done { task.ok 99 }) fun n {
+	let stop = task.fire (task.and-then (task.sleep 50ms) fun _done { task.ok 99 }) fun n {
 		ref.set log [...ref.get log, n]
 	}
 	stop ()

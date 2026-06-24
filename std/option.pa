@@ -6,21 +6,21 @@
 # option -- see the prelude. Import it (`use std/option`) for the
 # helpers below.
 
-# Chains a follow-up step onto an option. `then opt f` runs `f` on the
+# Chains a follow-up step onto an option. `and-then opt f` runs `f` on the
 # value inside `opt` when it's `some`, and `f` returns another option.
 # If `opt` is already `none`, `f` is skipped and the whole thing is
 # `none`. So you can line up several steps that each might come up
 # empty, and the first `none` stops the rest.
 #
-#     option.then (some 4) (fun n { some (n * 2) })   # => some 8
-#     option.then none (fun n { some (n * 2) })       # => none
+#     option.and-then (some 4) (fun n { some (n * 2) })   # => some 8
+#     option.and-then none (fun n { some (n * 2) })       # => none
 #
 # Most of the time you'll reach for `try` instead, which reads top to
 # bottom rather than nesting:
 #
 #     try first = list.head xs   # bail out with none if xs is empty
 #     some (first * 2)           # otherwise carry on with the value
-public def then :: fun (option a) (fun a -> option b) -> option b = fun o f {
+public def and-then :: fun (option a) (fun a -> option b) -> option b = fun o f {
 	when o is some v {
 		f v
 	} is none {
@@ -75,7 +75,7 @@ public def expect :: fun (option a) string -> a = fun o msg {
 #     option.map none (fun n { n * 2 })       # => none
 #
 # When `f` itself returns an option (so you'd otherwise get a nested
-# `option (option b)`), reach for `then` instead, which flattens.
+# `option (option b)`), reach for `and-then` instead, which flattens.
 public def map :: fun (option a) (fun a -> b) -> option b = fun o f {
 	when o is some v {
 		some (f v)
