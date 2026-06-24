@@ -7,6 +7,6 @@ runtime error
 == stdout ==
 before
 == stderr ==
-the list was empty
-  at std/option:65:3
+option.expect: the list was empty
+  at std/option:66:3
   at main:9:9

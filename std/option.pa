@@ -51,18 +51,19 @@ public def or-else :: fun (option a) (fun nothing -> a) -> a = fun o fallback {
 }
 
 # Returns the value inside a `some`, or stops the whole program when the
-# option is `none`. The message you pass is written to standard error and
-# the program exits nonzero (via `process.fail`). Reach for this in a script
-# when an empty result leaves nothing sensible to do -- the recovering
-# dual is `??`, which supplies a fallback instead of quitting.
+# option is `none`. The message you pass is written to standard error, behind
+# an `option.expect:` label that marks where the abort came from, and the
+# program exits nonzero (via `process.fail`). Reach for this in a script when an
+# empty result leaves nothing sensible to do -- the recovering dual is `??`,
+# which supplies a fallback instead of quitting.
 #
-#     # some -> the contents; none -> "no home directory" on stderr, then exit
+#     # some -> the contents; none -> "option.expect: no home directory" on stderr, then exit
 #     process.env "HOME" |> option.expect "no home directory"
 public def expect :: fun (option a) string -> a = fun o msg {
 	when o is some v {
 		v
 	} is none {
-		fail-with msg
+		fail-with "option.expect: $(msg)"
 	}
 }
 

@@ -1,5 +1,5 @@
-# `result.expect` on an `err` aborts the whole program: the message, then
-# the underlying error, go to stderr and the program exits nonzero.
+# `result.expect` on an `err` aborts the whole program: a `result.expect:`-labelled
+# message, then the underlying error, go to stderr and the program exits nonzero.
 # `after` never prints.
 use std/string
 

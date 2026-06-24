@@ -50,19 +50,19 @@ public def or-else :: fun (result a e) (fun nothing -> a) -> a = fun r fallback 
 }
 
 # Returns the value inside an `ok`, or stops the whole program when the
-# result is an `err`. The message you pass is written to standard error,
-# followed by the error value itself, and the program exits nonzero (via
-# `process.fail`). Reach for this in a script when there's nothing sensible to
-# do but bail -- the recovering dual is `??`, which supplies a fallback
-# instead of quitting.
+# result is an `err`. The message you pass is written to standard error, behind
+# a `result.expect:` label that marks where the abort came from and followed by
+# the error value itself, and the program exits nonzero (via `process.fail`).
+# Reach for this in a script when there's nothing sensible to do but bail -- the
+# recovering dual is `??`, which supplies a fallback instead of quitting.
 #
-#     # ok -> the contents; err -> "reading config: <the os error>" then exit
+#     # ok -> the contents; err -> "result.expect: reading config: <the os error>" then exit
 #     fs.read-file "config.toml" | result.expect "reading config"
 public def expect :: fun (result a e) string -> a = fun r msg {
 	when r is ok v {
 		v
 	} is err e {
-		fail-with "$(msg): $(to-string e)"
+		fail-with "result.expect: $(msg): $(to-string e)"
 	}
 }
 

@@ -7,6 +7,6 @@ runtime error
 == stdout ==
 before
 == stderr ==
-parsing the count: invalid digit found in string
+result.expect: parsing the count: invalid digit found in string
   at std/result:65:3
   at main:8:9

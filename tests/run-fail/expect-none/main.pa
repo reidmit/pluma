@@ -1,5 +1,5 @@
-# `option.expect` on `none` aborts with just the message -- an option has
-# no error payload to show. `after` never prints.
+# `option.expect` on `none` aborts with an `option.expect:`-labelled message --
+# an option has no error payload to show beyond it. `after` never prints.
 use std/list
 
 def empty :: list int = []
