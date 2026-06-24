@@ -75,7 +75,7 @@ def op-is-dir = 13
 # task's own failure channel (unlike `std/sys/net`/`std/sys/db`, which are `task a
 # string`). That keeps their decoders -- `to-text`/`to-bool`/`to-info`/... below --
 # shared with the synchronous `fs-op-sync` twins, whose `result bytes string` is the
-# natural form for a sync fallible call. `run-result` joins that envelope onto the
+# natural form for a sync fallible call. `task.try-map` joins that envelope onto the
 # task channel at the boundary, so every *public* fs op is still a clean `task a e`.
 def fs-op-s :: fun int string string -> task (result bytes string) _ = built-in "fs-op"
 
@@ -92,14 +92,6 @@ def fs-op-sync-b :: fun int string bytes -> result bytes string = built-in "fs-o
 def run :: fun (task (result bytes string) _) (fun (result bytes string) -> a) -> task a _ = fun t decode {
 	try r = t
 	task.ok (decode r)
-}
-
-# Like `run`, but for the fallible ops: the decoder yields a `result a string`, which
-# `task.flatten` joins onto the task's own failure channel so the wrapper returns a clean
-# `task a string` (a missing file or decode failure fails the task rather than surfacing as
-# an `err` value the caller has to re-match).
-def run-result :: fun (task (result bytes string) _) (fun (result bytes string) -> result a string) -> task a string = fun t decode {
-	task.flatten (task.map t decode)
 }
 
 # --- decoders (shared by the async + sync wrappers) ----------------------------
@@ -172,7 +164,7 @@ def parse-kind :: fun string -> file-kind = fun s {
 #
 #     try text = fs.read-text "notes.txt"
 public def read-text :: fun string -> task string string = fun path {
-	run-result (fs-op-s op-read-text path "") to-text
+	task.try-map (fs-op-s op-read-text path "") to-text
 }
 
 # The blocking form of `fs.read-text` -- returns its value directly instead of a `task`.
@@ -183,7 +175,7 @@ public def read-text-sync :: fun string -> result string string = fun path {
 # Reads an entire file as raw `bytes`, making no assumption that it is text. Reach for this
 # with images, compressed files, or anything that isn't UTF-8.
 public def read-bytes :: fun string -> task bytes string = fun path {
-	run-result (fs-op-s op-read-bytes path "") fun r {
+	task.try-map (fs-op-s op-read-bytes path "") fun r {
 		r
 	}
 }
@@ -198,7 +190,7 @@ public def read-bytes-sync :: fun string -> result bytes string = fun path {
 #
 #     try entries = fs.read-dir "."
 public def read-dir :: fun string -> task (list string) string = fun path {
-	run-result (fs-op-s op-read-dir path "") to-names
+	task.try-map (fs-op-s op-read-dir path "") to-names
 }
 
 # The blocking form of `fs.read-dir` -- returns its value directly instead of a `task`.
@@ -209,7 +201,7 @@ public def read-dir-sync :: fun string -> result (list string) string = fun path
 # Reads a path's metadata: its size, kind, and last-modified time. `err` if the path
 # doesn't exist or can't be read.
 public def stat :: fun string -> task file-info string = fun path {
-	run-result (fs-op-s op-stat path "") to-info
+	task.try-map (fs-op-s op-stat path "") to-info
 }
 
 # The blocking form of `fs.stat` -- returns its value directly instead of a `task`.
@@ -224,7 +216,7 @@ public def stat-sync :: fun string -> result file-info string = fun path {
 #
 #     try _ = fs.write-text "out.txt" "hello"
 public def write-text :: fun string string -> task nothing string = fun path content {
-	run-result (fs-op-s op-write path content) to-void
+	task.try-map (fs-op-s op-write path content) to-void
 }
 
 # The blocking form of `fs.write-text` -- returns its value directly instead of a `task`.
@@ -234,7 +226,7 @@ public def write-text-sync :: fun string string -> result nothing string = fun p
 
 # Writes raw `bytes` to a file, replacing whatever was there before.
 public def write-bytes :: fun string bytes -> task nothing string = fun path content {
-	run-result (fs-op-b op-write path content) to-void
+	task.try-map (fs-op-b op-write path content) to-void
 }
 
 # The blocking form of `fs.write-bytes` -- returns its value directly instead of a `task`.
@@ -245,7 +237,7 @@ public def write-bytes-sync :: fun string bytes -> result nothing string = fun p
 # Adds text to the end of a file, keeping the existing contents. Creates the file if it
 # doesn't exist.
 public def append-text :: fun string string -> task nothing string = fun path content {
-	run-result (fs-op-s op-append path content) to-void
+	task.try-map (fs-op-s op-append path content) to-void
 }
 
 # The blocking form of `fs.append-text` -- returns its value directly instead of a `task`.
@@ -255,7 +247,7 @@ public def append-text-sync :: fun string string -> result nothing string = fun 
 
 # Adds raw `bytes` to the end of a file.
 public def append-bytes :: fun string bytes -> task nothing string = fun path content {
-	run-result (fs-op-b op-append path content) to-void
+	task.try-map (fs-op-b op-append path content) to-void
 }
 
 # The blocking form of `fs.append-bytes` -- returns its value directly instead of a `task`.
@@ -268,7 +260,7 @@ public def append-bytes-sync :: fun string bytes -> result nothing string = fun 
 # Creates a directory, along with any parent directories that don't exist yet (like
 # `mkdir -p`). Quietly succeeds if it's already there.
 public def make-dir :: fun string -> task nothing string = fun path {
-	run-result (fs-op-s op-make-dir path "") to-void
+	task.try-map (fs-op-s op-make-dir path "") to-void
 }
 
 # The blocking form of `fs.make-dir` -- returns its value directly instead of a `task`.
@@ -279,7 +271,7 @@ public def make-dir-sync :: fun string -> result nothing string = fun path {
 # Removes a file or an *empty* directory. `err` if the path doesn't exist, or if it's a
 # non-empty directory (use `fs.remove-all` for that).
 public def remove :: fun string -> task nothing string = fun path {
-	run-result (fs-op-s op-remove path "") to-void
+	task.try-map (fs-op-s op-remove path "") to-void
 }
 
 # The blocking form of `fs.remove` -- returns its value directly instead of a `task`.
@@ -289,7 +281,7 @@ public def remove-sync :: fun string -> result nothing string = fun path {
 
 # Removes a file, or a directory and everything inside it (like `rm -rf`).
 public def remove-all :: fun string -> task nothing string = fun path {
-	run-result (fs-op-s op-remove-all path "") to-void
+	task.try-map (fs-op-s op-remove-all path "") to-void
 }
 
 # The blocking form of `fs.remove-all` -- returns its value directly instead of a `task`.
@@ -300,7 +292,7 @@ public def remove-all-sync :: fun string -> result nothing string = fun path {
 # Renames or moves a path from `source` to `dest`. `err` if `source` doesn't exist (or the
 # move crosses filesystems, which the OS may reject).
 public def rename :: fun string string -> task nothing string = fun source dest {
-	run-result (fs-op-s op-rename source dest) to-void
+	task.try-map (fs-op-s op-rename source dest) to-void
 }
 
 # The blocking form of `fs.rename` -- returns its value directly instead of a `task`.
@@ -311,7 +303,7 @@ public def rename-sync :: fun string string -> result nothing string = fun sourc
 # Copies a file's contents (and permission bits) from `source` to `dest`, replacing `dest`
 # if it exists.
 public def copy :: fun string string -> task nothing string = fun source dest {
-	run-result (fs-op-s op-copy source dest) to-void
+	task.try-map (fs-op-s op-copy source dest) to-void
 }
 
 # The blocking form of `fs.copy` -- returns its value directly instead of a `task`.

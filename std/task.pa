@@ -242,6 +242,18 @@ public def flatten :: fun (task (result a e) _) -> task a e = fun t {
 	lift r
 }
 
+# Maps a task's success through a *fallible* step: `try-map t f` runs `t`, applies
+# `f` (which returns a `result`) to the value, and joins that result onto the task's
+# own failure channel -- so `f`'s `err` fails the task. It's `flatten (map t f)`, the
+# bridge for "transform the task's output with a step that can itself fail" (decode a
+# reply, validate a row). The async sibling of `list.try-map`; reach for `map` when
+# the step can't fail.
+#
+#     fs.read-bytes path |> task.try-map bytes.to-string
+public def try-map :: fun (task a e) (fun a -> result b e) -> task b e = fun t f {
+	flatten (map t f)
+}
+
 # Awaits a list of already-spawned handles in order, collecting their values.
 # Handles run concurrently regardless of the order they're awaited in -- this
 # is just the sequential back half of `all` / `settle-all`. O(n): each result is

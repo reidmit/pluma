@@ -167,7 +167,7 @@ def decode-status :: fun (result bytes string) -> result int string = fun r {
 }
 
 def await-output :: fun (task (result bytes string) _) -> task output string = fun t {
-	task.flatten (task.map t decode-output)
+	task.try-map t decode-output
 }
 
 # Walk the `env-all` blob -- a `u32` count, then that many length-prefixed key/value field
@@ -221,13 +221,13 @@ public def run-with-sync :: fun command -> result output string = fun c {
 # terminal -- for interactive tools (`$EDITOR`, `less`, `vim`). Nothing is captured; the
 # task yields the exit status.
 public def exec :: fun string (list string) -> task int string = fun cmd args {
-	task.flatten (task.map (proc-op op-exec cmd (encode-req {
+	task.try-map (proc-op op-exec cmd (encode-req {
 		cmd,
 		args,
 		cwd: none,
 		env: [],
 		stdin: "",
-	})) decode-status)
+	})) decode-status
 }
 
 # The blocking form of `process.exec` -- returns a `result` instead of a `task`.
@@ -237,7 +237,7 @@ public def exec-sync :: fun string (list string) -> result int string = fun cmd 
 
 # Like `exec`, but takes a full `command` (working directory, environment, stdin).
 public def exec-with :: fun command -> task int string = fun c {
-	task.flatten (task.map (proc-op op-exec c.cmd (encode-req c)) decode-status)
+	task.try-map (proc-op op-exec c.cmd (encode-req c)) decode-status
 }
 
 # Run a shell command line through `/bin/sh -c`, capturing output. Handy for pipes and
