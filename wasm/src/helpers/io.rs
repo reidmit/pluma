@@ -11,7 +11,7 @@ use wasm_encoder::{Function, ValType};
 
 /// Cap for the `io-last-error` message read. Errno strings are short; the host
 /// truncates to this and returns the written length, so no overflow path is needed.
-const ERR_CAP: i32 = 256;
+pub(crate) const ERR_CAP: i32 = 256;
 
 /// `__io_result(payload) -> result`. The argument is a marshalled `std/sys/io` op's
 /// shaped return: a primitive `$value` on success, or `null` on failure (the host

@@ -67,22 +67,23 @@ public def local-addr :: fun listener -> result string string = built-in "net-lo
 # handling each connection as it arrives.
 #
 #     try conn = net.accept server   # waits for a client, then continues
-public def accept :: fun listener -> task (result connection string) = built-in "net-accept"
+public def accept :: fun listener -> task connection string = built-in "net-accept"
 
 # Reads up to `n` bytes from the connection, waiting until at least some
 # arrive. You usually get fewer than `n` -- whatever was ready -- so
-# reading a whole message means calling `read` until you have it all. An
-# empty result (zero bytes) means the other side closed the connection.
+# reading a whole message means calling `read` until you have it all. It
+# succeeds with empty bytes (zero length) when the other side closed the
+# connection, and fails only on a real I/O error.
 #
-#     try chunk = net.read conn 4096   # ok 'some bytes' or ok '' at end
-public def read :: fun connection int -> task (result bytes string) = built-in "net-read"
+#     try chunk = net.read conn 4096   # some bytes, or empty at end of stream
+public def read :: fun connection int -> task bytes string = built-in "net-read"
 
 # Writes `data` to the connection and hands back how many bytes it
 # actually took -- which can be fewer than you gave it when the network
 # is busy, so writing it all means calling `write` again with the rest.
 #
 #     try sent = net.write conn (string.to-bytes "hello")
-public def write :: fun connection bytes -> task (result int string) = built-in "net-write"
+public def write :: fun connection bytes -> task int string = built-in "net-write"
 
 # Closes the connection, freeing it. Do this when you're done with a
 # client so the program doesn't run out of open connections.
@@ -96,7 +97,7 @@ public def close :: fun connection -> result nothing string = built-in "net-clos
 # listening there or the address is malformed.
 #
 #     try conn = net.connect "127.0.0.1:8080"
-public def connect :: fun string -> task (result connection string) = built-in "net-connect"
+public def connect :: fun string -> task connection string = built-in "net-connect"
 
 # Like `connect`, but secures the connection with TLS -- the encryption
 # behind `https`. The server's certificate is verified against the built-in
@@ -107,7 +108,7 @@ public def connect :: fun string -> task (result connection string) = built-in "
 # the certificate doesn't check out.
 #
 #     try conn = net.connect-tls "example.com:443"
-public def connect-tls :: fun string -> task (result connection string) = fun address {
+public def connect-tls :: fun string -> task connection string = fun address {
 	connect-tls-raw address
 }
 
@@ -118,9 +119,9 @@ public def connect-tls :: fun string -> task (result connection string) = fun ad
 # else behaves like `connect-tls`.
 #
 #     try conn = net.connect-tls-trusting "internal.example:443" ca-pem
-public def connect-tls-trusting :: fun string string -> task (result connection string) = fun address ca {
+public def connect-tls-trusting :: fun string string -> task connection string = fun address ca {
 	# The host takes one string and splits the trust anchor off on a tab.
 	connect-tls-raw (address ++ "\t" ++ ca)
 }
 
-def connect-tls-raw :: fun string -> task (result connection string) = built-in "net-connect-tls"
+def connect-tls-raw :: fun string -> task connection string = built-in "net-connect-tls"

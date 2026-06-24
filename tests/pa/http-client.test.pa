@@ -21,7 +21,7 @@ def read-headers :: fun net.connection bytes -> task (result bytes string) = fun
 	if bytes.contains acc crlf2 {
 		task.ok (ok acc)
 	} else {
-		try r = net.read conn 4096
+		try r = task.attempt (net.read conn 4096)
 		when r is ok chunk {
 			if bytes.is-empty chunk {
 				task.ok (ok acc)
@@ -38,7 +38,7 @@ def write-bytes :: fun net.connection bytes -> task (result int string) = fun co
 	if bytes.is-empty data {
 		task.ok (ok 0)
 	} else {
-		try w = net.write conn data
+		try w = task.attempt (net.write conn data)
 		when w is ok n {
 			if n >= bytes.length data {
 				task.ok (ok n)
@@ -60,7 +60,7 @@ def close-it :: fun net.connection -> nothing = fun conn {
 
 # Serve one hand-rolled chunked response: "Hello" + " World" as two chunks.
 def serve-chunked :: fun net.listener -> task nothing = fun server {
-	try conn = task.flatten (net.accept server)
+	try conn = net.accept server
 	try _req = task.flatten (read-headers conn (string.to-bytes ""))
 	let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n"
 	try _sent = task.flatten (write-bytes conn (string.to-bytes resp))
@@ -101,7 +101,7 @@ def count-accepts :: fun net.listener (ref int) -> task nothing = fun server cou
 # Settles to `some conn` for a freshly accepted (and counted) connection, `none`
 # when a served connection finishes -- one homogeneous type for the manual scope.
 def accept-conn :: fun net.listener (ref int) -> task (option net.connection) = fun server counter {
-	try c = net.accept server
+	try c = task.attempt (net.accept server)
 	when c is ok conn {
 		ref.set counter (ref.get counter + 1)
 		task.ok (some conn)
@@ -192,7 +192,7 @@ def run-reuse :: fun nothing -> task (int, int) string = fun {
 # Serve a gzip-compressed body, labelled `Content-Encoding: gzip`. The payload is
 # produced by `compress.gzip`, so the client must run the codec to recover it.
 def serve-gzip :: fun net.listener -> task nothing = fun server {
-	try conn = task.flatten (net.accept server)
+	try conn = net.accept server
 	try _req = task.flatten (read-headers conn (string.to-bytes ""))
 	let payload = compress.gzip (string.to-bytes "compressed hello")
 	let head = "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: " ++ to-string (bytes.length payload) ++ "\r\nConnection: close\r\n\r\n"

@@ -313,7 +313,7 @@ def ensure :: fun conn int -> task bytes string = fun c n {
 	if bytes.length cur >= n {
 		task.ok cur
 	} else {
-		try r = net.read c.raw 4096
+		try r = task.attempt (net.read c.raw 4096)
 		when r is ok chunk {
 			if bytes.is-empty chunk {
 				task.ok cur
@@ -382,9 +382,9 @@ public def connect :: fun string -> task conn string = fun url {
 
 def open :: fun bool string -> task (result net.connection string) = fun secure authority {
 	if secure {
-		net.connect-tls authority
+		task.attempt (net.connect-tls authority)
 	} else {
-		net.connect authority
+		task.attempt (net.connect authority)
 	}
 }
 
@@ -415,7 +415,7 @@ def read-until-crlf2 :: fun net.connection bytes -> task bytes string = fun sock
 	if bytes.contains acc crlf2 {
 		task.ok acc
 	} else {
-		try r = net.read sock 4096
+		try r = task.attempt (net.read sock 4096)
 		when r is ok chunk {
 			if bytes.is-empty chunk {
 				task.ok acc
@@ -504,7 +504,7 @@ def write-all :: fun net.connection bytes -> task nothing string = fun conn data
 	if bytes.is-empty data {
 		task.ok ()
 	} else {
-		try n = task.flatten (net.write conn data)
+		try n = net.write conn data
 		if n >= bytes.length data {
 			task.ok ()
 		} else {

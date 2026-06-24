@@ -1316,7 +1316,7 @@ pub(crate) fn build_pump_fn(
 						elem(w, tp, 0);
 						unbox_i_any(w); // listener id
 						w.call(net.accept);
-						net_settle(w, g, fid, fval, fkind, nm, |w, n| {
+						net_settle(w, g, fid, fval, fkind, nm, true, |w, n| {
 							box_i(w, |w| {
 								w.local_get(n);
 							});
@@ -1338,7 +1338,7 @@ pub(crate) fn build_pump_fn(
 						unbox_i_any(w); // connection id
 						w.local_get(dst).local_get(max);
 						w.call(net.read);
-						net_settle(w, g, fid, fval, fkind, nm, move |w, n| {
+						net_settle(w, g, fid, fval, fkind, nm, true, move |w, n| {
 							w.i32(types::TAG_BYTES);
 							w.local_get(dst).local_get(n).call(nm.load);
 							w.struct_new(types::T_STR);
@@ -1363,7 +1363,7 @@ pub(crate) fn build_pump_fn(
 						unbox_i_any(w); // connection id
 						w.local_get(src).local_get(blen);
 						w.call(net.write);
-						net_settle(w, g, fid, fval, fkind, nm, |w, n| {
+						net_settle(w, g, fid, fval, fkind, nm, true, |w, n| {
 							box_i(w, |w| {
 								w.local_get(n);
 							});
@@ -1380,7 +1380,7 @@ pub(crate) fn build_pump_fn(
 						w.local_get(fid);
 						w.local_get(ap).local_get(al);
 						w.call(net.connect);
-						net_settle(w, g, fid, fval, fkind, nm, |w, n| {
+						net_settle(w, g, fid, fval, fkind, nm, true, |w, n| {
 							box_i(w, |w| {
 								w.local_get(n);
 							});
@@ -1395,7 +1395,7 @@ pub(crate) fn build_pump_fn(
 						w.local_get(fid);
 						w.local_get(ap).local_get(al);
 						w.call(net.connect_tls);
-						net_settle(w, g, fid, fval, fkind, nm, |w, n| {
+						net_settle(w, g, fid, fval, fkind, nm, true, |w, n| {
 							box_i(w, |w| {
 								w.local_get(n);
 							});
@@ -1418,7 +1418,7 @@ pub(crate) fn build_pump_fn(
 						elem(w, tp, 0);
 						w.ref_cast(types::T_INT).struct_get(types::T_INT, 1); // nanos (i64)
 						w.call(offload.sleep);
-						net_settle(w, g, fid, fval, fkind, nm, |w, _n| {
+						net_settle(w, g, fid, fval, fkind, nm, false, |w, _n| {
 							push_nothing(w);
 						});
 					});
@@ -1446,7 +1446,7 @@ pub(crate) fn build_pump_fn(
 						w.local_get(dp).local_get(dlen);
 						w.local_get(dst).i32(CAP);
 						w.call(offload.op);
-						net_settle(w, g, fid, fval, fkind, nm, move |w, n| {
+						net_settle(w, g, fid, fval, fkind, nm, false, move |w, n| {
 							if let Some(copyout) = nm.copyout {
 								w.local_get(n).i32(CAP).i32_gt_s();
 								w.if_(|w| {
@@ -1485,7 +1485,7 @@ pub(crate) fn build_pump_fn(
 						w.local_get(pp).local_get(plen);
 						w.local_get(dst).i32(CAP);
 						w.call(offload.db);
-						net_settle(w, g, fid, fval, fkind, nm, move |w, n| {
+						net_settle(w, g, fid, fval, fkind, nm, false, move |w, n| {
 							if let Some(copyout) = nm.copyout {
 								w.local_get(n).i32(CAP).i32_gt_s();
 								w.if_(|w| {
@@ -3810,6 +3810,7 @@ fn net_settle(
 	fval: Local,
 	fkind: Local,
 	nm: NetMarshal,
+	channel: bool,
 	build_ok: impl FnOnce(&mut Wat, Local),
 ) {
 	let n = w.local(ValType::I32);
@@ -3829,21 +3830,57 @@ fn net_settle(
 			w.br("ret");
 		},
 		|w| {
-			// Ready: build a payload-or-null and shape it through `__io_result` — status
-			// 0 → `ok <payload>`, non-zero → null → `err (io-last-error())` (the message
-			// was set host-side, same channel as `std/sys/io`).
-			w.local_get(status).i32(2).i32_eq(); // err?
-			w.if_result(
-				types::value_ref(),
-				|w| {
-					w.ref_null(types::T_VALUE); // err → null
-				},
-				|w| build_ok(w, n), // ok → the op's payload
-			);
-			w.call(nm.io_result);
-			w.local_set(fval);
-			w.i32(focus::OK).local_set(fkind);
-			w.br("main");
+			if channel {
+				// Channel form (`task a string`): the host's verdict drives the fiber's
+				// own success/failure channel — status 2 → fail with the bare
+				// `io-last-error()` message, else succeed with the op's payload. No
+				// `result` value is ever built.
+				let dst = w.local(ValType::I32);
+				let elen = w.local(ValType::I32);
+				w.local_get(status).i32(2).i32_eq(); // err?
+				w.if_else(
+					|w| {
+						// fail: fval = $str(io-last-error()), fkind = Err. Same scratch
+						// dance as `__io_result`'s err arm.
+						w.i32(0).global_set(nm.bump);
+						w.i32(crate::helpers::io::ERR_CAP)
+							.call(nm.alloc)
+							.local_set(dst);
+						w.local_get(dst)
+							.i32(crate::helpers::io::ERR_CAP)
+							.call(nm.io_last_error)
+							.local_set(elen);
+						w.i32(types::TAG_STR);
+						w.local_get(dst).local_get(elen).call(nm.load);
+						w.struct_new(types::T_STR);
+						w.local_set(fval);
+						w.i32(focus::ERR).local_set(fkind);
+						w.br("main");
+					},
+					|w| {
+						build_ok(w, n); // ok → the op's bare payload
+						w.local_set(fval);
+						w.i32(focus::OK).local_set(fkind);
+						w.br("main");
+					},
+				);
+			} else {
+				// Value form (`task (result a string)`): build a payload-or-null and shape
+				// it through `__io_result` — status 0 → `ok <payload>`, non-zero → null →
+				// `err (io-last-error())` — then settle the fiber `OK` carrying that value.
+				w.local_get(status).i32(2).i32_eq(); // err?
+				w.if_result(
+					types::value_ref(),
+					|w| {
+						w.ref_null(types::T_VALUE); // err → null
+					},
+					|w| build_ok(w, n), // ok → the op's payload
+				);
+				w.call(nm.io_result);
+				w.local_set(fval);
+				w.i32(focus::OK).local_set(fkind);
+				w.br("main");
+			}
 		},
 	);
 }

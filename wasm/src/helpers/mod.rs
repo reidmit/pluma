@@ -670,6 +670,7 @@ pub(crate) static REGISTRY: [HelperDef; Helper::COUNT] = [
 					store: c.dep(H::MarshalStore),
 					load: c.dep(H::MarshalLoad),
 					io_result: c.dep(H::IoResult),
+					io_last_error: c.io_last_error(),
 					bump: c.rt.bump,
 					copyout: c.rt.io_copyout,
 				});

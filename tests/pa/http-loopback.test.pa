@@ -22,7 +22,7 @@ def handler :: fun http.request -> task http.response = fun req {
 # `std/sys/net` reads carry their failure inside the task (`task (result …)`), so
 # `task.flatten` joins it onto this task's own failure channel and the loop reads linearly.
 def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
-	try chunk = task.flatten (net.read conn 4096)
+	try chunk = net.read conn 4096
 	if bytes.is-empty chunk {
 		task.ok acc
 	} else {
@@ -31,8 +31,8 @@ def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
 }
 
 def client :: fun string -> task string = fun addr {
-	try conn = task.flatten (net.connect addr)
-	try task.flatten (net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"))
+	try conn = net.connect addr
+	try net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
 	try raw = drain conn (string.to-bytes "")
 	net.close conn
 	task.ok (bytes.to-string raw ?? "<bad utf8>")

@@ -720,6 +720,10 @@ pub(crate) struct NetMarshal {
 	pub(crate) store: u32,
 	pub(crate) load: u32,
 	pub(crate) io_result: u32,
+	/// `io-last-error` host import — the bare error `$str` set on a failing io/net
+	/// call. `io_result` reads it to shape an `err` *value*; `net_settle`'s
+	/// channel form reads it to settle the fiber's failure channel directly.
+	pub(crate) io_last_error: u32,
 	pub(crate) bump: u32,
 	/// `io-copyout` host import — drains the host's overflow stash when a read's bytes
 	/// didn't fit the first `(dst, cap)` buffer. `Some` only for offload-fs reads (whose

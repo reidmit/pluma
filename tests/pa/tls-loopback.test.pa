@@ -48,9 +48,9 @@ def key :: string = """
 # Accept one TLS connection, read the request, reply, and close. The server-side
 # handshake happens transparently inside the first `read`.
 def serve-echo :: fun net.listener -> task nothing = fun server {
-	try conn = task.flatten (net.accept server)
-	try _req = task.flatten (net.read conn 1024)
-	try _sent = task.flatten (net.write conn (string.to-bytes "pong"))
+	try conn = net.accept server
+	try _req = net.read conn 1024
+	try _sent = net.write conn (string.to-bytes "pong")
 	net.close conn
 	task.ok ()
 }
@@ -58,9 +58,9 @@ def serve-echo :: fun net.listener -> task nothing = fun server {
 # Connect over TLS (trusting our self-signed cert), send a request, read the reply.
 # The client-side handshake happens transparently inside the first `write`.
 def talk :: fun string -> task string string = fun addr {
-	try conn = task.flatten (net.connect-tls-trusting addr cert)
-	try _sent = task.flatten (net.write conn (string.to-bytes "ping"))
-	try reply = task.flatten (net.read conn 1024)
+	try conn = net.connect-tls-trusting addr cert
+	try _sent = net.write conn (string.to-bytes "ping")
+	try reply = net.read conn 1024
 	net.close conn
 	task.ok (bytes.to-string reply ?? "<non-utf8>")
 }

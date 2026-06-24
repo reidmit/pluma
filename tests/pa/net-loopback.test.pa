@@ -14,9 +14,9 @@ use std/sys/net
 
 # Accept one client, echo back whatever it sends, then close.
 def serve-one = fun server {
-	try c = net.accept server
+	try c = task.attempt (net.accept server)
 	when c is ok conn {
-		try r = net.read conn 1024
+		try r = task.attempt (net.read conn 1024)
 		when r is ok msg {
 			try net.write conn msg
 			net.close conn
@@ -31,10 +31,10 @@ def serve-one = fun server {
 
 # Connect, send a line, read the echo, hand it back as a string.
 def round-trip = fun addr {
-	try c = net.connect addr
+	try c = task.attempt (net.connect addr)
 	when c is ok conn {
 		try net.write conn (string.to-bytes "hello over tcp")
-		try r = net.read conn 1024
+		try r = task.attempt (net.read conn 1024)
 		net.close conn
 		when r is ok reply {
 			task.ok (bytes.to-string reply ?? "<bad utf8>")

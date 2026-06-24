@@ -226,7 +226,7 @@ enum serve-event {
 
 # The acceptor child: wait for one connection and tag the outcome.
 def accept-one :: fun net.listener -> task serve-event = fun server {
-	try c = net.accept server
+	try c = task.attempt (net.accept server)
 	when c is ok conn {
 		task.ok (serve-event.arrived conn)
 	} is err _ {
@@ -354,7 +354,7 @@ def read-until-headers :: fun net.connection bytes -> task (result bytes string)
 	if bytes.contains acc crlf2 {
 		task.ok (ok acc)
 	} else {
-		try r = net.read conn 4096
+		try r = task.attempt (net.read conn 4096)
 		when r is ok chunk {
 			if bytes.is-empty chunk {
 				task.ok (ok acc)
@@ -374,7 +374,7 @@ def read-body-framed :: fun net.connection bytes int -> task (result (bytes, byt
 	if bytes.length acc >= need {
 		task.ok (ok (bytes.slice acc 0 need, bytes.slice acc need (bytes.length acc)))
 	} else {
-		try r = net.read conn 4096
+		try r = task.attempt (net.read conn 4096)
 		when r is ok chunk {
 			if bytes.is-empty chunk {
 				task.ok (ok (acc, string.to-bytes ""))
@@ -393,7 +393,7 @@ def read-body :: fun net.connection bytes int -> task (result bytes string) = fu
 	if bytes.length acc >= need {
 		task.ok (ok (bytes.slice acc 0 need))
 	} else {
-		try r = net.read conn 4096
+		try r = task.attempt (net.read conn 4096)
 		when r is ok chunk {
 			if bytes.is-empty chunk {
 				task.ok (ok acc)
@@ -494,7 +494,7 @@ def write-all :: fun net.connection bytes -> task (result int string) = fun conn
 	if bytes.is-empty data {
 		task.ok (ok 0)
 	} else {
-		try w = net.write conn data
+		try w = task.attempt (net.write conn data)
 		when w is ok n {
 			if n >= bytes.length data {
 				task.ok (ok n)
@@ -793,12 +793,12 @@ def url-secure :: fun string -> bool = fun url {
 def open-conn :: fun bool string (option string) -> task (result connection string) = fun secure authority ca {
 	if secure {
 		when ca is some pem {
-			net.connect-tls-trusting authority pem
+			task.attempt (net.connect-tls-trusting authority pem)
 		} is none {
-			net.connect-tls authority
+			task.attempt (net.connect-tls authority)
 		}
 	} else {
-		net.connect authority
+		task.attempt (net.connect authority)
 	}
 }
 
@@ -1013,7 +1013,7 @@ def response-keep-alive :: fun (dict string string) -> bool = fun headers {
 
 # Read a close-delimited body: everything until the peer hangs up.
 def read-to-close :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
-	try r = net.read conn 4096
+	try r = task.attempt (net.read conn 4096)
 	when r is ok chunk {
 		if bytes.is-empty chunk {
 			task.ok (ok acc)
@@ -1067,7 +1067,7 @@ def read-chunked :: fun net.connection bytes bytes -> task (result bytes string)
 
 # Read one more block into `buf`; fail if the peer closed before the body ended.
 def chunked-pull :: fun net.connection bytes -> task (result bytes string) = fun conn buf {
-	try r = net.read conn 4096
+	try r = task.attempt (net.read conn 4096)
 	when r is ok chunk {
 		if bytes.is-empty chunk {
 			task.ok (err "http.fetch: connection closed mid chunked body")
@@ -1221,7 +1221,7 @@ def read-event :: fun net.connection (ref bytes) -> task (option bytes) = fun co
 		ref.set buf pair.1
 		parse-event pair.0
 	} is none {
-		try r = net.read conn 4096
+		try r = task.attempt (net.read conn 4096)
 		when r is ok chunk {
 			if bytes.is-empty chunk {
 				task.ok none
