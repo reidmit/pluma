@@ -184,7 +184,7 @@ public def from-list :: fun (list int) -> result bytes string = fun xs {
 
 # Walks the list once checking every int fits in a byte, stopping at the
 # first that doesn't. Index-based so it never copies the tail (the O(n^2)
-# trap). `from-list` runs this before `build`, so the build never sees an
+# crash). `from-list` runs this before `build`, so the build never sees an
 # out-of-range int.
 def check-range :: fun (list int) int int -> result nothing string = fun xs n i {
 	if i >= n {

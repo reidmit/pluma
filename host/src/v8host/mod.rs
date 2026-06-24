@@ -135,7 +135,7 @@ fn stderr_is_color() -> bool {
 /// output streams in finish order (not module order) — a shared lock serializes
 /// printing so modules never interleave mid-line. Once all threads join, one
 /// aggregate summary closes the run. Exit code: 0 all-pass, 1 on any failure or
-/// trap.
+/// crash.
 pub fn run_test_v8(bytes: &[u8], num_modules: usize, color: bool) -> i32 {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use std::sync::{Arc, Mutex};
@@ -271,8 +271,8 @@ fn compile_to_shared(bytes: &[u8]) -> Option<v8::CompiledWasmModule> {
 }
 
 /// Map a run's status string to a `pluma test` exit code: `ok` → 0, a clean test
-/// failure (`run-all` returns `err ""`) → 1 silently, and a genuine trap → 1 with
-/// its message on stderr.
+/// failure (`run-all` returns `err ""`) → 1 silently, and a genuine runtime error
+/// → 1 with its message on stderr.
 fn test_exit_code(status: &str) -> i32 {
 	match status {
 		"ok" => 0,
@@ -339,8 +339,8 @@ fn run_in_fresh_isolate(
 	let ctx_ptr = &mut ctx as *mut Ctx;
 
 	let isolate = &mut v8::Isolate::new(Default::default());
-	// Capture a stack trace for an uncaught exception (a wasm trap or `io.fail`), so
-	// the trap arm in `run_in_context` can render a Pluma backtrace from the frames.
+	// Capture a stack trace for an uncaught exception (a wasm fault or `io.fail`), so
+	// the crash arm in `run_in_context` can render a Pluma backtrace from the frames.
 	isolate.set_capture_stack_trace_for_uncaught_exceptions(true, 64);
 	let scope = &mut v8::HandleScope::new(isolate);
 	let context = v8::Context::new(scope, Default::default());
@@ -359,7 +359,7 @@ fn run_in_fresh_isolate(
 /// The body of a run, inside an entered context: compile the WasmGC module, then
 /// instantiate it and run `_entry`. Returns the program status string.
 fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut Ctx) -> String {
-	// The trap source-map (module byte offset -> .pa line:col), read from the
+	// The crash source-map (module byte offset -> .pa line:col), read from the
 	// artifact's `pluma_lines` section. Only the from-bytes path carries it; a shared
 	// compiled module degrades to name-only frames.
 	let line_table = match &src {
@@ -548,7 +548,7 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 		.and_then(|v| v.try_into().ok())
 		.expect("_entry export");
 
-	// Call `_entry(null)`, catching an `io.fail` (or any) trap.
+	// Call `_entry(null)`, catching an `io.fail` (or any) runtime fault.
 	let recv = v8::undefined(scope).into();
 	let null = v8::null(scope).into();
 	let tc = &mut v8::TryCatch::new(scope);
@@ -559,8 +559,9 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 			entry_error(tc, exports, ret)
 		}
 		None => {
-			// A trap. An `io.fail` stashed its message host-side; surface that, else the
-			// raw V8 exception text (e.g. a wasm RuntimeError) so the reason isn't lost.
+			// A runtime fault. An `io.fail` stashed its message host-side; surface that,
+			// else the raw V8 exception text (e.g. a wasm RuntimeError) so the reason
+			// isn't lost.
 			let base = match unsafe { &*ctx_ptr }.state.fail.clone() {
 				Some(msg) => format!("runtime error: {msg}"),
 				None => {
@@ -572,16 +573,16 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 					// own `runtime error:` label (e.g. just `divide by zero`).
 					let detail = detail.strip_prefix("RuntimeError: ").unwrap_or(&detail);
 					if detail.is_empty() {
-						"runtime error: trap".to_string()
+						"runtime error".to_string()
 					} else {
 						format!("runtime error: {detail}")
 					}
 				}
 			};
 			// An optional escape hatch for calibrating against V8's own rendering.
-			if std::env::var_os("PLUMA_TRAP_STACK").is_some() {
+			if std::env::var_os("PLUMA_CRASH_STACK").is_some() {
 				if let Some(st) = tc.stack_trace() {
-					eprintln!("[trap stack] {}", st.to_rust_string_lossy(tc));
+					eprintln!("[crash stack] {}", st.to_rust_string_lossy(tc));
 				}
 			}
 			// Append a Pluma backtrace: the named wasm frames (innermost first) that the
@@ -607,7 +608,7 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 						out.push_str("\n  at ");
 						out.push_str(name);
 						// V8 reports a wasm frame's module byte offset as its 1-based
-						// column; resolve it to the trap's .pa line:col. The label is the
+						// column; resolve it to the fault's .pa line:col. The label is the
 						// module, so this reads as a `module:line:col` source location
 						// (rendered 1-based). Without a mapping, the bare module stands.
 						let col = frame.get_column();

@@ -9,7 +9,7 @@ use wasm_encoder::{Function, ValType};
 /// `==`: same-typed operands (the type checker guarantees it), IEEE float compare
 /// (so `nan != nan`), byte-exact strings. `self_idx` is `__eq`'s own wasm index
 /// (for the variant-payload recursion). Tuples/lists/records are not yet handled
-/// (they trap — a clear signal to implement them, not a silent wrong answer).
+/// (they fault — a clear signal to implement them, not a silent wrong answer).
 pub(crate) fn build_eq_fn(
 	self_idx: u32,
 	dict_eq_idx: u32,
@@ -275,7 +275,7 @@ pub(crate) fn build_eq_fn(
 	// equality is undecidable (functions/tasks) or, for handles/cells, identity is
 	// the designed semantics. Folding them all in here keeps `==` *total* over every
 	// value a user program can hold — so `signal.set`'s value-equality short-circuit
-	// is safe for a signal of any element type, never trapping.
+	// is safe for a signal of any element type, never faulting.
 	w.local_get(ta).i32(types::TAG_CLOSURE).i32_eq();
 	w.local_get(ta).i32(types::TAG_CTOR).i32_eq();
 	w.i32_or();
@@ -292,7 +292,7 @@ pub(crate) fn build_eq_fn(
 	});
 	// Only `$cnode` (an internal `$dict` trie node, which never escapes to user code)
 	// can reach here — so anything that does is a structural type missing an `__eq`
-	// arm: trap loudly rather than answer wrong.
+	// arm: fault loudly rather than answer wrong.
 	w.unreachable();
 	w.finish()
 }

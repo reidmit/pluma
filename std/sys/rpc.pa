@@ -78,7 +78,7 @@ public def skew-response :: fun nothing -> http.response = fun {
 
 # A handler aborts with a specific HTTP status by `reject`ing. The status can't
 # ride the (erased) task-failure value safely -- the dispatcher would have to
-# pattern-match an arbitrary failure, and matching a non-variant value traps -- so
+# pattern-match an arbitrary failure, and matching a non-variant value crashes -- so
 # it rides a per-request `ref` the dispatcher binds via `local`: `reject` writes
 # the status into it, then fails the task so the handler unwinds. `respond` reads
 # the ref after catching the failure, never inspecting the failure value itself.
@@ -102,7 +102,7 @@ public def reject :: fun int -> task a _ = fun status {
 # calls the real handler and wire-encodes its result to bytes. We bind the request
 # as ambient `context` (so the handler can read headers) and a fresh `reject` box,
 # run the handler reifying any failure with `task.attempt` -- WITHOUT inspecting
-# the failure value, since matching an erased failure would trap -- and shape the
+# the failure value, since matching an erased failure would crash -- and shape the
 # outcome: 200 + bytes on success, the rejected status on a `reject`, 500 on any
 # other failure. Running `produce` *inside* the bindings is what makes
 # `context`/`reject` visible to the handler (a synchronous read sees the binding

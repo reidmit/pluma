@@ -92,7 +92,7 @@ pub(crate) fn build_variant_from_array_fn() -> Function {
 /// display name as a `$str` from its global ctor id, for the cold print/wire paths.
 /// `names[gid] = (offset, len)` into the interned-string data segment, so each arm
 /// rebuilds the constant `$str` from segment 0 (like `str_lit`). An id past the table
-/// (shouldn't happen) yields the empty string rather than trapping.
+/// (shouldn't happen) yields the empty string rather than faulting.
 pub(crate) fn build_variant_name_fn(names: &[(u32, u32)]) -> Function {
 	let mut w = Wat::new(1);
 	let gid = w.param(0);

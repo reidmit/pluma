@@ -751,6 +751,22 @@ impl<'compiler> Analyzer<'compiler> {
 			),
 			Range::collapsed(0, 0),
 		);
+		// `crash: forall a. string -> a` — stop the program right now with a
+		// message. The message goes to stderr, the exit code is nonzero, and a
+		// backtrace follows. It diverges, so its result type is free to be
+		// anything (it can stand in for any expression).
+		let crash_var = self.next_type_var_id;
+		self.next_type_var_id += 1;
+		self.add_value_binding(
+			"crash".into(),
+			Scheme::Forall(
+				vec![crash_var],
+				vec![],
+				vec![],
+				Type::Fun(vec![Type::String], Box::new(Type::Var(crash_var))),
+			),
+			Range::collapsed(0, 0),
+		);
 
 		// Implicit prelude import. Every user module sees `__prelude__`'s
 		// enums (option, result, ordering) and their variant
@@ -2225,7 +2241,7 @@ impl<'compiler> Analyzer<'compiler> {
 	// named type var, or `_` for one the writer deliberately leaves to
 	// inference (`task a _`). A count that doesn't match the constructor's
 	// arity — too few or too many — is an error, so an accidentally-dropped
-	// argument can't silently become a forever-polymorphic var (the trap in
+	// argument can't silently become a forever-polymorphic var (the fault in
 	// body-less builtin signatures, which have no body to pin it down).
 	fn resolve_enum_args(
 		&mut self,
@@ -7552,7 +7568,7 @@ impl<'compiler> Analyzer<'compiler> {
 					// var outside this set escaped a local `let` that generalized a
 					// constrained value (which has no dict param); fabricating a slot for
 					// it would give the def a phantom dict param no caller supplies — a
-					// runtime trap. Report it as ambiguous instead.
+					// runtime fault. Report it as ambiguous instead.
 					let def_type_vars = subst.apply_to_type(&body_expr.ty).free_vars();
 
 					// First-seen ordering of (trait, var_id) → slot index.

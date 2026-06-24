@@ -7,7 +7,7 @@ use std/sys/io
 # Phase 2 classification: `error.is-a` recovers *which* leaf constructor a
 # failure was erased from -- through any amount of layered `context` -- by
 # comparing global constructor ids, without ever recovering the payload. It
-# distinguishes variants of the same enum and across enums, and never traps on
+# distinguishes variants of the same enum and across enums, and never crashes on
 # a non-variant argument.
 
 enum db-error {
@@ -57,7 +57,7 @@ def run = fun {
 		print (show (error.is-a wrapped db-error.timeout))
 		print (show (error.is-a wrapped db-error.refused))
 		print (show (error.is-a wrapped net-error.unreachable))
-		# a non-variant exemplar never matches and never traps
+		# a non-variant exemplar never matches and never crashes
 		print (show (error.is-a wrapped 0))
 		# a bare error carries no leaf constructor
 		print (show (error.is-a (error.new "empty") db-error.timeout))

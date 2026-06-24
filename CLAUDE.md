@@ -12,7 +12,7 @@ Crate layout is a normal Cargo workspace — frontend (`compiler`: tokenize → 
 
 ## Pluma syntax
 
-Pluma's syntax has some unique quirks. When in doubt, mirror a fixture in `tests/run/` (`grep tests/run/*/main.pa` for a working example); the full syntax is documented in `website/reference.pa`. The traps worth memorizing:
+Pluma's syntax has some unique quirks. When in doubt, mirror a fixture in `tests/run/` (`grep tests/run/*/main.pa` for a working example); the full syntax is documented in `website/reference.pa`. The pitfalls worth memorizing:
 
 - **Calls are uncurried and mostly paren-free.** Single arg: `print x`, `fact 5`. Multiple: `add x y`. Parens only group sub-expressions: `print (fact 5)`. `add 5` is an arity error, not partial application — wrap it: `fun y { add 5 y }`.
 - **Zero-arg calls use `()`, not `{}`.** `dict.empty ()`, `io.read ()`. `{}` is a block.

@@ -162,8 +162,8 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 		return Err(diags);
 	}
 	// 4. Append the `pluma_lines` source-map: lift each function's body-relative
-	//    marks to module offsets (V8 reports a trap's module byte offset), so the
-	//    host can resolve a trap to its `.pa` line. Custom sections trail the code
+	//    marks to module offsets (V8 reports a fault's module byte offset), so the
+	//    host can resolve a fault to its `.pa` line. Custom sections trail the code
 	//    section, so they don't shift the offsets they describe.
 	append_line_section(&mut bytes, &line_table);
 	Ok(bytes)

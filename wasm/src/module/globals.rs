@@ -95,7 +95,7 @@ pub(super) fn build_globals(
 	// The `wire` codec's scratch globals (heterogeneous types, so not via
 	// `alloc_slot`). Reset at each `wire-encode`/`wire-decode` call site; the
 	// ref-typed ones (`buf`/`input`/`ctx`) start null and are pre-initialized before
-	// any array op so they never trap.
+	// any array op so they never fault.
 	if needs_wire_codec {
 		let mut wire_global = |val_type: ValType, init: &ConstExpr| -> u32 {
 			let idx = gidx;

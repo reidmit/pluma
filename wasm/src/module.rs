@@ -581,7 +581,7 @@ impl Module {
 		let data_count = DataCountSection { count: 1 };
 
 		// Name section: label every defined function with its Pluma identity, so a V8
-		// trap stack trace reads as `module.name` frames instead of `wasm-function[N]`.
+		// fault stack trace reads as `module.name` frames instead of `wasm-function[N]`.
 		// Function indices follow the emission order — imports, IR functions, synthetic
 		// helpers, builtin wrappers — so the labels are gathered in that same order and
 		// sorted (helper indices aren't allocated in `REGISTRY` order) before encoding,
@@ -593,7 +593,7 @@ impl Module {
 		for (i, &fid) in reach.order.iter().enumerate() {
 			let f = &p.functions[fid as usize];
 			// Label the frame with the module's source path (`tests/app/main.pa`), so a
-			// trap renders as a jumpable `path:line:col` once the host appends the line.
+			// fault renders as a jumpable `path:line:col` once the host appends the line.
 			// A function whose module has no recorded path (synthetic scaffolding) falls
 			// back to its IR name minus the `.fun@line:col` definition-site suffix.
 			let label = p.module_paths.get(&f.module).cloned().unwrap_or_else(|| {

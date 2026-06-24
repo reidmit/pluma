@@ -547,8 +547,8 @@ fn build_poll_fn(f: &Function) -> Option<Function> {
 		blocks: Vec::new(),
 		loop_ctx: Vec::new(),
 	};
-	let trap = cfg.new_block(Vec::new(), Term::Return(Atom::Const(Const::Unit)));
-	let entry = cfg.build(&f.body.0, trap);
+	let halt = cfg.new_block(Vec::new(), Term::Return(Atom::Const(Const::Unit)));
+	let entry = cfg.build(&f.body.0, halt);
 	let blocks = renumber(&cfg.blocks, entry);
 	let n = blocks.len();
 
@@ -626,7 +626,7 @@ fn build_poll_fn(f: &Function) -> Option<Function> {
 			// (`return_call`). But in a poll fn that `Return` is rewritten to wrap
 			// `v` in a `ready`/`pending` variant, so the call is no longer in tail
 			// position — a `return_call` would skip the wrapping and hand the
-			// callee's raw result to the driver, which traps casting it to `__poll`.
+			// callee's raw result to the driver, which faults casting it to `__poll`.
 			// Downgrade to the ordinary frame-returning call so the wrapping runs.
 			// (Async self-recursion already rides the poll machine, so no TCO is
 			// lost.) `TailCallDirect` shouldn't exist yet — `resolve_direct_calls`

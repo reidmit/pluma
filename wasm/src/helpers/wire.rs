@@ -746,7 +746,7 @@ pub(crate) fn build_wire_enc_variant_fn(
 
 /// Build `__wire_rbyte() -> i32`: read one input byte, advancing `g_pos`. Once
 /// `g_err` is set (or the cursor is at end) it's a no-op returning 0, so the
-/// first error wins and over-reads don't trap.
+/// first error wins and over-reads don't fault.
 pub(crate) fn build_wire_rbyte_fn(g: WireGlobals) -> Function {
 	let mut w = Wat::new(0);
 	let byte = w.local(ValType::I32);

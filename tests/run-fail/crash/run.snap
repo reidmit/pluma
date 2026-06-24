@@ -1,0 +1,11 @@
+---
+source: tests/run.rs
+expression: combined
+---
+== status ==
+runtime error
+== stdout ==
+before
+== stderr ==
+stopping on purpose
+  at tests/run-fail/crash/main.pa:6:2

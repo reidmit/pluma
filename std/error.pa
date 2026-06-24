@@ -57,7 +57,7 @@ opaque enum error {
 
 # The global constructor id of a variant value (unique across every enum), or -1
 # for any non-variant. The safe tag read `from`/`is` classify on -- it never
-# traps, even on an int or a string.
+# crashes, even on an int or a string.
 def variant-gid :: fun a -> int = built-in "variant-gid"
 
 # A fresh error from a plain message, with no cause beneath it.

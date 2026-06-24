@@ -92,7 +92,7 @@ pub(crate) fn build_denominalize_fn(
 
 /// Build `__getfield(record, name) -> value`: linear-scan the record's
 /// name-sorted `names` array, comparing each to `name` via `__eq`; return the
-/// parallel `values` element on match. Traps if absent (the type checker
+/// parallel `values` element on match. Faults if absent (the type checker
 /// guarantees the field exists).
 pub(crate) fn build_getfield_fn(eq_idx: u32, denom_idx: u32) -> Function {
 	let mut w = Wat::new(2);
@@ -117,7 +117,7 @@ pub(crate) fn build_getfield_fn(eq_idx: u32, denom_idx: u32) -> Function {
 	w.i32(0).local_set(i);
 	w.block("done", |w| {
 		w.loop_("lp", |w| {
-			w.local_get(i).local_get(n).i32_ge_s().br_if("done"); // not found -> fall out (then trap)
+			w.local_get(i).local_get(n).i32_ge_s().br_if("done"); // not found -> fall out (then fault)
 			w.local_get(names).local_get(i).array_get(types::T_VALARRAY);
 			w.local_get(name).call(eq_idx);
 			w.if_(|w| {

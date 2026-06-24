@@ -626,7 +626,7 @@ impl<'a> FnEmitter<'a> {
 
 	/// Step 2.0 debug cross-check: assert the statically-resolved slot for `name`
 	/// within `shape` matches the runtime record's layout. Reads `names[slot]` off
-	/// the record in local `rec` and traps (`unreachable`) unless it equals the
+	/// the record in local `rec` and faults (`unreachable`) unless it equals the
 	/// constant field name `name`. Stack-neutral, and emitted only when a closed
 	/// shape was threaded *and* this is a debug build — release builds are
 	/// byte-for-byte unchanged. The real field read still goes through the
@@ -2060,7 +2060,7 @@ impl<'a> FnEmitter<'a> {
 	/// backing; the `*-bytes` raw writers take the `bytes` value's `$bytes` backing
 	/// directly. `__send_bytes` copies it to scratch offset 0 and returns the length;
 	/// the host appends a newline for the `print`-family variants. Returns `nothing`
-	/// (`io.fail` traps host-side before returning).
+	/// (`io.fail` faults host-side before returning).
 	fn emit_byte_writer(&mut self, tag: &str, idx: u32, arg: &Atom) {
 		let Some(send) = self.runtime.idx(Helper::MarshalSend) else {
 			self.diags.push(format!("`{tag}` needs __send_bytes"));
@@ -3306,7 +3306,7 @@ impl<'a> FnEmitter<'a> {
 			// variant.gid v : the global constructor id (field 2 of `$variant`) of a
 			// variant value, or -1 for any non-variant. The `ref.test` guard makes it
 			// total — a non-variant (int, string, null, ...) yields -1 rather than
-			// trapping on the cast — so `error.is` can compare tags safely.
+			// faulting on the cast — so `error.is` can compare tags safely.
 			"variant-gid" => {
 				let tmp = self.fresh_local(types::value_ref());
 				self.atom(&args[0]);
@@ -3494,7 +3494,7 @@ impl<'a> FnEmitter<'a> {
 			}
 			// math.to-int f : truncate toward zero into an i64. The *saturating*
 			// trunc has `f as i64` semantics (NaN -> 0, ±inf / out-of-range
-			// clamp to i64::MIN/MAX); plain `i64.trunc_f64_s` would trap instead.
+			// clamp to i64::MIN/MAX); plain `i64.trunc_f64_s` would fault instead.
 			"math-to-int" => {
 				self.ins(Instruction::I32Const(types::TAG_INT));
 				self.atom(&args[0]);

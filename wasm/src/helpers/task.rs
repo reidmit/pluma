@@ -42,7 +42,7 @@ use wasm_encoder::{Function, ValType};
 /// here; `main` may return a cold `$task` (drive it to completion via
 /// `__run_task`) or, when it's fully synchronous, a plain value. The distinct
 /// `TAG_TASK` discriminant tells the two apart; a plain value is handed straight
-/// back rather than fed to the driver (which would trap on a non-task root).
+/// back rather than fed to the driver (which would fault on a non-task root).
 /// Exported as `_entry`.
 pub(crate) fn build_task_entry_fn(entry_idx: u32, run_task: u32) -> Function {
 	let mut w = Wat::new(1);
@@ -349,7 +349,7 @@ fn emit_init_sched_state(
 	// Only enqueue `main`'s result as the root task when it actually is one
 	// (`render.mount`/`hydrate` return `task nothing`). A bare side-effecting
 	// `main` returns `nothing`, whose effects already ran synchronously in
-	// `seed_root` above; enqueuing a non-task would trap the scheduler's
+	// `seed_root` above; enqueuing a non-task would fault the scheduler's
 	// task-cast. Spawns made during `main` are already on `ready` and still run.
 	// Mirrors the sys-host entry's TAG_TASK guard (`build_task_entry_fn`).
 	w.local_get(root_task)

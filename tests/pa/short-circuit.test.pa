@@ -4,7 +4,7 @@ use std/test
 use std/sys/io
 
 # `and` and `or` short-circuit: the right operand only runs when the left
-# doesn't already decide the result. A trapping right operand (here, division
+# doesn't already decide the result. A crashing right operand (here, division
 # by zero) is therefore safe behind a guarding left.
 
 def loud = fun name result {
@@ -18,7 +18,7 @@ def no = fun { false }
 def yes = fun { true }
 
 def run = fun {
-	# `and` skips the right operand when the left is false — the trap never runs.
+	# `and` skips the right operand when the left is false — the crash never runs.
 	if no () and 10 / 0 == 0 {
 		print "and-then"
 	} else {

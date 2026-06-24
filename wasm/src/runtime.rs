@@ -1147,7 +1147,7 @@ pub(crate) fn scan_helpers(b: &Block, req: &mut HelperSet) {
 /// wasm renders to bytes in scratch and passes as `(ptr, len)` to a `(i32,i32) -> ()`
 /// import (the marshalling ABI). `print`/`io.write*` render via `__tostring`; the
 /// `*-bytes` raw writers take the value's `$bytes` backing directly; `io.fail` renders
-/// its message then traps. All return nothing.
+/// its message then faults. All return nothing.
 pub(crate) fn is_byte_writer(tag: &str) -> bool {
 	matches!(
 		tag,
@@ -1187,7 +1187,7 @@ pub(crate) struct HostSig {
 pub(crate) fn host_sig(tag: &str) -> Option<HostSig> {
 	match tag {
 		// stdout/stderr writers + the program-controlled abort. All take one
-		// boxed arg and return nothing (`io.fail` diverges — the host traps).
+		// boxed arg and return nothing (`io.fail` diverges — the host faults).
 		"print" | "io-print" | "io-print-err" | "io-write" | "io-write-err" | "io-write-bytes"
 		| "io-write-err-bytes" | "io-fail"
 		// `io.with-stdin` start: one-string-in, nothing-out (pushes a stdin frame).

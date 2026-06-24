@@ -272,7 +272,7 @@ impl<'a> Lowerer<'a> {
 		// record shapes intern (each shape's struct type + `shape_id`). So lower
 		// in the canonical module order (`modules_sorted`), never raw HashMap
 		// order, which made codegen differ per process: a `ref.cast` could target
-		// a shape interned under a different id, trapping as "illegal cast".
+		// a shape interned under a different id, faulting as "illegal cast".
 		for (module, data) in compiler.modules_sorted() {
 			if let Some(ast) = data.ast.as_ref() {
 				self.lower_module(module, ast);
@@ -1501,7 +1501,7 @@ impl<'a> Lowerer<'a> {
 	/// arity that forwards its arguments into the variant construction. A bare
 	/// `MakeVariantCtor` is a plain data struct, not a callable `$closure` — so
 	/// without this a constructor passed to a higher-order function or stored as
-	/// a value traps when invoked. Mirrors `lower_builtin_value_ref`; the applied
+	/// a value faults when invoked. Mirrors `lower_builtin_value_ref`; the applied
 	/// case (`some x`) stays a direct `MakeVariant` via the callee path plus
 	/// `fold_variant_ctor_calls`, so this only fires when the ctor escapes.
 	fn build_variant_ctor_closure(
@@ -2051,7 +2051,7 @@ impl<'a> Lowerer<'a> {
 			return self.lower_chain(left, right, range);
 		}
 		// Logical `&&`/`||` short-circuit: the right operand only runs when the
-		// left doesn't already decide the result, so a trapping right operand is
+		// left doesn't already decide the result, so a faulting right operand is
 		// safe behind a guarding left (`ok && (list.get xs i == v)`).
 		if matches!(op, Operator::LogicalAnd | Operator::LogicalOr) {
 			let is_and = matches!(op, Operator::LogicalAnd);
@@ -4099,6 +4099,10 @@ fn seed_prelude_globals(g: &mut GlobalTable) {
 	g.add_pre_evaluated("__prelude__", "print", builtin("print"));
 	g.add_pre_evaluated("__prelude__", "debug", builtin("debug"));
 	g.add_pre_evaluated("__prelude__", "to-string", builtin("to-string"));
+	// `crash msg` stops the program with a message + backtrace. It's the same
+	// host primitive `process.fail` / `option.expect` lower to, surfaced as a
+	// always-in-scope global.
+	g.add_pre_evaluated("__prelude__", "crash", builtin("io-fail"));
 	// `wire` codec builtins: a `wire` method call loads one of
 	// these as its callee, passing the schema dict as the first argument.
 	g.add_pre_evaluated("__prelude__", "wire-encode", builtin("wire-encode"));
@@ -4123,7 +4127,7 @@ fn reserve_user_globals(g: &mut GlobalTable, compiler: &Compiler) {
 	// assigned deterministically. These ids thread through the whole backend —
 	// global slot order, lifted-closure names, and the order functions/shapes are
 	// emitted — so a random reservation order made codegen non-reproducible (and
-	// could trap as "illegal cast" on some runs).
+	// could fault as "illegal cast" on some runs).
 	for (module_name, module) in compiler.modules_sorted() {
 		let Some(ast) = &module.ast else { continue };
 		for def in &ast.body {

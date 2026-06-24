@@ -269,6 +269,41 @@ So an app can still retry a timeout or 404 a missing row while carrying the
 single `error` type everywhere above the leaf. The precise enum stays the source
 of truth; `error` is the convenience for the layers that have stopped looking.
 
+## crash: stop the program on purpose
+
+Everything above keeps a failure as a value you pass around. Sometimes that's the
+wrong shape: you've hit a state that should be impossible, or a startup
+invariant that there's no sensible way to continue past. For that there's
+`crash`, always in scope:
+
+```pluma
+crash "config file is missing a [server] section"
+```
+
+It stops the program immediately: the message goes to standard error under a
+`runtime error:` line, the process exits nonzero, and a backtrace of
+`path:line:col` frames (innermost first) follows so you can see where it
+happened. Because it never returns, `crash` type-checks anywhere a value is
+expected — you can use it as the `else` of an `if`, or the last arm of a `when`,
+to assert a branch is unreachable:
+
+```pluma
+def kind = fun n {
+	if n > 0 { "positive" }
+	else if n < 0 { "negative" }
+	else { crash "expected a non-zero input" }
+}
+```
+
+A few other failures land in the same place at runtime: dividing by zero, or
+`option.expect` / `result.expect` on a missing value. They all surface as a
+`runtime error:` with a backtrace.
+
+`crash` is a deliberate last resort, not the everyday tool. If a caller could
+reasonably recover, return a `result` (or an `option`) instead and let them
+decide — that's the whole point of the value-based model above. Reach for `crash`
+only when continuing would be a bug.
+
 ## Where to go next
 
 - **[Operators](/docs/reference/operators)**: the full precedence and signature

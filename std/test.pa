@@ -225,7 +225,7 @@ enum outcome {
 alias case-result {path :: list string, name :: string, kind :: outcome}
 
 # Run one case body to completion. The body is a task; `attempt` reifies its
-# outcome so a failing case (or a trapping assertion) is reported, not propagated.
+# outcome so a failing case (or a crashing assertion) is reported, not propagated.
 def run-body :: fun entry -> task outcome e = fun e {
 	try res = task.attempt (e.body ())
 	when res is ok _u {

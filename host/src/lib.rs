@@ -298,7 +298,7 @@ struct HostState {
 	/// stripped by the CLI), surfaced through the `io-args` import. Empty on the
 	/// buffered test paths.
 	args: Vec<String>,
-	/// The `io.fail` abort message, stashed before the host traps so the runner can
+	/// The `io.fail` abort message, stashed before the host aborts so the runner can
 	/// surface it as the program's `runtime error: <msg>` status.
 	fail: Option<String>,
 	/// The message the last failed `std/sys/io` call stashed (errno-style); returned

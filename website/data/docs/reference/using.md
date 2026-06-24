@@ -66,7 +66,7 @@ using list {
 
 Only the leading dot is affected. A fully-qualified name still works inside a
 block (you can write `math.abs n` in the middle of a `using list` block and it
-resolves the normal way) so the ambient never traps you. A leading dot is the
+resolves the normal way) so the ambient never trips you up. A leading dot is the
 *only* thing that looks at the surrounding `using`.
 
 ## The leading dot needs a block

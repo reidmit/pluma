@@ -69,7 +69,7 @@ pub fn optimize(bytes: &[u8], level: OptLevel) -> Result<Vec<u8>, String> {
 	let _ = std::fs::remove_file(&outfile);
 	// `wasm-opt` rewrites the code section, so the `pluma_lines` source-map (keyed by
 	// pre-opt module byte offsets) no longer describes it. Binaryen passes the unknown
-	// custom section through unchanged, which would map traps to wrong lines — drop it
+	// custom section through unchanged, which would map faults to wrong lines — drop it
 	// rather than mislead. (Recovering line info through opt is the DWARF `.debug_line`
 	// path, not this byte-offset table.)
 	Ok(crate::strip_custom_section(out, "pluma_lines"))
