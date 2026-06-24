@@ -3795,14 +3795,21 @@ fn marshal_str_arg(w: &mut Wat, nm: NetMarshal, tp: Local, idx: i32) -> (Local, 
 	(ptr, len)
 }
 
-/// Consume a net host op's `(status, n, payload)` result (on the stack, after the
-/// import call) and either park the fiber on socket readiness (would-block) or
-/// settle the produced `result` value down the chain (`br "main"`). `box_n` true →
-/// the `ok` payload is the boxed `n` channel (a socket id / write count); false →
-/// the `payload` ref (read bytes). The I/O continuation + net reactor's
-/// per-op result shaping: the task always produces a `result` *value* (the OS error
-/// is `err e`, NOT a fiber failure). On would-block it stashes the net `$task` in
-/// `fiber::RETRY` and parks `wait::IO` (`br "ret"`).
+/// Consume a net/offload host op's `(status, n, payload)` result (on the stack,
+/// after the import call) and either park the fiber on readiness (would-block,
+/// `br "ret"`) or settle it down the chain (`br "main"`). `build_ok` shapes the
+/// `ok` payload (boxed `n` for a socket id / count, or the read bytes).
+///
+/// `channel` picks how the host's verdict reaches the program, and is a *permanent*
+/// per-op distinction, not migration scaffolding:
+///   - `true` — settle the fiber's own success/failure channel directly, so the
+///     builtin is `task a string` (net's `read`/`write`/…, db's `db-op`). The
+///     common case: failure belongs in the channel.
+///   - `false` — settle `OK` carrying a `result` *value* (`io_result`), so the
+///     builtin is `task (result a string)`. Kept for `fs-op`, whose `result`-shaped
+///     decoders are shared with the synchronous `fs-op-sync` builtin (a sync
+///     fallible op's natural form); the dead `offload-sleep` proving op also rides
+///     this path.
 fn net_settle(
 	w: &mut Wat,
 	g: TaskGlobals,

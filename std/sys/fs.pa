@@ -71,6 +71,12 @@ def op-is-file = 12
 
 def op-is-dir = 13
 
+# The async ops deliberately produce a `result` *value* rather than settling the
+# task's own failure channel (unlike `std/sys/net`/`std/sys/db`, which are `task a
+# string`). That keeps their decoders -- `to-text`/`to-bool`/`to-info`/... below --
+# shared with the synchronous `fs-op-sync` twins, whose `result bytes string` is the
+# natural form for a sync fallible call. `run-result` joins that envelope onto the
+# task channel at the boundary, so every *public* fs op is still a clean `task a e`.
 def fs-op-s :: fun int string string -> task (result bytes string) = built-in "fs-op"
 
 def fs-op-b :: fun int string bytes -> task (result bytes string) = built-in "fs-op"
