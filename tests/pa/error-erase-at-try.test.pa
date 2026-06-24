@@ -46,7 +46,11 @@ def run = fun {
 	when serve () is ok v {
 		print "ok $(to-string v)"
 	} is err e {
+		# `message` is the semantic one-liner -- the `try`-site frames are skipped.
 		print (error.message e)
+		# `report` is the multi-line stack: the message, then each `try` site as a
+		# jumpable `at path:line:col` line, innermost first.
+		print (error.report e)
 	}
 }
 
@@ -56,6 +60,12 @@ def tests :: test.suite = [
 			run ()
 			task.ok ()
 		}
-		assert.matches cap.out "error-erase-at-try.test:40: error-erase-at-try.test:33: db timed out\n"
+		assert.matches cap.out """
+			db timed out
+			db timed out
+			  at tests/pa/error-erase-at-try.test.pa:34:2
+			  at tests/pa/error-erase-at-try.test.pa:41:2
+
+			"""
 	},
 ]

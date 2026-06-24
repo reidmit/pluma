@@ -55,6 +55,6 @@ def tests :: test.suite = [
 			run ()
 			task.ok ()
 		}
-		assert.matches cap.out "odd length\nbad digit\nok\nerror-decode-enums.test:27: time: invalid date/time: month 13 is out of range 1..=12\nyes\n"
+		assert.matches cap.out "odd length\nbad digit\nok\ntime: invalid date/time: month 13 is out of range 1..=12\nyes\n"
 	},
 ]

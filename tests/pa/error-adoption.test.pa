@@ -62,6 +62,6 @@ def tests :: test.suite = [
 			run ()
 			task.ok ()
 		}
-		assert.matches cap.out "error-adoption.test:26: missing SETTING\nerror-adoption.test:31: unauthorized\nyes\nno\n"
+		assert.matches cap.out "missing SETTING\nunauthorized\nyes\nno\n"
 	},
 ]

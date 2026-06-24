@@ -67,6 +67,6 @@ def tests :: test.suite = [
 			try task.attempt (run ())
 			task.ok ()
 		}
-		assert.matches cap.out "error-async-frame.test:39: error-async-frame.test:33: timed out\nyes\nno\n"
+		assert.matches cap.out "timed out\nyes\nno\n"
 	},
 ]

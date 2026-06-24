@@ -6765,13 +6765,11 @@ impl<'compiler> Analyzer<'compiler> {
 			}
 		};
 
-		// `error.context "<module>:<line>" <cause>` — the per-`try` frame. Inline
-		// (not a side table) because it's built only on the cold failure path.
-		let site = format!(
-			"{}:{}",
-			self.module_name.clone().unwrap_or_default(),
-			try_range.start.line
-		);
+		// `error.at "<path>:<line>:<col>" <cause>` — the per-`try` site frame. Inline
+		// (not a side table) because it's built only on the cold failure path. The
+		// label matches the crash backtrace's `path:line:col` so `error.report` reads
+		// like one and the location is jumpable; `message` skips it.
+		let site = self.try_site_label(try_range);
 		let site_lit = ExprNode {
 			range: try_range,
 			kind: ExprKind::Literal(LiteralNode {
@@ -6782,11 +6780,11 @@ impl<'compiler> Analyzer<'compiler> {
 			trait_dispatch: None,
 			dispatch_sink: None,
 		};
-		let context_call = ExprNode {
+		let site_call = ExprNode {
 			range: try_range,
 			kind: ExprKind::Call(CallNode {
 				range: try_range,
-				callee: Box::new(mk_namespace("std/error", "context")),
+				callee: Box::new(mk_namespace("std/error", "at")),
 				args: vec![site_lit, cause],
 				dict_args: Vec::new(),
 				mono_callee: None,
@@ -6803,7 +6801,7 @@ impl<'compiler> Analyzer<'compiler> {
 					ident: param,
 					ty: e_raw.clone(),
 				}],
-				body: vec![context_call],
+				body: vec![site_call],
 			}),
 			ty: Type::Fun(vec![e_raw], Box::new(error_ty.clone())),
 			trait_dispatch: None,
@@ -6825,6 +6823,25 @@ impl<'compiler> Analyzer<'compiler> {
 			trait_dispatch: None,
 			dispatch_sink: None,
 		}
+	}
+
+	// A `path:line:col` (1-based) label for a `try` propagation site, matching the
+	// crash backtrace's frame format so `error.report` reads like one. A user
+	// module's source path is made relative to the working dir when possible (the
+	// path is then jumpable); the embedded stdlib, whose path is a `<stdlib:…>`
+	// marker, falls back to `name.pa`.
+	fn try_site_label(&self, range: Range) -> String {
+		let name = self.module_name.clone().unwrap_or_default();
+		let path = match &self.module_path {
+			Some(p) if !p.to_string_lossy().starts_with('<') => std::env::current_dir()
+				.ok()
+				.and_then(|cwd| p.strip_prefix(&cwd).ok().map(|r| r.to_path_buf()))
+				.unwrap_or_else(|| p.clone())
+				.to_string_lossy()
+				.into_owned(),
+			_ => format!("{name}.pa"),
+		};
+		format!("{}:{}:{}", path, range.start.line + 1, range.start.col + 1)
 	}
 
 	// Rewrite one `??` BinaryOperation. The dual of `do_try_dispatch`:

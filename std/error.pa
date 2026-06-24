@@ -41,14 +41,18 @@ implement describe string {
 	}
 }
 
-# One hop in a failure's history: a message for this level, the cause it wrapped
-# (if any), and the global constructor id of the precise value it was erased from
-# (or -1 when there was none -- a bare `new`, or a `context` wrapper). The id
-# rides only the leaf frame; `is-a` reads it back to classify the failure.
+# One hop in a failure's history. A `frame` carries a human message for this
+# level, the cause it wrapped (if any), and the global constructor id of the
+# precise value it was erased from (-1 when there was none -- a bare `new`, or a
+# `context` wrapper); the id rides only the leaf frame, and `is-a` reads it back
+# to classify the failure. A `site` is a `try` propagation point: a
+# `path:line:col` label and the cause it carried, no message or id of its own --
+# `message`/`trace` skip it, `report` renders it as an `at` line.
 # Opaque -- build one with `new`/`from`, add levels with `context`, and read it
-# back with `message`/`trace`/`is-a`.
+# back with `message`/`report`/`trace`/`is-a`.
 opaque enum error {
 	frame string (option error) int
+	site string (option error)
 }
 
 # The global constructor id of a variant value (unique across every enum), or -1
@@ -85,8 +89,17 @@ public def context :: fun string error -> error = fun m e {
 	error.frame m (some e) (0 - 1)
 }
 
-# Renders the whole chain as one line, outermost frame first and joined with
-# `": "` -- the readable one-liner for a log or a message to the user.
+# Stamps a propagation-site frame -- a `path:line:col` label -- onto the cause
+# beneath it. This is what `try` calls for you at each hop it erases into `error`;
+# the label shows up in `report` (as an `at` line) but not in `message`. Rarely
+# needed by hand.
+public def at :: fun string error -> error = fun loc e {
+	error.site loc (some e)
+}
+
+# Renders the chain as one semantic line, outermost frame first and joined with
+# `": "` -- the readable one-liner for a log or a message to the user. The
+# `path:line:col` `try`-site frames are skipped; reach for `report` to see those.
 #
 #     error.message err   # => "loading user 7: querying db: timed out"
 public def message :: fun error -> string = fun e {
@@ -96,11 +109,51 @@ public def message :: fun error -> string = fun e {
 		} is none {
 			m
 		}
+	} is error.site _loc cause {
+		when cause is some inner {
+			message inner
+		} is none {
+			""
+		}
 	}
 }
 
-# The frames as a list, outermost first -- the structured form of `message`,
-# for logging each level on its own or inspecting the chain.
+# Renders the chain as a multi-line stack, like a backtrace: the semantic
+# `message` on the first line, then each `try` propagation site as an indented
+# `at path:line:col` line, innermost (closest to the failure) first. Those lines
+# are jumpable. The multi-line dual of `message` -- reach for it when surfacing an
+# error to a developer rather than logging a one-liner.
+#
+#     error.report err
+#     # => loading user 7: timed out
+#     #      at app/db.pa:14:3
+#     #      at app/handler.pa:8:5
+public def report :: fun error -> string = fun e {
+	"$(message e)$(site-lines e)"
+}
+
+# The `\n  at <site>` lines for `report`, innermost site first. Walks past the
+# message/context frames (those land in the headline via `message`) and emits one
+# line per `try` site.
+def site-lines :: fun error -> string = fun e {
+	when e is error.frame _m cause _gid {
+		when cause is some inner {
+			site-lines inner
+		} is none {
+			""
+		}
+	} is error.site loc cause {
+		when cause is some inner {
+			"$(site-lines inner)\n  at $(loc)"
+		} is none {
+			"\n  at $(loc)"
+		}
+	}
+}
+
+# The semantic frames as a list, outermost first -- the structured form of
+# `message`, for logging each level on its own or inspecting the chain. Like
+# `message`, the `try`-site frames are skipped.
 #
 #     error.trace err   # => ["loading user 7", "querying db", "timed out"]
 public def trace :: fun error -> list string = fun e {
@@ -109,6 +162,12 @@ public def trace :: fun error -> list string = fun e {
 			[m, ...trace inner]
 		} is none {
 			[m]
+		}
+	} is error.site _loc cause {
+		when cause is some inner {
+			trace inner
+		} is none {
+			[]
 		}
 	}
 }
@@ -121,6 +180,12 @@ def leaf-gid :: fun error -> int = fun e {
 			leaf-gid inner
 		} is none {
 			gid
+		}
+	} is error.site _loc cause {
+		when cause is some inner {
+			leaf-gid inner
+		} is none {
+			0 - 1
 		}
 	}
 }
