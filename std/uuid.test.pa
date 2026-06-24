@@ -18,7 +18,7 @@ def tests :: test.suite = [
 		when bytes.at (string.to-bytes u) 14 is some n {
 			assert.equals n 52
 		} is none {
-			assert.is-true false
+			assert.fail "v4 UUID has no byte at index 14"
 		}
 	},
 	test.case "v4 produces different values" fun {
@@ -31,7 +31,7 @@ def tests :: test.suite = [
 		when uuid.parse u is ok v {
 			assert.equals v u
 		} is err _msg {
-			assert.is-true false
+			assert.fail "v4 UUID failed to parse"
 		}
 	},
 	test.case "v7 has canonical length" fun {
@@ -44,7 +44,7 @@ def tests :: test.suite = [
 		when bytes.at (string.to-bytes u) 14 is some n {
 			assert.equals n 55
 		} is none {
-			assert.is-true false
+			assert.fail "v7 UUID has no byte at index 14"
 		}
 	},
 	test.case "v7 round-trips through parse" fun {
@@ -52,7 +52,7 @@ def tests :: test.suite = [
 		when uuid.parse u is ok v {
 			assert.equals v u
 		} is err _msg {
-			assert.is-true false
+			assert.fail "v7 UUID failed to parse"
 		}
 	},
 	test.case "parse accepts canonical form" fun {
@@ -61,47 +61,47 @@ def tests :: test.suite = [
 		when uuid.parse "550e8400-e29b-41d4-a716-446655440000" is ok v {
 			assert.equals v "550e8400-e29b-41d4-a716-446655440000"
 		} is err _msg {
-			assert.is-true false
+			assert.fail "canonical UUID rejected by parse"
 		}
 	},
 	test.case "parse normalizes uppercase" fun {
 		when uuid.parse "550E8400-E29B-41D4-A716-446655440000" is ok v {
 			assert.equals v "550e8400-e29b-41d4-a716-446655440000"
 		} is err _msg {
-			assert.is-true false
+			assert.fail "uppercase UUID rejected by parse"
 		}
 	},
 	test.case "parse accepts braced form" fun {
 		when uuid.parse "{550e8400-e29b-41d4-a716-446655440000}" is ok v {
 			assert.equals v "550e8400-e29b-41d4-a716-446655440000"
 		} is err _msg {
-			assert.is-true false
+			assert.fail "braced UUID rejected by parse"
 		}
 	},
 	test.case "parse accepts urn form" fun {
 		when uuid.parse "urn:uuid:550e8400-e29b-41d4-a716-446655440000" is ok v {
 			assert.equals v "550e8400-e29b-41d4-a716-446655440000"
 		} is err _msg {
-			assert.is-true false
+			assert.fail "urn-form UUID rejected by parse"
 		}
 	},
 	test.case "parse rejects too short" fun {
 		when uuid.parse "550e8400" is ok _v {
-			assert.is-true false
+			assert.fail "parse accepted a too-short string"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "parse rejects empty" fun {
 		when uuid.parse "" is ok _v {
-			assert.is-true false
+			assert.fail "parse accepted an empty string"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "parse rejects garbage" fun {
 		when uuid.parse "not-a-uuid-at-all-really" is ok _v {
-			assert.is-true false
+			assert.fail "parse accepted garbage input"
 		} is err _msg {
 			assert.is-true true
 		}

@@ -32,18 +32,14 @@ use std/list
 use std/random
 use std/string
 use std/task
-use std/sys/net
 use std/sys/http
+use std/sys/net
 
 # An open WebSocket connection. `raw` is the underlying socket; `masking` is
 # whether this end masks the frames it sends (clients must, servers must not);
 # `buf` holds bytes read past the last frame -- the start of the next one --
 # threaded between reads.
-public alias conn {
-	raw :: net.connection,
-	masking :: bool,
-	buf :: ref bytes,
-}
+public alias conn {raw :: net.connection, masking :: bool, buf :: ref bytes}
 
 # A message carried over a WebSocket: UTF-8 `text` or raw `binary`.
 public enum message {
@@ -62,13 +58,19 @@ def ws-guid :: string = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 def sha1 :: fun bytes -> result bytes string = built-in "sha1"
 
 def op-continuation :: int = 0
+
 def op-text :: int = 1
+
 def op-binary :: int = 2
+
 def op-close :: int = 8
+
 def op-ping :: int = 9
+
 def op-pong :: int = 10
 
 def empty-bytes :: bytes = string.to-bytes ""
+
 def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
 
 # --- sending -------------------------------------------------------------
@@ -139,7 +141,7 @@ def length-bytes :: fun int int -> bytes = fun mask-bit len {
 # A fresh 4-byte masking key. Falls back to a fixed key only if the host RNG
 # fails (it doesn't) -- masking is for framing, not security.
 def mask-key :: fun nothing -> bytes = fun {
-	random.bytes 4 ?? (bytes.from-list [0, 0, 0, 0] ?? empty-bytes)
+	random.bytes 4 ?? bytes.from-list [0, 0, 0, 0] ?? empty-bytes
 }
 
 # XOR each payload byte with the masking key, cycling the 4 key bytes. Its own
@@ -173,11 +175,7 @@ def u64-be :: fun int -> bytes = fun n {
 # --- receiving -----------------------------------------------------------
 
 # One decoded frame.
-alias frame {
-	fin :: bool,
-	opcode :: int,
-	payload :: bytes,
-}
+alias frame {fin :: bool, opcode :: int, payload :: bytes}
 
 # Receive the next message: `some msg` for a text/binary message, `none` when the
 # peer closes (cleanly, or by hanging up). Pings are answered with a pong and
@@ -396,7 +394,11 @@ def handshake-request :: fun string string string -> bytes = fun authority path 
 # Read the upgrade response head and pull out the status and accept key, keeping
 # any bytes that arrived past it (normally none -- the server waits for the client
 # to speak first).
-def read-handshake-response :: fun net.connection -> task {status :: int, accept :: string, leftover :: bytes} string = fun sock {
+def read-handshake-response :: fun net.connection -> task {
+	status :: int,
+	accept :: string,
+	leftover :: bytes,
+} string = fun sock {
 	try raw = read-until-crlf2 sock empty-bytes
 	let parts = bytes.split raw crlf2
 	let head = list.head parts ?? empty-bytes

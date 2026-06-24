@@ -17,54 +17,54 @@ def tests :: test.suite = [
 		when hex.decode "" is ok b {
 			assert.equals b ''
 		} is err _msg {
-			assert.is-true false
+			assert.fail "decode of empty string should succeed"
 		}
 	},
 	test.case "decode round-trips lowercase" fun {
 		when hex.decode "414243" is ok b {
 			assert.equals b 'ABC'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "decode of valid lowercase hex should succeed"
 		}
 	},
 	test.case "decode accepts uppercase" fun {
 		when hex.decode "FF" is ok b {
 			assert.equals b '\xff'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "decode of uppercase hex should succeed"
 		}
 	},
 	test.case "decode accepts mixed case" fun {
 		when hex.decode "AbCdEf" is ok b {
 			assert.equals b '\xab\xcd\xef'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "decode of mixed-case hex should succeed"
 		}
 	},
 	test.case "decode fails on odd length" fun {
 		when hex.decode "abc" is ok _b {
-			assert.is-true false
+			assert.fail "decode of odd-length string should fail"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "decode fails on non-hex digit" fun {
 		when hex.decode "zz" is ok _b {
-			assert.is-true false
+			assert.fail "decode of non-hex digit should fail"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "decode rejects 0x prefix" fun {
 		when hex.decode "0xff" is ok _b {
-			assert.is-true false
+			assert.fail "decode should reject 0x prefix"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "decode rejects whitespace" fun {
 		when hex.decode "ab cd" is ok _b {
-			assert.is-true false
+			assert.fail "decode should reject whitespace"
 		} is err _msg {
 			assert.is-true true
 		}
@@ -75,7 +75,7 @@ def tests :: test.suite = [
 		when hex.decode (hex.encode '\x89PNG\r\n\x1a\n') is ok b {
 			assert.equals b '\x89PNG\r\n\x1a\n'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "encode then decode should round-trip"
 		}
 	},
 ]

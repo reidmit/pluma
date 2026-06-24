@@ -112,6 +112,15 @@ public def is-false :: fun bool -> task nothing string = fun value {
 	}
 }
 
+# Always fails, with `message`. For a branch that should never run -- the
+# no-match arm of a `when`/`if`, an unexpected `ok`/`err` -- so the case
+# reports a clear reason instead of an opaque `expected true, got false`.
+#
+#     when outcome is err msg { check msg } is ok _ { assert.fail "expected an error" }
+public def fail :: fun string -> task nothing string = fun message {
+	task.err message
+}
+
 # Succeeds when the option holds a value (`some _`).
 #
 #     assert.is-some (list.head [1, 2, 3])

@@ -131,12 +131,12 @@ def tests :: test.suite = [
 		when list.head [1, 2, 3] is some n {
 			assert.equals n 1
 		} is none {
-			assert.is-true false
+			assert.fail "expected a head element"
 		}
 	},
 	test.case "head of empty is none" fun {
 		when list.head [] is some _n {
-			assert.is-true false
+			assert.fail "head of empty list should be none"
 		} is none {
 			assert.is-true true
 		}
@@ -145,19 +145,19 @@ def tests :: test.suite = [
 		when list.tail [1, 2, 3] is some rest {
 			assert.equals rest [2, 3]
 		} is none {
-			assert.is-true false
+			assert.fail "expected a tail"
 		}
 	},
 	test.case "tail of singleton is some empty" fun {
 		when list.tail [1] is some rest {
 			assert.equals rest []
 		} is none {
-			assert.is-true false
+			assert.fail "expected a tail for a singleton"
 		}
 	},
 	test.case "tail of empty is none" fun {
 		when list.tail [] is some _rest {
-			assert.is-true false
+			assert.fail "tail of empty list should be none"
 		} is none {
 			assert.is-true true
 		}
@@ -182,12 +182,12 @@ def tests :: test.suite = [
 		when list.find [1, 2, 3, 4] fun n { n > 2 } is some n {
 			assert.equals n 3
 		} is none {
-			assert.is-true false
+			assert.fail "expected to find a match"
 		}
 	},
 	test.case "find on no match is none" fun {
 		when list.find [1, 2, 3] fun n { n > 100 } is some _n {
-			assert.is-true false
+			assert.fail "find with no match should be none"
 		} is none {
 			assert.is-true true
 		}
@@ -363,14 +363,14 @@ def tests :: test.suite = [
 		when list.min-by [3, 1, 2] fun n { n } is some n {
 			assert.equals n 1
 		} is none {
-			assert.is-true false
+			assert.fail "expected a minimum"
 		}
 	},
 	test.case "max-by value is the maximum" fun {
 		when list.max-by [3, 1, 2] fun n { n } is some n {
 			assert.equals n 3
 		} is none {
-			assert.is-true false
+			assert.fail "expected a maximum"
 		}
 	},
 	test.case "min-by and max-by are none on empty" fun {
@@ -386,14 +386,14 @@ def tests :: test.suite = [
 		when list.last [1, 2, 3] is some n {
 			assert.equals n 3
 		} is none {
-			assert.is-true false
+			assert.fail "expected a last element"
 		}
 	},
 	test.case "last of singleton is that element" fun {
 		when list.last [42] is some n {
 			assert.equals n 42
 		} is none {
-			assert.is-true false
+			assert.fail "expected the singleton as last"
 		}
 	},
 	test.case "last of empty is none" fun { assert.is-none (list.last []) },
@@ -446,7 +446,7 @@ def tests :: test.suite = [
 		when list.find-index [10, 20, 30] fun n { n > 15 } is some i {
 			assert.equals i 1
 		} is none {
-			assert.is-true false
+			assert.fail "expected a match position"
 		}
 	},
 	test.case "find-index is none on no match" fun {
@@ -458,7 +458,7 @@ def tests :: test.suite = [
 		when list.index-of ["a", "b", "c"] "b" is some i {
 			assert.equals i 1
 		} is none {
-			assert.is-true false
+			assert.fail "expected to find the element"
 		}
 	},
 	test.case "index-of is none when absent" fun { assert.is-none (list.index-of [1, 2, 3] 9) },
@@ -476,21 +476,21 @@ def tests :: test.suite = [
 		when list.min [3, 1, 4, 1, 5] is some n {
 			assert.equals n 1
 		} is none {
-			assert.is-true false
+			assert.fail "expected a minimum"
 		}
 	},
 	test.case "max of ints" fun {
 		when list.max [3, 1, 4, 1, 5] is some n {
 			assert.equals n 5
 		} is none {
-			assert.is-true false
+			assert.fail "expected a maximum"
 		}
 	},
 	test.case "min of strings is lexicographic" fun {
 		when list.min ["pear", "apple", "fig"] is some s {
 			assert.equals s "apple"
 		} is none {
-			assert.is-true false
+			assert.fail "expected a minimum string"
 		}
 	},
 	test.case "min and max are none on empty" fun {
@@ -506,7 +506,7 @@ def tests :: test.suite = [
 		when list.sum [1.5, 2.5] is some total {
 			assert.equals total 4.0
 		} is none {
-			assert.is-true false
+			assert.fail "expected a sum"
 		}
 	},
 	test.case "product of ints" fun { assert.equals (list.product [1, 2, 3, 4] ?? 1) 24 },

@@ -20,19 +20,19 @@ def tests :: test.suite = [
 		when random.bytes 0 is ok b {
 			assert.equals (bytes.length b) 0
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected ok for bytes of length 0, got err"
 		}
 	},
 	test.case "bytes of length 16 has 16 bytes" fun {
 		when random.bytes 16 is ok b {
 			assert.equals (bytes.length b) 16
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected ok for bytes of length 16, got err"
 		}
 	},
 	test.case "bytes rejects negative length" fun {
 		when random.bytes (-1) is ok _b {
-			assert.is-true false
+			assert.fail "expected err for negative length, got ok"
 		} is err _msg {
 			assert.is-true true
 		}
@@ -41,19 +41,19 @@ def tests :: test.suite = [
 		when random.int-range 10 20 is ok n {
 			assert.all [assert.is-true (n >= 10), assert.is-true (n < 20)]
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected ok for int-range 10 20, got err"
 		}
 	},
 	test.case "int-range with low == high is err" fun {
 		when random.int-range 5 5 is ok _n {
-			assert.is-true false
+			assert.fail "expected err for int-range with low == high, got ok"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "int-range with low > high is err" fun {
 		when random.int-range 10 5 is ok _n {
-			assert.is-true false
+			assert.fail "expected err for int-range with low > high, got ok"
 		} is err _msg {
 			assert.is-true true
 		}
@@ -62,7 +62,7 @@ def tests :: test.suite = [
 		when random.int-range 7 8 is ok n {
 			assert.equals n 7
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected ok for int-range 7 8, got err"
 		}
 	},
 	test.case "bool returns a bool" fun {
@@ -76,7 +76,7 @@ def tests :: test.suite = [
 	},
 	test.case "choice of empty list is none" fun {
 		when random.choice [] is some _x {
-			assert.is-true false
+			assert.fail "expected none for choice of empty list, got some"
 		} is none {
 			assert.is-true true
 		}
@@ -85,7 +85,7 @@ def tests :: test.suite = [
 		when random.choice [42] is some x {
 			assert.equals x 42
 		} is none {
-			assert.is-true false
+			assert.fail "expected some for choice of singleton, got none"
 		}
 	},
 	test.case "choice always picks a list element" fun {
@@ -93,7 +93,7 @@ def tests :: test.suite = [
 		when random.choice xs is some x {
 			assert.is-true (list.contains xs x)
 		} is none {
-			assert.is-true false
+			assert.fail "expected some for choice of non-empty list, got none"
 		}
 	},
 ]

@@ -42,19 +42,19 @@ def tests :: test.suite = [
 		when res.and-then (ok 3) doubled is ok n {
 			assert.equals n 6
 		} is err _e {
-			assert.is-true false
+			assert.fail "and-then on ok: expected ok, got err"
 		}
 	},
 	test.case "and-then can change the ok type" fun {
 		when res.and-then (ok 5) fun n { ok (to-string n) } is ok s {
 			assert.equals s "5"
 		} is err _e {
-			assert.is-true false
+			assert.fail "and-then changing ok type: expected ok, got err"
 		}
 	},
 	test.case "and-then can flip ok into err" fun {
 		when res.and-then (ok (-3)) checked is ok _n {
-			assert.is-true false
+			assert.fail "and-then flipping ok to err: expected err, got ok"
 		} is err e {
 			assert.equals e "non-positive"
 		}
@@ -63,7 +63,7 @@ def tests :: test.suite = [
 		# --- and-then on `err` ---
 
 		when res.and-then bad-boom doubled is ok _n {
-			assert.is-true false
+			assert.fail "and-then on err: expected err, got ok"
 		} is err e {
 			assert.equals e "boom"
 		}
@@ -78,7 +78,7 @@ def tests :: test.suite = [
 		}
 		assert.all [
 			when res.and-then bad-skip bump-and-double is ok _n {
-				assert.is-true false
+				assert.fail "and-then on err should not call continuation: expected err, got ok"
 			} is err e {
 				assert.equals e "skip"
 			},
@@ -94,19 +94,19 @@ def tests :: test.suite = [
 		when r is ok n {
 			assert.equals n 8
 		} is err _e {
-			assert.is-true false
+			assert.fail "two-step and-then: expected ok, got err"
 		}
 	},
 	test.case "try desugars to and-then on ok" fun {
 		when try-pipe () is ok n {
 			assert.equals n 8
 		} is err _e {
-			assert.is-true false
+			assert.fail "try on ok: expected ok, got err"
 		}
 	},
 	test.case "try short-circuits on err" fun {
 		when try-pipe-err () is ok _n {
-			assert.is-true false
+			assert.fail "try short-circuit on err: expected err, got ok"
 		} is err e {
 			assert.equals e "early"
 		}
@@ -141,12 +141,12 @@ def tests :: test.suite = [
 		when res.map (ok 4) fun n { n * 2 } is ok n {
 			assert.equals n 8
 		} is err _e {
-			assert.is-true false
+			assert.fail "map on ok: expected ok, got err"
 		}
 	},
 	test.case "map passes an err through untouched" fun {
 		when res.map bad-boom fun n { n * 2 } is ok _n {
-			assert.is-true false
+			assert.fail "map on err passes through: expected err, got ok"
 		} is err e {
 			assert.equals e "boom"
 		}
@@ -155,7 +155,7 @@ def tests :: test.suite = [
 		# --- map-err ---
 
 		when res.map-err bad-boom fun e { e ++ "!" } is ok _n {
-			assert.is-true false
+			assert.fail "map-err on err: expected err, got ok"
 		} is err e {
 			assert.equals e "boom!"
 		}
@@ -164,7 +164,7 @@ def tests :: test.suite = [
 		when res.map-err (ok 4) fun e { e ++ "!" } is ok n {
 			assert.equals n 4
 		} is err _e {
-			assert.is-true false
+			assert.fail "map-err leaves ok alone: expected ok, got err"
 		}
 	},
 	test.case "is-ok and is-err on ok" fun {
@@ -185,7 +185,7 @@ def tests :: test.suite = [
 		when res.error bad-boom is some e {
 			assert.equals e "boom"
 		} is none {
-			assert.is-true false
+			assert.fail "error keeps err value: expected some, got none"
 		}
 	},
 	test.case "error is none on ok" fun { assert.is-none (res.error (ok 4)) },
@@ -195,19 +195,19 @@ def tests :: test.suite = [
 		when res.flatten (ok (ok 4)) is ok n {
 			assert.equals n 4
 		} is err _e {
-			assert.is-true false
+			assert.fail "flatten ok (ok x): expected ok, got err"
 		}
 	},
 	test.case "flatten surfaces the inner err" fun {
 		when res.flatten (ok (err "inner")) is ok _n {
-			assert.is-true false
+			assert.fail "flatten surfaces inner err: expected err, got ok"
 		} is err e {
 			assert.equals e "inner"
 		}
 	},
 	test.case "flatten passes the outer err through" fun {
 		when res.flatten (err "outer") is ok _n {
-			assert.is-true false
+			assert.fail "flatten passes outer err through: expected err, got ok"
 		} is err e {
 			assert.equals e "outer"
 		}

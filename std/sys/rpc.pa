@@ -113,7 +113,13 @@ public def respond :: fun http.request (fun nothing -> task bytes _) -> task htt
 		local.with reject-status box fun {
 			try outcome = task.attempt (produce ())
 			when outcome is ok b {
-				task.ok {status: 200, headers: dict.empty (), body: b, stream-body: none, hijack: none}
+				task.ok {
+					status: 200,
+					headers: dict.empty (),
+					body: b,
+					stream-body: none,
+					hijack: none,
+				}
 			} is err _e {
 				when ref.get box is some status {
 					task.ok (http.text status "")

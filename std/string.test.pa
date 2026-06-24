@@ -75,12 +75,12 @@ def tests :: test.suite = [
 			when string.char-at "hello" 1 is some c {
 				assert.equals c "e"
 			} is none {
-				assert.is-true false
+				assert.fail "expected some char at index 1, got none"
 			},
 			when string.char-at "héllo" 1 is some c {
 				assert.equals c "é"
 			} is none {
-				assert.is-true false
+				assert.fail "expected some char at index 1, got none"
 			},
 		]
 	},
@@ -172,26 +172,26 @@ def tests :: test.suite = [
 		when string.to-int "42" is ok n {
 			assert.equals n 42
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected to-int \"42\" to parse, got err"
 		}
 	},
 	test.case "to-int parses a negative integer" fun {
 		when string.to-int "-7" is ok n {
 			assert.equals n (-7)
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected to-int \"-7\" to parse, got err"
 		}
 	},
 	test.case "to-int fails on non-numeric input" fun {
 		when string.to-int "hello" is ok _n {
-			assert.is-true false
+			assert.fail "expected to-int \"hello\" to fail, got ok"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "to-int fails on a float" fun {
 		when string.to-int "3.14" is ok _n {
-			assert.is-true false
+			assert.fail "expected to-int \"3.14\" to fail, got ok"
 		} is err _msg {
 			assert.is-true true
 		}
@@ -200,19 +200,19 @@ def tests :: test.suite = [
 		when string.to-float "3.14" is ok x {
 			assert.equals x 3.14
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected to-float \"3.14\" to parse, got err"
 		}
 	},
 	test.case "to-float parses an integer literal" fun {
 		when string.to-float "42" is ok x {
 			assert.equals x 42.0
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected to-float \"42\" to parse, got err"
 		}
 	},
 	test.case "to-float fails on non-numeric input" fun {
 		when string.to-float "hello" is ok _x {
-			assert.is-true false
+			assert.fail "expected to-float \"hello\" to fail, got ok"
 		} is err _msg {
 			assert.is-true true
 		}
@@ -224,7 +224,7 @@ def tests :: test.suite = [
 		when bytes.to-string b is ok s {
 			assert.equals s "hello"
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected bytes.to-string to round-trip, got err"
 		}
 	},
 ]

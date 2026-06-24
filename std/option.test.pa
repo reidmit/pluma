@@ -35,19 +35,19 @@ def tests :: test.suite = [
 		when opt.and-then (some 3) doubled is some n {
 			assert.equals n 6
 		} is none {
-			assert.is-true false
+			assert.fail "and-then on some: expected some, got none"
 		}
 	},
 	test.case "and-then can change the inner type" fun {
 		when opt.and-then (some 5) fun n { some (to-string n) } is some s {
 			assert.equals s "5"
 		} is none {
-			assert.is-true false
+			assert.fail "and-then changing inner type: expected some, got none"
 		}
 	},
 	test.case "and-then can short-circuit a some into a none" fun {
 		when opt.and-then (some (-3)) positive is some _n {
-			assert.is-true false
+			assert.fail "and-then short-circuit: expected none, got some"
 		} is none {
 			assert.is-true true
 		}
@@ -56,7 +56,7 @@ def tests :: test.suite = [
 		# --- and-then on `none` ---
 
 		when opt.and-then none doubled is some _n {
-			assert.is-true false
+			assert.fail "and-then on none: expected none, got some"
 		} is none {
 			assert.is-true true
 		}
@@ -71,7 +71,7 @@ def tests :: test.suite = [
 		}
 		assert.all [
 			when opt.and-then none bump-and-double is some _n {
-				assert.is-true false
+				assert.fail "and-then on none: expected none, got some"
 			} is none {
 				assert.is-true true
 			},
@@ -87,19 +87,19 @@ def tests :: test.suite = [
 		when r is some n {
 			assert.equals n 8
 		} is none {
-			assert.is-true false
+			assert.fail "chained and-then: expected some, got none"
 		}
 	},
 	test.case "try desugars to and-then on some" fun {
 		when try-pipe () is some n {
 			assert.equals n 8
 		} is none {
-			assert.is-true false
+			assert.fail "try desugar: expected some, got none"
 		}
 	},
 	test.case "try short-circuits on none" fun {
 		when try-pipe-none () is some _n {
-			assert.is-true false
+			assert.fail "try short-circuit: expected none, got some"
 		} is none {
 			assert.is-true true
 		}
@@ -134,12 +134,12 @@ def tests :: test.suite = [
 		when opt.map (some 4) fun n { n * 2 } is some n {
 			assert.equals n 8
 		} is none {
-			assert.is-true false
+			assert.fail "map on some: expected some, got none"
 		}
 	},
 	test.case "map leaves a none alone" fun {
 		when opt.map none fun n { n * 2 } is some _n {
-			assert.is-true false
+			assert.fail "map on none: expected none, got some"
 		} is none {
 			assert.is-true true
 		}
@@ -148,7 +148,7 @@ def tests :: test.suite = [
 		when opt.map (some 5) to-string is some s {
 			assert.equals s "5"
 		} is none {
-			assert.is-true false
+			assert.fail "map changing inner type: expected some, got none"
 		}
 	},
 	test.case "is-some and is-none on some" fun {
@@ -165,19 +165,19 @@ def tests :: test.suite = [
 		when opt.filter (some 4) fun n { n > 0 } is some n {
 			assert.equals n 4
 		} is none {
-			assert.is-true false
+			assert.fail "filter keeping some: expected some, got none"
 		}
 	},
 	test.case "filter drops a failing some" fun {
 		when opt.filter (some (-1)) fun n { n > 0 } is some _n {
-			assert.is-true false
+			assert.fail "filter dropping some: expected none, got some"
 		} is none {
 			assert.is-true true
 		}
 	},
 	test.case "filter leaves a none as none" fun {
 		when opt.filter none fun n { n > 0 } is some _n {
-			assert.is-true false
+			assert.fail "filter on none: expected none, got some"
 		} is none {
 			assert.is-true true
 		}
@@ -188,12 +188,12 @@ def tests :: test.suite = [
 		when opt.flatten (some (some 4)) is some n {
 			assert.equals n 4
 		} is none {
-			assert.is-true false
+			assert.fail "flatten some (some x): expected some, got none"
 		}
 	},
 	test.case "flatten turns some none into none" fun {
 		when opt.flatten (some none) is some _n {
-			assert.is-true false
+			assert.fail "flatten some none: expected none, got some"
 		} is none {
 			assert.is-true true
 		}
@@ -204,12 +204,12 @@ def tests :: test.suite = [
 		when opt.to-result (some 4) "missing" is ok n {
 			assert.equals n 4
 		} is err _e {
-			assert.is-true false
+			assert.fail "to-result on some: expected ok, got err"
 		}
 	},
 	test.case "to-result turns none into err" fun {
 		when opt.to-result none "missing" is ok _n {
-			assert.is-true false
+			assert.fail "to-result on none: expected err, got ok"
 		} is err e {
 			assert.equals e "missing"
 		}

@@ -11,7 +11,7 @@ def tests :: test.suite = [
 		when json.parse "null" is ok v {
 			assert.is-true (json.is-null v)
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"null\" should succeed"
 		}
 	},
 	test.case "parse true" fun {
@@ -19,10 +19,10 @@ def tests :: test.suite = [
 			when json.get-bool v is some b {
 				assert.is-true b
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"true\" should be a bool"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"true\" should succeed"
 		}
 	},
 	test.case "parse false" fun {
@@ -30,10 +30,10 @@ def tests :: test.suite = [
 			when json.get-bool v is some b {
 				assert.is-false b
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"false\" should be a bool"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"false\" should succeed"
 		}
 	},
 	test.case "parse int" fun {
@@ -41,10 +41,10 @@ def tests :: test.suite = [
 			when json.get-int v is some n {
 				assert.equals n 42
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"42\" should be an int"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"42\" should succeed"
 		}
 	},
 	test.case "parse negative int" fun {
@@ -52,10 +52,10 @@ def tests :: test.suite = [
 			when json.get-int v is some n {
 				assert.equals n (-7)
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"-7\" should be an int"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"-7\" should succeed"
 		}
 	},
 	test.case "parse float" fun {
@@ -63,10 +63,10 @@ def tests :: test.suite = [
 			when json.get-float v is some x {
 				assert.equals x 3.14
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"3.14\" should be a float"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"3.14\" should succeed"
 		}
 	},
 	test.case "parse string" fun {
@@ -74,10 +74,10 @@ def tests :: test.suite = [
 			when json.get-string v is some s {
 				assert.equals s "hi"
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"hi\" should be a string"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing a string literal should succeed"
 		}
 	},
 	test.case "parse empty array" fun {
@@ -87,10 +87,10 @@ def tests :: test.suite = [
 			when json.get-array v is some xs {
 				assert.equals (list.length xs) 0
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"[]\" should be an array"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"[]\" should succeed"
 		}
 	},
 	test.case "parse array of ints" fun {
@@ -98,10 +98,10 @@ def tests :: test.suite = [
 			when json.get-array v is some xs {
 				assert.equals (list.length xs) 3
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"[1, 2, 3]\" should be an array"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"[1, 2, 3]\" should succeed"
 		}
 	},
 	test.case "parse empty object" fun {
@@ -109,31 +109,31 @@ def tests :: test.suite = [
 			when json.get-object v is some o {
 				assert.equals (dict.size o) 0
 			} is none {
-				assert.is-true false
+				assert.fail "parsed \"{}\" should be an object"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"{}\" should succeed"
 		}
 	},
 	test.case "parse error on malformed input" fun {
 		# --- parse: errors ---
 
 		when json.parse "{bad json" is ok _v {
-			assert.is-true false
+			assert.fail "parsing malformed input should fail"
 		} is err _e {
 			assert.is-true true
 		}
 	},
 	test.case "parse error carries line and col" fun {
 		when json.parse "{bad" is ok _v {
-			assert.is-true false
+			assert.fail "parsing malformed input should fail"
 		} is err e {
 			assert.all [assert.equals e.line 1, assert.equals e.col 2]
 		}
 	},
 	test.case "parse error on trailing garbage" fun {
 		when json.parse "42 extra" is ok _v {
-			assert.is-true false
+			assert.fail "parsing trailing garbage should fail"
 		} is err _e {
 			assert.is-true true
 		}
@@ -152,7 +152,7 @@ def tests :: test.suite = [
 		when json.parse "[1,2,3]" is ok v {
 			assert.equals (json.stringify v) "[1,2,3]"
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing \"[1,2,3]\" should succeed"
 		}
 	},
 	test.case "is-null on null variant" fun {
@@ -175,29 +175,29 @@ def tests :: test.suite = [
 				when json.get-int inner is some n {
 					assert.equals n 1
 				} is none {
-					assert.is-true false
+					assert.fail "field \"a\" should be an int"
 				}
 			} is none {
-				assert.is-true false
+				assert.fail "field \"a\" should be present"
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing an object should succeed"
 		}
 	},
 	test.case "get-field returns none for missing key" fun {
 		when json.parse "{\"a\": 1}" is ok v {
 			when json.get-field v "missing" is some _inner {
-				assert.is-true false
+				assert.fail "missing key should not be found"
 			} is none {
 				assert.is-true true
 			}
 		} is err _e {
-			assert.is-true false
+			assert.fail "parsing an object should succeed"
 		}
 	},
 	test.case "get-field on non-object returns none" fun {
 		when json.get-field (json.value.int 5) "a" is some _inner {
-			assert.is-true false
+			assert.fail "get-field on a non-object should be none"
 		} is none {
 			assert.is-true true
 		}
@@ -206,14 +206,14 @@ def tests :: test.suite = [
 		# --- get-* type filters ---
 
 		when json.get-int (json.value.string "x") is some _n {
-			assert.is-true false
+			assert.fail "get-int on a string should be none"
 		} is none {
 			assert.is-true true
 		}
 	},
 	test.case "get-float on an int is none" fun {
 		when json.get-float (json.value.int 42) is some _x {
-			assert.is-true false
+			assert.fail "get-float on an int should be none"
 		} is none {
 			assert.is-true true
 		}
@@ -222,47 +222,47 @@ def tests :: test.suite = [
 		when json.get-number (json.value.int 42) is some x {
 			assert.equals x 42.0
 		} is none {
-			assert.is-true false
+			assert.fail "get-number on an int should be some"
 		}
 	},
 	test.case "get-number passes float through" fun {
 		when json.get-number (json.value.float 3.5) is some x {
 			assert.equals x 3.5
 		} is none {
-			assert.is-true false
+			assert.fail "get-number on a float should be some"
 		}
 	},
 	test.case "get-number on a string is none" fun {
 		when json.get-number (json.value.string "x") is some _x {
-			assert.is-true false
+			assert.fail "get-number on a string should be none"
 		} is none {
 			assert.is-true true
 		}
 	},
 	test.case "get-bool on a non-bool is none" fun {
 		when json.get-bool (json.value.int 1) is some _b {
-			assert.is-true false
+			assert.fail "get-bool on a non-bool should be none"
 		} is none {
 			assert.is-true true
 		}
 	},
 	test.case "get-string on a non-string is none" fun {
 		when json.get-string (json.value.int 1) is some _s {
-			assert.is-true false
+			assert.fail "get-string on a non-string should be none"
 		} is none {
 			assert.is-true true
 		}
 	},
 	test.case "get-array on a non-array is none" fun {
 		when json.get-array (json.value.int 1) is some _xs {
-			assert.is-true false
+			assert.fail "get-array on a non-array should be none"
 		} is none {
 			assert.is-true true
 		}
 	},
 	test.case "get-object on a non-object is none" fun {
 		when json.get-object (json.value.int 1) is some _o {
-			assert.is-true false
+			assert.fail "get-object on a non-object should be none"
 		} is none {
 			assert.is-true true
 		}

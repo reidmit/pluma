@@ -20,40 +20,40 @@ def tests :: test.suite = [
 		when base64.decode "" is ok b {
 			assert.equals b ''
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected empty string to decode"
 		}
 	},
 	test.case "decode with full padding" fun {
 		when base64.decode "Zg==" is ok b {
 			assert.equals b 'f'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected decode with full padding to succeed"
 		}
 	},
 	test.case "decode without padding" fun {
 		when base64.decode "Zg" is ok b {
 			assert.equals b 'f'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected decode without padding to succeed"
 		}
 	},
 	test.case "decode standard alphabet" fun {
 		when base64.decode "//79" is ok b {
 			assert.equals b '\xff\xfe\xfd'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected standard-alphabet decode to succeed"
 		}
 	},
 	test.case "decode rejects URL-safe alphabet" fun {
 		when base64.decode "__79" is ok _b {
-			assert.is-true false
+			assert.fail "expected URL-safe alphabet to be rejected"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "decode rejects whitespace" fun {
 		when base64.decode "Zm 9v" is ok _b {
-			assert.is-true false
+			assert.fail "expected whitespace to be rejected"
 		} is err _msg {
 			assert.is-true true
 		}
@@ -70,26 +70,26 @@ def tests :: test.suite = [
 		when base64.url-decode "" is ok b {
 			assert.equals b ''
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected empty string to url-decode"
 		}
 	},
 	test.case "url-decode URL-safe alphabet" fun {
 		when base64.url-decode "__79" is ok b {
 			assert.equals b '\xff\xfe\xfd'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected URL-safe alphabet to url-decode"
 		}
 	},
 	test.case "url-decode tolerates padding" fun {
 		when base64.url-decode "Zg==" is ok b {
 			assert.equals b 'f'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected url-decode to tolerate padding"
 		}
 	},
 	test.case "url-decode rejects standard alphabet" fun {
 		when base64.url-decode "//79" is ok _b {
-			assert.is-true false
+			assert.fail "expected standard alphabet to be rejected"
 		} is err _msg {
 			assert.is-true true
 		}
@@ -100,14 +100,14 @@ def tests :: test.suite = [
 		when base64.decode (base64.encode '\x00\x01\x02\xfd\xfe\xff') is ok b {
 			assert.equals b '\x00\x01\x02\xfd\xfe\xff'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected encode/decode round-trip to succeed"
 		}
 	},
 	test.case "encode then decode url-safe" fun {
 		when base64.url-decode (base64.url-encode '\x00\x01\x02\xfd\xfe\xff') is ok b {
 			assert.equals b '\x00\x01\x02\xfd\xfe\xff'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "expected url-encode/url-decode round-trip to succeed"
 		}
 	},
 ]

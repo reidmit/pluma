@@ -22,26 +22,26 @@ def tests :: test.suite = [
 		when bytes.at 'hello' 0 is some n {
 			assert.equals n 104
 		} is none {
-			assert.is-true false
+			assert.fail "at 0 of 'hello' should be some byte"
 		}
 	},
 	test.case "at returns some at last index" fun {
 		when bytes.at 'hello' 4 is some n {
 			assert.equals n 111
 		} is none {
-			assert.is-true false
+			assert.fail "at last index of 'hello' should be some byte"
 		}
 	},
 	test.case "at returns none past the end" fun {
 		when bytes.at 'hello' 99 is some _n {
-			assert.is-true false
+			assert.fail "at 99 past the end should be none"
 		} is none {
 			assert.is-true true
 		}
 	},
 	test.case "at returns none on empty input" fun {
 		when bytes.at '' 0 is some _n {
-			assert.is-true false
+			assert.fail "at 0 of empty input should be none"
 		} is none {
 			assert.is-true true
 		}
@@ -95,26 +95,26 @@ def tests :: test.suite = [
 		when bytes.from-list [65, 66, 67] is ok b {
 			assert.equals b 'ABC'
 		} is err _msg {
-			assert.is-true false
+			assert.fail "from-list of valid bytes should be ok"
 		}
 	},
 	test.case "from-list of empty is empty bytes" fun {
 		when bytes.from-list [] is ok b {
 			assert.equals b ''
 		} is err _msg {
-			assert.is-true false
+			assert.fail "from-list of empty should be ok"
 		}
 	},
 	test.case "from-list fails on out-of-range high" fun {
 		when bytes.from-list [256] is ok _b {
-			assert.is-true false
+			assert.fail "from-list of out-of-range high should fail"
 		} is err _msg {
 			assert.is-true true
 		}
 	},
 	test.case "from-list fails on negative" fun {
 		when bytes.from-list [-1] is ok _b {
-			assert.is-true false
+			assert.fail "from-list of negative should fail"
 		} is err _msg {
 			assert.is-true true
 		}
@@ -143,12 +143,12 @@ def tests :: test.suite = [
 		when bytes.to-string 'hello' is ok s {
 			assert.equals s "hello"
 		} is err _msg {
-			assert.is-true false
+			assert.fail "to-string of valid UTF-8 should be ok"
 		}
 	},
 	test.case "to-string fails on invalid UTF-8" fun {
 		when bytes.to-string '\xff\xfe' is ok _s {
-			assert.is-true false
+			assert.fail "to-string of invalid UTF-8 should fail"
 		} is err _msg {
 			assert.is-true true
 		}
