@@ -1485,7 +1485,7 @@ pub(crate) fn build_pump_fn(
 						w.local_get(pp).local_get(plen);
 						w.local_get(dst).i32(CAP);
 						w.call(offload.db);
-						net_settle(w, g, fid, fval, fkind, nm, false, move |w, n| {
+						net_settle(w, g, fid, fval, fkind, nm, true, move |w, n| {
 							if let Some(copyout) = nm.copyout {
 								w.local_get(n).i32(CAP).i32_gt_s();
 								w.if_(|w| {

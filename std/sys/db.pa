@@ -45,15 +45,15 @@ def op-batch = 3
 
 def op-exec-count = 4
 
-def db-op :: fun int int string bytes -> task (result bytes string) = built-in "db-op"
+def db-op :: fun int int string bytes -> task bytes string = built-in "db-op"
 
 def no-bytes :: bytes = string.to-bytes ""
 
-# Runs one host op and lifts its `result` envelope onto the task's own failure
-# channel, so callers get a `task bytes string` -- a host-side error fails the
-# task rather than surfacing as an `err` value to re-match.
+# Runs one host op. The host settles the op's outcome on the task's own failure
+# channel directly (a host-side error fails the task rather than surfacing as an
+# `err` value to re-match), so this is just `db-op` under a clearer name.
 def run-op :: fun int int string bytes -> task bytes string = fun op id sql payload {
-	task.flatten (db-op op id sql payload)
+	db-op op id sql payload
 }
 
 # --- opening & closing ---------------------------------------------------------
