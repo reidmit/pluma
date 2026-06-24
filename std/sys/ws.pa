@@ -313,16 +313,12 @@ def ensure :: fun conn int -> task bytes string = fun c n {
 	if bytes.length cur >= n {
 		task.ok cur
 	} else {
-		try r = task.attempt (net.read c.raw 4096)
-		when r is ok chunk {
-			if bytes.is-empty chunk {
-				task.ok cur
-			} else {
-				ref.set c.buf (bytes.concat cur chunk)
-				ensure c n
-			}
-		} is err e {
-			task.err e
+		try chunk = net.read c.raw 4096
+		if bytes.is-empty chunk {
+			task.ok cur
+		} else {
+			ref.set c.buf (bytes.concat cur chunk)
+			ensure c n
 		}
 	}
 }
@@ -368,7 +364,7 @@ public def connect :: fun string -> task conn string = fun url {
 		raw-authority ++ default-port
 	}
 	let path = "/" ++ string.join (list.drop segs 1) "/"
-	try sock = task.flatten (open secure authority)
+	try sock = open secure authority
 	let key = client-key ()
 	try _ = write-all sock (handshake-request authority path key)
 	try resp = read-handshake-response sock
@@ -380,11 +376,11 @@ public def connect :: fun string -> task conn string = fun url {
 	}
 }
 
-def open :: fun bool string -> task (result net.connection string) _ = fun secure authority {
+def open :: fun bool string -> task net.connection string = fun secure authority {
 	if secure {
-		task.attempt (net.connect-tls authority)
+		net.connect-tls authority
 	} else {
-		task.attempt (net.connect authority)
+		net.connect authority
 	}
 }
 
@@ -415,15 +411,11 @@ def read-until-crlf2 :: fun net.connection bytes -> task bytes string = fun sock
 	if bytes.contains acc crlf2 {
 		task.ok acc
 	} else {
-		try r = task.attempt (net.read sock 4096)
-		when r is ok chunk {
-			if bytes.is-empty chunk {
-				task.ok acc
-			} else {
-				read-until-crlf2 sock (bytes.concat acc chunk)
-			}
-		} is err e {
-			task.err e
+		try chunk = net.read sock 4096
+		if bytes.is-empty chunk {
+			task.ok acc
+		} else {
+			read-until-crlf2 sock (bytes.concat acc chunk)
 		}
 	}
 }

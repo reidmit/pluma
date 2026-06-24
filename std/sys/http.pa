@@ -279,12 +279,14 @@ def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun reques
 # returns at once when it already holds the header terminator and `parse-head`
 # splits on the first one.
 def handle-conn :: fun net.connection (fun request -> task response _) bytes -> task nothing _ = fun conn handler leftover {
-	try raw-r = read-until-headers conn leftover
+	# `attempt` the reads so a failure closes the connection (`finish`) instead of
+	# propagating and leaking the socket.
+	try raw-r = task.attempt (read-until-headers conn leftover)
 	when raw-r is ok raw {
 		# No complete request head (the peer closed, or sent a partial) — done.
 		if bytes.contains raw crlf2 {
 			let parsed = parse-head raw
-			try body-r = read-body-framed conn parsed.body-start parsed.content-length
+			try body-r = task.attempt (read-body-framed conn parsed.body-start parsed.content-length)
 			when body-r is ok bl {
 				let (body, rest) = bl
 				let req = {
@@ -350,19 +352,15 @@ def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
 
 # Accumulate bytes until the blank line that ends the header block (or the
 # peer closes). The leftover after the headers is the start of the body.
-def read-until-headers :: fun net.connection bytes -> task (result bytes string) _ = fun conn acc {
+def read-until-headers :: fun net.connection bytes -> task bytes string = fun conn acc {
 	if bytes.contains acc crlf2 {
-		task.ok (ok acc)
+		task.ok acc
 	} else {
-		try r = task.attempt (net.read conn 4096)
-		when r is ok chunk {
-			if bytes.is-empty chunk {
-				task.ok (ok acc)
-			} else {
-				read-until-headers conn (bytes.concat acc chunk)
-			}
-		} is err e {
-			task.ok (err e)
+		try chunk = net.read conn 4096
+		if bytes.is-empty chunk {
+			task.ok acc
+		} else {
+			read-until-headers conn (bytes.concat acc chunk)
 		}
 	}
 }
@@ -370,38 +368,30 @@ def read-until-headers :: fun net.connection bytes -> task (result bytes string)
 # Like `read-body`, but also returns the bytes read past this request's body —
 # the start of the next pipelined request (empty for a non-pipelining client).
 # The server keep-alive loop threads that leftover into the next iteration.
-def read-body-framed :: fun net.connection bytes int -> task (result (bytes, bytes) string) _ = fun conn acc need {
+def read-body-framed :: fun net.connection bytes int -> task (bytes, bytes) string = fun conn acc need {
 	if bytes.length acc >= need {
-		task.ok (ok (bytes.slice acc 0 need, bytes.slice acc need (bytes.length acc)))
+		task.ok (bytes.slice acc 0 need, bytes.slice acc need (bytes.length acc))
 	} else {
-		try r = task.attempt (net.read conn 4096)
-		when r is ok chunk {
-			if bytes.is-empty chunk {
-				task.ok (ok (acc, string.to-bytes ""))
-			} else {
-				read-body-framed conn (bytes.concat acc chunk) need
-			}
-		} is err e {
-			task.ok (err e)
+		try chunk = net.read conn 4096
+		if bytes.is-empty chunk {
+			task.ok (acc, string.to-bytes "")
+		} else {
+			read-body-framed conn (bytes.concat acc chunk) need
 		}
 	}
 }
 
 # Read until the body has `need` bytes (or the peer closes), starting from
 # whatever already arrived with the headers.
-def read-body :: fun net.connection bytes int -> task (result bytes string) _ = fun conn acc need {
+def read-body :: fun net.connection bytes int -> task bytes string = fun conn acc need {
 	if bytes.length acc >= need {
-		task.ok (ok (bytes.slice acc 0 need))
+		task.ok (bytes.slice acc 0 need)
 	} else {
-		try r = task.attempt (net.read conn 4096)
-		when r is ok chunk {
-			if bytes.is-empty chunk {
-				task.ok (ok acc)
-			} else {
-				read-body conn (bytes.concat acc chunk) need
-			}
-		} is err e {
-			task.ok (err e)
+		try chunk = net.read conn 4096
+		if bytes.is-empty chunk {
+			task.ok acc
+		} else {
+			read-body conn (bytes.concat acc chunk) need
 		}
 	}
 }
@@ -490,19 +480,15 @@ def parse-head :: fun bytes -> {
 
 # Write every byte of `data`, looping until the connection has taken it all
 # (one `write` can accept fewer bytes than offered).
-def write-all :: fun net.connection bytes -> task (result int string) _ = fun conn data {
+def write-all :: fun net.connection bytes -> task int string = fun conn data {
 	if bytes.is-empty data {
-		task.ok (ok 0)
+		task.ok 0
 	} else {
-		try w = task.attempt (net.write conn data)
-		when w is ok n {
-			if n >= bytes.length data {
-				task.ok (ok n)
-			} else {
-				write-all conn (bytes.slice data n (bytes.length data))
-			}
-		} is err e {
-			task.ok (err e)
+		try n = net.write conn data
+		if n >= bytes.length data {
+			task.ok n
+		} else {
+			write-all conn (bytes.slice data n (bytes.length data))
 		}
 	}
 }
@@ -723,10 +709,10 @@ def fetch-with :: fun string (option string) method (dict string string) bytes -
 # either pooling or closing the connection. A `defer` closes the connection if the
 # task is cancelled (or fails) before it's been handed to `checkin`.
 def fetch-new :: fun bool string string bytes method (option string) -> task response string = fun secure authority key req verb ca {
-	try conn = task.flatten (open-conn secure authority ca)
+	try conn = open-conn secure authority ca
 	let settled = ref.new false
 	defer close-unless conn settled
-	try _ = task.flatten (write-all conn req)
+	try _ = write-all conn req
 	try pair = read-response-and-reuse conn verb
 	checkin key conn ca pair.1
 	ref.set settled true
@@ -737,7 +723,7 @@ def fetch-new :: fun bool string string bytes method (option string) -> task res
 # reusable)` on success; `none` if the connection was dead (write failed or no
 # response arrived) and the caller should retry on a fresh one.
 def exchange-pooled :: fun net.connection bytes method -> task (option (response, bool)) string = fun conn req verb {
-	try sent = task.attempt (task.flatten (write-all conn req))
+	try sent = task.attempt (write-all conn req)
 	when sent is err _ {
 		task.ok none
 	} is ok _ {
@@ -790,15 +776,15 @@ def url-secure :: fun string -> bool = fun url {
 
 # Open a connection to `authority` (a `host:port`): TLS when `secure`, trusting an
 # extra CA when one is given, else plain TCP.
-def open-conn :: fun bool string (option string) -> task (result connection string) _ = fun secure authority ca {
+def open-conn :: fun bool string (option string) -> task connection string = fun secure authority ca {
 	if secure {
 		when ca is some pem {
-			task.attempt (net.connect-tls-trusting authority pem)
+			net.connect-tls-trusting authority pem
 		} is none {
-			task.attempt (net.connect-tls authority)
+			net.connect-tls authority
 		}
 	} else {
-		task.attempt (net.connect authority)
+		net.connect authority
 	}
 }
 
@@ -924,7 +910,7 @@ def method-name :: fun method -> string = fun m {
 # positioned for the next one. A close-delimited body spends the connection, so it
 # reports `false`; otherwise reuse rides on the response's `Connection` header.
 def read-response-and-reuse :: fun net.connection method -> task (response, bool) string = fun conn verb {
-	try raw = task.flatten (read-until-headers conn (string.to-bytes ""))
+	try raw = read-until-headers conn (string.to-bytes "")
 	let parsed = parse-response-head raw
 	# Read the raw (still-encoded) body, framed, then -- once the connection is past
 	# it and reuse is decided -- undo any `Content-Encoding` (gzip / brotli).
@@ -941,13 +927,13 @@ def read-framed-body = fun conn verb parsed {
 	if response-bodyless verb parsed.status {
 		task.ok (string.to-bytes "", true)
 	} else if parsed.chunked {
-		try body = task.flatten (read-chunked conn parsed.body-start (string.to-bytes ""))
+		try body = read-chunked conn parsed.body-start (string.to-bytes "")
 		task.ok (body, true)
 	} else if parsed.has-length {
-		try body = task.flatten (read-body conn parsed.body-start parsed.content-length)
+		try body = read-body conn parsed.body-start parsed.content-length
 		task.ok (body, true)
 	} else {
-		try body = task.flatten (read-to-close conn parsed.body-start)
+		try body = read-to-close conn parsed.body-start
 		task.ok (body, false)
 	}
 }
@@ -1012,16 +998,12 @@ def response-keep-alive :: fun (dict string string) -> bool = fun headers {
 }
 
 # Read a close-delimited body: everything until the peer hangs up.
-def read-to-close :: fun net.connection bytes -> task (result bytes string) _ = fun conn acc {
-	try r = task.attempt (net.read conn 4096)
-	when r is ok chunk {
-		if bytes.is-empty chunk {
-			task.ok (ok acc)
-		} else {
-			read-to-close conn (bytes.concat acc chunk)
-		}
-	} is err e {
-		task.ok (err e)
+def read-to-close :: fun net.connection bytes -> task bytes string = fun conn acc {
+	try chunk = net.read conn 4096
+	if bytes.is-empty chunk {
+		task.ok acc
+	} else {
+		read-to-close conn (bytes.concat acc chunk)
 	}
 }
 
@@ -1035,16 +1017,16 @@ def crlf :: bytes = string.to-bytes "\r\n"
 # from `conn` whenever the buffer doesn't yet hold a full size line, or a full
 # chunk plus its trailing CRLF, and on the terminator we drain through the closing
 # blank line so the connection is left clean for reuse.
-def read-chunked :: fun net.connection bytes bytes -> task (result bytes string) _ = fun conn buf acc {
+def read-chunked :: fun net.connection bytes bytes -> task bytes string = fun conn buf acc {
 	when index-of-crlf buf 0 is some idx {
 		let size = hex-prefix-value buf
 		if size == 0 {
 			# Last chunk: make sure the closing "\r\n\r\n" (after any trailers) has been
 			# read off the socket before we hand the connection back.
 			if bytes.contains (bytes.slice buf idx (bytes.length buf)) crlf2 {
-				task.ok (ok acc)
+				task.ok acc
 			} else {
-				try buf2 = task.flatten (chunked-pull conn buf)
+				try buf2 = chunked-pull conn buf
 				read-chunked conn buf2 acc
 			}
 		} else {
@@ -1055,27 +1037,23 @@ def read-chunked :: fun net.connection bytes bytes -> task (result bytes string)
 				let chunk = bytes.slice buf data-start data-end
 				read-chunked conn (bytes.slice buf need (bytes.length buf)) (bytes.concat acc chunk)
 			} else {
-				try buf2 = task.flatten (chunked-pull conn buf)
+				try buf2 = chunked-pull conn buf
 				read-chunked conn buf2 acc
 			}
 		}
 	} is none {
-		try buf2 = task.flatten (chunked-pull conn buf)
+		try buf2 = chunked-pull conn buf
 		read-chunked conn buf2 acc
 	}
 }
 
 # Read one more block into `buf`; fail if the peer closed before the body ended.
-def chunked-pull :: fun net.connection bytes -> task (result bytes string) _ = fun conn buf {
-	try r = task.attempt (net.read conn 4096)
-	when r is ok chunk {
-		if bytes.is-empty chunk {
-			task.ok (err "http.fetch: connection closed mid chunked body")
-		} else {
-			task.ok (ok (bytes.concat buf chunk))
-		}
-	} is err e {
-		task.ok (err e)
+def chunked-pull :: fun net.connection bytes -> task bytes string = fun conn buf {
+	try chunk = net.read conn 4096
+	if bytes.is-empty chunk {
+		task.err "http.fetch: connection closed mid chunked body"
+	} else {
+		task.ok (bytes.concat buf chunk)
 	}
 }
 
@@ -1177,23 +1155,21 @@ public def fetch-stream :: fun string method (dict string string) bytes -> strea
 	stream.from-resource {
 		open: fun {
 			let split = split-url url
-			try c = open-conn (url-secure url) split.0 none
-			when c is ok conn {
-				try write-all conn (serialize-request verb split.1 split.0 headers body false false)
-				try raw-r = read-until-headers conn (string.to-bytes "")
-				when raw-r is ok raw {
-					let parsed = parse-response-head raw
-					if parsed.status == 200 {
-						task.ok (conn, ref.new parsed.body-start)
-					} else {
-						net.close conn
-						task.err ("http.fetch-stream: status " ++ to-string parsed.status)
-					}
-				} is err e {
+			try conn = open-conn (url-secure url) split.0 none
+			try write-all conn (serialize-request verb split.1 split.0 headers body false false)
+			# `attempt` so a failed header read closes the connection before re-failing
+			# (the stream's `close` only runs once `open` has handed back a resource).
+			try raw-r = task.attempt (read-until-headers conn (string.to-bytes ""))
+			when raw-r is ok raw {
+				let parsed = parse-response-head raw
+				if parsed.status == 200 {
+					task.ok (conn, ref.new parsed.body-start)
+				} else {
 					net.close conn
-					task.err e
+					task.err ("http.fetch-stream: status " ++ to-string parsed.status)
 				}
 			} is err e {
+				net.close conn
 				task.err e
 			}
 		},
@@ -1221,16 +1197,12 @@ def read-event :: fun net.connection (ref bytes) -> task (option bytes) _ = fun 
 		ref.set buf pair.1
 		parse-event pair.0
 	} is none {
-		try r = task.attempt (net.read conn 4096)
-		when r is ok chunk {
-			if bytes.is-empty chunk {
-				task.ok none
-			} else {
-				ref.set buf (bytes.concat (ref.get buf) chunk)
-				read-event conn buf
-			}
-		} is err e {
-			task.err e
+		try chunk = net.read conn 4096
+		if bytes.is-empty chunk {
+			task.ok none
+		} else {
+			ref.set buf (bytes.concat (ref.get buf) chunk)
+			read-event conn buf
 		}
 	}
 }
