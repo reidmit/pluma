@@ -8,5 +8,5 @@ runtime error
 before
 == stderr ==
 the list was empty
-  at std/option.fun@60:50
-  at main.fun@6:11
+  at std/option:65:3
+  at main:9:9

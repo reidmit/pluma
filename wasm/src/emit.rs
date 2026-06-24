@@ -73,6 +73,11 @@ pub(crate) struct FnEmitter<'a> {
 	/// `[<module>:<line>]` call-site header.
 	cur_line: usize,
 	body: Vec<Instruction<'static>>,
+	/// Source-line marks for the line table: `(index into `body`, line, col)` at
+	/// each statement boundary, in emission order. `emit` turns the instruction
+	/// index into a body byte offset (relayed via the encoded `Function`), which the
+	/// module assembler lifts to a module offset for the `pluma_lines` section.
+	line_marks: Vec<(usize, u32, u32)>,
 }
 
 impl<'a> FnEmitter<'a> {
@@ -144,10 +149,11 @@ impl<'a> FnEmitter<'a> {
 			defers_local: None,
 			cur_line: 0,
 			body: Vec::new(),
+			line_marks: Vec::new(),
 		}
 	}
 
-	pub(crate) fn emit(&mut self) -> Function {
+	pub(crate) fn emit(&mut self) -> (Function, Vec<(u32, u32, u32)>) {
 		// Prologue: copy each captured value out of the env (`$closure` captures
 		// array) into its local, so capture vars read like any other local.
 		let caps: Vec<u32> = self.f.captures.iter().map(|c| c.0).collect();
@@ -181,11 +187,26 @@ impl<'a> FnEmitter<'a> {
 		let body = self.f.body.clone();
 		self.block(&body);
 		let mut func = Function::new_with_locals_types(self.local_types.iter().copied());
-		for ins in &self.body {
+		// Replay the buffered instructions, converting each statement's instruction
+		// index into a body byte offset (`Function::byte_len` is the encoded length so
+		// far). The marks are in emission order, so a single cursor walks them.
+		let mut marks: Vec<(u32, u32, u32)> = Vec::with_capacity(self.line_marks.len());
+		let mut mi = 0;
+		for (idx, ins) in self.body.iter().enumerate() {
+			while mi < self.line_marks.len() && self.line_marks[mi].0 == idx {
+				let (_, line, col) = self.line_marks[mi];
+				marks.push((func.byte_len() as u32, line, col));
+				mi += 1;
+			}
 			func.instruction(ins);
 		}
+		while mi < self.line_marks.len() {
+			let (_, line, col) = self.line_marks[mi];
+			marks.push((func.byte_len() as u32, line, col));
+			mi += 1;
+		}
 		func.instruction(&Instruction::End);
-		func
+		(func, marks)
 	}
 
 	/// Allocate a fresh wasm local of the given type, returning its index.
@@ -199,6 +220,16 @@ impl<'a> FnEmitter<'a> {
 	fn block(&mut self, b: &Block) {
 		for s in &b.0 {
 			self.cur_line = s.range.start.line;
+			// Mark where this statement's instructions begin (an index into `body`),
+			// paired with its source position, for the line table. Synthetic stmts
+			// carry a `(0, 0)` range; skip them so they don't shadow real lines.
+			if s.range.start.line != 0 || s.range.start.col != 0 {
+				self.line_marks.push((
+					self.body.len(),
+					s.range.start.line as u32,
+					s.range.start.col as u32,
+				));
+			}
 			self.stmt(&s.kind);
 		}
 	}

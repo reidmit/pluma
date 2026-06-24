@@ -11,4 +11,5 @@ doctest = false
 compiler = { path = "../compiler" }
 ir = { path = "../ir" }
 wasm-encoder = "0.251"
+wasmparser = "0.251"
 wasm-opt = "0.116.1"

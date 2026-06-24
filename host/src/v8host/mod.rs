@@ -345,6 +345,13 @@ fn run_in_fresh_isolate(
 /// The body of a run, inside an entered context: compile the WasmGC module, then
 /// instantiate it and run `_entry`. Returns the program status string.
 fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut Ctx) -> String {
+	// The trap source-map (module byte offset -> .pa line:col), read from the
+	// artifact's `pluma_lines` section. Only the from-bytes path carries it; a shared
+	// compiled module degrades to name-only frames.
+	let line_table = match &src {
+		ModuleSource::Bytes(bytes) => parse_line_table(bytes),
+		ModuleSource::Compiled(_) => Vec::new(),
+	};
 	// Get the WasmGC module object — compile from bytes, or rebuild it from a
 	// shared `CompiledWasmModule` (no recompilation; the native code is shared).
 	let module = match src {
@@ -582,12 +589,64 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 						}
 						out.push_str("\n  at ");
 						out.push_str(name);
+						// V8 reports a wasm frame's module byte offset as its 1-based
+						// column; resolve it to the trap's .pa line:col. The label is the
+						// module, so this reads as a `module:line:col` source location
+						// (rendered 1-based). Without a mapping, the bare module stands.
+						let col = frame.get_column();
+						if col > 0 {
+							if let Some((line, c)) = lookup_line(&line_table, (col - 1) as u32) {
+								out.push_str(&format!(":{}:{}", line + 1, c + 1));
+							}
+						}
 					}
 				}
 			}
 			out
 		}
 	}
+}
+
+/// Decode the `pluma_lines` custom section into an offset-sorted line table of
+/// `(module byte offset, line, col)` at statement boundaries (all 0-based). Returns
+/// empty if the section is absent or malformed.
+fn parse_line_table(bytes: &[u8]) -> Vec<(u32, u32, u32)> {
+	for payload in wasmparser::Parser::new(0).parse_all(bytes).flatten() {
+		if let wasmparser::Payload::CustomSection(cs) = payload {
+			if cs.name() == "pluma_lines" {
+				return decode_line_table(cs.data());
+			}
+		}
+	}
+	Vec::new()
+}
+
+fn decode_line_table(data: &[u8]) -> Vec<(u32, u32, u32)> {
+	let mut out = Vec::new();
+	if data.len() < 4 {
+		return out;
+	}
+	let count = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
+	let mut p = 4;
+	for _ in 0..count {
+		if p + 12 > data.len() {
+			break;
+		}
+		let rd = |i: usize| u32::from_le_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]);
+		out.push((rd(p), rd(p + 4), rd(p + 8)));
+		p += 12;
+	}
+	out
+}
+
+/// The statement containing `off` is the one with the greatest start offset not
+/// past it. Returns its `(line, col)`, or `None` if `off` precedes the first mark.
+fn lookup_line(table: &[(u32, u32, u32)], off: u32) -> Option<(u32, u32)> {
+	let i = table.partition_point(|&(o, _, _)| o <= off);
+	(i > 0).then(|| {
+		let (_, line, col) = table[i - 1];
+		(line, col)
+	})
 }
 
 /// `new WebAssembly.Instance(module, imports)`.

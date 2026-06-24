@@ -43,7 +43,7 @@ impl Module {
 		extra_nominal: &HashMap<u32, Vec<(u32, ir::RecordShape)>>,
 		browser: bool,
 		diags: &mut Diagnostics,
-	) -> Vec<u8> {
+	) -> (Vec<u8>, Vec<Vec<(u32, u32, u32)>>) {
 		let builtin_g = builtin_globals(p);
 
 		// Host imports: the builtin tags actually called in reachable functions. The
@@ -418,6 +418,11 @@ impl Module {
 
 		let mut functions = FunctionSection::new();
 		let mut code = CodeSection::new();
+		// Per-IR-function source-line marks (body byte offset, line, col), gathered in
+		// emission order. The code section emits the IR functions first (in
+		// `reach.order`), so `line_table[k]` is the k-th defined function body — the
+		// alignment `emit_with_options` relies on to lift these to module offsets.
+		let mut line_table: Vec<Vec<(u32, u32, u32)>> = Vec::with_capacity(reach.order.len());
 		for &fid in &reach.order {
 			let f = &p.functions[fid as usize];
 			let arity = wasm_arity(fid, f.params.len());
@@ -454,8 +459,9 @@ impl Module {
 				extra_params,
 				diags,
 			);
-			let func = em.emit();
+			let (func, marks) = em.emit();
 			code.function(&func);
+			line_table.push(marks);
 		}
 
 		// Append the synthetic helpers after the IR functions, walking `REGISTRY` in
@@ -586,14 +592,21 @@ impl Module {
 		}
 		for (i, &fid) in reach.order.iter().enumerate() {
 			let f = &p.functions[fid as usize];
-			// Qualify the frame label with the module, but don't double it: an
-			// anonymous lambda's IR name already carries the module as its prefix
-			// (`std/result.fun@60:52`), whereas a named def's does not (`fold.fun@L:C`).
-			let label = if f.module.is_empty() || f.name.starts_with(&format!("{}.", f.module)) {
-				f.name.clone()
-			} else {
-				format!("{}.{}", f.module, f.name)
-			};
+			// The frame's identity, without the `.fun@line:col` definition-site suffix
+			// the IR name carries — the precise trap location comes from the line table
+			// instead. Then module-qualify, but don't double it: an anonymous lambda's
+			// name already prefixes the module (`std/result.fun@60:52` -> `std/result`),
+			// whereas a named def's does not (`fold.fun@L:C` -> `fold` -> `std/list.fold`).
+			let base = f
+				.name
+				.rfind(".fun@")
+				.map_or(f.name.as_str(), |i| &f.name[..i]);
+			let label =
+				if f.module.is_empty() || base == f.module || base.starts_with(&format!("{}.", f.module)) {
+					base.to_string()
+				} else {
+					format!("{}.{}", f.module, base)
+				};
 			fn_labels.push((num_imports + i as u32, label));
 		}
 		for def in &REGISTRY {
@@ -625,6 +638,6 @@ impl Module {
 		module.section(&code);
 		module.section(&data);
 		module.section(&name_sec);
-		module.finish()
+		(module.finish(), line_table)
 	}
 }

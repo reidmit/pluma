@@ -22,6 +22,8 @@ doctest = false
 compiler = { path = "../compiler" }
 ir = { path = "../ir" }
 wasm = { path = "../wasm" }
+# Reading the `pluma_lines` custom section (the trap source-map) out of the artifact.
+wasmparser = "0.251"
 # The V8 backend (rusty_v8): instantiates the WasmGC artifact under V8, driving the
 # marshalled `pluma.*` imports as native callbacks over the exported memory's ArrayBuffer.
 v8 = "137"

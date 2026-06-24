@@ -8,4 +8,4 @@ runtime error
 before
 == stderr ==
 stopping on purpose
-  at main.fun@5:11
+  at main:8:2

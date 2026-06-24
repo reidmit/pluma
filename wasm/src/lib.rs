@@ -150,7 +150,7 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 
 	// 3. Build and encode the module.
 	let mut diags = Diagnostics::default();
-	let bytes = module::Module::build(
+	let (mut bytes, line_table) = module::Module::build(
 		&p,
 		&reach,
 		&param_shapes,
@@ -158,10 +158,131 @@ pub fn emit_with_options(program: &IrProgram, opts: EmitOptions) -> Result<Vec<u
 		opts.browser,
 		&mut diags,
 	);
-	if diags.is_empty() {
-		Ok(bytes)
-	} else {
-		Err(diags)
+	if !diags.is_empty() {
+		return Err(diags);
+	}
+	// 4. Append the `pluma_lines` source-map: lift each function's body-relative
+	//    marks to module offsets (V8 reports a trap's module byte offset), so the
+	//    host can resolve a trap to its `.pa` line. Custom sections trail the code
+	//    section, so they don't shift the offsets they describe.
+	append_line_section(&mut bytes, &line_table);
+	Ok(bytes)
+}
+
+/// Build and append the `pluma_lines` custom section: a flat, offset-sorted table
+/// of `(module byte offset, line, col)` at statement boundaries. Body-relative
+/// marks are lifted by re-reading the just-encoded module to find where each
+/// function body lands; `line_table[k]` is the k-th defined function body (the IR
+/// functions are emitted first, in order). Line/col stay 0-based, as in the IR.
+fn append_line_section(bytes: &mut Vec<u8>, line_table: &[Vec<(u32, u32, u32)>]) {
+	let mut body_starts: Vec<usize> = Vec::new();
+	for payload in wasmparser::Parser::new(0).parse_all(bytes).flatten() {
+		if let wasmparser::Payload::CodeSectionEntry(body) = payload {
+			body_starts.push(body.range().start);
+		}
+	}
+	let mut entries: Vec<(u32, u32, u32)> = Vec::new();
+	for (k, marks) in line_table.iter().enumerate() {
+		let Some(&base) = body_starts.get(k) else {
+			break;
+		};
+		for &(body_off, line, col) in marks {
+			entries.push((base as u32 + body_off, line, col));
+		}
+	}
+	entries.sort_by_key(|&(off, _, _)| off);
+	entries.dedup_by_key(|&mut (off, _, _)| off);
+
+	let mut payload = Vec::with_capacity(4 + entries.len() * 12);
+	payload.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+	for (off, line, col) in entries {
+		payload.extend_from_slice(&off.to_le_bytes());
+		payload.extend_from_slice(&line.to_le_bytes());
+		payload.extend_from_slice(&col.to_le_bytes());
+	}
+	append_custom_section(bytes, "pluma_lines", &payload);
+}
+
+/// Append a raw custom section (`id 0`, name, payload) to a finished module.
+fn append_custom_section(bytes: &mut Vec<u8>, name: &str, payload: &[u8]) {
+	let mut content = Vec::new();
+	leb128_u32(&mut content, name.len() as u32);
+	content.extend_from_slice(name.as_bytes());
+	content.extend_from_slice(payload);
+	bytes.push(0x00);
+	leb128_u32(bytes, content.len() as u32);
+	bytes.extend_from_slice(&content);
+}
+
+/// Remove every top-level custom section named `name` from a finished module,
+/// preserving all other sections byte-for-byte. Used to drop a stale `pluma_lines`
+/// table after `wasm-opt` has rewritten the code it indexes.
+pub fn strip_custom_section(bytes: Vec<u8>, name: &str) -> Vec<u8> {
+	// 4-byte magic + 4-byte version, then a sequence of `[id][u32 len][body]`.
+	if bytes.len() < 8 {
+		return bytes;
+	}
+	let mut out = Vec::with_capacity(bytes.len());
+	out.extend_from_slice(&bytes[..8]);
+	let mut p = 8;
+	while p < bytes.len() {
+		let sec_start = p;
+		let id = bytes[p];
+		p += 1;
+		let Some((len, n)) = read_leb128_u32(&bytes[p..]) else {
+			out.extend_from_slice(&bytes[sec_start..]);
+			return out;
+		};
+		p += n;
+		let body_start = p;
+		let body_end = body_start + len as usize;
+		if body_end > bytes.len() {
+			out.extend_from_slice(&bytes[sec_start..]);
+			return out;
+		}
+		let drop = id == 0
+			&& read_leb128_u32(&bytes[body_start..]).is_some_and(|(name_len, m)| {
+				let s = body_start + m;
+				let e = s + name_len as usize;
+				e <= body_end && &bytes[s..e] == name.as_bytes()
+			});
+		if !drop {
+			out.extend_from_slice(&bytes[sec_start..body_end]);
+		}
+		p = body_end;
+	}
+	out
+}
+
+/// Read an unsigned LEB128 `u32` from the front of `data`, returning the value and
+/// the number of bytes consumed. `None` if the slice ends mid-encoding.
+fn read_leb128_u32(data: &[u8]) -> Option<(u32, usize)> {
+	let mut result: u32 = 0;
+	let mut shift = 0;
+	for (i, &byte) in data.iter().enumerate() {
+		result |= ((byte & 0x7f) as u32) << shift;
+		if byte & 0x80 == 0 {
+			return Some((result, i + 1));
+		}
+		shift += 7;
+		if shift >= 32 {
+			return None;
+		}
+	}
+	None
+}
+
+fn leb128_u32(out: &mut Vec<u8>, mut v: u32) {
+	loop {
+		let mut byte = (v & 0x7f) as u8;
+		v >>= 7;
+		if v != 0 {
+			byte |= 0x80;
+		}
+		out.push(byte);
+		if v == 0 {
+			break;
+		}
 	}
 }
 
