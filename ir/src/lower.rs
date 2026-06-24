@@ -71,6 +71,32 @@ pub fn lower_entry(compiler: &Compiler, entry: &str) -> Result<IrProgram, String
 	lowerer.run()
 }
 
+/// Build the backtrace display-path map (module name -> path string). A user
+/// module yields its source path made relative to the current dir when possible
+/// (so a frame is a jumpable `path:line:col`); the embedded stdlib, whose
+/// `module_path` is a synthetic `<stdlib:…>` marker, yields a bare `name.pa`.
+fn build_module_paths(compiler: &Compiler) -> HashMap<String, String> {
+	let cwd = std::env::current_dir().ok();
+	compiler
+		.modules_sorted()
+		.into_iter()
+		.map(|(name, module)| {
+			let path = &module.module_path;
+			let display = if path.to_string_lossy().starts_with('<') {
+				format!("{name}.pa")
+			} else {
+				cwd
+					.as_ref()
+					.and_then(|c| path.strip_prefix(c).ok())
+					.unwrap_or(path.as_path())
+					.to_string_lossy()
+					.into_owned()
+			};
+			(name.clone(), display)
+		})
+		.collect()
+}
+
 // --------------------------------------------------------------------------
 // The lowerer.
 // --------------------------------------------------------------------------
@@ -279,6 +305,7 @@ impl<'a> Lowerer<'a> {
 		let globals = self.globals.finish();
 		let param_shapes = self.spec_param_shapes;
 		let extra_nominal = self.spec_extra_nominal;
+		let module_paths = build_module_paths(compiler);
 		Ok(IrProgram {
 			functions,
 			globals,
@@ -287,6 +314,7 @@ impl<'a> Lowerer<'a> {
 			test_suites,
 			param_shapes,
 			extra_nominal,
+			module_paths,
 		})
 	}
 

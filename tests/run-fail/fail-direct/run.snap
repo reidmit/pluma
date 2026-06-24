@@ -8,4 +8,4 @@ runtime error
 before
 == stderr ==
 stopping on purpose
-  at main:8:2
+  at tests/run-fail/fail-direct/main.pa:8:2

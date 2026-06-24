@@ -592,21 +592,16 @@ impl Module {
 		}
 		for (i, &fid) in reach.order.iter().enumerate() {
 			let f = &p.functions[fid as usize];
-			// The frame's identity, without the `.fun@line:col` definition-site suffix
-			// the IR name carries — the precise trap location comes from the line table
-			// instead. Then module-qualify, but don't double it: an anonymous lambda's
-			// name already prefixes the module (`std/result.fun@60:52` -> `std/result`),
-			// whereas a named def's does not (`fold.fun@L:C` -> `fold` -> `std/list.fold`).
-			let base = f
-				.name
-				.rfind(".fun@")
-				.map_or(f.name.as_str(), |i| &f.name[..i]);
-			let label =
-				if f.module.is_empty() || base == f.module || base.starts_with(&format!("{}.", f.module)) {
-					base.to_string()
-				} else {
-					format!("{}.{}", f.module, base)
-				};
+			// Label the frame with the module's source path (`tests/app/main.pa`), so a
+			// trap renders as a jumpable `path:line:col` once the host appends the line.
+			// A function whose module has no recorded path (synthetic scaffolding) falls
+			// back to its IR name minus the `.fun@line:col` definition-site suffix.
+			let label = p.module_paths.get(&f.module).cloned().unwrap_or_else(|| {
+				f.name
+					.rfind(".fun@")
+					.map_or(f.name.as_str(), |i| &f.name[..i])
+					.to_string()
+			});
 			fn_labels.push((num_imports + i as u32, label));
 		}
 		for def in &REGISTRY {

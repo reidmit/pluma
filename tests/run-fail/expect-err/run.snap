@@ -8,5 +8,5 @@ runtime error
 before
 == stderr ==
 result.expect: parsing the count: invalid digit found in string
-  at std/result:65:3
-  at main:8:9
+  at std/result.pa:65:3
+  at tests/run-fail/expect-err/main.pa:8:9

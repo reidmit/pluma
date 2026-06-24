@@ -89,6 +89,11 @@ pub struct IrProgram {
 	/// their field reads are a constant-index `struct.get`. Empty when nothing
 	/// specialized.
 	pub extra_nominal: HashMap<u32, Vec<(u32, RecordShape)>>,
+	/// Module name -> a display path for backtraces: a cwd-relative `.pa` file for
+	/// a user module (so a trap frame is a jumpable `path:line:col`), or the bare
+	/// `name.pa` for the embedded stdlib, which has no on-disk source. The WASM
+	/// backend's `name` section uses it to label each function's frames.
+	pub module_paths: HashMap<String, String>,
 }
 
 /// How a global slot is initialized.

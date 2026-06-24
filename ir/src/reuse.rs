@@ -1465,7 +1465,8 @@ mod tests {
 			entry: FuncId(0),
 			test_suites: vec![],
 			param_shapes: std::collections::HashMap::new(),
-		extra_nominal: std::collections::HashMap::new(),
+			extra_nominal: std::collections::HashMap::new(),
+			module_paths: std::collections::HashMap::new(),
 		};
 		reuse(&mut p);
 		p.functions.pop().unwrap()

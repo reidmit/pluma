@@ -8,5 +8,5 @@ runtime error
 before
 == stderr ==
 option.expect: the list was empty
-  at std/option:66:3
-  at main:9:9
+  at std/option.pa:66:3
+  at tests/run-fail/expect-none/main.pa:9:9
