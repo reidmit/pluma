@@ -101,11 +101,25 @@ pub fn run_streaming_v8(bytes: &[u8], args: &[String]) -> i32 {
 	match result.status.as_str() {
 		"ok" => 0,
 		other => {
-			let msg = other.strip_prefix("runtime error: ").unwrap_or(other);
-			eprintln!("{msg}");
+			// Show the `runtime error:` label in red (matching the compiler's
+			// diagnostics), then the message + backtrace plain. A non-runtime status
+			// (e.g. `module error: …`) prints as-is.
+			match other.strip_prefix("runtime error: ") {
+				Some(body) if stderr_is_color() => eprintln!("\x1b[1;31mruntime error:\x1b[0m {body}"),
+				Some(body) => eprintln!("runtime error: {body}"),
+				None => eprintln!("{other}"),
+			}
 			1
 		}
 	}
+}
+
+/// Whether to ANSI-color the error printed to stderr: a terminal, and `NO_COLOR`
+/// not set to `1` (mirroring the CLI's `should_colorize`, but gated on stderr —
+/// where this writes — rather than stdout).
+fn stderr_is_color() -> bool {
+	use std::io::IsTerminal;
+	std::io::stderr().is_terminal() && std::env::var("NO_COLOR").as_deref() != Ok("1")
 }
 
 /// Run a `pluma test` artifact and map the outcome to a process exit code.
@@ -554,6 +568,9 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 						.exception()
 						.map(|e| e.to_rust_string_lossy(tc))
 						.unwrap_or_default();
+					// Drop V8's `RuntimeError:` class prefix so the reason reads under our
+					// own `runtime error:` label (e.g. just `divide by zero`).
+					let detail = detail.strip_prefix("RuntimeError: ").unwrap_or(&detail);
 					if detail.is_empty() {
 						"runtime error: trap".to_string()
 					} else {
