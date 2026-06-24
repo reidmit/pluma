@@ -30,7 +30,7 @@ use std::collections::{HashMap, HashSet};
 use wasm_encoder::{
 	CodeSection, ConstExpr, DataCountSection, DataSection, ElementSection, Elements, ExportKind,
 	ExportSection, Function, FunctionSection, ImportSection, MemorySection, MemoryType,
-	Module as WasmModule, RefType, TableSection, TableType, TypeSection,
+	Module as WasmModule, NameMap, NameSection, RefType, TableSection, TableType, TypeSection,
 };
 
 pub(crate) struct Module;
@@ -574,6 +574,44 @@ impl Module {
 		data.passive(strpool.bytes.iter().copied());
 		let data_count = DataCountSection { count: 1 };
 
+		// Name section: label every defined function with its Pluma identity, so a V8
+		// trap stack trace reads as `module.name` frames instead of `wasm-function[N]`.
+		// Function indices follow the emission order — imports, IR functions, synthetic
+		// helpers, builtin wrappers — so the labels are gathered in that same order and
+		// sorted (helper indices aren't allocated in `REGISTRY` order) before encoding,
+		// which the name map requires to be ascending.
+		let mut fn_labels: Vec<(u32, String)> = Vec::new();
+		for (i, tag) in imports.order().iter().enumerate() {
+			fn_labels.push((i as u32, tag.clone()));
+		}
+		for (i, &fid) in reach.order.iter().enumerate() {
+			let f = &p.functions[fid as usize];
+			// Qualify the frame label with the module, but don't double it: an
+			// anonymous lambda's IR name already carries the module as its prefix
+			// (`std/result.fun@60:52`), whereas a named def's does not (`fold.fun@L:C`).
+			let label = if f.module.is_empty() || f.name.starts_with(&format!("{}.", f.module)) {
+				f.name.clone()
+			} else {
+				format!("{}.{}", f.module, f.name)
+			};
+			fn_labels.push((num_imports + i as u32, label));
+		}
+		for def in &REGISTRY {
+			if let Some(idx) = runtime.idx(def.id) {
+				fn_labels.push((idx, format!("__{:?}", def.id)));
+			}
+		}
+		for (i, tag) in wrapper_order.iter().enumerate() {
+			fn_labels.push((wrapper_base + i as u32, format!("__wrap_{tag}")));
+		}
+		fn_labels.sort_by_key(|(idx, _)| *idx);
+		let mut fn_names = NameMap::new();
+		for (idx, name) in &fn_labels {
+			fn_names.append(*idx, name);
+		}
+		let mut name_sec = NameSection::new();
+		name_sec.functions(&fn_names);
+
 		let mut module = WasmModule::new();
 		module.section(&types);
 		module.section(&import_sec);
@@ -586,6 +624,7 @@ impl Module {
 		module.section(&data_count);
 		module.section(&code);
 		module.section(&data);
+		module.section(&name_sec);
 		module.finish()
 	}
 }

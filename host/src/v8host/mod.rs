@@ -325,6 +325,9 @@ fn run_in_fresh_isolate(
 	let ctx_ptr = &mut ctx as *mut Ctx;
 
 	let isolate = &mut v8::Isolate::new(Default::default());
+	// Capture a stack trace for an uncaught exception (a wasm trap or `io.fail`), so
+	// the trap arm in `run_in_context` can render a Pluma backtrace from the frames.
+	isolate.set_capture_stack_trace_for_uncaught_exceptions(true, 64);
 	let scope = &mut v8::HandleScope::new(isolate);
 	let context = v8::Context::new(scope, Default::default());
 	let scope = &mut v8::ContextScope::new(scope, context);
@@ -537,25 +540,52 @@ fn run_in_context(scope: &mut v8::HandleScope, src: ModuleSource, ctx_ptr: *mut 
 		None => {
 			// A trap. An `io.fail` stashed its message host-side; surface that, else the
 			// raw V8 exception text (e.g. a wasm RuntimeError) so the reason isn't lost.
-			match unsafe { &*ctx_ptr }.state.fail.clone() {
+			let base = match unsafe { &*ctx_ptr }.state.fail.clone() {
 				Some(msg) => format!("runtime error: {msg}"),
 				None => {
 					let detail = tc
 						.exception()
 						.map(|e| e.to_rust_string_lossy(tc))
 						.unwrap_or_default();
-					if std::env::var_os("PLUMA_TRAP_STACK").is_some() {
-						if let Some(st) = tc.stack_trace() {
-							eprintln!("[trap stack] {}", st.to_rust_string_lossy(tc));
-						}
-					}
 					if detail.is_empty() {
 						"runtime error: trap".to_string()
 					} else {
 						format!("runtime error: {detail}")
 					}
 				}
+			};
+			// An optional escape hatch for calibrating against V8's own rendering.
+			if std::env::var_os("PLUMA_TRAP_STACK").is_some() {
+				if let Some(st) = tc.stack_trace() {
+					eprintln!("[trap stack] {}", st.to_rust_string_lossy(tc));
+				}
 			}
+			// Append a Pluma backtrace: the named wasm frames (innermost first) that the
+			// `name` section labelled with each function's `module.name`. V8 prefixes a
+			// wasm function name with `$`; strip it. Synthetic runtime frames (the entry
+			// bootstrap, scheduler helpers, builtin wrappers — all named with a leading
+			// `__`) are scaffolding, not user code, so they're skipped.
+			let mut out = base;
+			if let Some(msg) = tc.message() {
+				if let Some(st) = msg.get_stack_trace(tc) {
+					for i in 0..st.get_frame_count() {
+						let Some(frame) = st.get_frame(tc, i) else {
+							continue;
+						};
+						let Some(name) = frame.get_function_name(tc) else {
+							continue;
+						};
+						let name = name.to_rust_string_lossy(tc);
+						let name = name.strip_prefix('$').unwrap_or(&name);
+						if name.is_empty() || name.starts_with("__") {
+							continue;
+						}
+						out.push_str("\n  at ");
+						out.push_str(name);
+					}
+				}
+			}
+			out
 		}
 	}
 }
