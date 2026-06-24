@@ -23,7 +23,7 @@ def echo-loop :: fun ws.conn -> task nothing string = fun sock {
 	}
 }
 
-def handler :: fun http.request -> task http.response = fun req {
+def handler :: fun http.request -> task http.response _ = fun req {
 	if req.path == "/socket" {
 		task.ok (ws.upgrade req echo-loop)
 	} else {

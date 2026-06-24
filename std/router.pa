@@ -43,12 +43,12 @@ use std/sys/http
 # handler's task when the request matches, or `none` when it doesn't. `handler`
 # walks the list and runs the first `some` it finds.
 opaque enum route {
-	route (fun http.request -> option (task http.response))
+	route (fun http.request -> option (task http.response _))
 }
 
 # Builds a route from a match rule and a handler. The rule decides whether this
 # route answers a given request; if it does, the handler's task is what runs.
-def make :: fun (fun http.request -> bool) (fun http.request -> task http.response) -> route = fun matches handle {
+def make :: fun (fun http.request -> bool) (fun http.request -> task http.response _) -> route = fun matches handle {
 	route.route fun req {
 		if matches req {
 			some (handle req)
@@ -63,7 +63,7 @@ def make :: fun (fun http.request -> bool) (fun http.request -> task http.respon
 #     router.get "/health" (fun req {
 #         task.ok (http.text 200 "ok")
 #     })
-public def get :: fun string (fun http.request -> task http.response) -> route = fun path handle {
+public def get :: fun string (fun http.request -> task http.response _) -> route = fun path handle {
 	make fun req {
 		if req.method is http.method.get {
 			req.path == path
@@ -79,7 +79,7 @@ public def get :: fun string (fun http.request -> task http.response) -> route =
 #         try id = create-user req.body
 #         task.ok (http.text 201 id)
 #     })
-public def post :: fun string (fun http.request -> task http.response) -> route = fun path handle {
+public def post :: fun string (fun http.request -> task http.response _) -> route = fun path handle {
 	make fun req {
 		if req.method is http.method.post {
 			req.path == path
@@ -96,13 +96,13 @@ public def post :: fun string (fun http.request -> task http.response) -> route 
 #     router.prefix "/static" (fun req {
 #         serve-file req.path
 #     })
-public def prefix :: fun string (fun http.request -> task http.response) -> route = fun pfx handle {
+public def prefix :: fun string (fun http.request -> task http.response _) -> route = fun pfx handle {
 	make fun req { string.starts-with req.path pfx } handle
 }
 
 # The first route whose rule matches `req`, as `some` of that route's task, or
 # `none` if no route in the list matches.
-def first-match :: fun (list route) http.request -> option (task http.response) = fun routes req {
+def first-match :: fun (list route) http.request -> option (task http.response _) = fun routes req {
 	when list.head routes is some r {
 		when r is route.route try-route {
 			when try-route req is some t {
@@ -125,7 +125,7 @@ def first-match :: fun (list route) http.request -> option (task http.response) 
 #         router.get "/health" health,
 #     ]
 #     http.serve "127.0.0.1:8080" app
-public def handler :: fun (list route) -> (fun http.request -> task http.response) = fun routes {
+public def handler :: fun (list route) -> (fun http.request -> task http.response _) = fun routes {
 	fun req {
 		when first-match routes req is some t {
 			t
@@ -144,6 +144,6 @@ public def handler :: fun (list route) -> (fun http.request -> task http.respons
 #         router.get "/" home,
 #         router.get "/health" health,
 #     ]
-public def serve :: fun string (list route) -> task nothing = fun address routes {
+public def serve :: fun string (list route) -> task nothing _ = fun address routes {
 	http.serve address (handler routes)
 }

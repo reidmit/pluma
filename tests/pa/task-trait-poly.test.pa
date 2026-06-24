@@ -11,13 +11,13 @@ use std/sys/io
 # `compile_constrained_thunk`. Exercised at int and float (per-call-site dicts)
 # and with an ord dispatch.
 
-def add-tasks :: fun (task a) (task a) -> task a = fun x y {
+def add-tasks :: fun (task a _) (task a _) -> task a _ = fun x y {
 	try p = x
 	try q = y
 	task.ok (p + q)
 }
 
-def bigger :: fun (task a) (task a) -> task bool = fun x y {
+def bigger :: fun (task a _) (task a _) -> task bool _ = fun x y {
 	try p = x
 	try q = y
 	task.ok (p > q)

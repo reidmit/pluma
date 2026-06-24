@@ -36,7 +36,7 @@ use std/task
 # producer's state and resource, so only the element type `a` shows in the type —
 # the resource type stays hidden inside the closures.
 opaque enum stream a {
-	stream (fun nothing -> task (option a)) (fun nothing -> task nothing)
+	stream (fun nothing -> task (option a) _) (fun nothing -> task nothing _)
 }
 
 # Where a `from-resource` stream is in its lifecycle: not yet opened, holding a
@@ -57,7 +57,7 @@ enum phase r {
 #     stream.from-seed 1 (fun n {
 #         if n < 1000000 { task.ok (some (n, n * 2)) } else { task.ok none }
 #     })
-public def from-seed :: fun s (fun s -> task (option (a, s))) -> stream a = fun initial step {
+public def from-seed :: fun s (fun s -> task (option (a, s)) _) -> stream a = fun initial step {
 	let cell = ref.new (some initial)
 	let pull = fun {
 		when ref.get cell is some cur {
@@ -95,9 +95,9 @@ public def from-seed :: fun s (fun s -> task (option (a, s))) -> stream a = fun 
 #         }
 #     }
 public def from-resource :: fun {
-	open :: fun nothing -> task r,
-	next :: fun r -> task (option a),
-	close :: fun r -> task nothing,
+	open :: fun nothing -> task r _,
+	next :: fun r -> task (option a) _,
+	close :: fun r -> task nothing _,
 } -> stream a = fun cfg {
 	let cell = ref.new phase.fresh
 	# Release: run `close` once if a resource is live, otherwise just mark closed.
@@ -160,7 +160,7 @@ public def map :: fun (stream a) (fun a -> b) -> stream b = fun s f {
 # faults the stream (the failure rides the pull's task, surfacing on whoever is
 # consuming). Shares the source's release. The remote-stream client uses this to
 # wire-decode each frame, so a malformed frame faults the subscription.
-public def map-task :: fun (stream a) (fun a -> task b) -> stream b = fun s f {
+public def map-task :: fun (stream a) (fun a -> task b _) -> stream b = fun s f {
 	when s is stream.stream pull stop {
 		let mapped = fun {
 			try out = pull ()
@@ -186,7 +186,7 @@ public def filter :: fun (stream a) (fun a -> bool) -> stream a = fun s keep {
 }
 
 # `filter`'s pull: pull until an element passes `keep` or the source drains.
-def pull-matching :: fun (fun nothing -> task (option a)) (fun a -> bool) -> task (option a) = fun pull keep {
+def pull-matching :: fun (fun nothing -> task (option a) _) (fun a -> bool) -> task (option a) _ = fun pull keep {
 	try out = pull ()
 	when out is some x {
 		if keep x {
@@ -256,13 +256,13 @@ public def take-while :: fun (stream a) (fun a -> bool) -> stream a = fun s keep
 # Pulls every element and runs `body` on each, in order, then releases. The
 # `defer`'d release runs on **every** terminus — drained, faulted, or cancelled —
 # and is shielded, so it survives a cancel mid-consumption.
-public def for-each :: fun (stream a) (fun a -> task nothing) -> task nothing = fun s body {
+public def for-each :: fun (stream a) (fun a -> task nothing _) -> task nothing _ = fun s body {
 	defer task.shielded (release s)
 	try for-each-loop s body
 	task.ok ()
 }
 
-def for-each-loop :: fun (stream a) (fun a -> task nothing) -> task nothing = fun s body {
+def for-each-loop :: fun (stream a) (fun a -> task nothing _) -> task nothing _ = fun s body {
 	try m = next s
 	when m is some x {
 		try body x
@@ -274,13 +274,13 @@ def for-each-loop :: fun (stream a) (fun a -> task nothing) -> task nothing = fu
 
 # Folds `f` over every element, threading an accumulator from `init`, then
 # releases (on any terminus, shielded — as `for-each`).
-public def fold :: fun (stream a) b (fun b a -> task b) -> task b = fun s init f {
+public def fold :: fun (stream a) b (fun b a -> task b _) -> task b _ = fun s init f {
 	defer task.shielded (release s)
 	try out = fold-loop s init f
 	task.ok out
 }
 
-def fold-loop :: fun (stream a) b (fun b a -> task b) -> task b = fun s acc f {
+def fold-loop :: fun (stream a) b (fun b a -> task b _) -> task b _ = fun s acc f {
 	try m = next s
 	when m is some x {
 		try acc2 = f acc x
@@ -292,7 +292,7 @@ def fold-loop :: fun (stream a) b (fun b a -> task b) -> task b = fun s acc f {
 
 # Pulls the stream to exhaustion for its effects, discarding the elements, then
 # releases. Use it to run a producer whose work happens in the pulling.
-public def drain :: fun (stream a) -> task nothing = fun s {
+public def drain :: fun (stream a) -> task nothing _ = fun s {
 	for-each s fun _x {
 		task.ok ()
 	}
@@ -304,7 +304,7 @@ public def drain :: fun (stream a) -> task nothing = fun s {
 # LOW-LEVEL: hand-looping `next` means **you** own the teardown — it does not run
 # the stream's release on its own. Reach for `for-each` / `fold` / `drain`, which
 # release for you, unless you specifically need manual control.
-public def next :: fun (stream a) -> task (option a) = fun s {
+public def next :: fun (stream a) -> task (option a) _ = fun s {
 	when s is stream.stream pull _stop {
 		pull ()
 	}
@@ -312,7 +312,7 @@ public def next :: fun (stream a) -> task (option a) = fun s {
 
 # Releases a stream's resource (idempotent). Private: consumers run it through the
 # shielded `defer`; `from-resource` is what makes it run the user's `close` once.
-def release :: fun (stream a) -> task nothing = fun s {
+def release :: fun (stream a) -> task nothing _ = fun s {
 	when s is stream.stream _pull stop {
 		stop ()
 	}

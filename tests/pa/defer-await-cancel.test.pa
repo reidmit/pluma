@@ -13,13 +13,13 @@ use std/sys/io
 
 def tag :: local string = local.new "-"
 
-def cleanup :: fun nothing -> task nothing = fun {
+def cleanup :: fun nothing -> task nothing _ = fun {
 	try task.sleep 1ms
 	print "async cleanup on cancel (tag=$(local.get tag))"
 	task.ok ()
 }
 
-def slow :: fun nothing -> task nothing = fun {
+def slow :: fun nothing -> task nothing _ = fun {
 	defer cleanup ()
 	try task.sleep 10s
 	print "slow finished (should NOT print)"

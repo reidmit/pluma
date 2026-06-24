@@ -23,7 +23,7 @@ use std/sys/rpc
 #   - no-Origin / curl-shaped request -> 200 (non-browser, out of CSRF scope)
 
 # Stands in for the synthesized dispatcher: always 200.
-def inner :: fun http.request -> task http.response = fun _req {
+def inner :: fun http.request -> task http.response _ = fun _req {
 	task.ok (http.text 200 "ok")
 }
 

@@ -33,14 +33,14 @@ use std/sys/http
 # the bytes are read, and a `Content-Type` is guessed from the extension. Answers
 # `404 Not Found` if the path escapes `root` (any `..` segment is refused), names
 # a missing file, or can't be read.
-public def serve :: fun string http.request -> task http.response = fun root req {
+public def serve :: fun string http.request -> task http.response _ = fun root req {
 	serve-file root req.path
 }
 
 # As `serve`, but takes the request path directly -- handy when you've already
 # pulled `req.path` apart, or want to serve a fixed file (`serve-file "public"
 # "/logo.svg"`).
-public def serve-file :: fun string string -> task http.response = fun root path {
+public def serve-file :: fun string string -> task http.response _ = fun root path {
 	if is-safe path {
 		try found = task.attempt (fs.read-bytes (root ++ path))
 		when found is ok body {

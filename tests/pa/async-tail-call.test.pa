@@ -11,13 +11,13 @@ use std/sys/io
 # the wrapping and handed the callee's raw task to the driver (which trapped casting
 # it). The CPS pass now downgrades tail calls in poll fns to ordinary calls.
 
-def helper :: fun int -> task int = fun n {
+def helper :: fun int -> task int _ = fun n {
 	task.ok (n * 10)
 }
 
 # `if`/`else`: the `else` arm tail-calls `helper` with no preceding suspension; the
 # `if` arm awaits first. Both must work.
-def via-if :: fun bool -> task int = fun suspend-first {
+def via-if :: fun bool -> task int _ = fun suspend-first {
 	if suspend-first {
 		try task.sleep 1ms
 		helper 1
@@ -32,7 +32,7 @@ enum choice {
 	later
 }
 
-def via-when :: fun choice -> task int = fun c {
+def via-when :: fun choice -> task int _ = fun c {
 	when c is choice.now {
 		helper 3
 	} is choice.later {
@@ -42,7 +42,7 @@ def via-when :: fun choice -> task int = fun c {
 }
 
 # Tail-call to a captured async *closure* from the entry region.
-def via-closure :: fun bool -> task int = fun suspend-first {
+def via-closure :: fun bool -> task int _ = fun suspend-first {
 	let g = fun n {
 		try task.sleep 1ms
 		task.ok (n + 100)
@@ -57,7 +57,7 @@ def via-closure :: fun bool -> task int = fun suspend-first {
 
 # Async self-recursion whose recursive call sits in a tail-position arm reached
 # after a suspension (the working continuation case) — still correct post-fix.
-def count-down :: fun int -> task int = fun n {
+def count-down :: fun int -> task int _ = fun n {
 	if n > 0 {
 		try task.sleep 1ms
 		count-down (n - 1)

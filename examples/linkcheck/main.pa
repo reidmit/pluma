@@ -138,7 +138,7 @@ def report :: fun (list (string, outcome)) -> nothing = fun results {
 
 # --- demo server: a miniature web with one of every interesting failure ---
 
-def demo-handler :: fun http.request -> task http.response = fun req {
+def demo-handler :: fun http.request -> task http.response _ = fun req {
 	if string.contains req.path "slow" {
 		try task.sleep 1s
 		task.ok (http.text 200 "eventually")

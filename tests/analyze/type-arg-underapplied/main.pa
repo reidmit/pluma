@@ -1,0 +1,9 @@
+use std/task
+
+# A type constructor must be fully applied. `task` takes two arguments — a value
+# type and an error type — so leaving the error implicit is rejected: write
+# `task int _` for a deliberately-polymorphic error, not the silently-elided
+# `task int`.
+def f :: fun int -> task int = fun n {
+	task.ok n
+}

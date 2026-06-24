@@ -3,6 +3,6 @@ use std/task
 
 # A function argument can't cross the wire, so this endpoint is rejected at
 # the boundary with attribution naming the offending parameter.
-public remote def apply-twice :: fun request (fun int -> int) int -> task int = fun _req f n {
+public remote def apply-twice :: fun request (fun int -> int) int -> task int _ = fun _req f n {
 	task.ok (f (f n))
 }

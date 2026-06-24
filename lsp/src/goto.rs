@@ -811,7 +811,7 @@ impl Resolver {
 					self.walk_type_expr(ty, scope);
 				}
 			}
-			TypeExprKind::EmptyTuple | TypeExprKind::Grouping(_) => {
+			TypeExprKind::EmptyTuple | TypeExprKind::Wildcard | TypeExprKind::Grouping(_) => {
 				if let TypeExprKind::Grouping(inner) = &t.kind {
 					self.walk_type_expr(inner, scope);
 				}

@@ -127,7 +127,7 @@ def cancel-sub :: fun int -> nothing = built-in "cancel-sub"
 # stream's shielded release run as it tears down); ignore the handle for plain
 # fire-and-forget. Drive a `stream` into a signal and stop it on demand:
 # `let stop = task.spawn (stream.for-each s (fun v { ... }))`.
-public def spawn :: fun (task nothing) -> (fun nothing -> nothing) = fun t {
+public def spawn :: fun (task nothing _) -> (fun nothing -> nothing) = fun t {
 	let sid = spawn-sub t
 	fun {
 		cancel-sub sid
@@ -146,7 +146,7 @@ public def spawn :: fun (task nothing) -> (fun nothing -> nothing) = fun t {
 # cancel the outstanding request when the query changes.
 #
 #     let stop = task.fire (api.search q) (fun hits { signal.set results hits })
-public def fire :: fun (task a) (fun a -> nothing) -> (fun nothing -> nothing) = fun t f {
+public def fire :: fun (task a _) (fun a -> nothing) -> (fun nothing -> nothing) = fun t f {
 	spawn (map t f)
 }
 
@@ -237,7 +237,7 @@ public def lift :: fun (result a e) -> task a e = fun r {
 # is `task.lift` behind an await; the inverse of `task.attempt`. (Named for the
 # `flatten` family -- `list.flatten`, `option.flatten` -- it collapses one
 # redundant failure-bearing layer, here a `result` nested in a `task`.)
-public def flatten :: fun (task (result a e)) -> task a e = fun t {
+public def flatten :: fun (task (result a e) _) -> task a e = fun t {
 	try r = t
 	lift r
 }
@@ -247,13 +247,13 @@ public def flatten :: fun (task (result a e)) -> task a e = fun t {
 # is just the sequential back half of `all` / `settle-all`. O(n): each result is
 # `list.push`ed onto a fresh accumulator, vs the O(n^2) `[h, ...rest]` recursion
 # (the tail-copy of `...rest` plus the `[x, ...xs]` rebuild).
-def await-all :: fun (list (task a)) -> task (list a) = fun handles {
+def await-all :: fun (list (task a _)) -> task (list a) _ = fun handles {
 	await-into handles [] 0 (list.length handles)
 }
 
 # The fill loop for `await-all`: awaits `handles[i]` in order, pushing each
 # result onto `acc` (a fresh, solely-owned list, so the in-place push is safe).
-def await-into :: fun (list (task a)) (list a) int int -> task (list a) = fun handles acc i n {
+def await-into :: fun (list (task a _)) (list a) int int -> task (list a) _ = fun handles acc i n {
 	if i < n {
 		try x = list.get handles i
 		list.push acc x
@@ -266,7 +266,7 @@ def await-into :: fun (list (task a)) (list a) int int -> task (list a) = fun ha
 # Runs `t1` and `t2` concurrently and pairs their results. Both start at
 # `spawn`, so awaiting them in order is still parallel; if either fails, the
 # fail-fast scope cancels the other and the whole task fails.
-public def both :: fun (task a) (task b) -> task (a, b) = fun t1 t2 {
+public def both :: fun (task a _) (task b _) -> task (a, b) _ = fun t1 t2 {
 	scope as s {
 		let h1 = s.spawn t1
 		let h2 = s.spawn t2
@@ -278,7 +278,7 @@ public def both :: fun (task a) (task b) -> task (a, b) = fun t1 t2 {
 
 # Runs every task in `ts` concurrently and collects their results in order.
 # Fail-fast: the first failure cancels the rest and fails the whole task.
-public def all :: fun (list (task a)) -> task (list a) = fun ts {
+public def all :: fun (list (task a _)) -> task (list a) _ = fun ts {
 	scope as s {
 		let handles = list.map ts fun t {
 			s.spawn t
@@ -290,13 +290,13 @@ public def all :: fun (list (task a)) -> task (list a) = fun ts {
 # Runs every task concurrently and collects *every* outcome as a `result` --
 # successes and failures alike. Each task is `attempt`-wrapped, so none of
 # them ever fails the scope: this always settles the full list.
-public def settle-all :: fun (list (task a)) -> task (list (result a e)) = fun ts {
+public def settle-all :: fun (list (task a _)) -> task (list (result a e)) _ = fun ts {
 	all (list.map ts attempt)
 }
 
 # Runs every task concurrently and returns the first to *settle* (succeed or
 # fail), cancelling the losers. Fails if `ts` is empty.
-public def race :: fun (list (task a)) -> task a = fun ts {
+public def race :: fun (list (task a _)) -> task a _ = fun ts {
 	manual scope as s {
 		list.map ts fun t {
 			s.spawn t
@@ -314,7 +314,7 @@ public def race :: fun (list (task a)) -> task a = fun ts {
 # Drives `race`'s success-seeking cousin: pull settled children via `s.next`
 # and return the first success, cancelling the rest; skip failures; fail if the
 # scope drains with none.
-def drain-any :: fun (manual-scope-handle a) -> task a = fun s {
+def drain-any :: fun (manual-scope-handle a) -> task a _ = fun s {
 	try got = s.next ()
 	when got is none {
 		err "any: all tasks failed"
@@ -330,7 +330,7 @@ def drain-any :: fun (manual-scope-handle a) -> task a = fun s {
 
 # Runs every task concurrently and returns the first to *succeed*, cancelling
 # the rest. Failures are skipped; if every task fails, this fails too.
-public def any :: fun (list (task a)) -> task a = fun ts {
+public def any :: fun (list (task a _)) -> task a _ = fun ts {
 	manual scope as s {
 		list.map ts fun t {
 			s.spawn t
@@ -342,7 +342,7 @@ public def any :: fun (list (task a)) -> task a = fun ts {
 # Retries `t` up to `n` attempts: cold tasks are re-runnable, so awaiting `t`
 # again runs it fresh. Returns the first success or the last failure. No scope
 # -- this is purely sequential re-running.
-public def retry :: fun int (task a) -> task a = fun n t {
+public def retry :: fun int (task a _) -> task a _ = fun n t {
 	if n <= 1 {
 		t
 	} else {
@@ -353,7 +353,7 @@ public def retry :: fun int (task a) -> task a = fun n t {
 # Runs `t` with a deadline: whichever of `t` and a `d`-long timer settles
 # first wins. If the timer wins, `t` is cancelled and the task fails with
 # "timeout".
-public def with-timeout :: fun duration (task a) -> task a = fun d t {
+public def with-timeout :: fun duration (task a _) -> task a _ = fun d t {
 	race [t, sleep d |> and-then fun _slept { err "timeout" }]
 }
 
@@ -362,7 +362,7 @@ public def with-timeout :: fun duration (task a) -> task a = fun d t {
 # `next` is the index of the next not-yet-started task in `ts` (an O(1) cursor,
 # vs popping `[head, ...rest]` off a shrinking list); results are pushed onto
 # `acc` in completion order (O(1), vs the `[x, ...acc]` prepend + final reverse).
-def gather :: fun (manual-scope-handle a) (list (task a)) (ref int) (list a) -> task (list a) = fun s ts next acc {
+def gather :: fun (manual-scope-handle a) (list (task a _)) (ref int) (list a) -> task (list a) _ = fun s ts next acc {
 	try got = s.next ()
 	when got is none {
 		ok acc
@@ -384,7 +384,7 @@ def gather :: fun (manual-scope-handle a) (list (task a)) (ref int) (list a) -> 
 # Bounded concurrency: runs at most `n` of `ts` at once, starting another each
 # time one finishes, and collects results in completion order. Fail-fast on
 # the first failure.
-public def pool :: fun int (list (task a)) -> task (list a) = fun n ts {
+public def pool :: fun int (list (task a _)) -> task (list a) _ = fun n ts {
 	manual scope as s {
 		list.map (list.take ts n) fun t {
 			s.spawn t

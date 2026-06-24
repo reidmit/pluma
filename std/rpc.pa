@@ -90,7 +90,7 @@ public def status-error :: fun string int -> rpc-error = fun route status {
 # call). Streaming is not covered here yet. (Cross-module `trait`/`implement` isn't
 # supported, so the contract is a plain function type rather than a typeclass --
 # the transports are still ordinary hand-written Pluma, not compiler-synthesized.)
-public alias sender fun string bytes (dict string string) -> task bytes
+public alias sender fun string bytes (dict string string) -> task bytes _
 
 # A streaming transport: opens a server->client subscription, surfacing each
 # server-sent frame as one `bytes` element of a `stream`. End-of-stream and
@@ -141,7 +141,7 @@ def outbound-headers :: local (list (string, string)) = local.new []
 #         try a = api.add 2 3   # the call attaches x-trace-id
 #         task.ok a
 #     })
-public def with-headers :: fun (list (string, string)) (fun nothing -> task a) -> task a = fun headers body {
+public def with-headers :: fun (list (string, string)) (fun nothing -> task a _) -> task a _ = fun headers body {
 	local.with outbound-headers [...local.get outbound-headers, ...headers] body
 }
 
@@ -160,7 +160,7 @@ def outbound :: fun string -> dict string string = fun fp {
 # fingerprint plus any `with-headers` headers and round-trips the encoded body.
 # The synthesized client stub wraps this with the wire encode/decode for the
 # endpoint's types. Fails with `rpc-error` if no transport is installed.
-public def call-unary :: fun string string bytes -> task bytes = fun route fp body {
+public def call-unary :: fun string string bytes -> task bytes _ = fun route fp body {
 	when ref.get current is some send {
 		send route body (outbound fp)
 	} is none {
@@ -186,7 +186,7 @@ public def call-stream :: fun string string bytes -> stream bytes = fun route fp
 # Lifts a `wire.decode` outcome into the task-failure channel: a malformed reply
 # is a transport-level fault, not a value. The synthesized client stub calls this
 # on the decoded result so a bad payload surfaces as a recoverable `rpc-error`.
-public def lift :: fun (result a wire-error) -> task a = fun r {
+public def lift :: fun (result a wire-error) -> task a _ = fun r {
 	when r is ok v {
 		task.ok v
 	} is err _e {

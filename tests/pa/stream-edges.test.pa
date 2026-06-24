@@ -43,7 +43,7 @@ def res :: fun string int -> stream int = fun tag limit {
 	}
 }
 
-def show :: fun int -> task nothing = fun n {
+def show :: fun int -> task nothing _ = fun n {
 	print "  $(to-string n)"
 	task.ok ()
 }

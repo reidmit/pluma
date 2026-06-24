@@ -9,7 +9,7 @@ use std/sys/io
 # result carrier (in `steps`), interleaved with binding `try`s to confirm the
 # two surfaces compose in one block.
 
-def beat :: fun string -> (task int) = fun label {
+def beat :: fun string -> (task int _) = fun label {
 	print label
 	task.ok 0
 }

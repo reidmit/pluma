@@ -14,7 +14,7 @@ def sleeper = fun ms n {
 }
 
 # Takes a *manual* handle as a parameter and drains it, summing the successes.
-def drain-sum :: fun (manual-scope-handle int) int -> task int = fun s acc {
+def drain-sum :: fun (manual-scope-handle int) int -> task int _ = fun s acc {
 	try got = s.next ()
 	when got is none {
 		task.ok acc
@@ -29,7 +29,7 @@ def drain-sum :: fun (manual-scope-handle int) int -> task int = fun s acc {
 
 # Takes a *fail-fast* handle as a parameter, spawns two children into it, and
 # pairs their results.
-def spawn-pair :: fun scope-handle (task int) (task int) -> task (int, int) = fun s t1 t2 {
+def spawn-pair :: fun scope-handle (task int _) (task int _) -> task (int, int) _ = fun s t1 t2 {
 	let h1 = s.spawn t1
 	let h2 = s.spawn t2
 	try a = h1

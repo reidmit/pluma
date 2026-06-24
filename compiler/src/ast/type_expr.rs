@@ -21,6 +21,12 @@ pub enum TypeExprKind {
 	EmptyTuple,
 	// e.g. (string) or (fun string -> bool)
 	Grouping(Box<TypeExprNode>),
+	// `_` — a deliberately-anonymous type argument. Resolves to a fresh
+	// inference variable, exactly like a one-off named type var would, but
+	// without the reader having to invent a name for a param they don't care
+	// about. Required wherever a type constructor's argument is left to
+	// inference: `task a _`, `dict _ string`.
+	Wildcard,
 }
 
 #[cfg(debug_assertions)]
@@ -59,6 +65,10 @@ impl std::fmt::Debug for TypeExprKind {
 
 			Grouping(inner) => {
 				write!(f, "{:#?}", inner)
+			}
+
+			Wildcard => {
+				write!(f, "wildcard-type _")
 			}
 		}
 	}

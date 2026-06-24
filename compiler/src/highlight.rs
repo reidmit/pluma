@@ -688,6 +688,7 @@ impl AstWalker {
 				}
 			}
 			TypeExprKind::EmptyTuple => {}
+			TypeExprKind::Wildcard => {}
 			TypeExprKind::Grouping(inner) => self.walk_type_expr(inner, out),
 		}
 	}

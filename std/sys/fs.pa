@@ -77,9 +77,9 @@ def op-is-dir = 13
 # shared with the synchronous `fs-op-sync` twins, whose `result bytes string` is the
 # natural form for a sync fallible call. `run-result` joins that envelope onto the
 # task channel at the boundary, so every *public* fs op is still a clean `task a e`.
-def fs-op-s :: fun int string string -> task (result bytes string) = built-in "fs-op"
+def fs-op-s :: fun int string string -> task (result bytes string) _ = built-in "fs-op"
 
-def fs-op-b :: fun int string bytes -> task (result bytes string) = built-in "fs-op"
+def fs-op-b :: fun int string bytes -> task (result bytes string) _ = built-in "fs-op"
 
 def fs-op-sync-s :: fun int string string -> result bytes string = built-in "fs-op-sync"
 
@@ -89,7 +89,7 @@ def fs-op-sync-b :: fun int string bytes -> result bytes string = built-in "fs-o
 # wrappers call the `decode` helpers directly (no await); the async ones run through here.
 # Used by the infallible queries (`exists`/`is-file`/`is-dir`), whose decoder yields a
 # plain value rather than a `result`.
-def run :: fun (task (result bytes string)) (fun (result bytes string) -> a) -> task a = fun t decode {
+def run :: fun (task (result bytes string) _) (fun (result bytes string) -> a) -> task a _ = fun t decode {
 	try r = t
 	task.ok (decode r)
 }
@@ -98,7 +98,7 @@ def run :: fun (task (result bytes string)) (fun (result bytes string) -> a) -> 
 # `task.flatten` joins onto the task's own failure channel so the wrapper returns a clean
 # `task a string` (a missing file or decode failure fails the task rather than surfacing as
 # an `err` value the caller has to re-match).
-def run-result :: fun (task (result bytes string)) (fun (result bytes string) -> result a string) -> task a string = fun t decode {
+def run-result :: fun (task (result bytes string) _) (fun (result bytes string) -> result a string) -> task a string = fun t decode {
 	task.flatten (task.map t decode)
 }
 
@@ -322,7 +322,7 @@ public def copy-sync :: fun string string -> result nothing string = fun source 
 # --- queries -------------------------------------------------------------------
 
 # True when the path exists (a file, directory, or anything else).
-public def exists :: fun string -> task bool = fun path {
+public def exists :: fun string -> task bool _ = fun path {
 	run (fs-op-s op-exists path "") to-bool
 }
 
@@ -332,7 +332,7 @@ public def exists-sync :: fun string -> bool = fun path {
 }
 
 # True when the path exists and is a regular file (following symlinks).
-public def is-file :: fun string -> task bool = fun path {
+public def is-file :: fun string -> task bool _ = fun path {
 	run (fs-op-s op-is-file path "") to-bool
 }
 
@@ -342,7 +342,7 @@ public def is-file-sync :: fun string -> bool = fun path {
 }
 
 # True when the path exists and is a directory (following symlinks).
-public def is-dir :: fun string -> task bool = fun path {
+public def is-dir :: fun string -> task bool _ = fun path {
 	run (fs-op-s op-is-dir path "") to-bool
 }
 

@@ -19,7 +19,7 @@ def req :: fun http.method string -> http.request = fun m p {
 }
 
 # Run one request through the handler and print "<status> <body>".
-def hit :: fun (fun http.request -> task http.response) http.method string -> task nothing = fun app m p {
+def hit :: fun (fun http.request -> task http.response _) http.method string -> task nothing _ = fun app m p {
 	try resp = app (req m p)
 	print "$(to-string resp.status) $(bytes.to-string resp.body ?? "<bad utf8>")"
 	task.ok ()

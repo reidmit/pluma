@@ -17,7 +17,7 @@ def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
 
 # Read off a connection until the blank line ending the request headers (the test
 # clients send no body), or the peer closes.
-def read-headers :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+def read-headers :: fun net.connection bytes -> task (result bytes string) _ = fun conn acc {
 	if bytes.contains acc crlf2 {
 		task.ok (ok acc)
 	} else {
@@ -34,7 +34,7 @@ def read-headers :: fun net.connection bytes -> task (result bytes string) = fun
 	}
 }
 
-def write-bytes :: fun net.connection bytes -> task (result int string) = fun conn data {
+def write-bytes :: fun net.connection bytes -> task (result int string) _ = fun conn data {
 	if bytes.is-empty data {
 		task.ok (ok 0)
 	} else {
@@ -59,7 +59,7 @@ def close-it :: fun net.connection -> nothing = fun conn {
 # --- chunked transfer decoding -------------------------------------------
 
 # Serve one hand-rolled chunked response: "Hello" + " World" as two chunks.
-def serve-chunked :: fun net.listener -> task nothing = fun server {
+def serve-chunked :: fun net.listener -> task nothing _ = fun server {
 	try conn = net.accept server
 	try _req = task.flatten (read-headers conn (string.to-bytes ""))
 	let resp = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n"
@@ -91,7 +91,7 @@ def run-chunked :: fun nothing -> task string string = fun {
 # every request on a connection in turn (HTTP/1.1 keep-alive). Because it accepts
 # concurrently it never wedges -- so the test can prove reuse by counting: N
 # sequential fetches that reuse one connection produce far fewer accepts than N.
-def count-accepts :: fun net.listener (ref int) -> task nothing = fun server counter {
+def count-accepts :: fun net.listener (ref int) -> task nothing _ = fun server counter {
 	manual scope as s {
 		s.spawn (accept-conn server counter)
 		drain-accepts s server counter
@@ -100,7 +100,7 @@ def count-accepts :: fun net.listener (ref int) -> task nothing = fun server cou
 
 # Settles to `some conn` for a freshly accepted (and counted) connection, `none`
 # when a served connection finishes -- one homogeneous type for the manual scope.
-def accept-conn :: fun net.listener (ref int) -> task (option net.connection) = fun server counter {
+def accept-conn :: fun net.listener (ref int) -> task (option net.connection) _ = fun server counter {
 	try c = task.attempt (net.accept server)
 	when c is ok conn {
 		ref.set counter (ref.get counter + 1)
@@ -110,12 +110,12 @@ def accept-conn :: fun net.listener (ref int) -> task (option net.connection) = 
 	}
 }
 
-def serve-conn :: fun net.connection -> task (option net.connection) = fun conn {
+def serve-conn :: fun net.connection -> task (option net.connection) _ = fun conn {
 	try _ = respond-loop conn
 	task.ok none
 }
 
-def respond-loop :: fun net.connection -> task nothing = fun conn {
+def respond-loop :: fun net.connection -> task nothing _ = fun conn {
 	try req = task.flatten (read-headers conn (string.to-bytes ""))
 	if bytes.is-empty req {
 		close-it conn
@@ -129,7 +129,7 @@ def respond-loop :: fun net.connection -> task nothing = fun conn {
 # Drain the accept scope: an accepted connection spawns its keep-alive handler and
 # re-arms the acceptor; a finished handler just continues; `none` (listener closed
 # on cancel) ends the loop.
-def drain-accepts :: fun (manual-scope-handle (option net.connection)) net.listener (ref int) -> task nothing = fun s server counter {
+def drain-accepts :: fun (manual-scope-handle (option net.connection)) net.listener (ref int) -> task nothing _ = fun s server counter {
 	try got = s.next ()
 	when got is none {
 		task.ok ()
@@ -191,7 +191,7 @@ def run-reuse :: fun nothing -> task (int, int) string = fun {
 
 # Serve a gzip-compressed body, labelled `Content-Encoding: gzip`. The payload is
 # produced by `compress.gzip`, so the client must run the codec to recover it.
-def serve-gzip :: fun net.listener -> task nothing = fun server {
+def serve-gzip :: fun net.listener -> task nothing _ = fun server {
 	try conn = net.accept server
 	try _req = task.flatten (read-headers conn (string.to-bytes ""))
 	let payload = compress.gzip (string.to-bytes "compressed hello")

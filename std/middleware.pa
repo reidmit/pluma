@@ -29,7 +29,7 @@ use std/task
 use std/sys/http
 
 # A request handler: the shape `http.serve` and `router.handler` consume.
-public alias handler fun http.request -> task http.response
+public alias handler fun http.request -> task http.response _
 
 # A wrapper around a handler. Build one as `fun next { fun req { ... } }`: act on
 # `req` before calling `next` to do work on the way in, act on `next`'s response

@@ -2221,10 +2221,12 @@ impl<'compiler> Analyzer<'compiler> {
 	}
 
 	// Build the type-arg vector for an enum reference in a type position.
-	// User-provided generics are resolved positionally; missing trailing
-	// args are filled with fresh type vars so a bare `option` parses as a
-	// polymorphic enum that inference can pin down. Excess generics are an
-	// arity-mismatch error.
+	// Every type-constructor argument must be written out: a concrete type, a
+	// named type var, or `_` for one the writer deliberately leaves to
+	// inference (`task a _`). A count that doesn't match the constructor's
+	// arity — too few or too many — is an error, so an accidentally-dropped
+	// argument can't silently become a forever-polymorphic var (the trap in
+	// body-less builtin signatures, which have no body to pin it down).
 	fn resolve_enum_args(
 		&mut self,
 		type_ident: &TypeIdentifierNode,
@@ -2232,25 +2234,29 @@ impl<'compiler> Analyzer<'compiler> {
 		constraints: &mut Vec<Constraint>,
 	) -> Vec<Type> {
 		let provided = type_ident.generics.len();
-		if provided > expected {
+		if provided != expected {
 			self.error(
 				type_ident.range,
-				ParamCountMismatch {
+				TypeParamCountMismatch {
 					expected,
 					found: provided,
 				},
 			);
-			return vec![Type::Unknown; expected];
-		}
-		let mut args = Vec::with_capacity(expected);
-		for i in 0..expected {
-			if i < provided {
-				args.push(self.type_expr_to_type(&type_ident.generics[i], constraints));
-			} else {
-				args.push(self.new_type_var());
+			let mut args = Vec::with_capacity(expected);
+			for i in 0..expected {
+				if i < provided {
+					args.push(self.type_expr_to_type(&type_ident.generics[i], constraints));
+				} else {
+					args.push(Type::Unknown);
+				}
 			}
+			return args;
 		}
-		args
+		type_ident
+			.generics
+			.iter()
+			.map(|g| self.type_expr_to_type(g, constraints))
+			.collect()
 	}
 
 	// Walk a type expression and collect identifiers that aren't already
@@ -2260,6 +2266,7 @@ impl<'compiler> Analyzer<'compiler> {
 	fn collect_free_type_idents(&self, type_expr: &TypeExprNode, out: &mut Vec<String>) {
 		match &type_expr.kind {
 			TypeExprKind::EmptyTuple => {}
+			TypeExprKind::Wildcard => {}
 			TypeExprKind::Grouping(inner) => self.collect_free_type_idents(inner, out),
 			TypeExprKind::Tuple(entries) => {
 				for e in entries {
@@ -2362,6 +2369,9 @@ impl<'compiler> Analyzer<'compiler> {
 	) -> Type {
 		match &type_expr.kind {
 			TypeExprKind::EmptyTuple => Type::Nothing,
+			// `_` — an anonymous type argument; mint a fresh inference var, the
+			// same thing a one-off named tyvar would resolve to.
+			TypeExprKind::Wildcard => self.new_type_var(),
 			TypeExprKind::Grouping(inner) => self.type_expr_to_type(inner, constraints),
 			TypeExprKind::Tuple(entries) => Type::Tuple(
 				entries

@@ -12,7 +12,7 @@ use std/sys/io
 
 def tenant :: local string = local.new "none"
 
-def worker :: fun string -> task nothing = fun name {
+def worker :: fun string -> task nothing _ = fun name {
 	try task.sleep 1ms
 	print "worker $(name): $(local.get tenant)"
 	task.ok ()

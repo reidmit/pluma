@@ -1,0 +1,58 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+module `main` (tests/analyze/type-arg-wildcard/main.pa) {
+    comments: {
+        3: " `_` fills a type-constructor argument the writer doesn't care to name: it",
+        4: " resolves to a fresh inference variable, the same thing a one-off named tyvar",
+        5: " would. Here the error channel of `task` and the key type of `dict` are both",
+        6: " left to inference, but written out explicitly.",
+    },
+    ast: Some(
+        module(0:0-11:44) [
+            use(0:0-0:12) `std/dict`,
+            use(1:0-1:12) `std/task`,
+        ] [
+            def(7:0-9:1) :: nothing {
+                name: ident(7:4-7:8) `echo`,
+                kind: expr(7:32-9:1) :: a -> task a b {
+                    kind: fun(7:32-9:1) {
+                        params: [
+                            ident(7:36-7:37) `x` :: a,
+                        ],
+                        body: [
+                            expr(8:1-8:10) :: task a b {
+                                kind: call(8:1-8:10) {
+                                    callee: expr(8:1-8:8) :: a -> task a b {
+                                        kind: namespace-access `task.ok`,
+                                    },
+                                    args: [
+                                        expr(8:9-8:10) :: a {
+                                            kind: ident(8:9-8:10) `x`,
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            def(11:0-11:44) :: nothing {
+                name: ident(11:4-11:11) `lengths`,
+                kind: expr(11:31-11:44) :: dict a string {
+                    kind: call(11:31-11:44) {
+                        callee: expr(11:31-11:41) :: nothing -> dict a b {
+                            kind: namespace-access `dict.empty`,
+                        },
+                        args: [
+                            expr(11:42-11:44) :: nothing {
+                                kind: (),
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    ),
+}

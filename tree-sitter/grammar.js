@@ -353,6 +353,7 @@ module.exports = grammar({
     ),
     _type_atom: $ => choice(
       $.type_identifier,
+      $.wildcard,
       $.record_type,
       $.tuple_type,
       $.grouping_type,

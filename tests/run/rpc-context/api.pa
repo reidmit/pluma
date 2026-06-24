@@ -8,7 +8,7 @@ use std/task
 use std/sys/rpc
 use std/sys/rpc/context
 
-public remote def guarded-add :: fun int int -> task int = fun a b {
+public remote def guarded-add :: fun int int -> task int _ = fun a b {
 	when context.header "x-role" is some role {
 		if role == "admin" {
 			task.ok (a + b)

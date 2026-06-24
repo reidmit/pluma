@@ -11,7 +11,7 @@ use std/sys/io
 
 def trace :: local string = local.new "-"
 
-def show :: fun string -> task nothing = fun label {
+def show :: fun string -> task nothing _ = fun label {
 	try task.sleep 1ms
 	print "$(label): $(local.get trace)"
 	task.ok ()

@@ -77,7 +77,7 @@ public alias response {
 	headers :: dict string string,
 	body :: bytes,
 	stream-body :: option (stream bytes),
-	hijack :: option (fun net.connection -> task nothing),
+	hijack :: option (fun net.connection -> task nothing _),
 }
 
 # --- building responses --------------------------------------------------
@@ -154,7 +154,7 @@ public def stream-response :: fun int (dict string string) (stream bytes) -> res
 # Cloud Run, Heroku, or Render hands your server a port via `$PORT` -- and it's
 # what lets `pluma dev` place the server subprocess on a free port without you
 # hardcoding one to match. With `PORT` unset, `address` is used verbatim.
-public def serve :: fun string (fun request -> task response) -> task nothing = fun address handler {
+public def serve :: fun string (fun request -> task response _) -> task nothing _ = fun address handler {
 	when net.listen (with-port-from-env address) is ok server {
 		serve-on server handler
 	} is err e {
@@ -169,7 +169,7 @@ public def serve :: fun string (fun request -> task response) -> task nothing = 
 # failed task if the address can't be bound or the cert/key don't load.
 #
 #     http.serve-tls "0.0.0.0:443" cert-pem key-pem handler
-public def serve-tls :: fun string string string (fun request -> task response) -> task nothing = fun address cert key handler {
+public def serve-tls :: fun string string string (fun request -> task response _) -> task nothing _ = fun address cert key handler {
 	when net.listen-tls (with-port-from-env address) cert key is ok server {
 		serve-on server handler
 	} is err e {
@@ -206,7 +206,7 @@ def host-part :: fun string -> string = fun address {
 # completed handlers never pile up in the scope (the leak that kept the
 # first cut sequential). At any moment the live set is the in-flight
 # handlers plus the single waiting acceptor.
-public def serve-on :: fun net.listener (fun request -> task response) -> task nothing = fun server handler {
+public def serve-on :: fun net.listener (fun request -> task response _) -> task nothing _ = fun server handler {
 	manual scope as s {
 		s.spawn (accept-one server)
 		serve-loop s server handler
@@ -225,7 +225,7 @@ enum serve-event {
 }
 
 # The acceptor child: wait for one connection and tag the outcome.
-def accept-one :: fun net.listener -> task serve-event = fun server {
+def accept-one :: fun net.listener -> task serve-event _ = fun server {
 	try c = task.attempt (net.accept server)
 	when c is ok conn {
 		task.ok (serve-event.arrived conn)
@@ -237,7 +237,7 @@ def accept-one :: fun net.listener -> task serve-event = fun server {
 # A handler child: serve every request on one connection (HTTP/1.1 keep-alive),
 # then report `served`. `handle-conn` never fails, so this child never fails the
 # scope.
-def handle-child :: fun net.connection (fun request -> task response) -> task serve-event = fun conn handler {
+def handle-child :: fun net.connection (fun request -> task response _) -> task serve-event _ = fun conn handler {
 	try handle-conn conn handler (string.to-bytes "")
 	task.ok serve-event.served
 }
@@ -249,7 +249,7 @@ def handle-child :: fun net.connection (fun request -> task response) -> task se
 # `closed` listener (the scope was cancelled, or accept errored) stops the
 # re-arm, and once the last in-flight handler drains, `s.next` yields
 # `none` and the loop ends.
-def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun request -> task response) -> task nothing = fun s server handler {
+def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun request -> task response _) -> task nothing _ = fun s server handler {
 	try got = s.next ()
 	when got is none {
 		task.ok ()
@@ -278,7 +278,7 @@ def serve-loop :: fun (manual-scope-handle serve-event) net.listener (fun reques
 # a pipelined request buffered there is handled too, since `read-until-headers`
 # returns at once when it already holds the header terminator and `parse-head`
 # splits on the first one.
-def handle-conn :: fun net.connection (fun request -> task response) bytes -> task nothing = fun conn handler leftover {
+def handle-conn :: fun net.connection (fun request -> task response _) bytes -> task nothing _ = fun conn handler leftover {
 	try raw-r = read-until-headers conn leftover
 	when raw-r is ok raw {
 		# No complete request head (the peer closed, or sent a partial) — done.
@@ -339,7 +339,7 @@ def wants-keep-alive :: fun (dict string string) -> bool = fun headers {
 	}
 }
 
-def finish :: fun net.connection -> task nothing = fun conn {
+def finish :: fun net.connection -> task nothing _ = fun conn {
 	net.close conn
 	task.ok ()
 }
@@ -350,7 +350,7 @@ def crlf2 :: bytes = string.to-bytes "\r\n\r\n"
 
 # Accumulate bytes until the blank line that ends the header block (or the
 # peer closes). The leftover after the headers is the start of the body.
-def read-until-headers :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+def read-until-headers :: fun net.connection bytes -> task (result bytes string) _ = fun conn acc {
 	if bytes.contains acc crlf2 {
 		task.ok (ok acc)
 	} else {
@@ -370,7 +370,7 @@ def read-until-headers :: fun net.connection bytes -> task (result bytes string)
 # Like `read-body`, but also returns the bytes read past this request's body —
 # the start of the next pipelined request (empty for a non-pipelining client).
 # The server keep-alive loop threads that leftover into the next iteration.
-def read-body-framed :: fun net.connection bytes int -> task (result (bytes, bytes) string) = fun conn acc need {
+def read-body-framed :: fun net.connection bytes int -> task (result (bytes, bytes) string) _ = fun conn acc need {
 	if bytes.length acc >= need {
 		task.ok (ok (bytes.slice acc 0 need, bytes.slice acc need (bytes.length acc)))
 	} else {
@@ -389,7 +389,7 @@ def read-body-framed :: fun net.connection bytes int -> task (result (bytes, byt
 
 # Read until the body has `need` bytes (or the peer closes), starting from
 # whatever already arrived with the headers.
-def read-body :: fun net.connection bytes int -> task (result bytes string) = fun conn acc need {
+def read-body :: fun net.connection bytes int -> task (result bytes string) _ = fun conn acc need {
 	if bytes.length acc >= need {
 		task.ok (ok (bytes.slice acc 0 need))
 	} else {
@@ -490,7 +490,7 @@ def parse-head :: fun bytes -> {
 
 # Write every byte of `data`, looping until the connection has taken it all
 # (one `write` can accept fewer bytes than offered).
-def write-all :: fun net.connection bytes -> task (result int string) = fun conn data {
+def write-all :: fun net.connection bytes -> task (result int string) _ = fun conn data {
 	if bytes.is-empty data {
 		task.ok (ok 0)
 	} else {
@@ -615,7 +615,7 @@ def serialize-stream-head :: fun response -> bytes = fun resp {
 # the stream's shielded release -- so the producer's resource is freed on every
 # terminus (drain, fault, or disconnect). Never fails: the connection closes next
 # regardless.
-def write-events :: fun net.connection (stream bytes) -> task nothing = fun conn events {
+def write-events :: fun net.connection (stream bytes) -> task nothing _ = fun conn events {
 	try outcome = task.attempt (stream.for-each events fun chunk {
 		try write-all conn (event-next chunk)
 		task.ok ()
@@ -790,7 +790,7 @@ def url-secure :: fun string -> bool = fun url {
 
 # Open a connection to `authority` (a `host:port`): TLS when `secure`, trusting an
 # extra CA when one is given, else plain TCP.
-def open-conn :: fun bool string (option string) -> task (result connection string) = fun secure authority ca {
+def open-conn :: fun bool string (option string) -> task (result connection string) _ = fun secure authority ca {
 	if secure {
 		when ca is some pem {
 			task.attempt (net.connect-tls-trusting authority pem)
@@ -1012,7 +1012,7 @@ def response-keep-alive :: fun (dict string string) -> bool = fun headers {
 }
 
 # Read a close-delimited body: everything until the peer hangs up.
-def read-to-close :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+def read-to-close :: fun net.connection bytes -> task (result bytes string) _ = fun conn acc {
 	try r = task.attempt (net.read conn 4096)
 	when r is ok chunk {
 		if bytes.is-empty chunk {
@@ -1035,7 +1035,7 @@ def crlf :: bytes = string.to-bytes "\r\n"
 # from `conn` whenever the buffer doesn't yet hold a full size line, or a full
 # chunk plus its trailing CRLF, and on the terminator we drain through the closing
 # blank line so the connection is left clean for reuse.
-def read-chunked :: fun net.connection bytes bytes -> task (result bytes string) = fun conn buf acc {
+def read-chunked :: fun net.connection bytes bytes -> task (result bytes string) _ = fun conn buf acc {
 	when index-of-crlf buf 0 is some idx {
 		let size = hex-prefix-value buf
 		if size == 0 {
@@ -1066,7 +1066,7 @@ def read-chunked :: fun net.connection bytes bytes -> task (result bytes string)
 }
 
 # Read one more block into `buf`; fail if the peer closed before the body ended.
-def chunked-pull :: fun net.connection bytes -> task (result bytes string) = fun conn buf {
+def chunked-pull :: fun net.connection bytes -> task (result bytes string) _ = fun conn buf {
 	try r = task.attempt (net.read conn 4096)
 	when r is ok chunk {
 		if bytes.is-empty chunk {
@@ -1216,7 +1216,7 @@ def nlnl :: bytes = string.to-bytes "\n\n"
 # from `conn` until a whole event is buffered. `none` once the stream ends (a
 # `done` event or the peer closing); a task failure on a `fault` event or a read
 # error. Decoded payload bytes on a `next` event.
-def read-event :: fun net.connection (ref bytes) -> task (option bytes) = fun conn buf {
+def read-event :: fun net.connection (ref bytes) -> task (option bytes) _ = fun conn buf {
 	when split-event (ref.get buf) is some pair {
 		ref.set buf pair.1
 		parse-event pair.0
@@ -1250,7 +1250,7 @@ def split-event :: fun bytes -> option (bytes, bytes) = fun buf {
 
 # Interpret one event's text: `next` yields its hex-decoded payload, `done` (and
 # anything unrecognised) ends the stream, `fault` fails the task.
-def parse-event :: fun bytes -> task (option bytes) = fun ev {
+def parse-event :: fun bytes -> task (option bytes) _ = fun ev {
 	let lines = string.split (bytes.to-string ev ?? "") "\n"
 	let kind = line-after lines "event: "
 	if kind == "next" {

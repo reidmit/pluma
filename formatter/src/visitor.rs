@@ -1307,6 +1307,7 @@ impl<'a> Formatter<'a> {
 				bracketed_collection("{", "}", docs)
 			}
 			TypeExprKind::EmptyTuple => text("()"),
+			TypeExprKind::Wildcard => text("_"),
 			TypeExprKind::Grouping(inner) => {
 				concat(vec![text("("), self.format_type_expr(inner), text(")")])
 			}

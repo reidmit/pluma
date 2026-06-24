@@ -6,16 +6,16 @@
 use std/task
 
 # Zero arguments.
-public remote def ping :: fun nothing -> task string = fun {
+public remote def ping :: fun nothing -> task string _ = fun {
 	task.ok "pong"
 }
 
 # One argument.
-public remote def greet :: fun string -> task string = fun name {
+public remote def greet :: fun string -> task string _ = fun name {
 	task.ok ("hello, " ++ name)
 }
 
 # Several arguments (sent as an encoded tuple).
-public remote def add :: fun int int -> task int = fun a b {
+public remote def add :: fun int int -> task int _ = fun a b {
 	task.ok (a + b)
 }

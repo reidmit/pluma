@@ -42,7 +42,7 @@ use std/view/head
 # `/_built/*`; every other request is handed to `handler`. `$PORT` overrides the
 # port in `address` (see `http.serve`), so the same binary runs locally and on a
 # host that assigns the port.
-public def serve :: fun string (fun http.request -> task http.response) -> task nothing = fun address handler {
+public def serve :: fun string (fun http.request -> task http.response _) -> task nothing _ = fun address handler {
 	http.serve address fun req {
 		if string.starts-with req.path "/_rpc/" {
 			rpc.dispatch req

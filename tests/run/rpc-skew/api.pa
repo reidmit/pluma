@@ -2,6 +2,6 @@
 # fingerprint guard we can probe.
 use std/task
 
-public remote def add :: fun int int -> task int = fun a b {
+public remote def add :: fun int int -> task int _ = fun a b {
 	task.ok (a + b)
 }

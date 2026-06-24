@@ -83,7 +83,7 @@ def check :: fun string string -> task (string, outcome) e = fun base path {
 	}
 }
 
-def handler :: fun http.request -> task http.response = fun req {
+def handler :: fun http.request -> task http.response _ = fun req {
 	if string.contains req.path "slow" {
 		try task.sleep 1s
 		task.ok (http.text 200 "eventually")

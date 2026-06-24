@@ -47,7 +47,7 @@ def key :: string = """
 
 # Accept one TLS connection, read the request, reply, and close. The server-side
 # handshake happens transparently inside the first `read`.
-def serve-echo :: fun net.listener -> task nothing = fun server {
+def serve-echo :: fun net.listener -> task nothing _ = fun server {
 	try conn = net.accept server
 	try _req = net.read conn 1024
 	try _sent = net.write conn (string.to-bytes "pong")
@@ -87,7 +87,7 @@ def run :: fun nothing -> task string string = fun {
 # An https round-trip: `http.serve-tls` serving the self-signed cert, fetched by
 # `http.fetch-trusting` told to trust it. Exercises the whole HTTP-over-TLS path
 # plus the client's custom-CA trust in one go.
-def serve-https :: fun net.listener -> task nothing = fun server {
+def serve-https :: fun net.listener -> task nothing _ = fun server {
 	http.serve-on server fun _req {
 		task.ok (http.text 200 "secure body")
 	}

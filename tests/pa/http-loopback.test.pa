@@ -14,7 +14,7 @@ use std/sys/net
 # server runs under a scope that's cancelled once the exchange is done.
 # Output is the (deterministic) status line and body the client received.
 
-def handler :: fun http.request -> task http.response = fun req {
+def handler :: fun http.request -> task http.response _ = fun req {
 	task.ok (http.text 200 ("you asked for " ++ req.path))
 }
 
@@ -30,7 +30,7 @@ def drain :: fun net.connection bytes -> task bytes string = fun conn acc {
 	}
 }
 
-def client :: fun string -> task string = fun addr {
+def client :: fun string -> task string _ = fun addr {
 	try conn = net.connect addr
 	try net.write conn (string.to-bytes "GET /hello HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
 	try raw = drain conn (string.to-bytes "")

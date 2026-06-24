@@ -26,7 +26,7 @@ use std/sys/rpc/context
 # POST the encoded body and translate the reply: 200 → bytes; any other status →
 # the matching typed `rpc-error` (`rpc.status-error`); a transport-level failure →
 # `transport`.
-def send :: fun string bytes (dict string string) -> task bytes = fun route body headers {
+def send :: fun string bytes (dict string string) -> task bytes _ = fun route body headers {
 	try outcome = task.attempt (http.fetch (rpc.server-origin ++ "/_rpc/" ++ route) http.method.post headers body)
 	when outcome is ok resp {
 		if resp.status == 200 {
@@ -92,7 +92,7 @@ def reject-status :: local (ref (option int)) = local.new (ref.new none)
 #         when context.header "authorization" is some _tok { task.ok () }
 #         is none { rpc.reject 401 }
 #     }
-public def reject :: fun int -> task a = fun status {
+public def reject :: fun int -> task a _ = fun status {
 	ref.set (local.get reject-status) (some status)
 	task.err "rpc-reject"
 }
@@ -107,7 +107,7 @@ public def reject :: fun int -> task a = fun status {
 # other failure. Running `produce` *inside* the bindings is what makes
 # `context`/`reject` visible to the handler (a synchronous read sees the binding
 # directly; an awaited one sees it reinstalled on resume).
-public def respond :: fun http.request (fun nothing -> task bytes) -> task http.response = fun req produce {
+public def respond :: fun http.request (fun nothing -> task bytes _) -> task http.response _ = fun req produce {
 	context.with-request req fun {
 		let box = ref.new none
 		local.with reject-status box fun {
@@ -135,7 +135,7 @@ public def respond :: fun http.request (fun nothing -> task bytes) -> task http.
 # *awaited* `context` read inside the producer is not bound -- a streaming
 # handler's rejection rides the stream's fault channel (a `fault` frame), not an
 # HTTP status, because the 200 head is already on the wire.
-public def respond-stream :: fun http.request (fun nothing -> stream bytes) -> task http.response = fun req produce {
+public def respond-stream :: fun http.request (fun nothing -> stream bytes) -> task http.response _ = fun req produce {
 	context.with-request req fun {
 		let events = produce ()
 		task.ok (http.stream-response 200 stream-headers events)
@@ -149,7 +149,7 @@ def stream-headers :: dict string string = dict.from-entries [("content-type", "
 # endpoint's real handler, guarding the per-route fingerprint and decoding /
 # encoding the wire payload. The compiler synthesizes this body from the
 # discovered `remote def`s; with none, it's an always-404 router.
-public def dispatch :: fun http.request -> task http.response = built-in "rpc-dispatch"
+public def dispatch :: fun http.request -> task http.response _ = built-in "rpc-dispatch"
 
 # --- cross-origin (CSRF) gate --------------------------------------------
 #
@@ -262,7 +262,7 @@ def preflight :: fun http.request -> http.response = fun req {
 # Wraps a dispatcher with the cross-origin gate: reject calls a browser won't
 # vouch for (403), answer CORS preflights for admitted origins, and tag real
 # replies so an admitted cross-origin page can read them.
-public def guard :: fun policy (fun http.request -> task http.response) -> (fun http.request -> task http.response) = fun pol inner {
+public def guard :: fun policy (fun http.request -> task http.response _) -> (fun http.request -> task http.response _) = fun pol inner {
 	fun req {
 		if admits pol req {
 			if req.method is http.method.options {
@@ -292,6 +292,6 @@ public def mounted-with :: fun policy -> router.route = fun pol {
 
 # The pure-RPC one-liner: serve every endpoint and nothing else. Sugar over
 # mounting `dispatch` in an otherwise-empty router.
-public def serve :: fun string -> task nothing = fun addr {
+public def serve :: fun string -> task nothing _ = fun addr {
 	router.serve addr [mounted]
 }

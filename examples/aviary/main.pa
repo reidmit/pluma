@@ -22,7 +22,7 @@ use model
 use route
 use ui
 
-def handler :: fun http.request -> task http.response = fun req {
+def handler :: fun http.request -> task http.response _ = fun req {
 	let r = route.parse req.path
 	task.map (ui.load-data r) fun data {
 		http.html (status-for r) (document r data)

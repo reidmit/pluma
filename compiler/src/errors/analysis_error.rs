@@ -30,6 +30,10 @@ pub enum AnalysisErrorKind {
 		expected: usize,
 		found: usize,
 	},
+	TypeParamCountMismatch {
+		expected: usize,
+		found: usize,
+	},
 	TupleSizeMismatch {
 		expected: usize,
 		found: usize,
@@ -176,6 +180,12 @@ impl fmt::Display for AnalysisError {
 			ParamCountMismatch { expected, found } => write!(
 				f,
 				"Parameter count mismatch: expected {}, but found {}.",
+				expected, found
+			),
+
+			TypeParamCountMismatch { expected, found } => write!(
+				f,
+				"Type argument count mismatch: this type constructor takes {}, but {} were given.",
 				expected, found
 			),
 
@@ -360,6 +370,7 @@ impl Reportable for AnalysisError {
 			TypeMismatch { .. } => "E0102",
 			RecursiveUnification { .. } => "E0103",
 			ParamCountMismatch { .. } => "E0104",
+			TypeParamCountMismatch { .. } => "E0136",
 			TupleSizeMismatch { .. } => "E0105",
 			TupleIndexNotPresent { .. } => "E0106",
 			RecordFieldNotPresent { .. } => "E0107",
@@ -481,6 +492,15 @@ impl Reportable for AnalysisError {
 			// someone coming from a curried language — say so plainly.
 			ParamCountMismatch { expected, found } if found < expected => vec![
 				"Pluma calls are uncurried, so this isn't partial application; pass every argument, or wrap it: `fun y { f x y }`."
+					.to_string(),
+			],
+
+			// A type constructor must be saturated: write every argument out.
+			// For one you don't care to name, write `_` — `task a _`, not the
+			// shorter `task a`, so a dropped argument reads as an error rather
+			// than silently inferring a stray polymorphic var.
+			TypeParamCountMismatch { found, expected } if found < expected => vec![
+				"Pluma type constructors must be fully applied; supply every argument, writing `_` for one you want inference to fill (`task a _`, `dict _ string`)."
 					.to_string(),
 			],
 

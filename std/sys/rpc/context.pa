@@ -28,7 +28,7 @@ def current :: local (option http.request) = local.new none
 # Binds `req` as the ambient request for `body` and every task it spawns. The
 # synthesized dispatcher wraps each handler invocation in this; it is not meant
 # for application use (handlers *read* context, they don't bind it).
-public def with-request :: fun http.request (fun nothing -> task a) -> task a = fun req body {
+public def with-request :: fun http.request (fun nothing -> task a _) -> task a _ = fun req body {
 	local.with current (some req) body
 }
 

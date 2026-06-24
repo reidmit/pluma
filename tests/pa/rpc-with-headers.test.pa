@@ -31,7 +31,7 @@ def header-of :: fun string -> string = fun key {
 	}
 }
 
-def call :: fun string -> task bytes = fun fp {
+def call :: fun string -> task bytes _ = fun fp {
 	rpc.call-unary "api.echo" fp (string.to-bytes "x")
 }
 

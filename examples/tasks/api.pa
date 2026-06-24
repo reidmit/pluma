@@ -22,12 +22,12 @@ def store :: ref (list todo) = ref.new []
 def next-id :: ref int = ref.new 1
 
 # Read the whole board.
-public remote def list-todos :: fun nothing -> task (list todo) = fun {
+public remote def list-todos :: fun nothing -> task (list todo) _ = fun {
 	task.ok (ref.get store)
 }
 
 # Append a todo and return the created record (so the client learns its id).
-public remote def add-todo :: fun string -> task todo = fun text {
+public remote def add-todo :: fun string -> task todo _ = fun text {
 	let id = ref.get next-id
 	ref.set next-id (id + 1)
 	let item = {id, text, done: false}
@@ -37,7 +37,7 @@ public remote def add-todo :: fun string -> task todo = fun text {
 }
 
 # Flip a todo's done flag and return the updated board.
-public remote def toggle-todo :: fun int -> task (list todo) = fun id {
+public remote def toggle-todo :: fun int -> task (list todo) _ = fun id {
 	ref.set store (list.map (ref.get store) fun t {
 		if t.id == id {
 			{
@@ -56,7 +56,7 @@ public remote def toggle-todo :: fun int -> task (list todo) = fun id {
 }
 
 # Drop every completed todo and return the remaining board.
-public remote def clear-done :: fun nothing -> task (list todo) = fun {
+public remote def clear-done :: fun nothing -> task (list todo) _ = fun {
 	ref.set store (list.filter (ref.get store) fun t {
 		if t.done {
 			false

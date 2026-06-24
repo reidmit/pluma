@@ -3512,7 +3512,11 @@ impl<'a> Parser<'a> {
 		while matches!(
 			self.current_token,
 			Some(
-				Token::Identifier(..) | Token::LeftParen(..) | Token::LeftBrace(..) | Token::KeywordFun(..)
+				Token::Identifier(..)
+					| Token::Underscore(..)
+					| Token::LeftParen(..)
+					| Token::LeftBrace(..)
+					| Token::KeywordFun(..)
 			)
 		) {
 			let arg = self.parse_type_expression()?;
@@ -3533,6 +3537,13 @@ impl<'a> Parser<'a> {
 				range: type_id.range,
 				kind: TypeExprKind::Single(type_id),
 			}),
+			Some(Token::Underscore(start, end)) => {
+				self.advance();
+				Some(TypeExprNode {
+					range: self.span_to_single_line_range(start, end),
+					kind: TypeExprKind::Wildcard,
+				})
+			}
 			Some(Token::LeftParen(..)) => self.parse_type_parenthetical(),
 			Some(Token::LeftBrace(..)) => self.parse_type_record(),
 			Some(Token::KeywordFun(..)) => self.parse_type_fun(),

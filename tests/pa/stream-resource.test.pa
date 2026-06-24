@@ -37,13 +37,13 @@ def res :: fun string int int -> stream int = fun tag limit fail-at {
 	}
 }
 
-def show :: fun int -> task nothing = fun n {
+def show :: fun int -> task nothing _ = fun n {
 	print "  $(to-string n)"
 	task.ok ()
 }
 
 # A consumer that sleeps before each element, so a deadline can land mid-stream.
-def slowly :: fun int -> task nothing = fun n {
+def slowly :: fun int -> task nothing _ = fun n {
 	try task.sleep 5ms
 	show n
 }

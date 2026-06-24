@@ -53,7 +53,7 @@ def document :: fun string view -> string = fun title body {
 	app.document {lang: "en", title, head: theme.head-tags, body}
 }
 
-def handler :: fun http.request -> task http.response = fun req {
+def handler :: fun http.request -> task http.response _ = fun req {
 	if req.path == "/" {
 		task.ok (http.html 200 (document "Pluma — a fullstack functional language" (ui.page ())))
 	} else if req.path == "/reference" {
@@ -96,7 +96,7 @@ def handler :: fun http.request -> task http.response = fun req {
 # request id and the path are bound as ambient context for the request's whole
 # task (`log.with`), so anything the handler logs along the way carries them too;
 # on the way out we add the response status and how long it took.
-def logged :: fun http.request -> task http.response = fun req {
+def logged :: fun http.request -> task http.response _ = fun req {
 	let started = time.monotonic ()
 	log.with [log.str "request-id" (uuid.v7 ()), log.str "path" req.path] fun {
 		try resp = handler req

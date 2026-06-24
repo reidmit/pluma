@@ -11,7 +11,7 @@ use std/sys/io
 
 def label :: local string = local.new "?"
 
-def slow :: fun nothing -> task nothing = fun {
+def slow :: fun nothing -> task nothing _ = fun {
 	defer print "cleanup sees label=$(local.get label)"
 	try task.sleep 10s
 	print "slow finished (should NOT print)"

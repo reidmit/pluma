@@ -544,7 +544,7 @@ def missing-view :: fun nothing -> view = fun {
 # On the server `api.*` are the real handlers (an in-process DB read); on the client
 # they're RPC stubs. Same call sites, so this one function feeds both the SSR render
 # and the client's initial hydrate (and every soft navigation).
-public def load-data :: fun route -> task model.page-data = fun r {
+public def load-data :: fun route -> task model.page-data _ = fun r {
 	when r is route.logbook {
 		task.map (api.list-sightings ()) model.page-data.logbook-data
 	} is route.field-guide {

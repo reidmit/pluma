@@ -17,7 +17,7 @@ use std/sys/net
 # `router-dispatch`; this is the integration check.
 
 # Read from the connection until the server closes it (Connection: close).
-def drain :: fun net.connection bytes -> task (result bytes string) = fun conn acc {
+def drain :: fun net.connection bytes -> task (result bytes string) _ = fun conn acc {
 	try r = task.attempt (net.read conn 4096)
 	when r is ok chunk {
 		if bytes.is-empty chunk {
@@ -32,7 +32,7 @@ def drain :: fun net.connection bytes -> task (result bytes string) = fun conn a
 
 # Send one raw request line (e.g. "GET /health") and return the reply's status
 # line and body, joined as "<status> | <body>".
-def call :: fun string string string -> task string = fun addr verb path {
+def call :: fun string string string -> task string _ = fun addr verb path {
 	try c = task.attempt (net.connect addr)
 	when c is ok conn {
 		let raw-req = verb ++ " " ++ path ++ " HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"

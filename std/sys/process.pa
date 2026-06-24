@@ -61,7 +61,7 @@ def op-env-all = 104
 
 def op-pid = 105
 
-def proc-op :: fun int string bytes -> task (result bytes string) = built-in "fs-op"
+def proc-op :: fun int string bytes -> task (result bytes string) _ = built-in "fs-op"
 
 def proc-op-sync :: fun int string bytes -> result bytes string = built-in "fs-op-sync"
 
@@ -166,7 +166,7 @@ def decode-status :: fun (result bytes string) -> result int string = fun r {
 	ok (read-status raw)
 }
 
-def await-output :: fun (task (result bytes string)) -> task output string = fun t {
+def await-output :: fun (task (result bytes string) _) -> task output string = fun t {
 	task.flatten (task.map t decode-output)
 }
 

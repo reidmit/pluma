@@ -5,6 +5,6 @@ use std/task
 # isn't built yet. The contract grammar rejects it with a clear
 # message rather than leaving the door silently ajar -- only `stream R` *results*
 # are supported.
-public remote def feed :: fun (stream int) -> task int = fun _s {
+public remote def feed :: fun (stream int) -> task int _ = fun _s {
 	task.ok 0
 }

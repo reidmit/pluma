@@ -1,0 +1,12 @@
+use std/dict
+use std/task
+
+# `_` fills a type-constructor argument the writer doesn't care to name: it
+# resolves to a fresh inference variable, the same thing a one-off named tyvar
+# would. Here the error channel of `task` and the key type of `dict` are both
+# left to inference, but written out explicitly.
+def echo :: fun a -> task a _ = fun x {
+	task.ok x
+}
+
+def lengths :: dict _ string = dict.empty ()

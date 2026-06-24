@@ -18,7 +18,7 @@ def big-body :: string = bytes.to-string (bytes.repeat (string.to-bytes "All wor
 
 # A real `http.serve` handler returning that body. The server compresses it
 # because the client (http.fetch) advertises Accept-Encoding.
-def serve-big :: fun net.listener -> task nothing = fun server {
+def serve-big :: fun net.listener -> task nothing _ = fun server {
 	http.serve-on server fun _req {
 		task.ok (http.text 200 big-body)
 	}

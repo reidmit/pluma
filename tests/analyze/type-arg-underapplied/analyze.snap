@@ -1,0 +1,7 @@
+---
+source: tests/analyze.rs
+expression: output
+---
+error: Type argument count mismatch: this type constructor takes 2, but 1 were given.
+> 7 | def f :: fun int -> task int = fun n {
+                          ^^^^^^^^

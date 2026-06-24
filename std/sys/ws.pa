@@ -95,7 +95,7 @@ public def send-binary :: fun conn bytes -> task nothing string = fun c b {
 
 # Close the connection: send a close frame, then shut the socket. Best-effort --
 # a failed write just means the peer already went away.
-public def close :: fun conn -> task nothing = fun c {
+public def close :: fun conn -> task nothing _ = fun c {
 	try _ = task.attempt (send-frame c op-close empty-bytes)
 	let _ = net.close c.raw
 	task.ok ()
@@ -380,7 +380,7 @@ public def connect :: fun string -> task conn string = fun url {
 	}
 }
 
-def open :: fun bool string -> task (result net.connection string) = fun secure authority {
+def open :: fun bool string -> task (result net.connection string) _ = fun secure authority {
 	if secure {
 		task.attempt (net.connect-tls authority)
 	} else {
@@ -462,7 +462,7 @@ public def upgrade :: fun http.request (fun conn -> task nothing string) -> http
 # then run `handler` on the server-side connection. Best-effort -- a failed
 # handshake write or a handler fault just ends the session (the HTTP server closes
 # the socket afterward).
-def server-session :: fun string (fun conn -> task nothing string) -> (fun net.connection -> task nothing) = fun key handler {
+def server-session :: fun string (fun conn -> task nothing string) -> (fun net.connection -> task nothing _) = fun key handler {
 	fun raw {
 		try sent = task.attempt (write-all raw (handshake-response key))
 		when sent is ok _ {
