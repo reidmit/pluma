@@ -157,8 +157,11 @@ pub(crate) enum Command {
 		#[arg(short = 'w', long)]
 		watch: bool,
 
-		/// Directory to start the walk-up from (default: current directory).
-		dir: Option<String>,
+		/// Directories and/or `*.test.pa` files to run; the run is the union of
+		/// them all (default: the whole package, found by walking up from the
+		/// current directory).
+		#[arg(value_name = "PATH")]
+		paths: Vec<String>,
 	},
 
 	/// Generate documentation for a module from its source.

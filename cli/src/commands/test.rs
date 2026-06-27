@@ -5,7 +5,16 @@ use std::path::{Path, PathBuf};
 use crate::printing::*;
 use crate::watch::{POLL_INTERVAL, scan};
 
-pub(crate) fn test_command(filters: Vec<String>, watch: bool, dir: Option<String>) {
+// A resolved positional argument: a directory whose `*.test.pa` files are all
+// run, or a single test file. Both hold canonical paths; module names are
+// derived against the package root at run time so watch mode picks up files
+// added to a directory target.
+enum Target {
+	Dir(PathBuf),
+	File(PathBuf),
+}
+
+pub(crate) fn test_command(filters: Vec<String>, watch: bool, paths: Vec<String>) {
 	let cwd = match std::env::current_dir() {
 		Ok(p) => p,
 		Err(err) => {
@@ -14,23 +23,31 @@ pub(crate) fn test_command(filters: Vec<String>, watch: bool, dir: Option<String
 		}
 	};
 
-	// No directory given means start the walk-up from cwd.
-	let start_dir: PathBuf = match dir {
-		Some(arg) => {
-			let p = Path::new(&arg);
-			if !p.is_dir() {
-				print_error(format!("`{}` is not a directory", arg));
+	// Each positional path may be a directory (run every `*.test.pa` beneath
+	// it) or a single test file; the run is the union of them all. No paths
+	// means run the whole package.
+	let mut targets: Vec<Target> = Vec::new();
+	for arg in &paths {
+		let p = Path::new(arg);
+		if p.is_dir() {
+			targets.push(Target::Dir(canonicalize_or_exit(p, arg)));
+		} else if p.is_file() {
+			if !arg.ends_with(".test.pa") {
+				print_error(format!("`{}` is not a `*.test.pa` test file", arg));
 				std::process::exit(1);
 			}
-			match p.canonicalize() {
-				Ok(d) => d,
-				Err(err) => {
-					print_error(format!("Could not resolve `{}`: {}", arg, err));
-					std::process::exit(1);
-				}
-			}
+			targets.push(Target::File(canonicalize_or_exit(p, arg)));
+		} else {
+			print_error(format!("`{}` is not a directory or file", arg));
+			std::process::exit(1);
 		}
-		None => cwd,
+	}
+
+	// Find the package root from the first target (or cwd when none is given).
+	let start_dir: PathBuf = match targets.first() {
+		Some(Target::Dir(d)) => d.clone(),
+		Some(Target::File(f)) => f.parent().unwrap_or(&cwd).to_path_buf(),
+		None => cwd.clone(),
 	};
 
 	// `pluma test` requires a package root — the marker tells the runner
@@ -45,18 +62,81 @@ pub(crate) fn test_command(filters: Vec<String>, watch: bool, dir: Option<String
 		}
 	};
 
-	if watch {
-		watch_suite(&filters, &root_dir);
-	} else {
-		std::process::exit(run_suite(&filters, &root_dir));
+	// Every target must live under the one package root, so its module name
+	// resolves consistently against it.
+	for t in &targets {
+		let path = match t {
+			Target::Dir(d) => d,
+			Target::File(f) => f,
+		};
+		if path.strip_prefix(&root_dir).is_err() {
+			print_error(format!(
+				"`{}` is not inside the package root `{}`",
+				path.display(),
+				root_dir.display()
+			));
+			std::process::exit(1);
+		}
 	}
+
+	if watch {
+		watch_suite(&filters, &targets, &root_dir);
+	} else {
+		std::process::exit(run_suite(&filters, &targets, &root_dir));
+	}
+}
+
+fn canonicalize_or_exit(p: &Path, arg: &str) -> PathBuf {
+	match p.canonicalize() {
+		Ok(d) => d,
+		Err(err) => {
+			print_error(format!("Could not resolve `{}`: {}", arg, err));
+			std::process::exit(1);
+		}
+	}
+}
+
+// The module name a `*.test.pa` file resolves to: its path relative to the
+// package root, with the path separator flipped to `/` and `.pa` stripped —
+// matching the names produced by `discover_test_modules`. Returns `None` if the
+// file lives outside the root.
+fn module_name_for(file: &Path, root: &Path) -> Option<String> {
+	let rel = file.strip_prefix(root).ok()?;
+	let rel_str = rel.to_string_lossy();
+	let stem = rel_str.strip_suffix(".pa").unwrap_or(&rel_str);
+	Some(stem.replace(std::path::MAIN_SEPARATOR, "/"))
+}
+
+// Resolve the targets into the sorted, de-duplicated set of module names to
+// run. Directories contribute every `*.test.pa` beneath them; files contribute
+// just themselves. An empty target list runs the whole package.
+fn modules_for_targets(targets: &[Target], root_dir: &Path) -> Vec<String> {
+	if targets.is_empty() {
+		let mut all = discover_test_modules(root_dir, root_dir);
+		all.sort();
+		return all;
+	}
+	let mut out = Vec::new();
+	for t in targets {
+		match t {
+			Target::Dir(d) => out.extend(discover_test_modules(d, root_dir)),
+			Target::File(f) => {
+				if let Some(name) = module_name_for(f, root_dir) {
+					out.push(name);
+				}
+			}
+		}
+	}
+	out.sort();
+	out.dedup();
+	out
 }
 
 /// Re-run the suite on every source change, never returning. The initial run
 /// happens immediately; thereafter a cheap mtime fingerprint is polled and a
 /// change triggers a fresh run. Compile and test failures print and keep the
 /// loop alive — the point of watch mode is to fix-and-rerun without restarting.
-fn watch_suite(filters: &[String], root_dir: &Path) -> ! {
+fn watch_suite(filters: &[String], targets: &[Target], root_dir: &Path) -> ! {
 	let clear = std::io::stdout().is_terminal();
 
 	loop {
@@ -65,7 +145,7 @@ fn watch_suite(filters: &[String], root_dir: &Path) -> ! {
 			// picture, not a scroll of stale output.
 			print!("\x1b[2J\x1b[3J\x1b[H");
 		}
-		run_suite(filters, root_dir);
+		run_suite(filters, targets, root_dir);
 		println!();
 		println!("watching for changes — press ctrl-c to exit");
 
@@ -81,17 +161,18 @@ fn watch_suite(filters: &[String], root_dir: &Path) -> ! {
 /// Discover, compile, and run the suite once, returning the exit code the
 /// process should carry (0 = all passed). Diagnostics and errors are printed
 /// here rather than aborting, so a caller in watch mode can run again.
-fn run_suite(filters: &[String], root_dir: &Path) -> i32 {
+fn run_suite(filters: &[String], targets: &[Target], root_dir: &Path) -> i32 {
 	// PLUMA_TIMING=1 prints a per-phase wall-clock breakdown to stderr.
 	let timing = std::env::var("PLUMA_TIMING").is_ok();
 	let t_start = std::time::Instant::now();
 	let root_dir = root_dir.to_path_buf();
 
-	// Module names below are paths relative to the package root, with `/`
-	// flipped to `.` and the `.pa` extension stripped — so
-	// `<root>/foo/bar.test.pa` becomes `foo.bar.test`.
-	let mut test_modules = discover_test_modules(&root_dir);
-	test_modules.sort();
+	// Module names are paths relative to the package root, with the path
+	// separator flipped to `/` and the `.pa` extension stripped — so
+	// `<root>/foo/bar.test.pa` becomes `foo/bar.test`. Resolved from the
+	// positional targets (directories expand to every file beneath them), or
+	// the whole package when none were given.
+	let mut test_modules = modules_for_targets(targets, &root_dir);
 
 	if !filters.is_empty() {
 		test_modules.retain(|name| filters.iter().any(|f| name.contains(f)));
@@ -216,11 +297,11 @@ fn run_suite(filters: &[String], root_dir: &Path) -> i32 {
 	code
 }
 
-// Recursively find every `*.test.pa` file under `root` and return its module
-// name (path relative to `root`, with `/` → `.` and `.pa` stripped). Hidden
-// directories (anything starting with `.`) are skipped — `.git`, `.cargo`,
-// etc. shouldn't be scanned.
-fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
+// Recursively find every `*.test.pa` file under `walk_dir` and return its
+// module name (path relative to `root`, with the separator flipped to `/` and
+// `.pa` stripped). Hidden directories (anything starting with `.`) are
+// skipped — `.git`, `.cargo`, etc. shouldn't be scanned.
+fn discover_test_modules(walk_dir: &std::path::Path, root: &std::path::Path) -> Vec<String> {
 	fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<String>) {
 		let entries = match std::fs::read_dir(dir) {
 			Ok(e) => e,
@@ -253,6 +334,6 @@ fn discover_test_modules(root: &std::path::Path) -> Vec<String> {
 	}
 
 	let mut out = Vec::new();
-	walk(root, root, &mut out);
+	walk(walk_dir, root, &mut out);
 	out
 }

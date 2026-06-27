@@ -42,8 +42,8 @@ fn main() {
 		Command::Test {
 			filters,
 			watch,
-			dir,
-		} => commands::test::test_command(filters, watch, dir),
+			paths,
+		} => commands::test::test_command(filters, watch, paths),
 
 		Command::Doc { module, out } => commands::doc::doc_command(module, out),
 
