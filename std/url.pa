@@ -1,0 +1,481 @@
+# Working with URLs and the percent-encoding that URLs are built from.
+#
+# Two layers live here. The lower one is **percent-encoding** (`encode`/`decode`
+# and their `-form` variants) -- the `%XX` escaping that lets arbitrary text ride
+# inside a URL. The higher one parses a whole URL into its parts (`parse`) and puts
+# them back together (`to-string`), with `parse-query`/`build-query` for the
+# `?a=1&b=2` query string in between.
+#
+# Everything here is pure text manipulation -- no sockets, no DNS -- so it works on
+# any target, client or server.
+use std/bytes
+use std/error
+use std/list
+use std/string
+
+# --- percent-encoding ----------------------------------------------------------
+
+# Percent-encodes a string for use as one piece of a URL -- a path segment, a query
+# value, a fragment. Every byte outside the "unreserved" set (`A-Z a-z 0-9 - . _ ~`)
+# becomes `%XX` with uppercase hex digits; a space becomes `%20`. This is the
+# `encodeURIComponent` of other languages.
+#
+#     url.encode "a b&c"   # => "a%20b%26c"
+public def encode :: fun string -> string = fun s {
+	percent-encode s false
+}
+
+# Like `encode`, but a space becomes `+` rather than `%20` -- the
+# `application/x-www-form-urlencoded` convention used inside query strings and HTML
+# form posts. `build-query` encodes its keys and values this way.
+#
+#     url.encode-form "a b"   # => "a+b"
+public def encode-form :: fun string -> string = fun s {
+	percent-encode s true
+}
+
+# Decodes percent-encoding back to plain text -- the inverse of `encode`. `%XX`
+# triples turn back into their byte; a `%` that isn't followed by two hex digits is
+# left as a literal `%` (lenient, so a malformed escape never loses the rest of the
+# string). The `decodeURIComponent` of other languages.
+#
+#     url.decode "a%20b%26c"   # => "a b&c"
+public def decode :: fun string -> string = fun s {
+	percent-decode s false
+}
+
+# Like `decode`, but `+` decodes to a space -- the reverse of `encode-form`, for
+# reading `application/x-www-form-urlencoded` text. `parse-query` decodes this way.
+#
+#     url.decode-form "a+b%21"   # => "a b!"
+public def decode-form :: fun string -> string = fun s {
+	percent-decode s true
+}
+
+# Shared encoder: walk the UTF-8 bytes, keeping unreserved bytes verbatim, turning a
+# space into `+` when `plus` is set, and `%XX`-escaping everything else. Builds the
+# output bytes in one pass, then reinterprets them (always ASCII, so the decode back
+# to a string can't fail).
+def percent-encode :: fun string bool -> string = fun s plus {
+	let b = string.to-bytes s
+	let n = bytes.length b
+	let out :: list int = []
+	encode-into b n plus 0 out
+	bytes.to-string (bytes.from-list out ?? '') ?? ""
+}
+
+def encode-into :: fun bytes int bool int (list int) -> nothing = fun b n plus i out {
+	if i >= n {
+		()
+	} else {
+		let c = bytes.get b i
+		if is-unreserved c {
+			list.push out c
+		} else if plus and c == 32 {
+			list.push out 43
+		} else {
+			list.push out 37
+			list.push out (hex-digit (c / 16))
+			list.push out (hex-digit (c % 16))
+		}
+		encode-into b n plus (i + 1) out
+	}
+}
+
+# Shared decoder: walk the bytes, expanding each `%XX` to its byte, turning `+` into a
+# space when `plus` is set, and copying everything else through. A `%` without two
+# following hex digits is copied literally. The resulting bytes are assumed to be
+# valid UTF-8 (as any correctly percent-encoded text is).
+def percent-decode :: fun string bool -> string = fun s plus {
+	let b = string.to-bytes s
+	let n = bytes.length b
+	let out :: list int = []
+	decode-into b n plus 0 out
+	bytes.to-string (bytes.from-list out ?? '') ?? ""
+}
+
+def decode-into :: fun bytes int bool int (list int) -> nothing = fun b n plus i out {
+	if i >= n {
+		()
+	} else {
+		let c = bytes.get b i
+		if c == 37 and i + 2 < n {
+			let hi = hex-value (bytes.get b (i + 1))
+			let lo = hex-value (bytes.get b (i + 2))
+			if hi >= 0 and lo >= 0 {
+				list.push out (hi * 16 + lo)
+				decode-into b n plus (i + 3) out
+			} else {
+				list.push out c
+				decode-into b n plus (i + 1) out
+			}
+		} else if plus and c == 43 {
+			list.push out 32
+			decode-into b n plus (i + 1) out
+		} else {
+			list.push out c
+			decode-into b n plus (i + 1) out
+		}
+	}
+}
+
+# Is byte `c` "unreserved" -- safe to leave unescaped in any URL component? The set is
+# `A-Z`, `a-z`, `0-9`, and the four marks `- . _ ~`.
+def is-unreserved :: fun int -> bool = fun c {
+	c >= 65 and c <= 90 or c >= 97 and c <= 122 or c >= 48 and c <= 57 or c == 45 or c == 46 or c == 95 or c == 126
+}
+
+# The ASCII byte of the uppercase hex digit for `v` (0-15): '0'-'9' then 'A'-'F'.
+def hex-digit :: fun int -> int = fun v {
+	if v < 10 {
+		v + 48
+	} else {
+		v + 55
+	}
+}
+
+# The value 0-15 of a hex-digit byte (either case), or -1 if it isn't one.
+def hex-value :: fun int -> int = fun c {
+	if c >= 48 and c <= 57 {
+		c - 48
+	} else if c >= 97 and c <= 102 {
+		c - 87
+	} else if c >= 65 and c <= 70 {
+		c - 55
+	} else {
+		-1
+	}
+}
+
+# --- query strings -------------------------------------------------------------
+
+# Parses a `?`-style query string into its key/value pairs, in order. A leading `?` is
+# optional and stripped. Keys and values are `decode-form`-decoded (so `+` is a space);
+# a key with no `=` gets an empty-string value; empty segments (a stray `&`) are
+# dropped. Pairs are kept as a list, not a dict, so a repeated key keeps every value.
+#
+#     url.parse-query "a=1&b=hi+there&a=2"   # => [("a", "1"), ("b", "hi there"), ("a", "2")]
+public def parse-query :: fun string -> list (string, string) = fun query {
+	let trimmed = if string.starts-with query "?" {
+		string.drop query 1
+	} else {
+		query
+	}
+	if string.is-empty trimmed {
+		[]
+	} else {
+		let segs = list.filter (string.split trimmed "&") fun seg {
+			!string.is-empty seg
+		}
+		list.map segs fun seg {
+			let (k, v) = cut seg "="
+			let value = when v is some raw {
+				decode-form raw
+			} is none {
+				""
+			}
+			(decode-form k, value)
+		}
+	}
+}
+
+# Builds a query string from key/value pairs -- the inverse of `parse-query`. Keys and
+# values are `encode-form`-encoded and joined with `&` and `=`. No leading `?` is added.
+#
+#     url.build-query [("q", "a b"), ("p", "2")]   # => "q=a+b&p=2"
+public def build-query :: fun (list (string, string)) -> string = fun pairs {
+	let parts = list.map pairs fun pair {
+		let (k, v) = pair
+		encode-form k ++ "=" ++ encode-form v
+	}
+	string.join parts "&"
+}
+
+# The first value for `key` in a query string, or `none` if it isn't present. A
+# convenience over `parse-query` for the common single-value lookup.
+#
+#     url.query-get "a=1&b=2" "b"   # => some "2"
+#     url.query-get "a=1" "z"       # => none
+public def query-get :: fun string string -> option string = fun query key {
+	let found = list.find (parse-query query) fun pair {
+		let (k, _v) = pair
+		k == key
+	}
+	when found is some pair {
+		let (_k, v) = pair
+		some v
+	} is none {
+		none
+	}
+}
+
+# --- parsing whole URLs --------------------------------------------------------
+
+# A URL broken into its parts. `query` holds the text after `?` (without the `?`),
+# `fragment` the text after `#`; both `userinfo` and `port` are `none` when absent.
+# For an authority-less URL like `mailto:bob@example.com`, `host` is empty and the
+# whole body sits in `path`.
+public alias url {
+	scheme :: string,
+	userinfo :: option string,
+	host :: string,
+	port :: option int,
+	path :: string,
+	query :: string,
+	fragment :: option string,
+}
+
+# Why a `parse` failed: no `scheme:` prefix (or an invalid one), an authority `//`
+# with an empty host, or a port that isn't a number in 0-65535.
+public enum parse-error {
+	missing-scheme
+	empty-host
+	bad-port
+}
+
+implement describe parse-error {
+	def describe = fun e {
+		when e is parse-error.missing-scheme {
+			"URL has no valid scheme"
+		} is parse-error.empty-host {
+			"URL authority has an empty host"
+		} is parse-error.bad-port {
+			"URL has an invalid port"
+		}
+	}
+}
+
+# Parses a URL string into its parts. Expects an absolute URL beginning with a
+# `scheme:` (relative references like `/path` are rejected). A scheme followed by
+# `//` is parsed with an authority (`[userinfo@]host[:port]`); without it, the rest is
+# kept verbatim as the `path` (so `mailto:` and the like round-trip). The scheme and
+# host are lowercased; the rest is left exactly as written.
+#
+#     url.parse "https://ada:pw@host.tld:8080/p/q?x=1#top"
+#     # => ok {scheme: "https", userinfo: some "ada:pw", host: "host.tld",
+#     #        port: some 8080, path: "/p/q", query: "x=1", fragment: some "top"}
+public def parse :: fun string -> result url parse-error = fun input {
+	let (scheme-part, after) = cut input ":"
+	when after is none {
+		err parse-error.missing-scheme
+	} is some rest {
+		if valid-scheme scheme-part {
+			let scheme = string.to-lower scheme-part
+			if string.starts-with rest "//" {
+				parse-authority scheme (string.drop rest 2)
+			} else {
+				ok {
+					scheme,
+					userinfo: none,
+					host: "",
+					port: none,
+					path: rest,
+					query: "",
+					fragment: none,
+				}
+			}
+		} else {
+			err parse-error.missing-scheme
+		}
+	}
+}
+
+# Parse the part of an authority-form URL after `scheme://`: peel off the fragment,
+# then the query, then split the authority from the path at the first `/`. The
+# delimiters (`#`, `?`, `/`) are all ASCII, so `cut` (which splits on whole-character
+# boundaries) keeps multi-byte path/query text intact.
+def parse-authority :: fun string string -> result url parse-error = fun scheme s {
+	let (before-frag, frag) = cut s "#"
+	let fragment = frag
+	let (before-query, q) = cut before-frag "?"
+	let query = q ?? ""
+	let (authority, path-rest) = cut before-query "/"
+	let path = when path-rest is some p {
+		"/" ++ p
+	} is none {
+		""
+	}
+	let (userinfo, hostport) = split-userinfo authority
+	try host-port = parse-host-port hostport
+	let (host-raw, port) = host-port
+	if string.is-empty host-raw {
+		err parse-error.empty-host
+	} else {
+		let host = string.to-lower host-raw
+		ok {scheme, userinfo, host, port, path, query, fragment}
+	}
+}
+
+# Split an authority's `userinfo@host` form. Splitting on the last `@` (everything
+# before it is the userinfo) matches the spec: a literal `@` inside userinfo must be
+# percent-encoded, so the final `@` always introduces the host.
+def split-userinfo :: fun string -> (option string, string) = fun authority {
+	let parts = string.split authority "@"
+	let n = list.length parts
+	if n <= 1 {
+		(none, authority)
+	} else {
+		(some (string.join (list.take parts (n - 1)) "@"), list.get parts (n - 1))
+	}
+}
+
+# Split a `host[:port]` (or bracketed `[ipv6][:port]`) into its host and optional port.
+# An IPv6 literal keeps its brackets in `host`; the port, if present, must parse as a
+# number in 0-65535.
+def parse-host-port :: fun string -> result (string, option int) parse-error = fun hp {
+	if string.starts-with hp "[" {
+		let (before-bracket, after) = cut hp "]"
+		when after is some tail {
+			let host = before-bracket ++ "]"
+			if string.is-empty tail {
+				ok (host, none)
+			} else if string.starts-with tail ":" {
+				parse-port host (string.drop tail 1)
+			} else {
+				err parse-error.bad-port
+			}
+		} is none {
+			err parse-error.bad-port
+		}
+	} else {
+		let (host, port-text) = cut hp ":"
+		when port-text is some p {
+			parse-port host p
+		} is none {
+			ok (host, none)
+		}
+	}
+}
+
+# Parse the textual port `p` for `host`. An empty `p` (a bare trailing `:`) is no port;
+# otherwise it must be a base-10 number in 0-65535.
+def parse-port :: fun string string -> result (string, option int) parse-error = fun host p {
+	if string.is-empty p {
+		ok (host, none)
+	} else {
+		when string.to-int p is ok n {
+			if n >= 0 and n <= 65535 {
+				ok (host, some n)
+			} else {
+				err parse-error.bad-port
+			}
+		} is err _ {
+			err parse-error.bad-port
+		}
+	}
+}
+
+# Is `s` a syntactically valid scheme? It must be a letter followed by any run of
+# letters, digits, and `+ - .`.
+def valid-scheme :: fun string -> bool = fun s {
+	let b = string.to-bytes s
+	let n = bytes.length b
+	if n == 0 {
+		false
+	} else if is-alpha (bytes.get b 0) {
+		scheme-tail b n 1
+	} else {
+		false
+	}
+}
+
+def scheme-tail :: fun bytes int int -> bool = fun b n i {
+	if i >= n {
+		true
+	} else {
+		let c = bytes.get b i
+		if is-alpha c or c >= 48 and c <= 57 or c == 43 or c == 45 or c == 46 {
+			scheme-tail b n (i + 1)
+		} else {
+			false
+		}
+	}
+}
+
+def is-alpha :: fun int -> bool = fun c {
+	c >= 65 and c <= 90 or c >= 97 and c <= 122
+}
+
+# --- formatting back to a string -----------------------------------------------
+
+# Renders a `url` back into a string. The inverse of `parse`: `to-string (parse s)`
+# reproduces `s` for any well-formed URL (modulo the scheme/host being lowercased).
+#
+#     url.to-string {scheme: "https", userinfo: none, host: "x.tld",
+#                    port: some 443, path: "/p", query: "a=1", fragment: none}
+#     # => "https://x.tld:443/p?a=1"
+public def to-string :: fun url -> string = fun u {
+	let userinfo = when u.userinfo is some ui {
+		ui ++ "@"
+	} is none {
+		""
+	}
+	let port = when u.port is some p {
+		":" ++ nat-string p
+	} is none {
+		""
+	}
+	let authority = if string.is-empty u.host {
+		""
+	} else {
+		"//" ++ userinfo ++ u.host ++ port
+	}
+	let query = if string.is-empty u.query {
+		""
+	} else {
+		"?" ++ u.query
+	}
+	let fragment = when u.fragment is some f {
+		"#" ++ f
+	} is none {
+		""
+	}
+	u.scheme ++ ":" ++ authority ++ u.path ++ query ++ fragment
+}
+
+# The `scheme://host[:port]` origin of a URL -- the part a browser uses for
+# same-origin checks, with no path, query, or fragment.
+#
+#     url.origin {scheme: "https", userinfo: none, host: "x.tld", port: some 8080,
+#                 path: "/p", query: "", fragment: none}   # => "https://x.tld:8080"
+public def origin :: fun url -> string = fun u {
+	let port = when u.port is some p {
+		":" ++ nat-string p
+	} is none {
+		""
+	}
+	u.scheme ++ "://" ++ u.host ++ port
+}
+
+# Render a non-negative int as decimal. A local helper because this module shadows the
+# polymorphic built-in `to-string` with its own `url` overload, so the built-in isn't
+# reachable here for the port number.
+def nat-string :: fun int -> string = fun n {
+	if n < 10 {
+		digit n
+	} else {
+		nat-string (n / 10) ++ digit (n % 10)
+	}
+}
+
+def digit :: fun int -> string = fun d {
+	when string.char-at "0123456789" d is some c {
+		c
+	} is none {
+		"0"
+	}
+}
+
+# --- shared --------------------------------------------------------------------
+
+# Split `s` at the first occurrence of `sep`: the text before it, and `some` of the
+# text after (or `none` if `sep` doesn't occur). The text after may itself contain
+# `sep` -- only the first one splits.
+def cut :: fun string string -> (string, option string) = fun s sep {
+	let parts = string.split s sep
+	if list.length parts >= 2 {
+		(list.get parts 0, some (string.join (list.drop parts 1) sep))
+	} else {
+		(s, none)
+	}
+}

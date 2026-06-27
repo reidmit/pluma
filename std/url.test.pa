@@ -1,0 +1,203 @@
+use std/assert
+use std/list
+use std/test
+use std/url
+
+# Parse `s`, asserting it succeeds, and hand the parts to `k`.
+def parsed :: fun string (fun url.url -> task nothing string) -> task nothing string = fun s k {
+	when url.parse s is ok u {
+		k u
+	} is err _e {
+		assert.fail "parse should succeed"
+	}
+}
+
+def tests :: test.suite = [
+	test.case "encode escapes reserved characters" fun {
+		# --- percent-encoding ---
+
+		assert.equals (url.encode "a b&c=d") "a%20b%26c%3Dd"
+	},
+	test.case "encode keeps unreserved characters" fun {
+		assert.equals (url.encode "aZ09-._~") "aZ09-._~"
+	},
+	test.case "encode escapes multi-byte UTF-8" fun {
+		assert.equals (url.encode "café") "caf%C3%A9"
+	},
+	test.case "encode-form uses plus for space" fun {
+		assert.equals (url.encode-form "a b c") "a+b+c"
+	},
+	test.case "decode reverses encode" fun { assert.equals (url.decode "a%20b%26c%3Dd") "a b&c=d" },
+	test.case "decode accepts lowercase hex" fun { assert.equals (url.decode "%c3%a9") "é" },
+	test.case "decode leaves a bare percent literal" fun {
+		assert.equals (url.decode "100%") "100%"
+	},
+	test.case "decode leaves a malformed escape literal" fun {
+		assert.equals (url.decode "%zz") "%zz"
+	},
+	test.case "decode does not touch plus" fun { assert.equals (url.decode "a+b") "a+b" },
+	test.case "decode-form turns plus into space" fun {
+		assert.equals (url.decode-form "a+b") "a b"
+	},
+	test.case "encode then decode round-trips" fun {
+		assert.equals (url.decode (url.encode "spaces, slashes / and ünïcode!")) "spaces, slashes / and ünïcode!"
+	},
+	test.case "parse-query splits pairs" fun {
+		# --- query strings ---
+
+		assert.equals (url.parse-query "a=1&b=2") [("a", "1"), ("b", "2")]
+	},
+	test.case "parse-query decodes form encoding" fun {
+		assert.equals (url.parse-query "q=hi+there&x=%26") [("q", "hi there"), ("x", "&")]
+	},
+	test.case "parse-query strips a leading question mark" fun {
+		assert.equals (url.parse-query "?a=1") [("a", "1")]
+	},
+	test.case "parse-query keeps a valueless key" fun {
+		assert.equals (url.parse-query "flag") [("flag", "")]
+	},
+	test.case "parse-query keeps repeated keys" fun {
+		assert.equals (url.parse-query "a=1&a=2") [("a", "1"), ("a", "2")]
+	},
+	test.case "parse-query drops empty segments" fun {
+		assert.equals (url.parse-query "a=1&&b=2") [("a", "1"), ("b", "2")]
+	},
+	test.case "parse-query of empty string is empty" fun { assert.equals (url.parse-query "") [] },
+	test.case "build-query encodes and joins" fun {
+		assert.equals (url.build-query [("q", "a b"), ("p", "2")]) "q=a+b&p=2"
+	},
+	test.case "build-query round-trips through parse-query" fun {
+		let pairs = [("name", "Ada Lovelace"), ("note", "100% & more")]
+		assert.equals (url.parse-query (url.build-query pairs)) pairs
+	},
+	test.case "query-get finds the first value" fun {
+		# --- query-get ---
+
+		when url.query-get "a=1&b=2&a=3" "a" is some v {
+			assert.equals v "1"
+		} is none {
+			assert.fail "query-get should find a"
+		}
+	},
+	test.case "query-get misses an absent key" fun {
+		when url.query-get "a=1" "z" is some _v {
+			assert.fail "query-get should miss z"
+		} is none {
+			assert.is-true true
+		}
+	},
+	test.case "parse breaks out every component" fun {
+		# --- parse ---
+
+		parsed "https://ada:pw@host.tld:8080/p/q?x=1&y=2#top" fun u {
+			assert.all [
+				assert.equals u.scheme "https",
+				assert.equals u.host "host.tld",
+				assert.equals u.path "/p/q",
+				assert.equals u.query "x=1&y=2",
+				when u.port is some p {
+					assert.equals p 8080
+				} is none {
+					assert.fail "port should be present"
+				},
+				when u.userinfo is some ui {
+					assert.equals ui "ada:pw"
+				} is none {
+					assert.fail "userinfo should be present"
+				},
+				when u.fragment is some f {
+					assert.equals f "top"
+				} is none {
+					assert.fail "fragment should be present"
+				},
+			]
+		}
+	},
+	test.case "parse handles a bare host" fun {
+		parsed "http://example.com" fun u {
+			assert.all [
+				assert.equals u.host "example.com",
+				assert.equals u.path "",
+				assert.equals u.query "",
+				when u.port is some _p {
+					assert.fail "no port expected"
+				} is none {
+					assert.is-true true
+				},
+			]
+		}
+	},
+	test.case "parse lowercases scheme and host" fun {
+		parsed "HTTP://Example.COM/Path" fun u {
+			assert.all [
+				assert.equals u.scheme "http",
+				assert.equals u.host "example.com",
+				assert.equals u.path "/Path",
+			]
+		}
+	},
+	test.case "parse keeps an IPv6 host bracketed" fun {
+		parsed "http://[::1]:9000/x" fun u {
+			assert.all [
+				assert.equals u.host "[::1]",
+				assert.equals u.path "/x",
+				when u.port is some p {
+					assert.equals p 9000
+				} is none {
+					assert.fail "port should be present"
+				},
+			]
+		}
+	},
+	test.case "parse treats an authority-less URL as an opaque path" fun {
+		parsed "mailto:bob@example.com" fun u {
+			assert.all [
+				assert.equals u.scheme "mailto",
+				assert.equals u.host "",
+				assert.equals u.path "bob@example.com",
+			]
+		}
+	},
+	test.case "parse rejects a missing scheme" fun {
+		when url.parse "/just/a/path" is ok _u {
+			assert.fail "parse should reject a relative reference"
+		} is err _e {
+			assert.is-true true
+		}
+	},
+	test.case "parse rejects an empty host" fun {
+		when url.parse "http:///path" is ok _u {
+			assert.fail "parse should reject an empty host"
+		} is err _e {
+			assert.is-true true
+		}
+	},
+	test.case "parse rejects a non-numeric port" fun {
+		when url.parse "http://host:nope/x" is ok _u {
+			assert.fail "parse should reject a bad port"
+		} is err _e {
+			assert.is-true true
+		}
+	},
+	test.case "to-string inverts parse" fun {
+		# --- to-string ---
+
+		let cases = [
+			"https://host.tld:8080/p/q?x=1&y=2#top",
+			"http://example.com/path",
+			"http://[::1]:9000/x",
+			"mailto:bob@example.com",
+			"https://ada:pw@host.tld/",
+		]
+		assert.all (list.map cases fun s {
+			parsed s fun u {
+				assert.equals (url.to-string u) s
+			}
+		})
+	},
+	test.case "origin drops path query and fragment" fun {
+		parsed "https://host.tld:443/p?x=1#f" fun u {
+			assert.equals (url.origin u) "https://host.tld:443"
+		}
+	},
+]
