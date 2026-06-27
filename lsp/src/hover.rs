@@ -12,6 +12,11 @@ pub struct HoverHit {
 	pub range: Range,
 	pub ty: Type,
 	pub doc: Option<String>,
+	// When set, the text shown for this hit instead of `ty`'s rendering.
+	// Carries a written type annotation verbatim (alias names intact) so a
+	// `def f :: fun user-id -> int` hovers as `fun user-id -> int` rather than
+	// the inferred, alias-expanded `fun int -> int`.
+	pub display: Option<String>,
 }
 
 pub fn build_index(module: &Module) -> Vec<HoverHit> {
@@ -39,6 +44,7 @@ pub fn build_index(module: &Module) -> Vec<HoverHit> {
 					range: Range::between(first.range.start, last.range.end),
 					ty: Type::Unknown,
 					doc: Some(doc.clone()),
+					display: None,
 				});
 			}
 			if let Some(alias) = &u.alias {
@@ -46,6 +52,7 @@ pub fn build_index(module: &Module) -> Vec<HoverHit> {
 					range: alias.range,
 					ty: Type::Unknown,
 					doc: Some(doc),
+					display: None,
 				});
 			}
 		}
@@ -103,6 +110,47 @@ pub fn doc_for_def(module: &Module, name_range: Range) -> Option<String> {
 	doc_comment_for(module, def.range.start.line)
 }
 
+// The written type annotation to show on hover, resolving usages through to
+// their definition — so a *call site* of `decode` shows its declared
+// `fun row -> ...` (alias names intact) just as hovering the def name does.
+// `None` when the target carries no `:: TYPE` annotation, in which case hover
+// falls back to the inferred type.
+pub fn annotation_for_hover(
+	hits: &[HoverHit],
+	source: &[u8],
+	path: &std::path::Path,
+	line: u32,
+	character: u32,
+) -> Option<String> {
+	if let Some(hit) = lookup(hits, line, character) {
+		if hit.display.is_some() {
+			return hit.display.clone();
+		}
+	}
+	match crate::goto::resolve(source, path, line, character)? {
+		// Same-file: the annotation already rode onto this file's index at the
+		// def's name hit.
+		crate::goto::Resolved::Here(range) => {
+			lookup(hits, range.start.line as u32, range.start.col as u32)?
+				.display
+				.clone()
+		}
+		// Cross-module (incl. stdlib): render it from the target module's AST.
+		crate::goto::Resolved::OtherModule { module, range, .. } => annotation_for_def(&module, range),
+	}
+}
+
+// The written type annotation of the top-level def whose name is at
+// `name_range`, rendered verbatim. `None` if that def has no annotation.
+pub fn annotation_for_def(module: &Module, name_range: Range) -> Option<String> {
+	let ast = module.ast.as_ref()?;
+	let def = ast.body.iter().find(|d| {
+		d.name.range.start.line == name_range.start.line
+			&& d.name.range.start.col == name_range.start.col
+	})?;
+	def.type_annotation.as_ref().map(|ann| ann.to_string())
+}
+
 fn range_size(r: &Range) -> usize {
 	// Lines weighted heavily so a multi-line range never beats a
 	// single-line one that contains the same point.
@@ -136,17 +184,30 @@ fn record(hits: &mut Vec<HoverHit>, range: Range, ty: Type) {
 		range,
 		ty,
 		doc: None,
+		display: None,
 	});
 }
 
-// Record a def name's hit, carrying its doc comment. Unlike `record`, this
-// keeps the hit even when the type is unknown (e.g. analysis failed
-// upstream) so the doc still shows.
-fn record_name(hits: &mut Vec<HoverHit>, range: Range, ty: Type, doc: Option<String>) {
-	if doc.is_none() && matches!(ty, Type::Unknown) {
+// Record a def name's hit, carrying its doc comment and an optional written-
+// annotation override. Unlike `record`, this keeps the hit even when the type
+// is unknown (e.g. analysis failed upstream) so the doc — or the annotation —
+// still shows.
+fn record_name(
+	hits: &mut Vec<HoverHit>,
+	range: Range,
+	ty: Type,
+	doc: Option<String>,
+	display: Option<String>,
+) {
+	if doc.is_none() && display.is_none() && matches!(ty, Type::Unknown) {
 		return;
 	}
-	hits.push(HoverHit { range, ty, doc });
+	hits.push(HoverHit {
+		range,
+		ty,
+		doc,
+		display,
+	});
 }
 
 fn walk_def(def: &DefinitionNode, hits: &mut Vec<HoverHit>, doc: Option<String>) {
@@ -158,7 +219,10 @@ fn walk_def(def: &DefinitionNode, hits: &mut Vec<HoverHit>, doc: Option<String>)
 		DefinitionKind::Expr(expr) => expr.ty.clone(),
 		_ => def.ty.clone(),
 	};
-	record_name(hits, def.name.range, name_ty, doc);
+	// A written `:: TYPE` annotation is shown verbatim so author-chosen alias
+	// names survive (the inferred `name_ty` has them expanded away).
+	let display = def.type_annotation.as_ref().map(|ann| ann.to_string());
+	record_name(hits, def.name.range, name_ty, doc, display);
 
 	match &def.kind {
 		DefinitionKind::Expr(expr) => walk_expr(expr, hits),
@@ -319,6 +383,59 @@ mod tests {
 		module.parse_from_bytes(src.as_bytes().to_vec(), &mut diags);
 		let hits = build_index(&module);
 		lookup(&hits, line, character).and_then(|h| h.doc.clone())
+	}
+
+	// The type-annotation override at a position (parser-only, no analyzer).
+	fn display_at(src: &str, line: u32, character: u32) -> Option<String> {
+		let mut module = Module::new("<test>".to_string(), PathBuf::new());
+		let mut diags: Vec<compiler::Diagnostic> = Vec::new();
+		module.parse_from_bytes(src.as_bytes().to_vec(), &mut diags);
+		let hits = build_index(&module);
+		lookup(&hits, line, character).and_then(|h| h.display.clone())
+	}
+
+	// The annotation shown on hover, resolving usages through to their def.
+	fn hover_annotation_at(src: &str, line: u32, character: u32) -> Option<String> {
+		let mut module = Module::new("<test>".to_string(), PathBuf::new());
+		let mut diags: Vec<compiler::Diagnostic> = Vec::new();
+		module.parse_from_bytes(src.as_bytes().to_vec(), &mut diags);
+		let hits = build_index(&module);
+		annotation_for_hover(&hits, src.as_bytes(), &PathBuf::new(), line, character)
+	}
+
+	#[test]
+	fn annotation_shows_at_usage() {
+		// Hovering a *call site* of an annotated def surfaces its written
+		// signature (alias names intact), resolved through the usage — same as
+		// hovering the def name.
+		let src = "alias row {id :: int}\ndef decode :: fun row -> int = fun r { r.id }\ndef main = fun {\n\tdecode {id: 1}\n}\n";
+		// The `decode` call is on line 3, just past the tab (col 1).
+		assert_eq!(
+			hover_annotation_at(src, 3, 3),
+			Some("fun row -> int".to_string())
+		);
+	}
+
+	#[test]
+	fn annotation_preserves_alias_name() {
+		// `decode` takes an alias `row` and returns `result todo string`.
+		// Hovering its name shows the written annotation verbatim — alias names
+		// intact — not the inferred, alias-expanded type.
+		let src =
+			"alias todo {id :: int}\ndef decode :: fun row -> result todo string = fun r {\n\tr\n}\n";
+		// `decode` name is on line 1, col 4.
+		assert_eq!(
+			display_at(src, 1, 6),
+			Some("fun row -> result todo string".to_string())
+		);
+	}
+
+	#[test]
+	fn no_annotation_means_no_override() {
+		// Without a `::` annotation there's nothing to echo — hover falls back
+		// to the inferred type.
+		let src = "def f = fun x { x }\n";
+		assert_eq!(display_at(src, 0, 4), None);
 	}
 
 	// The doc shown on hover, resolving usages through to their definition.

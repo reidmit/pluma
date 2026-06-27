@@ -313,10 +313,10 @@ impl LanguageServer for Backend {
 			return Ok(None);
 		};
 
-		// The doc resolves through the usage to its definition, so it needs the
-		// source text and path; the direct hit's own doc (def name) is the
-		// fallback.
-		let doc = match (
+		// Both the doc and the written-annotation override resolve through a
+		// usage to its definition, so they need the source text and path; the
+		// direct hit (def name) is the fallback.
+		let (doc, annotation) = match (
 			self.document_map.get(&uri).map(|t| t.clone()),
 			params
 				.text_document_position_params
@@ -325,15 +325,20 @@ impl LanguageServer for Backend {
 				.to_file_path()
 				.ok(),
 		) {
-			(Some(text), Some(path)) => {
-				hover::doc_for_hover(&hits, text.as_bytes(), &path, pos.line, pos.character)
-			}
-			_ => hit.doc.clone(),
+			(Some(text), Some(path)) => (
+				hover::doc_for_hover(&hits, text.as_bytes(), &path, pos.line, pos.character),
+				hover::annotation_for_hover(&hits, text.as_bytes(), &path, pos.line, pos.character),
+			),
+			_ => (hit.doc.clone(), hit.display.clone()),
 		};
 
 		// Type in a code fence; the doc comment (if any) as prose below a rule.
+		// A written `:: TYPE` annotation is preferred over the inferred type so
+		// author-chosen alias names survive.
 		let mut value = String::new();
-		if !matches!(hit.ty, compiler::types::Type::Unknown) {
+		if let Some(annotation) = &annotation {
+			value.push_str(&format!("```pluma\n{}\n```", annotation));
+		} else if !matches!(hit.ty, compiler::types::Type::Unknown) {
 			value.push_str(&format!("```pluma\n{}\n```", hit.ty));
 		}
 		if let Some(doc) = &doc {

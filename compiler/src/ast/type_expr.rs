@@ -29,6 +29,56 @@ pub enum TypeExprKind {
 	Wildcard,
 }
 
+// Source-faithful rendering of a written type annotation. Unlike `Type`'s
+// `Display` (which shows the *inferred*, alias-expanded type), this echoes the
+// surface syntax the author wrote — so a `user-id` alias stays `user-id`
+// rather than collapsing to its underlying `int`. Used for hover, where the
+// name the author chose is more informative than its expansion.
+impl std::fmt::Display for TypeExprNode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match &self.kind {
+			TypeExprKind::Single(ident) => write!(f, "{}", ident),
+			TypeExprKind::Func(params, ret) => {
+				write!(f, "fun")?;
+				for p in params {
+					write!(f, " {}", p)?;
+				}
+				write!(f, " -> {}", ret)
+			}
+			TypeExprKind::Tuple(items) => {
+				let parts: Vec<String> = items.iter().map(|t| t.to_string()).collect();
+				write!(f, "({})", parts.join(", "))
+			}
+			TypeExprKind::Record(fields) => {
+				if fields.is_empty() {
+					return write!(f, "{{}}");
+				}
+				let parts: Vec<String> = fields
+					.iter()
+					.map(|(name, ty)| format!("{} :: {}", name.name, ty))
+					.collect();
+				write!(f, "{{{}}}", parts.join(", "))
+			}
+			TypeExprKind::EmptyTuple => write!(f, "()"),
+			TypeExprKind::Grouping(inner) => write!(f, "({})", inner),
+			TypeExprKind::Wildcard => write!(f, "_"),
+		}
+	}
+}
+
+impl std::fmt::Display for TypeIdentifierNode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if let Some(m) = &self.module {
+			write!(f, "{}.", m.name)?;
+		}
+		write!(f, "{}", self.name)?;
+		for g in &self.generics {
+			write!(f, " {}", g)?;
+		}
+		Ok(())
+	}
+}
+
 #[cfg(debug_assertions)]
 impl std::fmt::Debug for TypeExprNode {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
